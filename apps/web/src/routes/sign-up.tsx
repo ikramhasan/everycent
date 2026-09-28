@@ -3,7 +3,7 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { AuthCard } from "@/components/auth-card";
 import { SignUpForm } from "@/components/sign-up-form";
 import { authClient } from "@/lib/auth-client";
-import { sessionQueryOptions } from "@/lib/session";
+import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/sign-up")({
   beforeLoad: async ({ context }) => {
@@ -34,7 +34,7 @@ function SignUpPage() {
         onSubmit={async (values) => {
           const { error } = await authClient.signUp.email(values);
           if (error) return error.message ?? "Sign up failed";
-          await queryClient.invalidateQueries({ queryKey: sessionQueryOptions.queryKey });
+          await refreshSession(queryClient);
           await navigate({ to: "/" });
           return null;
         }}

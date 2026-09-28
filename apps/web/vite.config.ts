@@ -10,7 +10,13 @@ export default defineConfig({
   // Router plugin must come before the React plugin.
   plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // @everycent/ui's sonner.tsx imports `useTheme` from "next-themes" directly;
+      // redirect that (and any of our own leftover imports) to our script-tag-free
+      // shim so both stay on the same theme state. See src/lib/theme.tsx for why.
+      "next-themes": fileURLToPath(new URL("./src/lib/theme.tsx", import.meta.url)),
+    },
   },
   server: {
     port: 5173,

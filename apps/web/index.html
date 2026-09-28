@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="everycent — give every cent a job." />
     <title>everycent</title>
+    <script>
+      // Apply the persisted (or system) theme before first paint, so there's
+      // no flash of the wrong theme. This is a real static script tag, so
+      // (unlike a <script> emitted by React on the client) the browser
+      // actually executes it. Kept in sync with src/lib/theme.tsx.
+      (() => {
+        try {
+          const stored = localStorage.getItem("theme");
+          const theme = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          const resolved =
+            theme === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : theme;
+          const root = document.documentElement;
+          root.classList.add(resolved);
+          root.style.colorScheme = resolved;
+        } catch (_e) {
+          // localStorage/matchMedia unavailable — leave the default (light) theme.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

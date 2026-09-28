@@ -5,7 +5,7 @@ import { AuthCard } from "@/components/auth-card";
 import { SignInForm } from "@/components/sign-in-form";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirect } from "@/lib/safe-redirect";
-import { sessionQueryOptions } from "@/lib/session";
+import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: z.object({ redirect: z.string().optional() }),
@@ -38,7 +38,7 @@ function SignInPage() {
         onSubmit={async (values) => {
           const { error } = await authClient.signIn.email(values);
           if (error) return error.message ?? "Sign in failed";
-          await queryClient.invalidateQueries({ queryKey: sessionQueryOptions.queryKey });
+          await refreshSession(queryClient);
           await navigate({ href: safeRedirect(search.redirect) });
           return null;
         }}
