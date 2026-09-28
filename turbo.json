@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "openapi:emit": {
+      "inputs": ["src/**", "package.json"],
+      "outputs": ["openapi.json"]
+    },
+    "generate": {
+      "dependsOn": ["^generate"],
+      "outputs": ["src/*.gen.ts"]
+    },
+    "@everycent/api-client#generate": {
+      "dependsOn": ["@everycent/api#openapi:emit"],
+      "inputs": ["../../apps/api/openapi.json", "package.json"],
+      "outputs": ["src/schema.gen.ts"]
+    },
+    "typecheck": {
+      "dependsOn": ["^generate", "generate"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^generate", "generate"],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^generate", "generate"],
+      "outputs": ["dist/**"]
+    }
+  }
+}
