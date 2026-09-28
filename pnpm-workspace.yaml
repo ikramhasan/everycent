@@ -13,10 +13,10 @@ catalog:
   "@tailwindcss/vite": ^4.3.3
   "@tanstack/react-query": ^5.104.0
   "@tanstack/react-query-devtools": ^5.104.0
-  "@tanstack/react-router": ^1.170.40
+  "@tanstack/react-router": 1.170.38
   "@tanstack/react-router-devtools": ^1.167.2
-  "@tanstack/router-cli": ^1.167.39
-  "@tanstack/router-plugin": ^1.168.41
+  "@tanstack/router-cli": 1.167.38
+  "@tanstack/router-plugin": 1.168.40
   "@testing-library/jest-dom": ^7.0.1
   "@testing-library/react": ^16.3.3
   "@testing-library/user-event": ^14.6.7
@@ -54,3 +54,9 @@ catalog:
 # a non-frozen install, auto-append a minimumReleaseAgeExclude block instead — don't rely
 # on that; pin an older version instead so the security policy stays intact). turbo is
 # pinned to ^2.11.4 rather than ^2.11.5 for this reason (2.11.5 was too new at pin time).
+# Likewise @tanstack/react-router, router-cli, and router-plugin are pinned to exact
+# versions 1.170.38 / 1.167.38 / 1.168.40 (not the newer 1.170.40 / 1.167.39 / 1.168.41)
+# — those releases were too new at pin time. Exact pins (no ^) so pnpm doesn't silently
+# re-resolve to the newer, non-compliant patch that a caret range would also satisfy;
+# this also keeps their transitive router-core / router-generator versions within the
+# policy, so no exclusion list is needed.
