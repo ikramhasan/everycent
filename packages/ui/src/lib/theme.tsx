@@ -70,17 +70,20 @@ function withTransitionsDisabled(apply: () => void) {
  * Minimal, client-only theme provider with the same public shape as
  * next-themes' `ThemeProvider` + `useTheme` — but without next-themes'
  * inline anti-flash `<script>` tag. That script is meant to run as part of
- * server-rendered HTML, before React hydrates; in this app there is no
- * server render, so the tag is emitted by React itself when `ThemeProvider`
- * renders, and a script React renders is never executed on the client. That
- * produces a "script tag" console warning for no benefit here. Equivalent
- * anti-flash behavior instead lives as a real, static `<script>` in
- * index.html, which the browser does execute, before this provider mounts.
+ * server-rendered HTML, before React hydrates; consumers of this package are
+ * plain client-rendered SPAs with no server render, so the tag would be
+ * emitted by React itself when `ThemeProvider` renders, and a script React
+ * renders is never executed on the client. That produces a "script tag"
+ * console warning for no benefit in that setup — hence no dependency on
+ * next-themes at all here.
  *
- * Aliased to the "next-themes" import specifier in vite.config.ts, so
- * `@everycent/ui`'s sonner.tsx — which imports `useTheme` from "next-themes"
- * directly — resolves to this implementation too and stays in sync with the
- * app's actual theme.
+ * Consuming apps should apply the theme before first paint themselves, via a
+ * real static `<script>` in their index.html (not React-rendered, so the
+ * browser does execute it) that reads the same "theme" localStorage key —
+ * see apps/web/index.html for the reference implementation. `sonner.tsx` in
+ * this package imports `useTheme` from here directly, so it always reflects
+ * whatever this provider (if any) is mounted above it; with no provider
+ * mounted, `useTheme` falls back to `{ theme: "system", ... }`.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => readStoredTheme());

@@ -5,8 +5,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
+import { useTheme } from "@everycent/ui/lib/theme";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useTheme } from "@/lib/theme";
 
 export function ModeToggle() {
   const { setTheme } = useTheme();
