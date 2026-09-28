@@ -38,9 +38,16 @@ catalog:
   tailwindcss: ^4.3.3
   tsdown: ^0.23.0
   tsx: ^4.23.15
-  turbo: ^2.11.5
+  turbo: ^2.11.4
   typescript: ~5.9.3
   uuid: ^14.0.2
   vite: ^8.3.1
   vitest: ^5.0.2
   zod: ^4.6.5
+
+# pnpm 12 enforces a default minimumReleaseAge (24h) supply-chain policy: a brand-new
+# release only resolves once it has been on the registry for a day. Catalog entries here
+# must resolve to a version already past that cutoff, or `pnpm install` will fail (or, on
+# a non-frozen install, auto-append a minimumReleaseAgeExclude block instead — don't rely
+# on that; pin an older version instead so the security policy stays intact). turbo is
+# pinned to ^2.11.4 rather than ^2.11.5 for this reason (2.11.5 was too new at pin time).
