@@ -1,0 +1,27 @@
+{
+  "name": "@everycent/api-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../apps/api/openapi.json -o src/schema.gen.ts",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "catalog:",
+    "openapi-react-query": "catalog:"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "catalog:"
+  },
+  "devDependencies": {
+    "@everycent/tsconfig": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "openapi-typescript": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
