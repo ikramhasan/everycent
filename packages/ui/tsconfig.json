@@ -1,0 +1,5 @@
+{
+  "extends": "@everycent/tsconfig/react.json",
+  "compilerOptions": { "types": [] },
+  "include": ["src"]
+}

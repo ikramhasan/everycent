@@ -1,0 +1,8 @@
+{
+  "name": "@everycent/web",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@everycent/ui": "workspace:*"
+  }
+}
