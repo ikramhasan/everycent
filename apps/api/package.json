@@ -17,6 +17,8 @@
     "@hono/node-server": "catalog:",
     "@hono/zod-openapi": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"
   },

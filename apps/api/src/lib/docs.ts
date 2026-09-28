@@ -13,6 +13,13 @@ export const OPENAPI_CONFIG = {
 } as const;
 
 export function registerDocs(app: OpenAPIHono<AppEnv>): void {
+  app.openAPIRegistry.registerComponent("securitySchemes", "cookieAuth", {
+    type: "apiKey",
+    in: "cookie",
+    name: "better-auth.session_token",
+    description: "Session cookie set by the Better Auth endpoints under /api/auth",
+  });
+
   app.doc31("/openapi.json", OPENAPI_CONFIG);
   app.get("/docs", Scalar({ url: "/openapi.json", pageTitle: "everycent API" }));
 }

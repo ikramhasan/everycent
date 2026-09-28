@@ -6,6 +6,7 @@ import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { healthRouter } from "./routes/health";
+import { meRouter } from "./routes/me";
 import type { AppDeps } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -23,7 +24,10 @@ export function createApp(deps: AppDeps) {
   app.onError(onError);
   app.notFound(notFound);
 
+  app.on(["GET", "POST"], "/api/auth/*", (c) => c.var.deps.auth.handler(c.req.raw));
+
   app.route("/v1", healthRouter);
+  app.route("/v1", meRouter);
 
   registerDocs(app);
   return app;
