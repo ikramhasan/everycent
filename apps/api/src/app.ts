@@ -5,6 +5,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
+import { budgetsRouter } from "./routes/budgets";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 import type { AppDeps } from "./types";
@@ -24,10 +25,14 @@ export function createApp(deps: AppDeps) {
   app.onError(onError);
   app.notFound(notFound);
 
+  // Budgets are organization-plugin records, but clients must go through /v1/budgets (our
+  // validation, error shape and OpenAPI contract), so the plugin's own endpoints stay hidden.
+  app.all("/api/auth/organization/*", notFound);
   app.on(["GET", "POST"], "/api/auth/*", (c) => c.var.deps.auth.handler(c.req.raw));
 
   app.route("/v1", healthRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", budgetsRouter);
 
   registerDocs(app);
   return app;

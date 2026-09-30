@@ -59,3 +59,39 @@ export async function signUp(
     .join("; ");
   return { cookie, email };
 }
+
+export interface TestBudget {
+  id: string;
+  name: string;
+  currency: string;
+  numberFormat: string;
+  currencySymbolPosition: string;
+  dateFormat: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const budgetInput = {
+  name: "Household",
+  currency: "USD",
+  numberFormat: "comma_dot",
+  currencySymbolPosition: "before",
+  dateFormat: "MM/DD/YYYY",
+} as const;
+
+/** Creates a budget through the API as the user behind `cookie`. */
+export async function createBudget(
+  app: App,
+  cookie: string,
+  input: Partial<Record<keyof typeof budgetInput, string>> = {},
+): Promise<TestBudget> {
+  const res = await app.request("/v1/budgets", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ ...budgetInput, ...input }),
+  });
+  if (res.status !== 201)
+    throw new Error(`create budget failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as TestBudget;
+}

@@ -466,6 +466,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@everycent/engine':
+        specifier: workspace:*
+        version: link:../engine
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.3(kysely@0.29.6)(postgres@3.4.9)

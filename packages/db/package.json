@@ -14,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@everycent/engine": "workspace:*",
     "drizzle-orm": "catalog:",
     "postgres": "catalog:",
     "uuid": "catalog:"

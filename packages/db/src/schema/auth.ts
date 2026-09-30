@@ -21,6 +21,8 @@ export const session = pgTable(
     token: text().notNull().unique(),
     ipAddress: text(),
     userAgent: text(),
+    /** Added by the organization plugin; unused (the current budget lives in the URL). */
+    activeOrganizationId: text(),
     userId: text()
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

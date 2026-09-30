@@ -1,0 +1,145 @@
+import { BUDGET_ROLES } from "@everycent/db/schema";
+import {
+  zCurrencyCode,
+  zCurrencySymbolPosition,
+  zDateFormat,
+  zNumberFormat,
+} from "@everycent/engine";
+import { createRoute, z } from "@hono/zod-openapi";
+import { jsonError } from "../../lib/errors";
+import { requireAuth } from "../../middleware/require-auth";
+
+const BudgetName = z.string().trim().min(1).max(100);
+
+export const BudgetSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    currency: zCurrencyCode,
+    numberFormat: zNumberFormat,
+    currencySymbolPosition: zCurrencySymbolPosition,
+    dateFormat: zDateFormat,
+    role: z.enum(BUDGET_ROLES).describe("The signed-in user's role in this budget"),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .openapi("Budget");
+
+const BudgetListSchema = z
+  .object({
+    budgets: z.array(BudgetSchema),
+    lastUsedBudgetId: z.string().nullable(),
+  })
+  .openapi("BudgetList");
+
+const CreateBudgetSchema = z
+  .object({
+    name: BudgetName,
+    currency: zCurrencyCode,
+    numberFormat: zNumberFormat,
+    currencySymbolPosition: zCurrencySymbolPosition,
+    dateFormat: zDateFormat,
+  })
+  .openapi("CreateBudget");
+
+const UpdateBudgetSchema = z
+  .strictObject({
+    name: BudgetName.optional(),
+    numberFormat: zNumberFormat.optional(),
+    currencySymbolPosition: zCurrencySymbolPosition.optional(),
+    dateFormat: zDateFormat.optional(),
+  })
+  .openapi("UpdateBudget", { description: "The currency can't be changed after creation." });
+
+const BudgetParams = z.object({
+  budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
+});
+
+export const listBudgets = createRoute({
+  method: "get",
+  path: "/budgets",
+  operationId: "listBudgets",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Budgets the signed-in user belongs to",
+  responses: {
+    200: {
+      description: "Budgets sorted by name, and the last-used one",
+      content: { "application/json": { schema: BudgetListSchema } },
+    },
+    401: jsonError("Not signed in"),
+  },
+});
+
+export const createBudget = createRoute({
+  method: "post",
+  path: "/budgets",
+  operationId: "createBudget",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Create a budget (the caller becomes its owner)",
+  request: {
+    body: { required: true, content: { "application/json": { schema: CreateBudgetSchema } } },
+  },
+  responses: {
+    201: { description: "Created", content: { "application/json": { schema: BudgetSchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+  },
+});
+
+export const getBudget = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}",
+  operationId: "getBudget",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "One budget (also records it as the caller's last-used budget)",
+  request: { params: BudgetParams },
+  responses: {
+    200: { description: "The budget", content: { "application/json": { schema: BudgetSchema } } },
+    401: jsonError("Not signed in"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const updateBudget = createRoute({
+  method: "patch",
+  path: "/budgets/{budgetId}",
+  operationId: "updateBudget",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Rename a budget or change its formats",
+  request: {
+    params: BudgetParams,
+    body: { required: true, content: { "application/json": { schema: UpdateBudgetSchema } } },
+  },
+  responses: {
+    200: { description: "Updated", content: { "application/json": { schema: BudgetSchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't update this budget"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const deleteBudget = createRoute({
+  method: "delete",
+  path: "/budgets/{budgetId}",
+  operationId: "deleteBudget",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Delete a budget and everything in it (owner only)",
+  request: { params: BudgetParams },
+  responses: {
+    204: { description: "Deleted" },
+    401: jsonError("Not signed in"),
+    403: jsonError("Only the owner can delete a budget"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});

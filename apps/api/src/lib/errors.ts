@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { APIError } from "better-auth/api";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -49,6 +50,13 @@ const STATUS_CODES: Partial<Record<number, string>> = {
 export function onError(err: Error, c: Context) {
   if (err instanceof AppError) {
     return c.json(errorBody(err.code, err.message, err.details), err.status);
+  }
+  if (err instanceof APIError) {
+    // Thrown by server-side auth.api.* calls (e.g. the organization plugin behind /v1/budgets).
+    const body = err.body as { code?: string; message?: string } | undefined;
+    const status = err.statusCode as ContentfulStatusCode;
+    const code = body?.code ?? STATUS_CODES[status] ?? "HTTP_ERROR";
+    return c.json(errorBody(code, body?.message || err.message || "Request failed"), status);
   }
   if (err instanceof HTTPException) {
     const code = STATUS_CODES[err.status] ?? "HTTP_ERROR";

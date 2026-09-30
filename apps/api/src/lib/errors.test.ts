@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { APIError } from "better-auth/api";
 import { describe, expect, it, vi } from "vitest";
 import { AppError, notFound, onError } from "./errors";
 import { createRouter } from "./router";
@@ -18,6 +19,9 @@ function buildTestRouter() {
   );
   router.get("/app-error", () => {
     throw new AppError(409, "CONFLICT", "Already exists", { field: "email" });
+  });
+  router.get("/auth-error", () => {
+    throw APIError.from("FORBIDDEN", { code: "NOT_ALLOWED", message: "Not allowed" });
   });
   router.get("/boom", () => {
     throw new Error("secret internal detail");
@@ -42,6 +46,12 @@ describe("error handling", () => {
     expect(await res.json()).toEqual({
       error: { code: "CONFLICT", message: "Already exists", details: { field: "email" } },
     });
+  });
+
+  it("renders Better Auth APIErrors in the standard shape", async () => {
+    const res = await buildTestRouter().request("/auth-error");
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: { code: "NOT_ALLOWED", message: "Not allowed" } });
   });
 
   it("hides unexpected errors behind a generic 500", async () => {
