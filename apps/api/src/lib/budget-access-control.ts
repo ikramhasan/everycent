@@ -11,6 +11,7 @@ import { defaultStatements } from "better-auth/plugins/organization/access";
 export const budgetAc = createAccessControl({
   ...defaultStatements,
   category: ["create", "update", "delete"],
+  account: ["create", "update", "delete"],
 } as const);
 
 export const budgetRoles = {
@@ -19,10 +20,12 @@ export const budgetRoles = {
     member: ["create", "update", "delete"],
     invitation: ["create", "cancel"],
     category: ["create", "update", "delete"],
+    account: ["create", "update", "delete"],
   }),
   editor: budgetAc.newRole({
     organization: ["update"],
     category: ["create", "update", "delete"],
+    account: ["create", "update", "delete"],
   }),
 } satisfies Record<BudgetRole, unknown>;
 

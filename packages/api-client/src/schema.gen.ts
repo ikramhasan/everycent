@@ -155,7 +155,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a category */
+        /** Delete a category, moving its history to another category */
         delete: operations["deleteCategory"];
         options?: never;
         head?: never;
@@ -174,6 +174,116 @@ export interface paths {
         put?: never;
         /** Move a category within its group or into another group */
         post: operations["moveCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The budget's accounts with their balances */
+        get: operations["listAccounts"];
+        put?: never;
+        /**
+         * Add an account with its starting balance
+         * @description Creates a Starting Balance transaction dated `date`. Credit accounts also get a payment category. Debt balances are negative.
+         */
+        post: operations["createAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an account that has no history beyond its starting balance */
+        delete: operations["deleteAccount"];
+        options?: never;
+        head?: never;
+        /** Rename an account, edit its note, type or loan details */
+        patch: operations["updateAccount"];
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move an account before another one, or to the end */
+        post: operations["moveAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close an account
+         * @description A non-zero balance is zeroed with a Manual Balance Adjustment dated `date` (for budget accounts it comes out of Ready to Assign). A credit account's payment category is hidden.
+         */
+        post: operations["closeAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed account (and show its payment category again) */
+        post: operations["reopenAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An account's transactions, newest first */
+        get: operations["listAccountTransactions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -295,6 +405,11 @@ export interface components {
             id: string;
             name: string;
             hidden: boolean;
+            /**
+             * @description credit_card_payments: managed by YNAB rules, listed first
+             * @enum {string|null}
+             */
+            kind: "credit_card_payments" | null;
             /** @description In display order, hidden ones included */
             categories: components["schemas"]["Category"][];
         };
@@ -304,6 +419,8 @@ export interface components {
             name: string;
             note: string;
             hidden: boolean;
+            /** @description Set on a credit account's payment category, which is named after the account */
+            linkedAccountId: string | null;
         };
         CreateCategoryGroup: {
             name: string;
@@ -330,6 +447,117 @@ export interface components {
             groupId: string;
             /** @description Place it right before this category in that group; null moves it to the end */
             beforeCategoryId: string | null;
+        };
+        AccountList: {
+            /** @description In sidebar order, closed ones included */
+            accounts: components["schemas"]["Account"][];
+        };
+        Account: {
+            id: string;
+            name: string;
+            /**
+             * @description YNAB account type
+             * @enum {string}
+             */
+            type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            note: string;
+            closed: boolean;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            interestRate: string | null;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            minimumPayment: string | null;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            escrowAmount: string | null;
+            /** @description Credit accounts: their payment category */
+            paymentCategoryId: string | null;
+            balances: components["schemas"]["AccountBalances"];
+        };
+        AccountBalances: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            cleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            uncleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            working: string;
+        };
+        CreateAccount: {
+            name: string;
+            /**
+             * @description YNAB account type
+             * @enum {string}
+             */
+            type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            /**
+             * @description Defaults to the budget's currency, which is the only one allowed for now
+             * @enum {string}
+             */
+            currency?: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description Today's balance; negative for money owed */
+            balance: string;
+            /**
+             * Format: date
+             * @description Date of the starting balance (the user's today)
+             */
+            date: string;
+            /** @description Annual interest rate in percent (loan accounts) */
+            interestRate?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            minimumPayment?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            escrowAmount?: string;
+        };
+        UpdateAccount: {
+            name?: string;
+            note?: string;
+            /**
+             * @description Only within the same family (cash, credit, loan, tracking)
+             * @enum {string}
+             */
+            type?: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            /** @description Annual interest rate in percent (loan accounts) */
+            interestRate?: string | null;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            minimumPayment?: string | null;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            escrowAmount?: string | null;
+        };
+        MoveAccount: {
+            /** @description Place it right before this account; null moves it to the end */
+            beforeAccountId: string | null;
+        };
+        CloseAccount: {
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date: string;
+        };
+        TransactionList: {
+            transactions: components["schemas"]["Transaction"][];
+        };
+        Transaction: {
+            id: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            payeeName: string | null;
+            categoryName: string | null;
+            memo: string;
+            /** @enum {string} */
+            cleared: "uncleared" | "cleared" | "reconciled";
         };
     };
     responses: never;
@@ -718,6 +946,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     createCategoryGroup: {
@@ -780,11 +1017,23 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteCategoryGroup: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Required when the category (or a category in the group) has transactions */
+                reassignToCategoryId?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -800,6 +1049,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Invalid reassignment target */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Not signed in */
             401: {
@@ -821,6 +1079,15 @@ export interface operations {
             };
             /** @description No such budget, group or category, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -891,6 +1158,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     moveCategoryGroup: {
@@ -954,11 +1230,23 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteCategory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Required when the category (or a category in the group) has transactions */
+                reassignToCategoryId?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -974,6 +1262,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Invalid reassignment target */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Not signed in */
             401: {
@@ -995,6 +1292,15 @@ export interface operations {
             };
             /** @description No such budget, group or category, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1065,6 +1371,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     moveCategory: {
@@ -1120,6 +1435,454 @@ export interface operations {
                 };
             };
             /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accounts in sidebar order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccount"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ACCOUNT_HAS_HISTORY: close the account instead */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccount"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    moveAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveAccount"];
+            };
+        };
+        responses: {
+            /** @description Accounts in their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountList"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    closeAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseAccount"];
+            };
+        };
+        responses: {
+            /** @description Closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    reopenAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reopened */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAccountTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

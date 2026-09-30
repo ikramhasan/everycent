@@ -1,3 +1,4 @@
+import { CATEGORY_GROUP_KINDS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -12,6 +13,10 @@ export const CategorySchema = z
     name: z.string(),
     note: z.string(),
     hidden: z.boolean(),
+    linkedAccountId: z
+      .string()
+      .nullable()
+      .describe("Set on a credit account's payment category, which is named after the account"),
   })
   .openapi("Category");
 
@@ -20,6 +25,10 @@ export const CategoryGroupSchema = z
     id: z.string(),
     name: z.string(),
     hidden: z.boolean(),
+    kind: z
+      .enum(CATEGORY_GROUP_KINDS)
+      .nullable()
+      .describe("credit_card_payments: managed by YNAB rules, listed first"),
     categories: z.array(CategorySchema).describe("In display order, hidden ones included"),
   })
   .openapi("CategoryGroup");
@@ -41,6 +50,19 @@ const CategoryParams = BudgetParams.extend({
 function json<T extends z.ZodType>(schema: T) {
   return { required: true, content: { "application/json": { schema } } } as const;
 }
+
+const ReassignQuery = z.object({
+  reassignToCategoryId: z
+    .string()
+    .optional()
+    .openapi({
+      param: { name: "reassignToCategoryId", in: "query" },
+      description: "Required when the category (or a category in the group) has transactions",
+    }),
+});
+const managed = jsonError(
+  "MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId",
+);
 
 const notFound = jsonError("No such budget, group or category, or the caller isn't a member");
 
@@ -84,6 +106,7 @@ export const createCategoryGroup = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -112,6 +135,7 @@ export const updateCategoryGroup = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -123,12 +147,14 @@ export const deleteCategoryGroup = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Delete a category group and its categories",
-  request: { params: GroupParams },
+  request: { params: GroupParams, query: ReassignQuery },
   responses: {
     204: { description: "Deleted" },
+    400: jsonError("Invalid reassignment target"),
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -162,6 +188,7 @@ export const moveCategoryGroup = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -183,6 +210,7 @@ export const createCategory = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -212,6 +240,7 @@ export const updateCategory = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -222,13 +251,15 @@ export const deleteCategory = createRoute({
   tags: ["Categories"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "Delete a category",
-  request: { params: CategoryParams },
+  summary: "Delete a category, moving its history to another category",
+  request: { params: CategoryParams, query: ReassignQuery },
   responses: {
     204: { description: "Deleted" },
+    400: jsonError("Invalid reassignment target"),
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });
 
@@ -265,5 +296,6 @@ export const moveCategory = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+    409: managed,
   },
 });

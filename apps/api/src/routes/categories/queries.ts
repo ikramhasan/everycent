@@ -1,20 +1,31 @@
-import { type Database, newId } from "@everycent/db";
-import { category, categoryGroup } from "@everycent/db/schema";
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { newId, sql } from "@everycent/db";
+import { category, categoryGroup, transaction } from "@everycent/db/schema";
+import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
-
-type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type Db = Database | Tx;
+import type { Db } from "../../lib/ledger";
 
 export type CategoryRow = typeof category.$inferSelect;
 export type CategoryGroupRow = typeof categoryGroup.$inferSelect;
 
 export function toCategoryJson(c: CategoryRow) {
-  return { id: c.id, groupId: c.groupId, name: c.name, note: c.note, hidden: c.hidden };
+  return {
+    id: c.id,
+    groupId: c.groupId,
+    name: c.name,
+    note: c.note,
+    hidden: c.hidden,
+    linkedAccountId: c.linkedAccountId,
+  };
 }
 
 export function toGroupJson(g: CategoryGroupRow, categories: CategoryRow[]) {
-  return { id: g.id, name: g.name, hidden: g.hidden, categories: categories.map(toCategoryJson) };
+  return {
+    id: g.id,
+    name: g.name,
+    hidden: g.hidden,
+    kind: g.kind,
+    categories: categories.map(toCategoryJson),
+  };
 }
 
 /** Visible-to-users groups and categories (internal ones excluded), in display order. */
@@ -23,7 +34,12 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .select()
     .from(categoryGroup)
     .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)))
-    .orderBy(asc(categoryGroup.sortOrder), asc(categoryGroup.id));
+    // YNAB pins Credit Card Payments to the top.
+    .orderBy(
+      sql`${categoryGroup.kind} is null`,
+      asc(categoryGroup.sortOrder),
+      asc(categoryGroup.id),
+    );
   const categories = await db
     .select()
     .from(category)
@@ -103,33 +119,52 @@ export async function insertCategory(db: Db, budgetId: string, groupId: string, 
   return row;
 }
 
-/**
- * Returns `ids` without `movingId`, with `movingId` inserted before `beforeId` (or at the end
- * when `beforeId` is null). `beforeId` must be one of `ids`.
- */
-export function reorder(ids: readonly string[], movingId: string, beforeId: string | null) {
-  const rest = ids.filter((id) => id !== movingId);
-  if (beforeId === null || beforeId === movingId) {
-    if (beforeId === movingId) return [...ids];
-    return [...rest, movingId];
-  }
-  const at = rest.indexOf(beforeId);
-  if (at === -1)
-    throw new AppError(400, "BAD_REQUEST", "The position to move to isn't in that list");
-  return [...rest.slice(0, at), movingId, ...rest.slice(at)];
+/** Refuses edits YNAB doesn't allow on the Credit Card Payments group and payment categories. */
+export function managedError(message: string) {
+  return new AppError(409, "MANAGED_CATEGORY", message);
 }
 
-/** Rewrites sort_order to match `ids` (0-based). Lists are short, so one update per row is fine. */
-export async function writeOrder(
-  tx: Tx,
-  table: typeof category | typeof categoryGroup,
-  ids: readonly string[],
-  extra: Partial<{ groupId: string }> = {},
+/** Whether any transaction uses one of these categories. */
+export async function hasHistory(db: Db, categoryIds: readonly string[]) {
+  if (categoryIds.length === 0) return false;
+  const [row] = await db
+    .select({ id: transaction.id })
+    .from(transaction)
+    .where(inArray(transaction.categoryId, [...categoryIds]))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Moves the history of categories that are about to be deleted to `targetId`, which must be
+ * another category of the budget (Ready to Assign and Uncategorized included, payment categories
+ * not). Without a target, deleting a category with history is refused.
+ */
+export async function reassignHistory(
+  db: Db,
+  budgetId: string,
+  categoryIds: readonly string[],
+  targetId: string | undefined,
 ) {
-  for (const [sortOrder, id] of ids.entries()) {
-    await tx
-      .update(table)
-      .set({ sortOrder, ...extra })
-      .where(eq(table.id, id));
+  if (!(await hasHistory(db, categoryIds))) return;
+  if (!targetId) {
+    throw new AppError(
+      409,
+      "CATEGORY_HAS_HISTORY",
+      "This category has transactions. Choose a category to move them to.",
+    );
   }
+  const [target] = await db
+    .select()
+    .from(category)
+    .where(and(eq(category.id, targetId), eq(category.budgetId, budgetId)));
+  if (!target) throw new AppError(404, "NOT_FOUND", "The category to move history to wasn't found");
+  if (categoryIds.includes(target.id) || target.linkedAccountId) {
+    throw new AppError(400, "BAD_REQUEST", "History can't be moved to that category");
+  }
+  // Phase 6 must move assigned amounts too (docs/deferred.md).
+  await db
+    .update(transaction)
+    .set({ categoryId: target.id })
+    .where(inArray(transaction.categoryId, [...categoryIds]));
 }

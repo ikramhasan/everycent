@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { budgetAccount } from "./account";
 import { budget } from "./budget";
 import { timestamps } from "./columns";
 
@@ -9,6 +10,10 @@ import { timestamps } from "./columns";
  */
 export const INTERNAL_CATEGORY_KINDS = ["ready_to_assign", "uncategorized"] as const;
 export type InternalCategoryKind = (typeof INTERNAL_CATEGORY_KINDS)[number];
+
+/** Groups YNAB manages itself. */
+export const CATEGORY_GROUP_KINDS = ["credit_card_payments"] as const;
+export type CategoryGroupKind = (typeof CATEGORY_GROUP_KINDS)[number];
 
 export const categoryGroup = pgTable(
   "category_group",
@@ -23,6 +28,8 @@ export const categoryGroup = pgTable(
     hidden: boolean().notNull().default(false),
     /** Holds the internal categories; never listed, renamed, moved or deleted. */
     internal: boolean().notNull().default(false),
+    /** "credit_card_payments": listed first; can't be renamed, moved, hidden or deleted. */
+    kind: text({ enum: CATEGORY_GROUP_KINDS }),
     ...timestamps,
   },
   (t) => [
@@ -30,6 +37,9 @@ export const categoryGroup = pgTable(
     uniqueIndex("category_group_one_internal_per_budget_idx")
       .on(t.budgetId)
       .where(sql`${t.internal}`),
+    uniqueIndex("category_group_kind_per_budget_idx")
+      .on(t.budgetId, t.kind)
+      .where(sql`${t.kind} is not null`),
   ],
 );
 
@@ -49,6 +59,10 @@ export const category = pgTable(
     sortOrder: integer().notNull(),
     hidden: boolean().notNull().default(false),
     internalKind: text({ enum: INTERNAL_CATEGORY_KINDS }),
+    /** Set on a credit account's payment category; named after the account. */
+    linkedAccountId: text()
+      .unique()
+      .references(() => budgetAccount.id, { onDelete: "cascade" }),
     ...timestamps,
   },
   (t) => [

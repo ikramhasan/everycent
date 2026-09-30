@@ -10,13 +10,21 @@ const data: CategoryListData = {
       id: "g1",
       name: "Bills",
       hidden: false,
+      kind: null,
       categories: [
-        { id: "c1", groupId: "g1", name: "Rent", note: "", hidden: false },
-        { id: "c2", groupId: "g1", name: "Electric", note: "Pays quarterly", hidden: false },
-        { id: "c3", groupId: "g1", name: "Cable", note: "", hidden: true },
+        { id: "c1", groupId: "g1", name: "Rent", note: "", hidden: false, linkedAccountId: null },
+        {
+          id: "c2",
+          groupId: "g1",
+          name: "Electric",
+          note: "Pays quarterly",
+          hidden: false,
+          linkedAccountId: null,
+        },
+        { id: "c3", groupId: "g1", name: "Cable", note: "", hidden: true, linkedAccountId: null },
       ],
     },
-    { id: "g2", name: "Old", hidden: true, categories: [] },
+    { id: "g2", name: "Old", hidden: true, kind: null, categories: [] },
   ],
 };
 

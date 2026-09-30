@@ -1,6 +1,7 @@
 # everycent — agent guide
 
-Read `README.md` first.
+Read `README.md` first, then `docs/deferred.md` (known gaps and work deliberately left for later
+phases — check it before starting a phase, and add to it whenever you defer something).
 
 ## Invariants (never break)
 

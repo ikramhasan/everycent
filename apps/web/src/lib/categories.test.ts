@@ -13,13 +13,20 @@ const c = (id: string, groupId: string, hidden = false) => ({
   name: id,
   note: "",
   hidden,
+  linkedAccountId: null,
 });
 
 const list: CategoryList = {
   groups: [
-    { id: "g1", name: "Bills", hidden: false, categories: [c("rent", "g1"), c("old", "g1", true)] },
-    { id: "g2", name: "Old stuff", hidden: true, categories: [c("x", "g2")] },
-    { id: "g3", name: "Fun", hidden: false, categories: [] },
+    {
+      id: "g1",
+      name: "Bills",
+      hidden: false,
+      kind: null,
+      categories: [c("rent", "g1"), c("old", "g1", true)],
+    },
+    { id: "g2", name: "Old stuff", hidden: true, kind: null, categories: [c("x", "g2")] },
+    { id: "g3", name: "Fun", hidden: false, kind: null, categories: [] },
   ],
 };
 
