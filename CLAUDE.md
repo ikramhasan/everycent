@@ -13,6 +13,14 @@ Read `README.md` first.
 - Every route has an `operationId`, a response schema and documented error responses (`jsonError`).
 - Authed routes use `middleware: [requireAuth] as const` and `security: [{ cookieAuth: [] }]`.
 - Handlers read dependencies from `c.var.deps` — never import a global db/auth.
+- Budget-scoped routes live under `/v1/budgets/{budgetId}/…` and authorize through
+  `loadBudgetAccess(c, budgetId, permission?)` (`apps/api/src/lib/budget-access.ts`): non-members
+  get 404, members lacking the permission get 403. Never query budget data without it.
+- Budgets are Better Auth organization-plugin records (`budget`, `budget_member`,
+  `budget_invitation`). Clients use `/v1/budgets`; the plugin's `/api/auth/organization/*`
+  endpoints are blocked in `app.ts`. Roles live in `apps/api/src/lib/budget-access-control.ts`.
+- Better Auth owns the `account` table (logins). The finance accounts table needs another name
+  (e.g. `budget_account`).
 - After changing API routes: `pnpm generate` and commit `apps/api/openapi.json` +
   `packages/api-client/src/schema.gen.ts` (a test fails if they drift).
 - Schema changes: edit `packages/db/src/schema/*`, then `pnpm db:generate`; commit migrations.

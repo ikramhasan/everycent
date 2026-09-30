@@ -21,15 +21,19 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@everycent/ui/components/sidebar";
-import { useQueryClient } from "@tanstack/react-query";
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { ChevronsUpDown, LogOut, Wallet } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
+import { ChevronsUpDown, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { budgetsQueryOptions } from "@/lib/budgets";
+import { BudgetSwitcher } from "./budget-switcher";
 import { ModeToggle } from "./mode-toggle";
 
 export function AppShell({ user }: { user: { name: string; email: string } }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { budgetId } = useParams({ strict: false });
+  const budgets = useQuery(budgetsQueryOptions());
 
   async function signOut() {
     await authClient.signOut();
@@ -48,21 +52,53 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <Link to="/" className="px-2 py-1.5 font-semibold text-lg tracking-tight">
-            everycent
-          </Link>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <BudgetSwitcher budgets={budgets.data?.budgets ?? []} currentBudgetId={budgetId} />
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link to="/" activeProps={{ "data-active": true }}>
-                    <Wallet />
-                    <span>Budget</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {budgetId ? (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/budgets/$budgetId"
+                        params={{ budgetId }}
+                        activeOptions={{ exact: true }}
+                        activeProps={{ "data-active": true }}
+                      >
+                        <Wallet />
+                        <span>Budget</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/budgets/$budgetId/settings"
+                        params={{ budgetId }}
+                        activeProps={{ "data-active": true }}
+                      >
+                        <Settings />
+                        <span>Budget settings</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link to="/budgets" activeProps={{ "data-active": true }}>
+                      <LayoutGrid />
+                      <span>All budgets</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>

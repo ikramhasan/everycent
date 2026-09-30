@@ -75,13 +75,15 @@ Items marked **(extra)** go beyond what YNAB offers.
 
 ### 2. Budgets (plans)
 
-- [ ] Create / rename / delete a budget
-- [ ] Multiple budgets per user, budget switcher, last-used budget remembered
-- [ ] Budget base currency + currency display settings (symbol position, separators)
-- [ ] Budget date format and number format settings
-- [ ] Default category template on creation (YNAB-style starter groups)
-- [ ] Onboarding flow for a new budget (add first account, pick categories)
-- [ ] Fresh start (archive the old budget, start a new one with the same categories/accounts)
+- [x] Create / rename / delete a budget
+- [x] Multiple budgets per user, budget switcher, last-used budget remembered
+- [x] Budget base currency + currency display settings (symbol position, separators)
+- [x] Budget date format and number format settings
+- [x] Shared-budget foundation: `budget_member` roles (owner, editor) on the Better Auth
+      organization plugin, ready for phase 16
+
+Moved to the phases that unblock them: the default category template (phase 4), and onboarding
+and fresh start (after phase 5 core).
 
 ### 3. Accounts
 
@@ -108,6 +110,7 @@ Items marked **(extra)** go beyond what YNAB offers.
 - [ ] Auto-created credit card payment categories (one per credit account)
 - [ ] Hidden categories section
 - [ ] Category emoji / icons **(extra)**
+- [ ] Default category template on budget creation (YNAB-style starter groups) — moved from phase 2
 
 ### 5. Transactions & register
 
@@ -126,6 +129,11 @@ Items marked **(extra)** go beyond what YNAB offers.
 - [ ] Future-dated transactions (excluded from balances until the date)
 - [ ] Tags on transactions **(extra)**
 - [ ] Receipt / file attachments **(extra)**
+
+#### Budget onboarding (moved from phase 2; needs phases 3–5 core)
+
+- [ ] Onboarding flow for a new budget (add first account, pick categories)
+- [ ] Fresh start (archive the old budget, start a new one with the same categories/accounts)
 
 ### 6. Budget screen (the core loop)
 
