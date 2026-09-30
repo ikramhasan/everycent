@@ -1,6 +1,6 @@
 # everycent — agent guide
 
-Read `README.md` first. Design: `docs/superpowers/specs/2026-09-28-monorepo-foundation-design.md`.
+Read `README.md` first.
 
 ## Invariants (never break)
 
