@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@everycent/db": "workspace:*",
-    "@everycent/money": "workspace:*",
+    "@everycent/engine": "workspace:*",
     "@hono/node-server": "catalog:",
     "@hono/zod-openapi": "catalog:",
     "@scalar/hono-api-reference": "catalog:",

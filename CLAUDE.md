@@ -4,10 +4,10 @@ Read `README.md` first. Design: `docs/superpowers/specs/2026-09-28-monorepo-foun
 
 ## Invariants (never break)
 
-- **Money is never a float.** Use `@everycent/money`: `bigint` minor units + `CurrencyCode`.
+- **Money is never a float.** Use `@everycent/engine`: `bigint` minor units + `CurrencyCode`.
   DB: `bigint` column (mode "bigint") + adjacent `currency char(3)`. JSON: integer string
   (`zMoney`/`zMinorUnits`). Never `Number(amount)`, never `parseFloat`.
-- Currency exponents in `packages/money/src/currency.ts` must never change for an existing code.
+- Currency exponents in `packages/engine/src/currency.ts` must never change for an existing code.
 - Every API router comes from `createRouter()` (shared validation error shape). Errors are thrown
   as `AppError(status, CODE, message)` and rendered as `{ error: { code, message, details? } }`.
 - Every route has an `operationId`, a response schema and documented error responses (`jsonError`).

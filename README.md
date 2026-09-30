@@ -11,7 +11,7 @@ multi-currency support.
 | API (`apps/api`) | Hono + @hono/zod-openapi on Node, Better Auth, Scalar docs |
 | Web (`apps/web`) | Vite + React 19, TanStack Router + Query, Tailwind v4, shadcn/ui |
 | DB (`packages/db`) | PostgreSQL 17 + Drizzle ORM |
-| Money (`packages/money`) | Exact bigint minor-unit arithmetic, ISO 4217, FX |
+| Engine (`packages/engine`) | Money: exact bigint minor-unit arithmetic, ISO 4217, FX |
 | API client (`packages/api-client`) | Generated from OpenAPI (openapi-typescript + openapi-fetch) |
 | UI (`packages/ui`) | Shared shadcn/ui components and theme |
 
@@ -56,7 +56,7 @@ Items marked **(extra)** go beyond what YNAB offers.
 ### 0. Foundation
 
 - [x] Monorepo, tooling, CI-style `pnpm check`
-- [x] `@everycent/money`: bigint minor units, ISO 4217 exponents, parse/format, allocation, rounding, FX primitives
+- [x] `@everycent/engine`: bigint minor units, ISO 4217 exponents, parse/format, allocation, rounding, FX primitives
 - [x] API skeleton: `createRouter()`, `AppError`, OpenAPI + Scalar docs, generated typed client
 - [x] PostgreSQL + Drizzle, UUIDv7 ids, migrations, test DB harness
 - [x] Better Auth email/password sign-up, sign-in, sign-out; `/v1/me`
