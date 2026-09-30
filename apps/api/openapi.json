@@ -688,6 +688,10 @@
               "null"
             ],
             "description": "Set on a credit account's payment category, which is named after the account"
+          },
+          "hasTransactions": {
+            "type": "boolean",
+            "description": "Deleting it requires reassignToCategoryId"
           }
         },
         "required": [
@@ -696,7 +700,8 @@
           "name",
           "note",
           "hidden",
-          "linkedAccountId"
+          "linkedAccountId",
+          "hasTransactions"
         ]
       },
       "CreateCategoryGroup": {

@@ -14,6 +14,7 @@ const c = (id: string, groupId: string, hidden = false) => ({
   note: "",
   hidden,
   linkedAccountId: null,
+  hasTransactions: false,
 });
 
 const list: CategoryList = {

@@ -421,6 +421,8 @@ export interface components {
             hidden: boolean;
             /** @description Set on a credit account's payment category, which is named after the account */
             linkedAccountId: string | null;
+            /** @description Deleting it requires reassignToCategoryId */
+            hasTransactions: boolean;
         };
         CreateCategoryGroup: {
             name: string;

@@ -20,6 +20,7 @@ export function NamePopover({
   initial = { name: "", note: "" },
   withNote = false,
   submitLabel = "OK",
+  nameLockedReason,
   onSubmit,
   actions,
 }: {
@@ -28,6 +29,8 @@ export function NamePopover({
   initial?: NameValues;
   withNote?: boolean;
   submitLabel?: string;
+  /** Shows the name read-only with this explanation (e.g. payment categories). */
+  nameLockedReason?: string;
   onSubmit: (values: NameValues) => Promise<void> | void;
   /** Extra buttons; call `close()` when one finishes. */
   actions?: (close: () => void) => ReactNode;
@@ -67,9 +70,13 @@ export function NamePopover({
               value={values.name}
               onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
               maxLength={100}
-              autoFocus
+              autoFocus={!nameLockedReason}
+              readOnly={Boolean(nameLockedReason)}
               required
             />
+            {nameLockedReason && (
+              <p className="text-muted-foreground text-xs">{nameLockedReason}</p>
+            )}
           </div>
           {withNote && (
             <div className="grid gap-1.5">

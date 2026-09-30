@@ -12,7 +12,15 @@ const data: CategoryListData = {
       hidden: false,
       kind: null,
       categories: [
-        { id: "c1", groupId: "g1", name: "Rent", note: "", hidden: false, linkedAccountId: null },
+        {
+          id: "c1",
+          groupId: "g1",
+          name: "Rent",
+          note: "",
+          hidden: false,
+          linkedAccountId: null,
+          hasTransactions: false,
+        },
         {
           id: "c2",
           groupId: "g1",
@@ -20,15 +28,72 @@ const data: CategoryListData = {
           note: "Pays quarterly",
           hidden: false,
           linkedAccountId: null,
+          hasTransactions: false,
         },
-        { id: "c3", groupId: "g1", name: "Cable", note: "", hidden: true, linkedAccountId: null },
+        {
+          id: "c3",
+          groupId: "g1",
+          name: "Cable",
+          note: "",
+          hidden: true,
+          linkedAccountId: null,
+          hasTransactions: false,
+        },
       ],
     },
     { id: "g2", name: "Old", hidden: true, kind: null, categories: [] },
   ],
 };
 
-function renderList() {
+const withCards: CategoryListData = {
+  groups: [
+    {
+      id: "cc",
+      name: "Credit Card Payments",
+      hidden: false,
+      kind: "credit_card_payments",
+      categories: [
+        {
+          id: "pay",
+          groupId: "cc",
+          name: "Visa",
+          note: "",
+          hidden: false,
+          linkedAccountId: "acct",
+          hasTransactions: false,
+        },
+      ],
+    },
+    {
+      id: "g1",
+      name: "Bills",
+      hidden: false,
+      kind: null,
+      categories: [
+        {
+          id: "c1",
+          groupId: "g1",
+          name: "Rent",
+          note: "",
+          hidden: false,
+          linkedAccountId: null,
+          hasTransactions: true,
+        },
+        {
+          id: "c2",
+          groupId: "g1",
+          name: "Water",
+          note: "",
+          hidden: false,
+          linkedAccountId: null,
+          hasTransactions: false,
+        },
+      ],
+    },
+  ],
+};
+
+function renderList(list: CategoryListData = data) {
   const actions = Object.fromEntries(
     [
       "createGroup",
@@ -41,7 +106,7 @@ function renderList() {
       "moveCategory",
     ].map((name) => [name, vi.fn().mockResolvedValue(undefined)]),
   ) as unknown as { [K in keyof CategoryListActions]: ReturnType<typeof vi.fn> };
-  render(<CategoryList data={data} actions={actions as unknown as CategoryListActions} />);
+  render(<CategoryList data={list} actions={actions as unknown as CategoryListActions} />);
   return actions;
 }
 
@@ -104,7 +169,7 @@ describe("CategoryList", () => {
     expect(dialog).toHaveTextContent("Delete “Bills”?");
     expect(actions.deleteGroup).not.toHaveBeenCalled();
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    expect(actions.deleteGroup).toHaveBeenCalledWith("g1");
+    expect(actions.deleteGroup).toHaveBeenCalledWith("g1", undefined);
   });
 
   it("lists hidden groups and categories and can show them again", async () => {
@@ -116,5 +181,49 @@ describe("CategoryList", () => {
     const old = screen.getByText("Old").closest("li");
     await userEvent.click(within(old as HTMLElement).getByRole("button", { name: "Show" }));
     expect(actions.updateGroup).toHaveBeenCalledWith("g2", { hidden: false });
+  });
+
+  it("locks the Credit Card Payments group and payment category names", async () => {
+    renderList(withCards);
+    expect(screen.queryByRole("button", { name: "Credit Card Payments" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add a category to Credit Card Payments" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reorder Credit Card Payments" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Visa" }));
+    expect(screen.getByLabelText("Category name")).toHaveAttribute("readonly");
+    expect(screen.getByText(/Rename the account instead/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide" })).toBeInTheDocument();
+  });
+
+  it("asks where to move a category's transactions before deleting it", async () => {
+    const actions = renderList(withCards);
+    await userEvent.click(screen.getByRole("button", { name: "Rent" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    expect(confirm).toBeDisabled();
+
+    const select = within(dialog).getByLabelText("Move its transactions to");
+    const options = within(select)
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    // Not itself, and never a payment category.
+    expect(options).toEqual(["Select a category…", "Water"]);
+    await userEvent.selectOptions(select, "c2");
+    await userEvent.click(confirm);
+    expect(actions.deleteCategory).toHaveBeenCalledWith("c1", "c2");
+  });
+
+  it("deletes a category without history straight away", async () => {
+    const actions = renderList(withCards);
+    await userEvent.click(screen.getByRole("button", { name: "Water" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).queryByLabelText("Move its transactions to")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(actions.deleteCategory).toHaveBeenCalledWith("c2", undefined);
   });
 });

@@ -17,6 +17,7 @@ export const CategorySchema = z
       .string()
       .nullable()
       .describe("Set on a credit account's payment category, which is named after the account"),
+    hasTransactions: z.boolean().describe("Deleting it requires reassignToCategoryId"),
   })
   .openapi("Category");
 

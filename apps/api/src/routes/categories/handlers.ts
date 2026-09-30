@@ -8,6 +8,7 @@ import type { AppEnv } from "../../types";
 import {
   findCategory,
   findGroup,
+  hasHistory,
   insertCategory,
   insertGroup,
   listCategoryTree,
@@ -162,7 +163,7 @@ export const updateCategoryHandler: RouteHandler<typeof updateCategory, Env> = a
       .returning();
     if (updated) row = updated;
   }
-  return c.json(toCategoryJson(row), 200);
+  return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
 };
 
 export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = async (c) => {

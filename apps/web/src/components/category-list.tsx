@@ -13,6 +13,8 @@ import {
   AlertDialogTitle,
 } from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
+import { Label } from "@everycent/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronRight, EyeOff, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -36,8 +38,9 @@ export interface CategoryListActions {
     categoryId: string,
     patch: { name?: string; note?: string; hidden?: boolean },
   ) => Promise<void>;
-  deleteGroup: (groupId: string) => Promise<void>;
-  deleteCategory: (categoryId: string) => Promise<void>;
+  /** `reassignTo` receives the history of categories that have transactions. */
+  deleteGroup: (groupId: string, reassignTo?: string) => Promise<void>;
+  deleteCategory: (categoryId: string, reassignTo?: string) => Promise<void>;
   moveGroup: (groupId: string, beforeGroupId: string | null) => Promise<void>;
   moveCategory: (
     categoryId: string,
@@ -46,7 +49,17 @@ export interface CategoryListActions {
   ) => Promise<void>;
 }
 
-type PendingDelete = { kind: "group" | "category"; id: string; name: string } | null;
+type PendingDelete = {
+  kind: "group" | "category";
+  id: string;
+  name: string;
+  /** Categories that disappear with it. */
+  deletedIds: string[];
+  hasTransactions: boolean;
+} | null;
+
+/** Draggable types: payment categories only move within the Credit Card Payments group. */
+const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
 
 /** The category side of YNAB's budget screen: groups, categories, drag to reorder, hidden section. */
 export function CategoryList({
@@ -61,6 +74,7 @@ export function CategoryList({
   const beforeDrag = useRef(layout);
   const dragging = useRef(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
+  const [reassignTo, setReassignTo] = useState("");
 
   // Follow the server unless a drag is in progress.
   useEffect(() => {
@@ -75,14 +89,37 @@ export function CategoryList({
   const hidden = useMemo(() => hiddenItems(data), [data]);
 
   function requestDelete(kind: "group" | "category", id: string, name: string) {
-    setPendingDelete({ kind, id, name });
+    const deleted =
+      kind === "group" ? (groupsById.get(id)?.categories ?? []) : [categoriesById.get(id)];
+    setReassignTo("");
+    setPendingDelete({
+      kind,
+      id,
+      name,
+      deletedIds: deleted.flatMap((c) => (c ? [c.id] : [])),
+      hasTransactions: deleted.some((c) => c?.hasTransactions),
+    });
   }
+
+  // Where a deleted category's history can go: any other regular category.
+  const reassignTargets = useMemo(
+    () =>
+      data.groups
+        .filter((g) => !g.kind)
+        .map((g) => ({
+          group: g.name,
+          categories: g.categories.filter((c) => !pendingDelete?.deletedIds.includes(c.id)),
+        }))
+        .filter((g) => g.categories.length > 0),
+    [data, pendingDelete],
+  );
 
   async function confirmDelete() {
     if (!pendingDelete) return;
-    const { kind, id } = pendingDelete;
+    const { kind, id, hasTransactions } = pendingDelete;
+    const target = hasTransactions ? reassignTo : undefined;
     setPendingDelete(null);
-    await (kind === "group" ? actions.deleteGroup(id) : actions.deleteCategory(id));
+    await (kind === "group" ? actions.deleteGroup(id, target) : actions.deleteCategory(id, target));
   }
 
   return (
@@ -107,7 +144,8 @@ export function CategoryList({
             beforeDrag.current = layout;
           }}
           onDragOver={(event) => {
-            if (event.operation.source?.type !== "category") return;
+            const type = event.operation.source?.type;
+            if (type !== "category" && type !== "payment") return;
             setLayout((l) => ({ ...l, items: move(l.items, event) }));
           }}
           onDragEnd={(event) => {
@@ -121,8 +159,10 @@ export function CategoryList({
             if (source.type === "group") {
               const groupOrder = move(layout.groupOrder, event);
               setLayout((l) => ({ ...l, groupOrder }));
-              const before = nextId(groupOrder, id);
-              if (before !== nextId(beforeDrag.current.groupOrder, id)) {
+              // Credit Card Payments stays pinned first; order the other groups around it.
+              const movable = (order: string[]) => order.filter((g) => !groupsById.get(g)?.kind);
+              const before = nextId(movable(groupOrder), id);
+              if (before !== nextId(movable(beforeDrag.current.groupOrder), id)) {
                 void actions.moveGroup(id, before);
               }
               return;
@@ -186,9 +226,36 @@ export function CategoryList({
               If you might need it later, hide it instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingDelete?.hasTransactions && (
+            <div className="grid gap-2">
+              <Label htmlFor="reassign-to">Move its transactions to</Label>
+              <NativeSelect
+                id="reassign-to"
+                value={reassignTo}
+                onChange={(e) => setReassignTo(e.target.value)}
+              >
+                <NativeSelectOption value="" disabled>
+                  Select a category…
+                </NativeSelectOption>
+                {reassignTargets.map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.categories.map((c) => (
+                      <NativeSelectOption key={c.id} value={c.id}>
+                        {c.name}
+                      </NativeSelectOption>
+                    ))}
+                  </optgroup>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={pendingDelete?.hasTransactions === true && !reassignTo}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -211,11 +278,14 @@ function GroupSection({
   onDelete: () => void;
   children: ReactNode;
 }) {
+  const managed = group.kind === "credit_card_payments";
   const { ref, handleRef, isDragSource } = useSortable({
     id: group.id,
     index,
     type: "group",
-    accept: ["group", "category"],
+    // Credit Card Payments is pinned and only takes payment categories.
+    disabled: managed,
+    accept: managed ? ["payment"] : ["group", "category"],
     // Let categories win collisions so they can be dropped between rows of this group.
     collisionPriority: CollisionPriority.Low,
   });
@@ -227,57 +297,71 @@ function GroupSection({
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
       <div className="group/header flex items-center gap-1 bg-muted/60 px-2 py-1.5">
-        <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
-        <NamePopover
-          title="Category group name"
-          initial={{ name: group.name, note: "" }}
-          onSubmit={({ name }) => actions.updateGroup(group.id, { name })}
-          actions={(close) => (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  close();
-                  await actions.updateGroup(group.id, { hidden: true });
-                }}
-              >
-                Hide
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-destructive"
-                onClick={() => {
-                  close();
-                  onDelete();
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-          trigger={
-            <button
-              type="button"
-              className="truncate rounded px-1 font-semibold text-sm hover:bg-accent"
-            >
-              {group.name}
-            </button>
-          }
-        />
-        <NamePopover
-          title={`New category in ${group.name}`}
-          submitLabel="Add"
-          onSubmit={({ name }) => actions.createCategory(group.id, name)}
-          trigger={
-            <Button variant="ghost" size="icon-sm" aria-label={`Add a category to ${group.name}`}>
-              <Plus />
-            </Button>
-          }
-        />
+        {managed ? (
+          <span className="w-5" />
+        ) : (
+          <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
+        )}
+        {managed ? (
+          <span className="truncate px-1 font-semibold text-sm">{group.name}</span>
+        ) : (
+          <>
+            <NamePopover
+              title="Category group name"
+              initial={{ name: group.name, note: "" }}
+              onSubmit={({ name }) => actions.updateGroup(group.id, { name })}
+              actions={(close) => (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      close();
+                      await actions.updateGroup(group.id, { hidden: true });
+                    }}
+                  >
+                    Hide
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => {
+                      close();
+                      onDelete();
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </>
+              )}
+              trigger={
+                <button
+                  type="button"
+                  className="truncate rounded px-1 font-semibold text-sm hover:bg-accent"
+                >
+                  {group.name}
+                </button>
+              }
+            />
+            <NamePopover
+              title={`New category in ${group.name}`}
+              submitLabel="Add"
+              onSubmit={({ name }) => actions.createCategory(group.id, name)}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Add a category to ${group.name}`}
+                >
+                  <Plus />
+                </Button>
+              }
+            />
+          </>
+        )}
       </div>
       <div className="min-h-2">{children}</div>
     </section>
@@ -297,12 +381,13 @@ function CategoryRow({
   actions: CategoryListActions;
   onDelete: () => void;
 }) {
+  const isPayment = Boolean(category.linkedAccountId);
   const { ref, handleRef, isDragSource } = useSortable({
     id: category.id,
     index,
     group: groupId,
-    type: "category",
-    accept: ["category"],
+    type: categoryType(category),
+    accept: [categoryType(category)],
   });
 
   return (
@@ -317,6 +402,9 @@ function CategoryRow({
       <NamePopover
         title="Category name"
         withNote
+        nameLockedReason={
+          isPayment ? "Named after its credit account. Rename the account instead." : undefined
+        }
         initial={{ name: category.name, note: category.note }}
         onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
         actions={(close) => (
@@ -332,18 +420,20 @@ function CategoryRow({
             >
               Hide
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-destructive"
-              onClick={() => {
-                close();
-                onDelete();
-              }}
-            >
-              Delete
-            </Button>
+            {!isPayment && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive"
+                onClick={() => {
+                  close();
+                  onDelete();
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </>
         )}
         trigger={

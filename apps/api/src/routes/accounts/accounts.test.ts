@@ -29,7 +29,13 @@ type Txn = {
   categoryName: string | null;
   cleared: string;
 };
-type Category = { id: string; name: string; hidden: boolean; linkedAccountId: string | null };
+type Category = {
+  id: string;
+  name: string;
+  hidden: boolean;
+  linkedAccountId: string | null;
+  hasTransactions: boolean;
+};
 type Group = { id: string; name: string; kind: string | null; categories: Category[] };
 type ErrorBody = { error: { code: string } };
 
@@ -316,6 +322,9 @@ describe("payment categories and category history", () => {
       currency: "USD",
       categoryId: rent?.id,
     });
+
+    const listed = (await groups())[0]?.categories.find((c) => c.id === rent?.id);
+    expect(listed).toMatchObject({ hasTransactions: true });
 
     const refused = await send("DELETE", `${base}/categories/${rent?.id}`, cookie);
     expect(refused.status).toBe(409);

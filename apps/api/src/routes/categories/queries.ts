@@ -7,7 +7,7 @@ import type { Db } from "../../lib/ledger";
 export type CategoryRow = typeof category.$inferSelect;
 export type CategoryGroupRow = typeof categoryGroup.$inferSelect;
 
-export function toCategoryJson(c: CategoryRow) {
+export function toCategoryJson(c: CategoryRow, hasTransactions = false) {
   return {
     id: c.id,
     groupId: c.groupId,
@@ -15,16 +15,21 @@ export function toCategoryJson(c: CategoryRow) {
     note: c.note,
     hidden: c.hidden,
     linkedAccountId: c.linkedAccountId,
+    hasTransactions,
   };
 }
 
-export function toGroupJson(g: CategoryGroupRow, categories: CategoryRow[]) {
+export function toGroupJson(
+  g: CategoryGroupRow,
+  categories: CategoryRow[],
+  used: ReadonlySet<string> = new Set(),
+) {
   return {
     id: g.id,
     name: g.name,
     hidden: g.hidden,
     kind: g.kind,
-    categories: categories.map(toCategoryJson),
+    categories: categories.map((c) => toCategoryJson(c, used.has(c.id))),
   };
 }
 
@@ -45,11 +50,17 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .from(category)
     .where(and(eq(category.budgetId, budgetId), isNull(category.internalKind)))
     .orderBy(asc(category.sortOrder), asc(category.id));
+  const usedRows = await db
+    .selectDistinct({ id: transaction.categoryId })
+    .from(transaction)
+    .where(eq(transaction.budgetId, budgetId));
+  const used = new Set(usedRows.flatMap((u) => (u.id ? [u.id] : [])));
   return {
     groups: groups.map((g) =>
       toGroupJson(
         g,
         categories.filter((c) => c.groupId === g.id),
+        used,
       ),
     ),
   };

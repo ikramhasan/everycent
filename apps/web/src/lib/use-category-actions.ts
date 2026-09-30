@@ -64,9 +64,15 @@ export function useCategoryActions(budgetId: string): CategoryListActions {
           () => updateGroup.mutateAsync({ params: { path: { ...budget, groupId } }, body }),
           "Couldn't update the category group.",
         ),
-      deleteGroup: (groupId) =>
+      deleteGroup: (groupId, reassignTo) =>
         run(
-          () => deleteGroup.mutateAsync({ params: { path: { ...budget, groupId } } }),
+          () =>
+            deleteGroup.mutateAsync({
+              params: {
+                path: { ...budget, groupId },
+                query: reassignTo ? { reassignToCategoryId: reassignTo } : {},
+              },
+            }),
           "Couldn't delete the category group.",
         ),
       moveGroup: (groupId, beforeGroupId) =>
@@ -88,9 +94,15 @@ export function useCategoryActions(budgetId: string): CategoryListActions {
           () => updateCategory.mutateAsync({ params: { path: { ...budget, categoryId } }, body }),
           "Couldn't update the category.",
         ),
-      deleteCategory: (categoryId) =>
+      deleteCategory: (categoryId, reassignTo) =>
         run(
-          () => deleteCategory.mutateAsync({ params: { path: { ...budget, categoryId } } }),
+          () =>
+            deleteCategory.mutateAsync({
+              params: {
+                path: { ...budget, categoryId },
+                query: reassignTo ? { reassignToCategoryId: reassignTo } : {},
+              },
+            }),
           "Couldn't delete the category.",
         ),
       moveCategory: (categoryId, groupId, beforeCategoryId) =>
