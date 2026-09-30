@@ -102,15 +102,15 @@ and fresh start (after phase 5 core).
 
 ### 4. Categories
 
-- [ ] Category groups: create, rename, reorder, hide, delete
-- [ ] Categories: create, rename, reorder, move between groups, hide/unhide, delete
-      (with reassignment of history to another category)
-- [ ] Category notes
-- [ ] Internal categories: Inflow: Ready to Assign, Uncategorized
+- [x] Category groups: create, rename, reorder, hide, delete
+- [x] Categories: create, rename, reorder (drag and drop), move between groups, hide/unhide, delete
+- [ ] Reassign a deleted category's history to another category (needs transactions, phase 3/5)
+- [x] Category notes
+- [x] Internal categories: Inflow: Ready to Assign, Uncategorized
 - [ ] Auto-created credit card payment categories (one per credit account)
-- [ ] Hidden categories section
+- [x] Hidden categories section
 - [ ] Category emoji / icons **(extra)**
-- [ ] Default category template on budget creation (YNAB-style starter groups) — moved from phase 2
+- [x] Default category template on budget creation (YNAB-style starter groups) — moved from phase 2
 
 ### 5. Transactions & register
 
