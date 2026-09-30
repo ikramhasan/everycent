@@ -167,6 +167,9 @@ catalogs:
     '@biomejs/biome':
       specifier: ^2.5.14
       version: 2.5.14
+    '@dnd-kit/abstract':
+      specifier: ^0.5.0
+      version: 0.5.0
     '@dnd-kit/helpers':
       specifier: ^0.5.0
       version: 0.5.0
@@ -359,6 +362,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@dnd-kit/abstract':
+        specifier: 'catalog:'
+        version: 0.5.0
       '@dnd-kit/helpers':
         specifier: 'catalog:'
         version: 0.5.0
