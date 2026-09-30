@@ -42,6 +42,12 @@ describe("categories", () => {
     expect(names(await tree())).toEqual(STARTER_CATEGORIES.map((g) => [g.group, g.categories]));
   });
 
+  it("starts every starter category with an emoji, like YNAB", () => {
+    for (const name of STARTER_CATEGORIES.flatMap((g) => g.categories)) {
+      expect(name, name).toMatch(/^\p{Extended_Pictographic}\uFE0F? \S/u);
+    }
+  });
+
   it("creates hidden internal categories that the list never shows", async () => {
     const { budget, tree } = await setup();
     const internal = await db
@@ -149,21 +155,24 @@ describe("categories", () => {
 
     const [billsAfter, frequentAfter] = (await tree()).groups;
     expect(billsAfter?.categories.map((c) => c.name)).toEqual([
-      "Electric",
-      "Rent/Mortgage",
-      "Water",
-      "Internet",
-      "Phone",
-      "Eating Out",
+      "🔌 Electric",
+      "🏡 Rent/Mortgage",
+      "💧 Water",
+      "🌐 Internet",
+      "📱 Phone",
+      "🍽️ Eating Out",
     ]);
     expect(billsAfter?.categories.at(-1)?.groupId).toBe(bills?.id);
-    expect(frequentAfter?.categories.map((c) => c.name)).toEqual(["Groceries", "Transportation"]);
+    expect(frequentAfter?.categories.map((c) => c.name)).toEqual([
+      "🛒 Groceries",
+      "🚌 Transportation",
+    ]);
 
     // A later insert into the old group still lands at the end, after the renumbering.
     await send("POST", `${base}/categories`, cookie, { groupId: frequent?.id, name: "Coffee" });
     expect((await tree()).groups[1]?.categories.map((c) => c.name)).toEqual([
-      "Groceries",
-      "Transportation",
+      "🛒 Groceries",
+      "🚌 Transportation",
       "Coffee",
     ]);
   });
@@ -190,7 +199,7 @@ describe("categories", () => {
 
     const after = await tree();
     expect(after.groups.map((g) => g.name)).not.toContain("Frequent");
-    expect(after.groups[0]?.categories.map((c) => c.name)).not.toContain("Rent/Mortgage");
+    expect(after.groups[0]?.categories.map((c) => c.name)).not.toContain("🏡 Rent/Mortgage");
     const orphans = await db
       .select()
       .from(category)
@@ -248,7 +257,7 @@ describe("categories", () => {
       }),
     ];
     for (const res of await Promise.all(attempts)) expect(res.status).toBe(404);
-    expect((await owner.tree()).groups[0]?.categories[0]?.name).toBe("Rent/Mortgage");
+    expect((await owner.tree()).groups[0]?.categories[0]?.name).toBe("🏡 Rent/Mortgage");
   });
 
   it("lets a partner with editor access manage categories", async () => {

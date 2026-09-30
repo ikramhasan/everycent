@@ -6,11 +6,17 @@ import { category, categoryGroup } from "@everycent/db/schema";
  * sub-project) will let people pick their own.
  */
 export const STARTER_CATEGORIES: ReadonlyArray<{ group: string; categories: readonly string[] }> = [
-  { group: "Bills", categories: ["Rent/Mortgage", "Electric", "Water", "Internet", "Phone"] },
-  { group: "Frequent", categories: ["Groceries", "Eating Out", "Transportation"] },
-  { group: "Non-Monthly", categories: ["Home Maintenance", "Auto Maintenance", "Gifts"] },
-  { group: "Goals", categories: ["Vacation", "Education", "Home Improvement"] },
-  { group: "Quality of Life Goals", categories: ["Hobbies", "Health & Wellness", "Entertainment"] },
+  {
+    group: "Bills",
+    categories: ["🏡 Rent/Mortgage", "🔌 Electric", "💧 Water", "🌐 Internet", "📱 Phone"],
+  },
+  { group: "Frequent", categories: ["🛒 Groceries", "🍽️ Eating Out", "🚌 Transportation"] },
+  { group: "Non-Monthly", categories: ["🔧 Home Maintenance", "🚗 Auto Maintenance", "🎁 Gifts"] },
+  { group: "Goals", categories: ["🏖️ Vacation", "🎓 Education", "🔨 Home Improvement"] },
+  {
+    group: "Quality of Life Goals",
+    categories: ["🎨 Hobbies", "💪 Health & Wellness", "🎬 Entertainment"],
+  },
 ];
 
 /** Creates the internal categories and the starter template for a new budget, atomically. */
