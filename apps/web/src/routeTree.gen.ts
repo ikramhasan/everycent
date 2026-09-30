@@ -18,6 +18,7 @@ import { Route as AuthedBudgetsBudgetIdRouteImport } from './routes/_authed/budg
 import { Route as AuthedBudgetsNewRouteImport } from './routes/_authed/budgets/new'
 import { Route as AuthedBudgetsBudgetIdIndexRouteImport } from './routes/_authed/budgets/$budgetId/index'
 import { Route as AuthedBudgetsBudgetIdSettingsRouteImport } from './routes/_authed/budgets/$budgetId/settings'
+import { Route as AuthedBudgetsBudgetIdAccountsAccountIdRouteImport } from './routes/_authed/budgets/$budgetId/accounts/$accountId'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -65,6 +66,12 @@ const AuthedBudgetsBudgetIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => AuthedBudgetsBudgetIdRoute,
   } as any)
+const AuthedBudgetsBudgetIdAccountsAccountIdRoute =
+  AuthedBudgetsBudgetIdAccountsAccountIdRouteImport.update({
+    id: '/accounts/$accountId',
+    path: '/accounts/$accountId',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/budgets/': typeof AuthedBudgetsIndexRoute
   '/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
   '/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
+  '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
@@ -84,6 +92,7 @@ export interface FileRoutesByTo {
   '/budgets': typeof AuthedBudgetsIndexRoute
   '/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
   '/budgets/$budgetId': typeof AuthedBudgetsBudgetIdIndexRoute
+  '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,6 +105,7 @@ export interface FileRoutesById {
   '/_authed/budgets/': typeof AuthedBudgetsIndexRoute
   '/_authed/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
   '/_authed/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
+  '/_authed/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/budgets/'
     | '/budgets/$budgetId/settings'
     | '/budgets/$budgetId/'
+    | '/budgets/$budgetId/accounts/$accountId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/budgets'
     | '/budgets/$budgetId/settings'
     | '/budgets/$budgetId'
+    | '/budgets/$budgetId/accounts/$accountId'
   id:
     | '__root__'
     | '/_authed'
@@ -128,6 +140,7 @@ export interface FileRouteTypes {
     | '/_authed/budgets/'
     | '/_authed/budgets/$budgetId/settings'
     | '/_authed/budgets/$budgetId/'
+    | '/_authed/budgets/$budgetId/accounts/$accountId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -201,17 +214,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBudgetsBudgetIdSettingsRouteImport
       parentRoute: typeof AuthedBudgetsBudgetIdRoute
     }
+    '/_authed/budgets/$budgetId/accounts/$accountId': {
+      id: '/_authed/budgets/$budgetId/accounts/$accountId'
+      path: '/accounts/$accountId'
+      fullPath: '/budgets/$budgetId/accounts/$accountId'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdAccountsAccountIdRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
   }
 }
 
 interface AuthedBudgetsBudgetIdRouteChildren {
   AuthedBudgetsBudgetIdSettingsRoute: typeof AuthedBudgetsBudgetIdSettingsRoute
   AuthedBudgetsBudgetIdIndexRoute: typeof AuthedBudgetsBudgetIdIndexRoute
+  AuthedBudgetsBudgetIdAccountsAccountIdRoute: typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
 
 const AuthedBudgetsBudgetIdRouteChildren: AuthedBudgetsBudgetIdRouteChildren = {
   AuthedBudgetsBudgetIdSettingsRoute: AuthedBudgetsBudgetIdSettingsRoute,
   AuthedBudgetsBudgetIdIndexRoute: AuthedBudgetsBudgetIdIndexRoute,
+  AuthedBudgetsBudgetIdAccountsAccountIdRoute:
+    AuthedBudgetsBudgetIdAccountsAccountIdRoute,
 }
 
 const AuthedBudgetsBudgetIdRouteWithChildren =

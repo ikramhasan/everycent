@@ -25,7 +25,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronsUpDown, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { budgetsQueryOptions } from "@/lib/budgets";
+import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
+import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
 import { ModeToggle } from "./mode-toggle";
 
@@ -34,6 +35,11 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
   const navigate = useNavigate();
   const { budgetId } = useParams({ strict: false });
   const budgets = useQuery(budgetsQueryOptions());
+  // Same query the budget route loads, so this reads the cache rather than fetching again.
+  const currentBudget = useQuery({
+    ...budgetQueryOptions(budgetId ?? ""),
+    enabled: Boolean(budgetId),
+  });
 
   async function signOut() {
     await authClient.signOut();
@@ -101,6 +107,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
               )}
             </SidebarMenu>
           </SidebarGroup>
+          {budgetId && currentBudget.data && <AccountsNav budget={currentBudget.data} />}
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>

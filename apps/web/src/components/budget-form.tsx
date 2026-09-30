@@ -18,6 +18,7 @@ import { Input } from "@everycent/ui/components/input";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { type FormEvent, useState } from "react";
+import { todayIso } from "@/lib/dates";
 import { CurrencyPicker, currencyName } from "./currency-picker";
 
 export interface BudgetFormValues extends BudgetFormatSettings {
@@ -28,12 +29,6 @@ export interface BudgetFormValues extends BudgetFormatSettings {
 /** -1,234,567.89 in the currency's own precision, so the preview shows grouping and decimals. */
 function previewAmount(currency: CurrencyCode): Money {
   return money(-(123456789n * 10n ** BigInt(currencyExponent(currency))) / 100n, currency);
-}
-
-function todayIso(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 const SYMBOL_POSITION_LABELS: Record<CurrencySymbolPosition, string> = {
