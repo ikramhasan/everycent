@@ -54,6 +54,9 @@ Read `README.md` first.
   import `cn` from an npm package literally named `cn` — rewrite that import to
   `@everycent/ui/lib/utils` and do not add a `cn` dependency. Components under `packages/ui` are
   owned/vendored code and are lint-exempt (Biome still formats them).
+- **Boolean `data-*` attributes.** Tailwind's `data-active:` (and similar) variants match the
+  attribute's presence, so `data-active={false}` still styles as active. Render
+  `data-x={flag || undefined}`; check newly vendored shadcn components for this.
 - **Test typing.** `res.json()` from the Hono test client / `fetch` is typed `Promise<unknown>`;
   narrow with an explicit `as { ... }` cast at the call site rather than loosening the type.
 - **Bundling workspace packages.** `apps/api`'s `tsdown.config.ts` uses `deps.alwaysBundle:

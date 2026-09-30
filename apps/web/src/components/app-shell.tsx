@@ -118,7 +118,11 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     <ChevronsUpDown className="ml-auto size-4" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="start" className="w-56">
+                <DropdownMenuContent
+                  side="top"
+                  align="start"
+                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
+                >
                   <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={signOut}>
