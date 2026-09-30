@@ -87,27 +87,29 @@ and fresh start (after phase 5 core).
 
 ### 3. Accounts
 
-- [ ] Budget account types: cash, checking, savings
-- [ ] Credit accounts: credit card, line of credit
-- [ ] Loan accounts: mortgage, auto loan, student loan, personal loan, medical debt, other debt
-      (interest rate, minimum payment, escrow)
-- [ ] Tracking (off-budget) accounts: asset, liability
-- [ ] Starting balance transaction on creation
-- [ ] Per-account currency (defaults to budget currency) — stored now, used in phase 11
-- [ ] Balances: cleared, uncleared, working
-- [ ] Account notes / nickname
-- [ ] Reorder accounts, sidebar grouped by type with group totals
-- [ ] Close / reopen accounts (requires zero balance; hidden in "Closed" section)
-- [ ] Delete accounts (with transactions)
+- [x] Budget account types: cash, checking, savings
+- [x] Credit accounts: credit card, line of credit
+- [x] Loan accounts: mortgage, auto loan, student loan, personal loan, medical debt, other debt
+      (interest rate, minimum payment, escrow — stored; used by the phase 7 loan features)
+- [x] Tracking (off-budget) accounts: asset, liability
+- [x] Starting balance transaction on creation
+- [x] Per-account currency — stored; only the budget currency is accepted until phase 11
+- [x] Balances: cleared, uncleared, working
+- [x] Account notes / nickname
+- [x] Reorder accounts, sidebar grouped by type with group totals
+- [x] Close / reopen accounts (YNAB-style: a non-zero balance is zeroed with a Manual Balance
+      Adjustment; closed accounts move to a "Closed" section)
+- [x] Delete accounts (YNAB rule: only with no history beyond the starting balance; otherwise close)
 
 ### 4. Categories
 
 - [x] Category groups: create, rename, reorder, hide, delete
 - [x] Categories: create, rename, reorder (drag and drop), move between groups, hide/unhide, delete
-- [ ] Reassign a deleted category's history to another category (needs transactions, phase 3/5)
+- [x] Reassign a deleted category's history to another category (transactions now; assigned
+      amounts join in phase 6)
 - [x] Category notes
 - [x] Internal categories: Inflow: Ready to Assign, Uncategorized
-- [ ] Auto-created credit card payment categories (one per credit account)
+- [x] Auto-created credit card payment categories (one per credit account)
 - [x] Hidden categories section
 - [ ] Category emoji / icons **(extra)**
 - [x] Default category template on budget creation (YNAB-style starter groups) — moved from phase 2

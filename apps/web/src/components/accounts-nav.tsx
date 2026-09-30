@@ -236,7 +236,8 @@ function AccountItem({
           <span className="truncate">{account.name}</span>
         </Link>
       </SidebarMenuButton>
-      <SidebarMenuBadge className={cn("tabular-nums", working < 0n && "text-destructive")}>
+      {/* `!` beats the sidebar's active-item colour so money owed always reads red, as in YNAB. */}
+      <SidebarMenuBadge className={cn("tabular-nums", working < 0n && "text-destructive!")}>
         {format(working)}
       </SidebarMenuBadge>
     </SidebarMenuItem>
