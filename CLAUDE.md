@@ -26,6 +26,12 @@ Read `README.md` first.
 - Schema changes: edit `packages/db/src/schema/*`, then `pnpm db:generate`; commit migrations.
   Never edit an applied migration. Primary keys are `newId()` (UUIDv7) text ids.
 - New third-party deps go through the `catalog:` in `pnpm-workspace.yaml`.
+- **Prefer well-maintained libraries over hand-rolled code.** Before building a general-purpose
+  capability (drag and drop, date pickers, virtualization, parsing, charts, …), look for an
+  actively maintained, widely used library and use it instead of writing our own; we don't want to
+  own and maintain edge cases someone else already solved. Check maintenance (recent releases,
+  open-issue health), bundle size and license first. Hand-roll only domain logic (budgeting rules,
+  money math) or when no suitable library exists, and say why in a comment.
 - API tests use `createTestApp()` + `resetDatabase()` against the real test DB. No DB mocks.
 - shadcn components: `pnpm dlx shadcn@latest add <name> -c apps/web` (lands in `packages/ui`).
 - Web imports: app code via `@/…`, shared UI via `@everycent/ui/components/<name>`.

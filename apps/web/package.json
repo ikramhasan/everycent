@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dnd-kit/helpers": "catalog:",
+    "@dnd-kit/react": "catalog:",
     "@everycent/api-client": "workspace:*",
     "@everycent/engine": "workspace:*",
     "@everycent/ui": "workspace:*",

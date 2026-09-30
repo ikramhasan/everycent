@@ -5,6 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
+import { seedBudgetCategories } from "./starter-categories";
 
 export function createAuth(db: Database, env: Env) {
   return betterAuth({
@@ -24,6 +25,11 @@ export function createAuth(db: Database, env: Env) {
         ac: budgetAc,
         roles: budgetRoles,
         creatorRole: "owner",
+        organizationHooks: {
+          afterCreateOrganization: async ({ organization }) => {
+            await seedBudgetCategories(db, organization.id);
+          },
+        },
         schema: {
           organization: {
             modelName: "budget",
