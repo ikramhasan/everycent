@@ -1,17 +1,11 @@
 import { sql } from "@everycent/db";
-import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
-import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
+import { budgetAccount, category, payee, subTransaction, transaction } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import {
-  type Db,
-  findOrCreatePayee,
-  insertTransaction,
-  internalCategoryId,
-  transferPayeeId,
-} from "../../lib/ledger";
+import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -21,19 +15,73 @@ import type {
   listTransactions,
   updateTransaction,
 } from "./routes";
+import {
+  type AccountRow,
+  assertNotSelf,
+  assertOnePayee,
+  assertOpen,
+  findAccount,
+  insertOtherSide,
+  lockTransaction,
+  reconciledOtherSide,
+  resolveCategory,
+  transferInSplit,
+  usesCategory,
+} from "./rules";
+import {
+  assertLinesAddUp,
+  assertSplitAllowed,
+  deleteLineTransfers,
+  splitLines,
+  syncLines,
+} from "./splits";
 
 type Env = AppEnv & AuthedEnv;
-type AccountRow = typeof budgetAccount.$inferSelect;
+type Filter = { accountId?: string; transactionId?: string };
+
+function filterWhere(budgetId: string, filter: Filter) {
+  return and(
+    eq(transaction.budgetId, budgetId),
+    filter.accountId ? eq(transaction.accountId, filter.accountId) : undefined,
+    filter.transactionId ? eq(transaction.id, filter.transactionId) : undefined,
+  );
+}
+
+/** The lines of the split transactions that `filter` selects, grouped by transaction. */
+async function queryLines(db: Db, budgetId: string, filter: Filter) {
+  const other = alias(transaction, "other_side");
+  const rows = await db
+    .select({
+      id: subTransaction.id,
+      transactionId: subTransaction.transactionId,
+      amount: subTransaction.amount,
+      payeeId: subTransaction.payeeId,
+      payeeName: payee.name,
+      categoryId: subTransaction.categoryId,
+      categoryName: category.name,
+      memo: subTransaction.memo,
+      transferAccountId: payee.transferAccountId,
+      transferTransactionId: other.id,
+    })
+    .from(subTransaction)
+    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+    .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
+    .leftJoin(category, eq(category.id, subTransaction.categoryId))
+    .leftJoin(other, eq(other.transferSubTransactionId, subTransaction.id))
+    .where(filterWhere(budgetId, filter))
+    .orderBy(asc(subTransaction.sortOrder), asc(subTransaction.id));
+  const byTransaction = new Map<string, Omit<(typeof rows)[number], "transactionId">[]>();
+  for (const { transactionId, ...line } of rows) {
+    byTransaction.set(transactionId, [...(byTransaction.get(transactionId) ?? []), line]);
+  }
+  return byTransaction;
+}
 
 /**
  * Register rows with each account's running balance. The window runs over the whole account
  * (oldest first), so filtering by `transactionId` happens outside it.
  */
-async function queryTransactions(
-  db: Db,
-  budgetId: string,
-  filter: { accountId?: string; transactionId?: string },
-) {
+async function queryTransactions(db: Db, budgetId: string, filter: Filter) {
   const rows = db
     .select({
       id: transaction.id,
@@ -49,7 +97,14 @@ async function queryTransactions(
       memo: transaction.memo,
       cleared: transaction.cleared,
       transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
-      transferTransactionId: transaction.transferTransactionId,
+      // A split line's transfer points at the split itself.
+      transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
+        select ${subTransaction.transactionId} from ${subTransaction}
+        where ${subTransaction.id} = ${transaction.transferSubTransactionId}
+      ))`.as("transfer_transaction_id"),
+      transferFromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`.as(
+        "transfer_from_split",
+      ),
       createdAt: transaction.createdAt,
       runningBalance: sql<string>`sum(${transaction.amount}) over (
         partition by ${transaction.accountId}
@@ -72,9 +127,11 @@ async function queryTransactions(
     .from(rows)
     .where(filter.transactionId ? eq(rows.id, filter.transactionId) : undefined)
     .orderBy(desc(rows.date), desc(rows.createdAt), desc(rows.id));
+  const lines = await queryLines(db, budgetId, filter);
   return result.map(({ createdAt: _, ...r }) => ({
     ...r,
     amount: r.amount.toString(),
+    subtransactions: (lines.get(r.id) ?? []).map((l) => ({ ...l, amount: l.amount.toString() })),
     // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
     runningBalance: BigInt(r.runningBalance).toString(),
   }));
@@ -84,123 +141,6 @@ async function transactionJson(db: Db, budgetId: string, accountId: string, id: 
   const [row] = await queryTransactions(db, budgetId, { accountId, transactionId: id });
   if (!row) throw new AppError(404, "NOT_FOUND", "Transaction not found");
   return row;
-}
-
-async function findAccount(db: Db, budgetId: string, accountId: string) {
-  const [row] = await db
-    .select()
-    .from(budgetAccount)
-    .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)));
-  if (!row) throw new AppError(404, "NOT_FOUND", "Account not found");
-  return row;
-}
-
-function assertOpen(account: AccountRow) {
-  if (account.closed) {
-    throw new AppError(
-      400,
-      "ACCOUNT_CLOSED",
-      `Reopen ${account.name} to add transactions or transfers to it`,
-    );
-  }
-}
-
-function usesCategory(account: AccountRow, transferTo: AccountRow | null) {
-  return usesAccountCategory(account.type, transferTo?.type);
-}
-
-/**
- * The category a transaction in `account` (a transfer if `transferTo` is set) is stored with,
- * following YNAB: budget accounts fall back to Uncategorized, and payment categories only receive
- * money by assigning (phase 7), never from a transaction.
- */
-async function resolveCategory(
-  db: Db,
-  budgetId: string,
-  account: AccountRow,
-  transferTo: AccountRow | null,
-  categoryId: string | null,
-) {
-  if (!usesCategory(account, transferTo)) {
-    if (categoryId !== null) {
-      throw new AppError(
-        400,
-        "CATEGORY_NOT_ALLOWED",
-        isOnBudget(account.type)
-          ? "Transfers between budget accounts don't use categories"
-          : "Tracking accounts don't use categories",
-      );
-    }
-    return null;
-  }
-  if (categoryId === null) return internalCategoryId(db, budgetId, "uncategorized");
-  const [row] = await db
-    .select({ linkedAccountId: category.linkedAccountId })
-    .from(category)
-    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
-  if (!row) throw new AppError(400, "BAD_REQUEST", "No such category in this budget");
-  if (row.linkedAccountId) {
-    throw new AppError(
-      400,
-      "CATEGORY_NOT_ALLOWED",
-      "Credit card payment categories can't be used on transactions",
-    );
-  }
-  return categoryId;
-}
-
-function assertNotSelf(account: AccountRow, transferTo: AccountRow) {
-  if (transferTo.id === account.id) {
-    throw new AppError(400, "TRANSFER_SAME_ACCOUNT", "An account can't transfer to itself");
-  }
-}
-
-function assertOnePayee(body: { payeeName?: string | null; transferAccountId?: string }) {
-  if (body.transferAccountId !== undefined && body.payeeName != null) {
-    throw new AppError(400, "BAD_REQUEST", "Give a payee name or a transfer account, not both");
-  }
-}
-
-/** Adds the other side of a new transfer, in `transferTo`, and links the two. */
-async function insertOtherSide(
-  tx: Db,
-  side: { id: string; budgetId: string; date: string; amount: bigint; memo: string },
-  account: AccountRow,
-  transferTo: AccountRow,
-) {
-  const otherId = await insertTransaction(tx, {
-    budgetId: side.budgetId,
-    accountId: transferTo.id,
-    date: side.date,
-    amount: -side.amount,
-    currency: transferTo.currency,
-    payeeId: await transferPayeeId(tx, account),
-    categoryId: await resolveCategory(tx, side.budgetId, transferTo, account, null),
-    memo: side.memo,
-    cleared: "uncleared",
-    transferTransactionId: side.id,
-  });
-  await tx
-    .update(transaction)
-    .set({ transferTransactionId: otherId })
-    .where(eq(transaction.id, side.id));
-}
-
-async function lockTransaction(tx: Db, budgetId: string, id: string) {
-  const [row] = await tx
-    .select()
-    .from(transaction)
-    .where(and(eq(transaction.id, id), eq(transaction.budgetId, budgetId)))
-    .for("update");
-  return row;
-}
-
-function reconciledOtherSide(): never {
-  throw new AppError(
-    409,
-    "TRANSFER_RECONCILED",
-    "The other side of this transfer is reconciled. Its date and amount can't change.",
-  );
 }
 
 export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
@@ -228,6 +168,13 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
       assertOpen(transferTo);
     }
     const amount = BigInt(body.amount);
+    const split = body.subtransactions;
+    if (split) {
+      if (transferTo) notSplittable();
+      if (body.categoryId !== null) categoryOnSplit();
+      assertSplitAllowed(account);
+      assertLinesAddUp(split, amount);
+    }
     const id = await insertTransaction(tx, {
       budgetId,
       accountId: account.id,
@@ -239,10 +186,19 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
         : body.payeeName
           ? await findOrCreatePayee(tx, budgetId, body.payeeName)
           : null,
-      categoryId: await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
+      categoryId: split
+        ? null
+        : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
       memo: body.memo,
       cleared: body.cleared,
     });
+    if (split) {
+      await syncLines(
+        tx,
+        { budgetId, parentId: id, date: body.date, account, moved: false },
+        split,
+      );
+    }
     if (transferTo) {
       await insertOtherSide(
         tx,
@@ -265,6 +221,9 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   const accountId = await db.transaction(async (tx) => {
     const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+    if (existing.transferSubTransactionId) {
+      return updateSplitTransferSide(tx, budgetId, existing, body);
+    }
     const other = existing.transferTransactionId
       ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
       : undefined;
@@ -293,8 +252,28 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
       if (retargeted || dateChanges || amount !== -other.amount) reconciledOtherSide();
     }
 
+    // A split stays one until it gets a category (or becomes a transfer); see `syncLines`.
+    const existingLines = await splitLines(tx, transactionId);
+    const wasSplit = existingLines.length > 0;
+    const lines = body.subtransactions;
+    if (lines && body.categoryId !== undefined) categoryOnSplit();
+    const unsplit = wasSplit && !lines && (body.categoryId !== undefined || transferTo !== null);
+    const split = lines !== undefined || (wasSplit && !unsplit);
+    if (split) {
+      if (transferTo) notSplittable();
+      assertSplitAllowed(account);
+      if (lines) assertLinesAddUp(lines, amount);
+      else
+        assertLinesAddUp(
+          existingLines.map((l) => ({ amount: l.amount.toString() })),
+          amount,
+        );
+    }
+
     let categoryId = existing.categoryId;
-    if (body.categoryId !== undefined) {
+    if (split) {
+      categoryId = null;
+    } else if (body.categoryId !== undefined) {
       categoryId = await resolveCategory(tx, budgetId, account, transferTo, body.categoryId);
     } else if (moved || retargeted) {
       // Keep the category if it can still be used, otherwise fall back.
@@ -322,6 +301,14 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
         transferTransactionId: transferTo ? undefined : null,
       })
       .where(eq(transaction.id, transactionId));
+
+    if (split || wasSplit) {
+      await syncLines(
+        tx,
+        { budgetId, parentId: transactionId, date: body.date ?? existing.date, account, moved },
+        unsplit ? [] : lines,
+      );
+    }
 
     if (other && !transferTo) {
       await tx.delete(transaction).where(eq(transaction.id, other.id));
@@ -368,6 +355,8 @@ export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, En
   await db.transaction(async (tx) => {
     const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+    if (existing.transferSubTransactionId) transferInSplit();
+    await deleteLineTransfers(tx, existing.id);
     const ids = [existing.id];
     if (existing.transferTransactionId) {
       const other = await lockTransaction(tx, budgetId, existing.transferTransactionId);
@@ -378,6 +367,71 @@ export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, En
   });
   return c.body(null, 204);
 };
+
+function notSplittable(): never {
+  throw new AppError(
+    400,
+    "SPLIT_NOT_ALLOWED",
+    "A transfer can't be split. Make the split's lines transfers instead.",
+  );
+}
+
+function categoryOnSplit(): never {
+  throw new AppError(
+    400,
+    "BAD_REQUEST",
+    "A split's categories go on its lines; give either `categoryId` or `subtransactions`",
+  );
+}
+
+/**
+ * The other side of a split's transfer line: the split owns its date, amount, account and payee,
+ * so only memo, cleared and (where one applies) the category change here.
+ */
+async function updateSplitTransferSide(
+  tx: Db,
+  budgetId: string,
+  existing: typeof transaction.$inferSelect,
+  body: {
+    accountId?: string;
+    date?: string;
+    amount?: string;
+    payeeName?: string | null;
+    transferAccountId?: string;
+    categoryId?: string | null;
+    memo?: string;
+    cleared?: "uncleared" | "cleared";
+    subtransactions?: unknown;
+  },
+) {
+  const locked =
+    (body.accountId !== undefined && body.accountId !== existing.accountId) ||
+    (body.date !== undefined && body.date !== existing.date) ||
+    (body.amount !== undefined && BigInt(body.amount) !== existing.amount) ||
+    body.payeeName !== undefined ||
+    body.transferAccountId !== undefined ||
+    body.subtransactions !== undefined;
+  if (locked) transferInSplit();
+  const account = await findAccount(tx, budgetId, existing.accountId);
+  const [line] = await tx
+    .select({ accountId: transaction.accountId })
+    .from(subTransaction)
+    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+    .where(eq(subTransaction.id, existing.transferSubTransactionId ?? ""));
+  const splitAccount = line ? await findAccount(tx, budgetId, line.accountId) : null;
+  await tx
+    .update(transaction)
+    .set({
+      categoryId:
+        body.categoryId === undefined
+          ? undefined
+          : await resolveCategory(tx, budgetId, account, splitAccount, body.categoryId),
+      memo: body.memo,
+      cleared: body.cleared,
+    })
+    .where(eq(transaction.id, existing.id));
+  return account.id;
+}
 
 export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");

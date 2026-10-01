@@ -35,6 +35,7 @@ import {
   MoreHorizontal,
   Plus,
   ReceiptText,
+  Split,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,11 +52,15 @@ import {
   cellUpdate,
   createBody,
   type Draft,
+  draftFrom,
   emptyDraft,
   payeesQueryOptions,
+  type SubTransaction,
+  startSplit,
   type Transaction,
   transactionsQueryOptions,
   transactionsQueryPrefix,
+  updateBody,
 } from "@/lib/transactions";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
@@ -69,6 +74,17 @@ const ROW_HEIGHT = 41;
 interface EditingCell {
   id: string;
   column: CellColumn;
+}
+
+/** A register row: a transaction, or one line of a split under it. */
+type Item =
+  | { kind: "transaction"; key: string; t: Transaction }
+  | { kind: "line"; key: string; t: Transaction; line: SubTransaction };
+
+/** The whole-transaction editor open on an existing row (splits are edited all at once). */
+interface EditingSplit {
+  id: string;
+  draft: Draft;
 }
 
 /**
@@ -91,6 +107,8 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const [adding, setAdding] = useState(false);
   const [newError, setNewError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
+  const [splitError, setSplitError] = useState<string | null>(null);
 
   const allAccounts = accountId === undefined;
   const columnIds = useMemo(() => registerColumns(allAccounts), [allAccounts]);
@@ -121,13 +139,24 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
     getRowId: (t) => t.id,
   });
   const rows = table.getRowModel().rows;
+  // Split lines sit right under their transaction (read-only; the split is edited as a whole).
+  const flat = useMemo(
+    () =>
+      rows.flatMap(({ original: t }): Item[] => [
+        { kind: "transaction", key: t.id, t },
+        ...t.subtransactions.map(
+          (line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line }),
+        ),
+      ]),
+    [rows],
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: flat.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    getItemKey: (index) => rows[index]?.id ?? index,
+    getItemKey: (index) => flat[index]?.key ?? index,
     overscan: 12,
     // Lets jsdom (no layout) render the first screen of rows.
     initialRect: { width: 1280, height: 800 },
@@ -138,14 +167,14 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const focused = useRef<string | null>(null);
   useEffect(() => {
     if (!focusId || focused.current === focusId) return;
-    const index = rows.findIndex((r) => r.id === focusId);
+    const index = flat.findIndex((r) => r.key === focusId);
     if (index === -1) return;
     focused.current = focusId;
     virtualizer.scrollToIndex(index, { align: "center" });
     setHighlightId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => clearTimeout(timer);
-  }, [focusId, rows, virtualizer]);
+  }, [focusId, flat, virtualizer]);
   const paddingTop = items[0]?.start ?? 0;
   const paddingBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
 
@@ -165,12 +194,45 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
     return usesCategory(type, transferType);
   }
 
-  /** The cells of `t` that can be edited, in Tab order. */
+  /**
+   * The cells of `t` that can be edited, in Tab order. A split's transfer side only takes its
+   * memo and category; the split owns the rest.
+   */
   function editableColumns(t: Transaction): CellColumn[] {
     const categorized = hasCategory(t);
     return columnIds.filter(
-      (c): c is CellColumn => isEditable(c) && (c !== "category" || categorized),
+      (c): c is CellColumn =>
+        isEditable(c) &&
+        (c !== "category" || categorized) &&
+        (!t.transferFromSplit || c === "memo" || c === "category"),
     );
+  }
+
+  /** Splits open as a whole, as do transactions being split from the category cell. */
+  function openSplit(t: Transaction, split = false) {
+    const draft = draftFrom(t, budget);
+    setEditing(null);
+    setAdding(false);
+    setSplitError(null);
+    setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft });
+  }
+
+  async function saveSplit(t: Transaction, draft: Draft) {
+    if (!draft.date) return setSplitError("Enter a date.");
+    const result = updateBody(t, draft, budget);
+    if (!result.ok) return setSplitError(result.error);
+    try {
+      if (Object.keys(result.body).length > 0) {
+        await update.mutateAsync({
+          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          body: result.body,
+        });
+        await refresh();
+      }
+      setEditingSplit(null);
+    } catch (e) {
+      setSplitError(apiErrorMessage(e, "Couldn't save the split."));
+    }
   }
 
   /** Accounts the payee cell offers transfers to: other open ones, plus the current target. */
@@ -191,6 +253,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
 
   function startAdding() {
     setEditing(null);
+    setEditingSplit(null);
     setNewError(null);
     setAdding(true);
   }
@@ -254,9 +317,8 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
         params: { path: { budgetId: budget.id, transactionId: t.id } },
       });
       await refresh();
-      toast.success(
-        t.transferAccountId ? "Transfer deleted from both accounts" : "Transaction deleted",
-      );
+      const transfers = t.transferAccountId || t.subtransactions.some((l) => l.transferAccountId);
+      toast.success(transfers ? "Deleted, with its transfers" : "Transaction deleted");
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't delete the transaction."));
     }
@@ -299,6 +361,18 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
           t.payeeName
         );
       case "category":
+        if (t.subtransactions.length > 0) {
+          const count = new Set(t.subtransactions.map((l) => l.categoryId ?? l.transferAccountId))
+            .size;
+          return (
+            <span className="flex items-center gap-1.5">
+              <Split className="size-4 shrink-0" />
+              <span className="truncate">
+                Split ({count} {count === 1 ? "category" : "categories"})
+              </span>
+            </span>
+          );
+        }
         return hasCategory(t) ? t.categoryName : "";
       case "memo":
         return t.memo;
@@ -337,12 +411,50 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem variant="destructive" onSelect={() => void handleDelete(t)}>
+              {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
+                <DropdownMenuItem onSelect={() => openSplit(t, true)}>
+                  <Split /> Split
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={t.transferFromSplit}
+                onSelect={() => void handleDelete(t)}
+              >
                 <Trash2 /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
+    }
+  }
+
+  /** A split line, indented under its transaction. */
+  function lineDisplay(t: Transaction, line: SubTransaction, id: ColumnId) {
+    const amount = BigInt(line.amount);
+    switch (id) {
+      case "payee":
+        return (
+          <span className="flex min-w-0 items-center gap-1 pl-4">
+            {line.transferAccountId && (
+              <ArrowLeftRight className="size-3.5 shrink-0" aria-label="Transfer" />
+            )}
+            <span className="truncate">{line.payeeName}</span>
+          </span>
+        );
+      case "category": {
+        const type = accountById.get(t.accountId)?.type ?? "checking";
+        const to = line.transferAccountId ? accountById.get(line.transferAccountId)?.type : null;
+        return usesCategory(type, to) ? line.categoryName : "";
+      }
+      case "memo":
+        return line.memo;
+      case "outflow":
+        return amount < 0n ? show(-amount) : "";
+      case "inflow":
+        return amount > 0n ? show(amount) : "";
+      default:
+        return null;
     }
   }
 
@@ -396,6 +508,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
               payees={payeeList}
               categories={options}
               dateFormat={budget.dateFormat}
+              settings={budget}
               pending={create.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
@@ -404,9 +517,58 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
           )}
           {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
           {items.map((item) => {
-            const t = rows[item.index]?.original;
-            if (!t) return null;
+            const row = flat[item.index];
+            if (!row) return null;
+            const t = row.t;
             const future = t.date > today;
+            if (editingSplit?.id === t.id) {
+              if (row.kind === "line") return null;
+              return (
+                <TransactionEditor
+                  key={t.id}
+                  initial={editingSplit.draft}
+                  label="Edit transaction"
+                  columns={columnIds}
+                  accounts={editorAccounts(accountList, t.accountId)}
+                  payees={payeeList}
+                  categories={options}
+                  dateFormat={budget.dateFormat}
+                  settings={budget}
+                  pending={update.isPending}
+                  error={splitError}
+                  onSave={(draft) => void saveSplit(t, draft)}
+                  onCancel={() => setEditingSplit(null)}
+                />
+              );
+            }
+            if (row.kind === "line") {
+              return (
+                <TableRow
+                  key={row.key}
+                  data-index={item.index}
+                  ref={virtualizer.measureElement}
+                  aria-label={`Split line of ${t.payeeName ?? "transaction"}`}
+                  className={cn("text-muted-foreground text-xs", future && "italic")}
+                >
+                  {columnIds.map((id) => {
+                    const spec = COLUMN_SPECS[id];
+                    return (
+                      <TableCell
+                        key={id}
+                        className={cn(
+                          "truncate py-1.5",
+                          spec.align === "right" && "text-right tabular-nums",
+                          isEditable(id) && "cursor-text",
+                        )}
+                        onClick={isEditable(id) ? () => openSplit(t) : undefined}
+                      >
+                        {lineDisplay(t, row.line, id)}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              );
+            }
             const editable = editableColumns(t);
             return (
               <TableRow
@@ -434,6 +596,11 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
                           payees={payeeList}
                           transfers={transferTargets(t)}
                           categories={options}
+                          onSplit={
+                            !t.transferFromSplit && !t.transferAccountId
+                              ? () => openSplit(t, true)
+                              : undefined
+                          }
                           onCommit={(value, exit, transferAccountId) =>
                             void commitCell(t, editing.column, value, exit, transferAccountId)
                           }
@@ -456,7 +623,10 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
                       )}
                       onClick={
                         canEdit
-                          ? () => setEditing({ id: t.id, column: id as CellColumn })
+                          ? () =>
+                              t.subtransactions.length > 0
+                                ? openSplit(t)
+                                : setEditing({ id: t.id, column: id as CellColumn })
                           : undefined
                       }
                     >

@@ -2,9 +2,17 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "@/lib/accounts";
+import type { MoneySettings } from "@/lib/money-input";
 import { emptyDraft } from "@/lib/transactions";
 import { registerColumns } from "./register-columns";
 import { TransactionEditor } from "./transaction-editor";
+
+const usd: MoneySettings = {
+  currency: "USD",
+  numberFormat: "comma_dot",
+  currencySymbolPosition: "before",
+  dateFormat: "MM/DD/YYYY",
+};
 
 const account = (id: string, type: Account["type"]): Account => ({
   id,
@@ -41,6 +49,7 @@ function renderEditor(accountId = "checking") {
             { id: "rent", name: "Rent", group: "Bills" },
           ]}
           dateFormat="MM/DD/YYYY"
+          settings={usd}
           pending={false}
           error={null}
           onSave={onSave}
@@ -135,5 +144,43 @@ describe("TransactionEditor", () => {
     await userEvent.setup().click(screen.getByLabelText("Payee"));
     expect(screen.queryByRole("option", { name: "checking" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "savings" })).toBeInTheDocument();
+  });
+
+  it("splits across categories, with a remaining counter", async () => {
+    const { onSave } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "120");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+    expect(screen.getByText("Split (2 lines)")).toBeInTheDocument();
+    expect(screen.getByText("120.00 left to split")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Outflow, line 1"), "80");
+    await user.type(screen.getByLabelText("Outflow, line 2"), "40");
+    expect(screen.getByText("Fully split")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add line" }));
+    await user.click(screen.getByRole("button", { name: "Remove line 3" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outflow: "120",
+        lines: [
+          expect.objectContaining({ outflow: "80" }),
+          expect.objectContaining({ outflow: "40" }),
+        ],
+      }),
+    );
+  });
+
+  it("doesn't offer a split on a transfer", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("Category"));
+    expect(screen.getByRole("option", { name: "Split" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.type(screen.getByLabelText("Payee"), "brokerage");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByLabelText("Category"));
+    expect(screen.queryByRole("option", { name: "Split" })).not.toBeInTheDocument();
   });
 });

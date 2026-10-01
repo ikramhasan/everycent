@@ -35,6 +35,7 @@ export function CellEditor({
   payees,
   transfers,
   categories,
+  onSplit,
   onCommit,
   onCancel,
 }: {
@@ -47,6 +48,8 @@ export function CellEditor({
   /** Accounts the payee cell offers as transfers. */
   transfers: readonly TransferTarget[];
   categories: readonly CategoryOption[];
+  /** Offers "Split" in the category list; the register then opens the whole-split editor. */
+  onSplit?: () => void;
   /** `transferAccountId` is set when the payee cell now holds a transfer. */
   onCommit: (value: string | null, exit: CellExit, transferAccountId: string | null) => void;
   onCancel: () => void;
@@ -137,6 +140,14 @@ export function CellEditor({
           <CategoryField
             value={value}
             onChange={(id) => finish("stay", id)}
+            onSplit={
+              onSplit
+                ? () => {
+                    done.current = true;
+                    onSplit();
+                  }
+                : undefined
+            }
             categories={categories}
             autoFocus
           />

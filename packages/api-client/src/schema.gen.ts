@@ -304,8 +304,8 @@ export interface paths {
         get: operations["listTransactions"];
         put?: never;
         /**
-         * Add a transaction or a transfer
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open.
+         * Add a transaction, a transfer or a split
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers).
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -326,14 +326,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a transaction
-         * @description Deleting either side of a transfer deletes both.
+         * @description Deleting either side of a transfer deletes both. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own.
          */
         delete: operations["deleteTransaction"];
         options?: never;
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared and category.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -647,10 +647,28 @@ export interface components {
             cleared: "uncleared" | "cleared" | "reconciled";
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
-            /** @description Transfers: the matching transaction in the other account */
+            /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
             transferTransactionId: string | null;
+            /** @description The other side is a line of a split, which owns this transfer's date, amount and account; only memo, cleared and category change here */
+            transferFromSplit: boolean;
+            /** @description A split's lines, in order (empty when not split); the split has no category */
+            subtransactions: components["schemas"]["SubTransaction"][];
             /** @description The account's balance after this transaction, in date order (all of its transactions) */
             runningBalance: string;
+        };
+        SubTransaction: {
+            id: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            payeeId: string | null;
+            payeeName: string | null;
+            categoryId: string | null;
+            categoryName: string | null;
+            memo: string;
+            /** @description Transfer lines: the other account */
+            transferAccountId: string | null;
+            /** @description Transfer lines: the transaction they keep in the other account */
+            transferTransactionId: string | null;
         };
         CreateTransaction: {
             accountId: string;
@@ -668,11 +686,26 @@ export interface components {
             categoryId: string | null;
             /** @default  */
             memo: string;
+            subtransactions?: components["schemas"]["SubTransactionInput"][];
             /**
              * @default uncleared
              * @enum {string}
              */
             cleared: "uncleared" | "cleared";
+        };
+        SubTransactionInput: {
+            /** @description An existing line of this split; leave out for new ones */
+            id?: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            /** @default null */
+            payeeName: string | null;
+            /** @description Make this line a transfer */
+            transferAccountId?: string;
+            /** @default null */
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
         };
         UpdateTransaction: {
             accountId?: string;
@@ -690,6 +723,7 @@ export interface components {
             memo?: string;
             /** @enum {string} */
             cleared?: "uncleared" | "cleared";
+            subtransactions?: components["schemas"]["SubTransactionInput"][];
         };
         PayeeList: {
             payees: components["schemas"]["Payee"][];
@@ -2218,7 +2252,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change */
+            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2290,7 +2324,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change */
+            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
             409: {
                 headers: {
                     [name: string]: unknown;

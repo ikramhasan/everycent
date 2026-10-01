@@ -127,6 +127,7 @@ export interface NewTransaction {
   cleared: ClearedState;
   memo?: string;
   transferTransactionId?: string | null;
+  transferSubTransactionId?: string | null;
 }
 
 export async function insertTransaction(db: Db, values: NewTransaction) {

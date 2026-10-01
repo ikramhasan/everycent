@@ -5,16 +5,27 @@ import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { TableCell, TableRow } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
-import { Circle, CircleCheck } from "lucide-react";
+import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 import type { Account } from "@/lib/accounts";
-import type { CategoryOption, Draft, Payee } from "@/lib/transactions";
+import type { MoneySettings } from "@/lib/money-input";
+import {
+  type CategoryOption,
+  type Draft,
+  emptyLine,
+  type LineDraft,
+  type Payee,
+  remainingLabel,
+  splitRemaining,
+  startSplit,
+} from "@/lib/transactions";
 import type { ColumnId } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 
 /**
- * The row for a new transaction, like YNAB's: Tab moves between fields, Enter saves, Esc
- * cancels. The second row holds the buttons and any error.
+ * The row for a new transaction (or a whole split being edited), like YNAB's: Tab moves between
+ * fields, Enter saves, Esc cancels. A split adds a row per line, then a row to add lines and see
+ * what's left to split; the last row holds the buttons and any error.
  */
 export function TransactionEditor({
   initial,
@@ -23,6 +34,8 @@ export function TransactionEditor({
   payees,
   categories,
   dateFormat,
+  settings,
+  label = "New transaction",
   pending,
   error,
   onSave,
@@ -35,6 +48,9 @@ export function TransactionEditor({
   payees: readonly Payee[];
   categories: readonly CategoryOption[];
   dateFormat: DateFormat;
+  settings: MoneySettings;
+  /** Names the editor's row for screen readers. */
+  label?: string;
   pending: boolean;
   error: string | null;
   onSave: (draft: Draft) => void;
@@ -45,8 +61,20 @@ export function TransactionEditor({
   const account = accounts.find((a) => a.id === draft.accountId);
   const transferTo = accounts.find((a) => a.id === draft.transferAccountId);
   const needsCategory = account ? usesCategory(account.type, transferTo?.type) : true;
-  // Money can move to any other open account.
+  // Money can move to any other open account; a split can't itself be a transfer (its lines can).
   const transfers = accounts.filter((a) => a.id !== draft.accountId);
+  const lines = draft.lines;
+  const canSplit = account ? usesCategory(account.type, null) && !draft.transferAccountId : false;
+
+  function setLine(key: string, patch: Partial<LineDraft>) {
+    setDraft((d) => ({
+      ...d,
+      lines: d.lines?.map((l) => (l.key === key ? { ...l, ...patch } : l)) ?? null,
+    }));
+  }
+  function removeLine(key: string) {
+    setDraft((d) => ({ ...d, lines: d.lines?.filter((l) => l.key !== key) ?? null }));
+  }
 
   function handleKeyDown(event: KeyboardEvent) {
     if (listOwnsKey(event)) return;
@@ -74,7 +102,7 @@ export function TransactionEditor({
                 accountId: e.target.value,
                 ...(self ? { payeeName: "", transferAccountId: null } : {}),
                 ...(next && !usesCategory(next.type, self ? null : transferTo?.type)
-                  ? { categoryId: null }
+                  ? { categoryId: null, lines: null }
                   : {}),
               });
             }}
@@ -101,7 +129,7 @@ export function TransactionEditor({
           <PayeeField
             value={draft.payeeName}
             payees={payees}
-            transfers={transfers}
+            transfers={lines ? [] : transfers}
             onChange={({ name, transferAccountId, payee }) =>
               setDraft((d) => {
                 const to = accounts.find((a) => a.id === transferAccountId);
@@ -112,7 +140,7 @@ export function TransactionEditor({
                   transferAccountId,
                   ...(!uses ? { categoryId: null } : {}),
                   // YNAB fills in the category last used with this payee.
-                  ...(payee?.lastCategoryId && uses && d.categoryId === null
+                  ...(payee?.lastCategoryId && uses && d.categoryId === null && !d.lines
                     ? { categoryId: payee.lastCategoryId }
                     : {}),
                 };
@@ -121,10 +149,19 @@ export function TransactionEditor({
           />
         );
       case "category":
+        if (lines) {
+          return (
+            <p className="flex items-center gap-1.5 px-2 text-sm">
+              <Split className="size-4 text-muted-foreground" />
+              Split ({lines.length} lines)
+            </p>
+          );
+        }
         return needsCategory ? (
           <CategoryField
             value={draft.categoryId}
             onChange={(categoryId) => set({ categoryId })}
+            onSplit={canSplit ? () => setDraft(startSplit) : undefined}
             categories={categories}
           />
         ) : (
@@ -181,10 +218,96 @@ export function TransactionEditor({
     }
   }
 
+  function lineCell(line: LineDraft, index: number, column: ColumnId) {
+    const to = accounts.find((a) => a.id === line.transferAccountId);
+    const lineUses = account ? usesCategory(account.type, to?.type) : true;
+    const name = `line ${index + 1}`;
+    switch (column) {
+      case "payee":
+        return (
+          <PayeeField
+            label={`Payee, ${name}`}
+            value={line.payeeName}
+            payees={payees}
+            transfers={transfers}
+            onChange={({ name: payeeName, transferAccountId, payee }) => {
+              const toAccount = accounts.find((a) => a.id === transferAccountId);
+              const uses = account ? usesCategory(account.type, toAccount?.type) : true;
+              setLine(line.key, {
+                payeeName,
+                transferAccountId,
+                ...(!uses ? { categoryId: null } : {}),
+                ...(payee?.lastCategoryId && uses && line.categoryId === null
+                  ? { categoryId: payee.lastCategoryId }
+                  : {}),
+              });
+            }}
+          />
+        );
+      case "category":
+        return lineUses ? (
+          <CategoryField
+            label={`Category, ${name}`}
+            value={line.categoryId}
+            onChange={(categoryId) => setLine(line.key, { categoryId })}
+            categories={categories}
+          />
+        ) : (
+          <p className="px-2 text-muted-foreground text-sm italic">Category not needed</p>
+        );
+      case "memo":
+        return (
+          <Input
+            aria-label={`Memo, ${name}`}
+            placeholder="Memo"
+            value={line.memo}
+            onChange={(e) => setLine(line.key, { memo: e.target.value })}
+            className="h-8"
+          />
+        );
+      case "outflow":
+      case "inflow":
+        return (
+          <Input
+            aria-label={`${column === "outflow" ? "Outflow" : "Inflow"}, ${name}`}
+            placeholder={column === "outflow" ? "Outflow" : "Inflow"}
+            inputMode="decimal"
+            value={line[column]}
+            onChange={(e) =>
+              setLine(
+                line.key,
+                column === "outflow"
+                  ? { outflow: e.target.value, inflow: "" }
+                  : { inflow: e.target.value, outflow: "" },
+              )
+            }
+            className="h-8 text-right tabular-nums"
+          />
+        );
+      case "actions":
+        return (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Remove ${name}`}
+            onClick={() => removeLine(line.key)}
+          >
+            <X />
+          </Button>
+        );
+      default:
+        return null;
+    }
+  }
+
+  const split = lines ? splitRemaining(draft, settings) : null;
+  const remaining = split && "remaining" in split ? split.remaining : null;
+
   return (
     <>
       <TableRow
-        aria-label="New transaction"
+        aria-label={label}
         className="border-b-0 bg-muted/50 hover:bg-muted/50"
         onKeyDown={handleKeyDown}
       >
@@ -194,9 +317,46 @@ export function TransactionEditor({
           </TableCell>
         ))}
       </TableRow>
+      {lines?.map((line, index) => (
+        <TableRow
+          key={line.key}
+          aria-label={`Split line ${index + 1}`}
+          className="border-b-0 bg-muted/50 hover:bg-muted/50"
+          onKeyDown={handleKeyDown}
+        >
+          {columns.map((column) => (
+            <TableCell key={column} className="px-1.5 py-1">
+              {lineCell(line, index, column)}
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
       <TableRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
         <TableCell colSpan={columns.length} className="px-1.5 pt-0">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {lines && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => set({ lines: [...lines, emptyLine()] })}
+                >
+                  <Plus /> Add line
+                </Button>
+                <p
+                  className={cn(
+                    "mr-auto text-sm tabular-nums",
+                    remaining !== null && remaining !== 0n
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                  aria-live="polite"
+                >
+                  {remaining === null ? "Check the amounts" : remainingLabel(remaining, settings)}
+                </p>
+              </>
+            )}
             {error && <FieldError className="mr-auto">{error}</FieldError>}
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               Cancel

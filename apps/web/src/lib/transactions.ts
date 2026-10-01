@@ -4,9 +4,11 @@ import type { CategoryList } from "./categories";
 import { type MoneySettings, parseMoneyInput, toMoneyInput } from "./money-input";
 
 export type Transaction = components["schemas"]["Transaction"];
+export type SubTransaction = components["schemas"]["SubTransaction"];
 export type Payee = components["schemas"]["Payee"];
 type CreateBody = components["schemas"]["CreateTransaction"];
 type UpdateBody = components["schemas"]["UpdateTransaction"];
+type LineBody = components["schemas"]["SubTransactionInput"];
 
 /** One account's register, or every account's when `accountId` is left out. */
 export const transactionsQueryOptions = (budgetId: string, accountId?: string) =>
@@ -68,6 +70,47 @@ export interface Draft {
   outflow: string;
   inflow: string;
   cleared: "uncleared" | "cleared";
+  /** A split's lines (the category is then unused); null when it isn't split. */
+  lines: LineDraft[] | null;
+}
+
+/** One line of a split, as typed. */
+export interface LineDraft {
+  /** Stable React key; new lines get a local one. */
+  key: string;
+  /** The saved line this edits; new lines leave it out. */
+  id?: string;
+  payeeName: string;
+  transferAccountId: string | null;
+  categoryId: string | null;
+  memo: string;
+  outflow: string;
+  inflow: string;
+}
+
+let nextLineKey = 0;
+
+export function emptyLine(patch: Partial<LineDraft> = {}): LineDraft {
+  nextLineKey += 1;
+  return {
+    key: `new-${nextLineKey}`,
+    payeeName: "",
+    transferAccountId: null,
+    categoryId: null,
+    memo: "",
+    outflow: "",
+    inflow: "",
+    ...patch,
+  };
+}
+
+/** YNAB's "Split": the current category moves to the first of two lines. */
+export function startSplit(draft: Draft): Draft {
+  return {
+    ...draft,
+    categoryId: null,
+    lines: [emptyLine({ categoryId: draft.categoryId }), emptyLine()],
+  };
 }
 
 export function emptyDraft(accountId: string, date: string): Draft {
@@ -81,6 +124,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     outflow: "",
     inflow: "",
     cleared: "uncleared",
+    lines: null,
   };
 }
 
@@ -96,11 +140,30 @@ export function draftFrom(t: Transaction, settings: MoneySettings): Draft {
     outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
     inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
     cleared: t.cleared === "uncleared" ? "uncleared" : "cleared",
+    lines:
+      t.subtransactions.length > 0 ? t.subtransactions.map((l) => lineFrom(l, settings)) : null,
+  };
+}
+
+function lineFrom(line: SubTransaction, settings: MoneySettings): LineDraft {
+  const amount = BigInt(line.amount);
+  return {
+    key: line.id,
+    id: line.id,
+    payeeName: line.payeeName ?? "",
+    transferAccountId: line.transferAccountId,
+    categoryId: line.categoryId,
+    memo: line.memo,
+    outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
+    inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
   };
 }
 
 /** Inflow minus outflow, in minor units; empty fields count as zero. */
-export function draftAmount(draft: Draft, settings: MoneySettings): bigint | string {
+export function draftAmount(
+  draft: Pick<Draft, "outflow" | "inflow">,
+  settings: MoneySettings,
+): bigint | string {
   const parse = (text: string) => (text.trim() === "" ? 0n : parseMoneyInput(text, settings));
   const outflow = parse(draft.outflow);
   if (typeof outflow === "string") return outflow;
@@ -109,11 +172,95 @@ export function draftAmount(draft: Draft, settings: MoneySettings): bigint | str
   return inflow - outflow;
 }
 
+/**
+ * A split's total and what's left to put on its lines. With the transaction's own amount left
+ * empty, the lines make up the total.
+ */
+export function splitRemaining(
+  draft: Draft,
+  settings: MoneySettings,
+): { error: string } | { total: bigint; remaining: bigint } {
+  let lines = 0n;
+  for (const line of draft.lines ?? []) {
+    const amount = draftAmount(line, settings);
+    if (typeof amount === "string") return { error: amount };
+    lines += amount;
+  }
+  const blank = draft.outflow.trim() === "" && draft.inflow.trim() === "";
+  const total = blank ? lines : draftAmount(draft, settings);
+  if (typeof total === "string") return { error: total };
+  // Positive while lines are still missing, negative when they go past the total.
+  const remaining = total < 0n ? lines - total : total - lines;
+  return { total, remaining };
+}
+
+/** How the editor and errors describe what's left of a split. */
+export function remainingLabel(remaining: bigint, settings: MoneySettings) {
+  if (remaining === 0n) return "Fully split";
+  const amount = toMoneyInput(remaining < 0n ? -remaining : remaining, settings);
+  return remaining > 0n ? `${amount} left to split` : `${amount} too much on the lines`;
+}
+
+/**
+ * A split cut down to one line (or none) isn't a split any more: the transaction takes the
+ * remaining line's category (or transfer) and, if it had none, its amount.
+ */
+function collapseSplit(draft: Draft): Draft {
+  if (!draft.lines || draft.lines.length >= 2) return draft;
+  const [line] = draft.lines;
+  const blank = draft.outflow.trim() === "" && draft.inflow.trim() === "";
+  return {
+    ...draft,
+    lines: null,
+    categoryId: line?.categoryId ?? null,
+    ...(line?.transferAccountId
+      ? { transferAccountId: line.transferAccountId, payeeName: line.payeeName }
+      : {}),
+    ...(line && blank ? { outflow: line.outflow, inflow: line.inflow } : {}),
+  };
+}
+
 type Result<T> = { ok: true; body: T } | { ok: false; error: string };
 
-export function createBody(draft: Draft, settings: MoneySettings): Result<CreateBody> {
-  const amount = draftAmount(draft, settings);
-  if (typeof amount === "string") return { ok: false, error: amount };
+/** The amount to save, and the split's lines if it has them. */
+function amountAndLines(
+  draft: Draft,
+  settings: MoneySettings,
+): Result<{ amount: bigint; lines?: LineBody[] }> {
+  if (!draft.lines) {
+    const amount = draftAmount(draft, settings);
+    return typeof amount === "string"
+      ? { ok: false, error: amount }
+      : { ok: true, body: { amount } };
+  }
+  const split = splitRemaining(draft, settings);
+  if ("error" in split) return { ok: false, error: split.error };
+  if (split.remaining !== 0n) {
+    return {
+      ok: false,
+      error: `The lines must add up to the total: ${remainingLabel(split.remaining, settings)}.`,
+    };
+  }
+  const lines = draft.lines.map((line): LineBody => {
+    const amount = draftAmount(line, settings) as bigint;
+    return {
+      ...(line.id ? { id: line.id } : {}),
+      amount: amount.toString(),
+      ...(line.transferAccountId
+        ? { payeeName: null, transferAccountId: line.transferAccountId }
+        : { payeeName: line.payeeName.trim() || null }),
+      categoryId: line.categoryId,
+      memo: line.memo,
+    };
+  });
+  return { ok: true, body: { amount: split.total, lines } };
+}
+
+export function createBody(input: Draft, settings: MoneySettings): Result<CreateBody> {
+  const draft = collapseSplit(input);
+  const result = amountAndLines(draft, settings);
+  if (!result.ok) return result;
+  const { amount, lines } = result.body;
   return {
     ok: true,
     body: {
@@ -123,9 +270,10 @@ export function createBody(draft: Draft, settings: MoneySettings): Result<Create
       ...(draft.transferAccountId
         ? { payeeName: null, transferAccountId: draft.transferAccountId }
         : { payeeName: draft.payeeName.trim() || null }),
-      categoryId: draft.categoryId,
+      categoryId: lines ? null : draft.categoryId,
       memo: draft.memo,
       cleared: draft.cleared,
+      ...(lines ? { subtransactions: lines } : {}),
     },
   };
 }
@@ -136,11 +284,13 @@ export function createBody(draft: Draft, settings: MoneySettings): Result<Create
  */
 export function updateBody(
   original: Transaction,
-  draft: Draft,
+  input: Draft,
   settings: MoneySettings,
 ): Result<UpdateBody> {
-  const amount = draftAmount(draft, settings);
-  if (typeof amount === "string") return { ok: false, error: amount };
+  const draft = collapseSplit(input);
+  const result = amountAndLines(draft, settings);
+  if (!result.ok) return result;
+  const { amount, lines } = result.body;
   const before = draftFrom(original, settings);
   const body: UpdateBody = {};
   if (draft.accountId !== before.accountId) body.accountId = draft.accountId;
@@ -153,10 +303,24 @@ export function updateBody(
   } else if (before.transferAccountId || draft.payeeName.trim() !== before.payeeName) {
     body.payeeName = draft.payeeName.trim() || null;
   }
-  if (draft.categoryId !== before.categoryId) body.categoryId = draft.categoryId;
+  if (lines) {
+    // The API replaces a split's lines as a whole (matched by id).
+    const same =
+      before.lines !== null &&
+      JSON.stringify(lines) === JSON.stringify(amountAndLinesOf(before, settings));
+    if (!same) body.subtransactions = lines;
+  } else if (before.lines || draft.categoryId !== before.categoryId) {
+    // Giving a split a category un-splits it.
+    body.categoryId = draft.categoryId;
+  }
   if (draft.memo !== before.memo) body.memo = draft.memo;
   if (draft.cleared !== before.cleared) body.cleared = draft.cleared;
   return { ok: true, body };
+}
+
+function amountAndLinesOf(draft: Draft, settings: MoneySettings) {
+  const result = amountAndLines(draft, settings);
+  return result.ok ? result.body.lines : undefined;
 }
 
 /** The cells YNAB lets you edit in place on an existing transaction. */

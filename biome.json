@@ -2,7 +2,13 @@
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/*.gen.ts", "!apps/api/openapi.json", "!packages/db/migrations"]
+    "includes": [
+      "**",
+      "!**/*.gen.ts",
+      "!apps/api/openapi.json",
+      "!packages/db/migrations",
+      "!docs/artifacts"
+    ]
   },
   "formatter": {
     "enabled": true,

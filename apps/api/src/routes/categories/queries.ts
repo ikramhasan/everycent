@@ -1,5 +1,5 @@
 import { newId, sql } from "@everycent/db";
-import { category, categoryGroup, transaction } from "@everycent/db/schema";
+import { category, categoryGroup, subTransaction, transaction } from "@everycent/db/schema";
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
 import { type Db, internalCategoryId } from "../../lib/ledger";
@@ -54,7 +54,12 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .selectDistinct({ id: transaction.categoryId })
     .from(transaction)
     .where(eq(transaction.budgetId, budgetId));
-  const used = new Set(usedRows.flatMap((u) => (u.id ? [u.id] : [])));
+  const usedLines = await db
+    .selectDistinct({ id: subTransaction.categoryId })
+    .from(subTransaction)
+    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+    .where(eq(transaction.budgetId, budgetId));
+  const used = new Set([...usedRows, ...usedLines].flatMap((u) => (u.id ? [u.id] : [])));
   return {
     readyToAssignCategoryId: await internalCategoryId(db, budgetId, "ready_to_assign"),
     groups: groups.map((g) =>
@@ -144,7 +149,12 @@ export async function hasHistory(db: Db, categoryIds: readonly string[]) {
     .from(transaction)
     .where(inArray(transaction.categoryId, [...categoryIds]))
     .limit(1);
-  return Boolean(row);
+  const [line] = await db
+    .select({ id: subTransaction.id })
+    .from(subTransaction)
+    .where(inArray(subTransaction.categoryId, [...categoryIds]))
+    .limit(1);
+  return Boolean(row ?? line);
 }
 
 /**
@@ -179,4 +189,8 @@ export async function reassignHistory(
     .update(transaction)
     .set({ categoryId: target.id })
     .where(inArray(transaction.categoryId, [...categoryIds]));
+  await db
+    .update(subTransaction)
+    .set({ categoryId: target.id })
+    .where(inArray(subTransaction.categoryId, [...categoryIds]));
 }

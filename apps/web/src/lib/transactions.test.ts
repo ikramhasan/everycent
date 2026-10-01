@@ -8,6 +8,9 @@ import {
   type Draft,
   draftFrom,
   emptyDraft,
+  emptyLine,
+  splitRemaining,
+  startSplit,
   type Transaction,
   updateBody,
 } from "./transactions";
@@ -34,6 +37,8 @@ const txn: Transaction = {
   cleared: "reconciled",
   transferAccountId: null,
   transferTransactionId: null,
+  transferFromSplit: false,
+  subtransactions: [],
   runningBalance: "0",
 };
 
@@ -185,6 +190,117 @@ describe("cellUpdate", () => {
     expect(cellUpdate(transfer, "payee", "Bank", usd)).toEqual({
       ok: true,
       body: { payeeName: "Bank" },
+    });
+  });
+});
+
+describe("splits", () => {
+  const receipt: Draft = {
+    ...emptyDraft("a1", "2026-10-01"),
+    payeeName: "Supermarket",
+    outflow: "120",
+    lines: [
+      emptyLine({ categoryId: "groceries", outflow: "80", memo: "food" }),
+      emptyLine({ categoryId: "household", outflow: "40" }),
+    ],
+  };
+
+  it("moves the category to the first line when splitting", () => {
+    const split = startSplit({ ...emptyDraft("a1", "2026-10-01"), categoryId: "groceries" });
+    expect(split.categoryId).toBeNull();
+    expect(split.lines?.map((l) => l.categoryId)).toEqual(["groceries", null]);
+  });
+
+  it("counts what's left to split, for outflows and inflows", () => {
+    const short = { ...receipt, outflow: "130" };
+    expect(splitRemaining(short, usd)).toEqual({ total: -13000n, remaining: 1000n });
+    expect(splitRemaining({ ...receipt, outflow: "100" }, usd)).toMatchObject({
+      remaining: -2000n,
+    });
+    // No total typed: the lines make it up.
+    expect(splitRemaining({ ...receipt, outflow: "" }, usd)).toEqual({
+      total: -12000n,
+      remaining: 0n,
+    });
+    expect(createBody(short, usd)).toEqual({
+      ok: false,
+      error: "The lines must add up to the total: 10.00 left to split.",
+    });
+  });
+
+  it("sends the lines, with transfers by account", () => {
+    const lines = receipt.lines ?? [];
+    const draft: Draft = {
+      ...receipt,
+      lines: [
+        ...lines.slice(0, 1),
+        { ...(lines[1] ?? emptyLine()), categoryId: null, transferAccountId: "a2", payeeName: "x" },
+      ],
+    };
+    expect(createBody(draft, usd)).toMatchObject({
+      ok: true,
+      body: {
+        amount: "-12000",
+        categoryId: null,
+        subtransactions: [
+          { amount: "-8000", payeeName: null, categoryId: "groceries", memo: "food" },
+          { amount: "-4000", payeeName: null, transferAccountId: "a2", categoryId: null },
+        ],
+      },
+    });
+  });
+
+  it("isn't a split any more with one line left: it keeps that line's category", () => {
+    const one = { ...receipt, outflow: "", lines: receipt.lines?.slice(1) ?? [] };
+    const result = createBody(one, usd);
+    expect(result).toMatchObject({ ok: true, body: { amount: "-4000", categoryId: "household" } });
+    expect(result.ok && "subtransactions" in result.body).toBe(false);
+  });
+
+  it("only sends changed lines, and un-splits with a category", () => {
+    const split: Transaction = {
+      ...txn,
+      amount: "-12000",
+      cleared: "uncleared",
+      subtransactions: [
+        {
+          id: "l1",
+          amount: "-8000",
+          payeeId: null,
+          payeeName: null,
+          categoryId: "groceries",
+          categoryName: "Groceries",
+          memo: "",
+          transferAccountId: null,
+          transferTransactionId: null,
+        },
+        {
+          id: "l2",
+          amount: "-4000",
+          payeeId: null,
+          payeeName: null,
+          categoryId: "household",
+          categoryName: "Household",
+          memo: "",
+          transferAccountId: null,
+          transferTransactionId: null,
+        },
+      ],
+    };
+    const draft = draftFrom(split, usd);
+    expect(updateBody(split, draft, usd)).toEqual({ ok: true, body: {} });
+
+    const lines = draft.lines ?? [];
+    const edited = { ...draft, lines: lines.map((l, i) => (i === 0 ? { ...l, memo: "food" } : l)) };
+    expect(updateBody(split, edited, usd)).toMatchObject({
+      ok: true,
+      body: { subtransactions: [{ id: "l1", memo: "food" }, { id: "l2" }] },
+    });
+
+    const unsplit = { ...draft, lines: lines.slice(0, 1), outflow: "120" };
+    expect(updateBody(split, unsplit, usd)).toEqual({
+      ok: true,
+      body: { categoryId: "groceries" },
     });
   });
 });

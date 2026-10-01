@@ -64,7 +64,17 @@ before starting a roadmap phase** and remove an entry once it's done.
   the same; a "transfer the balance to…" choice was considered and left out for now.
 - Both sides of a transfer use the budget currency. Phase 11 needs a rate on cross-currency
   transfers.
-- Transfers can't be split yet; a split line that's a transfer comes with 5c.
+
+## Splits (phase 5c follow-ups)
+
+- A split is edited as a whole (YNAB does the same); its lines can't be edited a cell at a time.
+- The transaction a split's transfer line keeps in the other account only takes memo, cleared and
+  category there (409 `TRANSFER_IN_SPLIT` otherwise); date, amount and deletion go through the
+  split. The register hides those cells and the delete action.
+- A split with a reconciled transfer side can't drop or re-point that line (409
+  `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
+- Category activity for split lines (phase 6) must read `sub_transaction`, not the split's own
+  null category.
 
 ## Accounts (phase 3 follow-ups)
 

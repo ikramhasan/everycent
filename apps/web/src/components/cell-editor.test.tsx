@@ -27,6 +27,8 @@ const txn: Transaction = {
   cleared: "uncleared",
   transferAccountId: null,
   transferTransactionId: null,
+  transferFromSplit: false,
+  subtransactions: [],
   runningBalance: "0",
 };
 

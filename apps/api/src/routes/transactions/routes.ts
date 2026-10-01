@@ -10,6 +10,23 @@ const Memo = z.string().max(500);
 /** People toggle between these two; reconciling is its own flow. */
 const SettableCleared = z.enum(["uncleared", "cleared"]);
 
+const SubTransactionSchema = z
+  .object({
+    id: z.string(),
+    amount: zMinorUnits.describe("Negative is an outflow"),
+    payeeId: z.string().nullable(),
+    payeeName: z.string().nullable(),
+    categoryId: z.string().nullable(),
+    categoryName: z.string().nullable(),
+    memo: z.string(),
+    transferAccountId: z.string().nullable().describe("Transfer lines: the other account"),
+    transferTransactionId: z
+      .string()
+      .nullable()
+      .describe("Transfer lines: the transaction they keep in the other account"),
+  })
+  .openapi("SubTransaction");
+
 export const TransactionSchema = z
   .object({
     id: z.string(),
@@ -31,7 +48,19 @@ export const TransactionSchema = z
     transferTransactionId: z
       .string()
       .nullable()
-      .describe("Transfers: the matching transaction in the other account"),
+      .describe(
+        "Transfers: the matching transaction in the other account (the split, for a split's " +
+          "transfer line)",
+      ),
+    transferFromSplit: z
+      .boolean()
+      .describe(
+        "The other side is a line of a split, which owns this transfer's date, amount and " +
+          "account; only memo, cleared and category change here",
+      ),
+    subtransactions: z
+      .array(SubTransactionSchema)
+      .describe("A split's lines, in order (empty when not split); the split has no category"),
     runningBalance: zMinorUnits.describe(
       "The account's balance after this transaction, in date order (all of its transactions)",
     ),
@@ -58,7 +87,8 @@ function ok<T extends z.ZodType>(description: string, schema: T) {
 const notFound = jsonError("No such budget, account or transaction, or the caller isn't a member");
 const forbidden = jsonError("The caller's role can't change transactions");
 const reconciled = jsonError(
-  "The other side of the transfer is reconciled, so its date and amount can't change",
+  "The other side of the transfer is reconciled, so its date and amount can't change; or this " +
+    "is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`)",
 );
 
 const categoryRules =
@@ -71,6 +101,23 @@ const transferRules =
   "with the opposite amount is kept in that account. Only a transfer from a budget account to " +
   "a tracking account has a category (on the budget side), as money leaves the budget. New " +
   "transfers need both accounts open.";
+
+const splitRules =
+  "`subtransactions` (two or more lines, adding up to the amount) splits it across categories; " +
+  "its own `categoryId` is then null. Lines follow the same category and transfer rules. Only " +
+  "budget accounts have splits, and a transfer can't be split (its lines can be transfers).";
+
+const SubTransactionInput = z
+  .object({
+    id: z.string().optional().describe("An existing line of this split; leave out for new ones"),
+    amount: zMinorUnits.describe("Negative is an outflow"),
+    payeeName: PayeeName.nullable().default(null),
+    transferAccountId: z.string().optional().describe("Make this line a transfer"),
+    categoryId: z.string().nullable().default(null),
+    memo: Memo.default(""),
+  })
+  .openapi("SubTransactionInput");
+const SubTransactions = z.array(SubTransactionInput).min(2);
 
 const TransferAccountId = z
   .string()
@@ -104,8 +151,8 @@ export const createTransaction = createRoute({
   tags: ["Transactions"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "Add a transaction or a transfer",
-  description: `${categoryRules} ${transferRules}`,
+  summary: "Add a transaction, a transfer or a split",
+  description: `${categoryRules} ${transferRules} ${splitRules}`,
   request: {
     params: BudgetParams,
     body: json(
@@ -118,6 +165,7 @@ export const createTransaction = createRoute({
           transferAccountId: TransferAccountId.optional(),
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
+          subtransactions: SubTransactions.optional(),
           cleared: SettableCleared.default("uncleared"),
         })
         .openapi("CreateTransaction"),
@@ -148,7 +196,10 @@ export const updateTransaction = createRoute({
     "sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back " +
     "into a normal transaction and deletes the other side. Setting `cleared` on a reconciled " +
     "transaction unlocks it. Moving it to an account that can't use its category resets the " +
-    "category.",
+    "category. " +
+    `${splitRules} Sending \`subtransactions\` replaces a split's lines (matched by \`id\`); ` +
+    "changing a split's amount needs new lines too. Giving a split a `categoryId` (or making " +
+    "it a transfer) un-splits it. A split's transfer side only takes memo, cleared and category.",
   request: {
     params: TransactionParams,
     body: json(
@@ -162,6 +213,7 @@ export const updateTransaction = createRoute({
           categoryId: z.string().nullable().optional(),
           memo: Memo.optional(),
           cleared: SettableCleared.optional(),
+          subtransactions: SubTransactions.optional(),
         })
         .openapi("UpdateTransaction"),
     ),
@@ -187,7 +239,9 @@ export const deleteTransaction = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Delete a transaction",
-  description: "Deleting either side of a transfer deletes both.",
+  description:
+    "Deleting either side of a transfer deletes both. Deleting a split deletes its transfer " +
+    "lines' other sides; those can't be deleted on their own.",
   request: { params: TransactionParams },
   responses: {
     204: { description: "Deleted" },

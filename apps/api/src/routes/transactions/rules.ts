@@ -1,0 +1,134 @@
+import { budgetAccount, category, transaction } from "@everycent/db/schema";
+import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
+import { and, eq } from "drizzle-orm";
+import { AppError } from "../../lib/errors";
+import { type Db, insertTransaction, internalCategoryId, transferPayeeId } from "../../lib/ledger";
+
+/** The rules transactions, transfers and split lines share. */
+
+export type AccountRow = typeof budgetAccount.$inferSelect;
+
+export async function findAccount(db: Db, budgetId: string, accountId: string) {
+  const [row] = await db
+    .select()
+    .from(budgetAccount)
+    .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)));
+  if (!row) throw new AppError(404, "NOT_FOUND", "Account not found");
+  return row;
+}
+
+export function assertOpen(account: AccountRow) {
+  if (account.closed) {
+    throw new AppError(
+      400,
+      "ACCOUNT_CLOSED",
+      `Reopen ${account.name} to add transactions or transfers to it`,
+    );
+  }
+}
+
+export function usesCategory(account: AccountRow, transferTo: AccountRow | null) {
+  return usesAccountCategory(account.type, transferTo?.type);
+}
+
+/**
+ * The category a transaction in `account` (a transfer if `transferTo` is set) is stored with,
+ * following YNAB: budget accounts fall back to Uncategorized, and payment categories only receive
+ * money by assigning (phase 7), never from a transaction.
+ */
+export async function resolveCategory(
+  db: Db,
+  budgetId: string,
+  account: AccountRow,
+  transferTo: AccountRow | null,
+  categoryId: string | null,
+) {
+  if (!usesCategory(account, transferTo)) {
+    if (categoryId !== null) {
+      throw new AppError(
+        400,
+        "CATEGORY_NOT_ALLOWED",
+        isOnBudget(account.type)
+          ? "Transfers between budget accounts don't use categories"
+          : "Tracking accounts don't use categories",
+      );
+    }
+    return null;
+  }
+  if (categoryId === null) return internalCategoryId(db, budgetId, "uncategorized");
+  const [row] = await db
+    .select({ linkedAccountId: category.linkedAccountId })
+    .from(category)
+    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
+  if (!row) throw new AppError(400, "BAD_REQUEST", "No such category in this budget");
+  if (row.linkedAccountId) {
+    throw new AppError(
+      400,
+      "CATEGORY_NOT_ALLOWED",
+      "Credit card payment categories can't be used on transactions",
+    );
+  }
+  return categoryId;
+}
+
+export function assertNotSelf(account: AccountRow, transferTo: AccountRow) {
+  if (transferTo.id === account.id) {
+    throw new AppError(400, "TRANSFER_SAME_ACCOUNT", "An account can't transfer to itself");
+  }
+}
+
+export function assertOnePayee(body: { payeeName?: string | null; transferAccountId?: string }) {
+  if (body.transferAccountId !== undefined && body.payeeName != null) {
+    throw new AppError(400, "BAD_REQUEST", "Give a payee name or a transfer account, not both");
+  }
+}
+
+/** Adds the other side of a new transfer, in `transferTo`, and links the two. */
+export async function insertOtherSide(
+  tx: Db,
+  side: { id: string; budgetId: string; date: string; amount: bigint; memo: string },
+  account: AccountRow,
+  transferTo: AccountRow,
+) {
+  const otherId = await insertTransaction(tx, {
+    budgetId: side.budgetId,
+    accountId: transferTo.id,
+    date: side.date,
+    amount: -side.amount,
+    currency: transferTo.currency,
+    payeeId: await transferPayeeId(tx, account),
+    categoryId: await resolveCategory(tx, side.budgetId, transferTo, account, null),
+    memo: side.memo,
+    cleared: "uncleared",
+    transferTransactionId: side.id,
+  });
+  await tx
+    .update(transaction)
+    .set({ transferTransactionId: otherId })
+    .where(eq(transaction.id, side.id));
+}
+
+export async function lockTransaction(tx: Db, budgetId: string, id: string) {
+  const [row] = await tx
+    .select()
+    .from(transaction)
+    .where(and(eq(transaction.id, id), eq(transaction.budgetId, budgetId)))
+    .for("update");
+  return row;
+}
+
+export function reconciledOtherSide(): never {
+  throw new AppError(
+    409,
+    "TRANSFER_RECONCILED",
+    "The other side of this transfer is reconciled. Its date and amount can't change.",
+  );
+}
+
+export function transferInSplit(): never {
+  throw new AppError(
+    409,
+    "TRANSFER_IN_SPLIT",
+    "This transfer comes from a split. Change its date, amount or account from the split.",
+  );
+}

@@ -28,7 +28,7 @@ import {
   InputGroupInput,
 } from "@everycent/ui/components/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
-import { ArrowLeftRight, CalendarDays, Plus } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import { type CategoryOption, categoryLabel, type Payee, transferLabel } from "@/lib/transactions";
@@ -153,6 +153,7 @@ export interface PayeeChoice {
  * payee" so it's clear that's what will happen.
  */
 export function PayeeField({
+  label = "Payee",
   value,
   onChange,
   onPick,
@@ -160,6 +161,8 @@ export function PayeeField({
   transfers,
   autoFocus,
 }: {
+  /** Accessible name (split lines say which line). */
+  label?: string;
   value: string;
   onChange: (choice: PayeeChoice) => void;
   /** An item in the list was chosen. */
@@ -232,7 +235,7 @@ export function PayeeField({
       autoHighlight={typed}
     >
       <AutocompleteInput
-        aria-label="Payee"
+        aria-label={label}
         placeholder="Payee"
         showTrigger={false}
         autoFocus={autoFocus}
@@ -278,23 +281,36 @@ interface CategoryGroupItems {
   items: CategoryOption[];
 }
 
-/** Category picker grouped like the budget; clearing it means Uncategorized. */
+/** The "Split" entry at the end of the category list. */
+const SPLIT: CategoryOption = { id: "__split", name: "Split", group: "" };
+
+/**
+ * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
+ * list ends with YNAB's "Split", to spread the transaction across several categories.
+ */
 export function CategoryField({
+  label = "Category",
   value,
   onChange,
+  onSplit,
   categories,
   autoFocus,
 }: {
+  label?: string;
   value: string | null;
   onChange: (id: string | null) => void;
+  onSplit?: () => void;
   categories: readonly CategoryOption[];
   autoFocus?: boolean;
 }) {
   const groups = useMemo(() => {
     const byGroup = new Map<string, CategoryOption[]>();
     for (const c of categories) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
-    return [...byGroup].map(([group, items]): CategoryGroupItems => ({ value: group, items }));
-  }, [categories]);
+    const list = [...byGroup].map(
+      ([group, items]): CategoryGroupItems => ({ value: group, items }),
+    );
+    return onSplit ? [...list, { value: "", items: [SPLIT] }] : list;
+  }, [categories, onSplit]);
   const selected = categories.find((c) => c.id === value) ?? null;
   const [open, setOpen] = useState(Boolean(autoFocus));
 
@@ -304,13 +320,16 @@ export function CategoryField({
       onOpenChange={setOpen}
       items={groups}
       value={selected}
-      onValueChange={(option) => onChange(option?.id ?? null)}
+      onValueChange={(option) => {
+        if (option?.id === SPLIT.id) onSplit?.();
+        else onChange(option?.id ?? null);
+      }}
       itemToStringLabel={categoryLabel}
       isItemEqualToValue={(a, b) => a.id === b.id}
       autoHighlight
     >
       <ComboboxInput
-        aria-label="Category"
+        aria-label={label}
         placeholder="Uncategorized"
         showTrigger={false}
         showClear={selected !== null}
@@ -323,11 +342,17 @@ export function CategoryField({
         <ComboboxList>
           {(group: CategoryGroupItems) => (
             <ComboboxGroup key={group.value} items={group.items}>
-              <ComboboxLabel>{group.value}</ComboboxLabel>
+              {group.value && <ComboboxLabel>{group.value}</ComboboxLabel>}
               <ComboboxCollection>
                 {(option: CategoryOption) => (
                   <ComboboxItem key={option.id} value={option}>
-                    {option.name}
+                    {option.id === SPLIT.id ? (
+                      <>
+                        <Split className="size-4 text-muted-foreground" /> Split
+                      </>
+                    ) : (
+                      option.name
+                    )}
                   </ComboboxItem>
                 )}
               </ComboboxCollection>

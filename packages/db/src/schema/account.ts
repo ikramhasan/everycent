@@ -114,13 +114,52 @@ export const transaction = pgTable(
     transferTransactionId: text().references((): AnyPgColumn => transaction.id, {
       onDelete: "set null",
     }),
+    /**
+     * Set instead of `transferTransactionId` when the other side is a line of a split: that line
+     * owns the date and amount, so they're edited from the split.
+     */
+    transferSubTransactionId: text().references((): AnyPgColumn => subTransaction.id, {
+      onDelete: "set null",
+    }),
     ...timestamps,
   },
   (t) => [
     uniqueIndex("transaction_transfer_transaction_idx").on(t.transferTransactionId),
+    uniqueIndex("transaction_transfer_sub_transaction_idx").on(t.transferSubTransactionId),
     index("transaction_account_date_idx").on(t.accountId, t.date),
     index("transaction_budget_id_idx").on(t.budgetId),
     index("transaction_category_id_idx").on(t.categoryId),
     index("transaction_payee_id_idx").on(t.payeeId),
+  ],
+);
+
+/**
+ * The lines of a split transaction. A split's own category is null; its lines carry the
+ * categories and always add up to its amount. A line can be a transfer: then its payee is the
+ * other account's transfer payee and a transaction there points back with
+ * `transferSubTransactionId`.
+ */
+export const subTransaction = pgTable(
+  "sub_transaction",
+  {
+    id: text().primaryKey(),
+    transactionId: text()
+      .notNull()
+      .references(() => transaction.id, { onDelete: "cascade" }),
+    /** Order within the split (ascending). */
+    sortOrder: integer().notNull(),
+    /** Minor units; negative is an outflow. */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    /** Always the parent transaction's currency. */
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    payeeId: text().references(() => payee.id, { onDelete: "set null" }),
+    /** Same rules as a transaction's category (no action: see `transaction.categoryId`). */
+    categoryId: text().references(() => category.id),
+    memo: text().notNull().default(""),
+    ...timestamps,
+  },
+  (t) => [
+    index("sub_transaction_transaction_id_idx").on(t.transactionId),
+    index("sub_transaction_category_id_idx").on(t.categoryId),
   ],
 );

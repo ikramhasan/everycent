@@ -124,7 +124,7 @@ and fresh start (after phase 5 core).
 - [x] Payees: create on the fly, autocomplete, remember last category per payee
 - [x] Cleared / uncleared / reconciled states, toggle cleared
 - [x] Transfers between accounts (linked pair, transfer payees, on-/off-budget rules)
-- [ ] Split transactions (multiple categories; split transfers)
+- [x] Split transactions (multiple categories; split transfers)
 - [ ] Flags (colors) with custom flag names
 - [x] Running balance column
 - [ ] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
