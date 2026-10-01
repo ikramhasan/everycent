@@ -11,6 +11,7 @@ export {
   zAccountType,
 } from "./accounts";
 export { allocate } from "./allocate";
+export { evaluateAmount } from "./amount-expression";
 export {
   assertCurrencyCode,
   CURRENCY_CODES,
