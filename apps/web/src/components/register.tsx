@@ -46,6 +46,7 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
 import {
   type CellColumn,
   categoryOptions,
@@ -63,6 +64,7 @@ import {
   updateBody,
 } from "@/lib/transactions";
 import { CellEditor, type CellExit } from "./cell-editor";
+import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { TransactionEditor } from "./transaction-editor";
 
@@ -101,6 +103,8 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const payees = useQuery(payeesQueryOptions(budget.id));
+  const flagList = useQuery(flagsQueryOptions(budget.id));
+  const renameFlagMutation = $api.useMutation("put", "/v1/budgets/{budgetId}/flags/{color}");
   const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
@@ -124,6 +128,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
     [categories.data],
   );
   const payeeList = payees.data?.payees ?? [];
+  const flags = flagList.data?.flags ?? [];
 
   const tableColumns = useMemo(
     () =>
@@ -299,6 +304,35 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
     }
   }
 
+  async function setFlag(t: Transaction, flag: FlagColor | null) {
+    try {
+      await update.mutateAsync({
+        params: { path: { budgetId: budget.id, transactionId: t.id } },
+        body: { flag },
+      });
+      await refresh();
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't change the flag."));
+    }
+  }
+
+  /** Flag names are the budget's, so everyone on it sees the new ones. */
+  async function renameFlags(changes: Flag[]) {
+    try {
+      for (const { color, name } of changes) {
+        await renameFlagMutation.mutateAsync({
+          params: { path: { budgetId: budget.id, color } },
+          body: { name },
+        });
+      }
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't rename the flags."));
+      throw e;
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: flagsQueryOptions(budget.id).queryKey });
+    }
+  }
+
   async function toggleCleared(t: Transaction) {
     try {
       await update.mutateAsync({
@@ -332,6 +366,15 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
     switch (id) {
+      case "flag":
+        return (
+          <FlagMenu
+            value={t.flag}
+            flags={flags}
+            onChange={(flag) => void setFlag(t, flag)}
+            onRename={renameFlags}
+          />
+        );
       case "account":
         return t.accountName;
       case "date":
@@ -472,7 +515,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
       <Table
         containerRef={scrollRef}
         containerClassName="max-h-[70vh] overflow-auto rounded-lg border"
-        className="min-w-[64rem] table-fixed"
+        className="min-w-[66rem] table-fixed"
       >
         <colgroup>
           {columnIds.map((id) => (
@@ -509,6 +552,8 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
               categories={options}
               dateFormat={budget.dateFormat}
               settings={budget}
+              flags={flags}
+              onRenameFlags={renameFlags}
               pending={create.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
@@ -534,6 +579,8 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
                   categories={options}
                   dateFormat={budget.dateFormat}
                   settings={budget}
+                  flags={flags}
+                  onRenameFlags={renameFlags}
                   pending={update.isPending}
                   error={splitError}
                   onSave={(draft) => void saveSplit(t, draft)}
@@ -617,6 +664,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
                         "truncate",
                         spec.align === "right" && "text-right tabular-nums",
                         spec.align === "center" && "py-1 text-center",
+                        id === "flag" && "px-1",
                         id === "actions" && "py-1",
                         (id === "category" || id === "memo") && "text-muted-foreground",
                         canEdit && "cursor-text",

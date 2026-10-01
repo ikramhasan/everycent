@@ -3,6 +3,7 @@ import {
   type ClearedState,
   category,
   categoryGroup,
+  type FlagColor,
   type InternalCategoryKind,
   type InternalPayeeKind,
   payee,
@@ -126,6 +127,7 @@ export interface NewTransaction {
   categoryId: string | null;
   cleared: ClearedState;
   memo?: string;
+  flag?: FlagColor | null;
   transferTransactionId?: string | null;
   transferSubTransactionId?: string | null;
 }

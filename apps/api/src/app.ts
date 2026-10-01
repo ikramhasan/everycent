@@ -8,6 +8,7 @@ import { createRouter } from "./lib/router";
 import { accountsRouter } from "./routes/accounts";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
+import { flagsRouter } from "./routes/flags";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 import { transactionsRouter } from "./routes/transactions";
@@ -39,6 +40,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", categoriesRouter);
   app.route("/v1", accountsRouter);
   app.route("/v1", transactionsRouter);
+  app.route("/v1", flagsRouter);
 
   registerDocs(app);
   return app;

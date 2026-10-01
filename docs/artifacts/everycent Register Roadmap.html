@@ -57,7 +57,7 @@ section { display: grid; gap: 14px; }
 .stat .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .stat .v { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .meter { height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; margin-top: 6px; }
-.meter span { display: block; height: 100%; width: 69%; background: var(--accent); }
+.meter span { display: block; height: 100%; width: 75%; background: var(--accent); }
 @media (max-width: 680px) { .status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Stage rail */
@@ -120,17 +120,17 @@ a { color: var(--accent); }
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · phase 5 · after 5c · 2 Oct 2026</div>
+    <div class="eyebrow">everycent · phase 5 · after 5d · 2 Oct 2026</div>
     <h1>Finishing the register</h1>
-    <p class="lede">The register core, transfers and <strong>split transactions are built</strong>. What's left of Phase 5 is <strong>three stages plus optional extras</strong>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
+    <p class="lede">The register core, transfers, splits and <strong>flags are built</strong>. What's left of Phase 5 is <strong>two stages plus optional extras</strong>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
   </header>
 
   <section aria-label="Where things stand">
     <div class="status">
-      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5c-splits</code></span></div>
-      <div class="stat"><span class="k">Phase 5 items</span><span class="v">11 of 16 done</span><div class="meter" aria-hidden="true"><span></span></div></div>
+      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5d-flags</code></span></div>
+      <div class="stat"><span class="k">Phase 5 items</span><span class="v">12 of 16 done</span><div class="meter" aria-hidden="true"><span></span></div></div>
       <div class="stat"><span class="k">Checks</span><span class="v"><code>pnpm check</code> passing</span></div>
-      <div class="stat"><span class="k">Next</span><span class="v">5d, flags</span></div>
+      <div class="stat"><span class="k">Next</span><span class="v">5e, sort, search and filter</span></div>
     </div>
   </section>
 
@@ -138,8 +138,8 @@ a { color: var(--accent); }
     <ol class="rail">
       <li class="done"><a href="#transfers"><span class="id">5b</span><span class="nm">Transfers</span><span class="sz">done</span></a></li>
       <li class="done"><a href="#splits"><span class="id">5c</span><span class="nm">Splits</span><span class="sz">done</span></a></li>
-      <li><a href="#flags"><span class="id">5d</span><span class="nm">Flags</span><span class="sz">small · next</span></a></li>
-      <li><a href="#find"><span class="id">5e</span><span class="nm">Sort, search, filter</span><span class="sz">medium</span></a></li>
+      <li class="done"><a href="#flags"><span class="id">5d</span><span class="nm">Flags</span><span class="sz">done</span></a></li>
+      <li><a href="#find"><span class="id">5e</span><span class="nm">Sort, search, filter</span><span class="sz">medium · next</span></a></li>
       <li><a href="#bulk"><span class="id">5f</span><span class="nm">Bulk edit</span><span class="sz">medium</span></a></li>
       <li class="extra"><a href="#extras"><span class="id">5x</span><span class="nm">Tags, receipts</span><span class="sz">extra</span></a></li>
     </ol>
@@ -204,32 +204,31 @@ a { color: var(--accent); }
     </div>
   </article>
 
-  <article class="stage next" id="flags">
-    <div class="head"><span class="sid">5d</span><h2>Flags</h2><span class="pill go">Next</span></div>
+  <article class="stage done" id="flags">
+    <div class="head"><span class="sid">5d</span><h2>Flags</h2><span class="pill ok">Done · phase-5d-flags</span></div>
     <p class="goal">YNAB's six flag colors on any transaction, with names you choose per budget (for example red = "Reimbursable").</p>
     <div class="cols">
       <div>
-        <h3>Scope</h3>
+        <h3>What shipped</h3>
         <ul class="plain">
-          <li>Flag column on transactions: none, red, orange, yellow, green, blue, purple.</li>
-          <li>Per-budget flag names, editable from the flag menu.</li>
-          <li>Flag cell in the register (before the date, as in YNAB) with a color menu.</li>
+          <li><code>flag</code> column on transactions (red, orange, yellow, green, blue, purple or none), set on create and edit.</li>
+          <li><code>flag_name</code> table and <code>GET/PUT /v1/budgets/{id}/flags</code>; an empty name clears it.</li>
+          <li>Flag cell before the date, as in YNAB: a bookmark in the flag's color, opening the six colors, "Clear flag" and "Edit names".</li>
+          <li>Fresh start copies the flag names.</li>
         </ul>
       </div>
       <div>
-        <h3>To settle first</h3>
+        <h3>Settled</h3>
         <ul class="plain">
-          <li class="q">Are flag names shared with partners on the budget, or per person? (YNAB: per budget.)</li>
+          <li>Flag names belong to the budget, so partners see the same names (as in YNAB). Anyone who can edit transactions can rename them.</li>
+          <li>A transfer's flag is per side, like memo and cleared.</li>
         </ul>
       </div>
     </div>
-    <div class="done-when">
-      <p><b>Done when</b> flags can be set and cleared from the register, renamed, and both partners see the same names.</p>
-    </div>
   </article>
 
-  <article class="stage" id="find">
-    <div class="head"><span class="sid">5e</span><h2>Sort, search and filter</h2><span class="pill">Needs 5d for flag filters</span></div>
+  <article class="stage next" id="find">
+    <div class="head"><span class="sid">5e</span><h2>Sort, search and filter</h2><span class="pill go">Next</span></div>
     <p class="goal">Finding things in a long register: click a column header to sort, type to search, and narrow by date range and state.</p>
     <div class="cols">
       <div>
@@ -315,7 +314,7 @@ a { color: var(--accent); }
     <h2>Picking up</h2>
     <p>Open Claude Code in the BudgetApp repo and start with:</p>
     <div class="prompt">
-      <code id="resume-prompt">Let's start Phase 5d, flags. Read docs/deferred.md first.</code>
+      <code id="resume-prompt">Let's start Phase 5e, sort, search and filter. Read docs/deferred.md first.</code>
       <button class="copy" id="copy-btn" type="button">Copy</button>
     </div>
     <p class="q">Each stage: settle its open questions in chat, build on a branch, check every screen in the browser in both themes, pass <code>pnpm check</code>, then merge.</p>

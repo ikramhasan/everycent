@@ -76,6 +76,14 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Category activity for split lines (phase 6) must read `sub_transaction`, not the split's own
   null category.
 
+## Flags (phase 5d follow-ups)
+
+- Flags are per transaction; split lines have none (YNAB is the same). Filtering by flag comes
+  with 5e.
+- The flag menu is a popover with plain buttons (`apps/web/src/components/flag-menu.tsx`), not a
+  Radix dropdown, because it switches into a form for renaming. Arrow-key navigation between
+  colors isn't there yet; Tab works.
+
 ## Accounts (phase 3 follow-ups)
 
 - Changing an account's type is allowed only within the same family (cash, credit, loan,

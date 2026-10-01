@@ -1,4 +1,4 @@
-import { CLEARED_STATES } from "@everycent/db/schema";
+import { CLEARED_STATES, FLAG_COLORS } from "@everycent/db/schema";
 import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
@@ -9,6 +9,10 @@ const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
 /** People toggle between these two; reconciling is its own flow. */
 const SettableCleared = z.enum(["uncleared", "cleared"]);
+const Flag = z
+  .enum(FLAG_COLORS)
+  .nullable()
+  .describe("One of YNAB's six flag colors; null clears it");
 
 const SubTransactionSchema = z
   .object({
@@ -41,6 +45,7 @@ export const TransactionSchema = z
     categoryName: z.string().nullable(),
     memo: z.string(),
     cleared: z.enum(CLEARED_STATES),
+    flag: Flag,
     transferAccountId: z
       .string()
       .nullable()
@@ -167,6 +172,7 @@ export const createTransaction = createRoute({
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
           cleared: SettableCleared.default("uncleared"),
+          flag: Flag.default(null),
         })
         .openapi("CreateTransaction"),
     ),
@@ -193,13 +199,13 @@ export const updateTransaction = createRoute({
   summary: "Edit a transaction, move it to another account, or toggle cleared",
   description:
     `${categoryRules} ${transferRules} On a transfer, date and amount changes apply to both ` +
-    "sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back " +
+    "sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back " +
     "into a normal transaction and deletes the other side. Setting `cleared` on a reconciled " +
     "transaction unlocks it. Moving it to an account that can't use its category resets the " +
     "category. " +
     `${splitRules} Sending \`subtransactions\` replaces a split's lines (matched by \`id\`); ` +
     "changing a split's amount needs new lines too. Giving a split a `categoryId` (or making " +
-    "it a transfer) un-splits it. A split's transfer side only takes memo, cleared and category.",
+    "it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
   request: {
     params: TransactionParams,
     body: json(
@@ -213,6 +219,7 @@ export const updateTransaction = createRoute({
           categoryId: z.string().nullable().optional(),
           memo: Memo.optional(),
           cleared: SettableCleared.optional(),
+          flag: Flag.optional(),
           subtransactions: SubTransactions.optional(),
         })
         .openapi("UpdateTransaction"),

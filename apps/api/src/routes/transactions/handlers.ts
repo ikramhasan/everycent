@@ -1,5 +1,12 @@
 import { sql } from "@everycent/db";
-import { budgetAccount, category, payee, subTransaction, transaction } from "@everycent/db/schema";
+import {
+  budgetAccount,
+  category,
+  type FlagColor,
+  payee,
+  subTransaction,
+  transaction,
+} from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -96,6 +103,7 @@ async function queryTransactions(db: Db, budgetId: string, filter: Filter) {
       categoryName: sql<string | null>`${category.name}`.as("category_name"),
       memo: transaction.memo,
       cleared: transaction.cleared,
+      flag: transaction.flag,
       transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
       // A split line's transfer points at the split itself.
       transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
@@ -191,6 +199,7 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
         : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
       memo: body.memo,
       cleared: body.cleared,
+      flag: body.flag,
     });
     if (split) {
       await syncLines(
@@ -298,6 +307,7 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
         categoryId,
         memo: body.memo,
         cleared: body.cleared,
+        flag: body.flag,
         transferTransactionId: transferTo ? undefined : null,
       })
       .where(eq(transaction.id, transactionId));
@@ -401,6 +411,7 @@ async function updateSplitTransferSide(
     categoryId?: string | null;
     memo?: string;
     cleared?: "uncleared" | "cleared";
+    flag?: FlagColor | null;
     subtransactions?: unknown;
   },
 ) {
@@ -428,6 +439,7 @@ async function updateSplitTransferSide(
           : await resolveCategory(tx, budgetId, account, splitAccount, body.categoryId),
       memo: body.memo,
       cleared: body.cleared,
+      flag: body.flag,
     })
     .where(eq(transaction.id, existing.id));
   return account.id;

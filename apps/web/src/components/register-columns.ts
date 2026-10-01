@@ -1,4 +1,5 @@
 export type ColumnId =
+  | "flag"
   | "account"
   | "date"
   | "payee"
@@ -26,6 +27,7 @@ interface ColumnSpec {
 }
 
 export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
+  flag: { header: "Flag", width: "2.5rem", align: "center", srOnly: true },
   account: { header: "Account", width: "9rem" },
   date: { header: "Date", width: "9.25rem" },
   payee: { header: "Payee", width: "12rem" },
@@ -38,9 +40,13 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
   actions: { header: "Actions", width: "2.75rem", srOnly: true },
 };
 
-/** All-accounts view adds the account and drops the running balance (YNAB does the same). */
+/**
+ * All-accounts view adds the account and drops the running balance (YNAB does the same). The flag
+ * comes first, before the date, as in YNAB.
+ */
 export function registerColumns(allAccounts: boolean): ColumnId[] {
   return [
+    "flag",
     ...(allAccounts ? (["account"] as const) : []),
     "date",
     "payee",

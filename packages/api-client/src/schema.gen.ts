@@ -333,7 +333,7 @@ export interface paths {
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared and category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -348,6 +348,40 @@ export interface paths {
         /** The budget's payees, by name (built-in and transfer ones left out) */
         get: operations["listPayees"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The six flag colors and the budget's names for them */
+        get: operations["listFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/flags/{color}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Name a flag color for everyone on the budget (an empty name clears it) */
+        put: operations["renameFlag"];
         post?: never;
         delete?: never;
         options?: never;
@@ -645,6 +679,11 @@ export interface components {
             memo: string;
             /** @enum {string} */
             cleared: "uncleared" | "cleared" | "reconciled";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
             /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
@@ -692,6 +731,12 @@ export interface components {
              * @enum {string}
              */
             cleared: "uncleared" | "cleared";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @default null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
         };
         SubTransactionInput: {
             /** @description An existing line of this split; leave out for new ones */
@@ -723,6 +768,11 @@ export interface components {
             memo?: string;
             /** @enum {string} */
             cleared?: "uncleared" | "cleared";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @enum {string|null}
+             */
+            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
         };
         PayeeList: {
@@ -733,6 +783,19 @@ export interface components {
             name: string;
             /** @description Category of the payee's latest categorized transaction, suggested for the next */
             lastCategoryId: string | null;
+        };
+        FlagList: {
+            /** @description All six colors, in YNAB's order */
+            flags: components["schemas"]["Flag"][];
+        };
+        Flag: {
+            /** @enum {string} */
+            color: "red" | "orange" | "yellow" | "green" | "blue" | "purple";
+            /** @description Empty when the color has no name */
+            name: string;
+        };
+        RenameFlag: {
+            name: string;
         };
     };
     responses: never;
@@ -2365,6 +2428,109 @@ export interface operations {
                 };
             };
             /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    renameFlag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                color: "red" | "orange" | "yellow" | "green" | "blue" | "purple";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameFlag"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flag"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

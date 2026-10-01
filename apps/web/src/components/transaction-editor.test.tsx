@@ -31,6 +31,7 @@ const account = (id: string, type: Account["type"]): Account => ({
 function renderEditor(accountId = "checking") {
   const onSave = vi.fn();
   const onCancel = vi.fn();
+  const onRenameFlags = vi.fn(async () => {});
   render(
     <table>
       <tbody>
@@ -50,6 +51,11 @@ function renderEditor(accountId = "checking") {
           ]}
           dateFormat="MM/DD/YYYY"
           settings={usd}
+          flags={[
+            { color: "red", name: "Reimbursable" },
+            { color: "blue", name: "" },
+          ]}
+          onRenameFlags={onRenameFlags}
           pending={false}
           error={null}
           onSave={onSave}
@@ -58,7 +64,7 @@ function renderEditor(accountId = "checking") {
       </tbody>
     </table>,
   );
-  return { onSave, onCancel };
+  return { onSave, onCancel, onRenameFlags };
 }
 
 describe("TransactionEditor", () => {
@@ -182,5 +188,22 @@ describe("TransactionEditor", () => {
     await user.keyboard("{Enter}");
     await user.click(screen.getByLabelText("Category"));
     expect(screen.queryByRole("option", { name: "Split" })).not.toBeInTheDocument();
+  });
+
+  it("flags a new transaction and renames flags", async () => {
+    const { onSave, onRenameFlags } = renderEditor();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Add flag" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Reimbursable (Red)" }));
+    expect(screen.getByRole("button", { name: "Flag: Reimbursable (Red)" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Flag: Reimbursable (Red)" }));
+    await user.click(screen.getByRole("menuitem", { name: "Edit names" }));
+    await user.type(screen.getByLabelText("Name for Blue"), "Tax");
+    await user.click(screen.getByRole("button", { name: "Save names" }));
+    expect(onRenameFlags).toHaveBeenCalledWith([{ color: "blue", name: "Tax" }]);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ flag: "red" }));
   });
 });

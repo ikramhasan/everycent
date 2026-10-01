@@ -1,6 +1,7 @@
 import type { components } from "@everycent/api-client";
 import { $api } from "./api";
 import type { CategoryList } from "./categories";
+import type { FlagColor } from "./flags";
 import { type MoneySettings, parseMoneyInput, toMoneyInput } from "./money-input";
 
 export type Transaction = components["schemas"]["Transaction"];
@@ -70,6 +71,7 @@ export interface Draft {
   outflow: string;
   inflow: string;
   cleared: "uncleared" | "cleared";
+  flag: FlagColor | null;
   /** A split's lines (the category is then unused); null when it isn't split. */
   lines: LineDraft[] | null;
 }
@@ -124,6 +126,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     outflow: "",
     inflow: "",
     cleared: "uncleared",
+    flag: null,
     lines: null,
   };
 }
@@ -140,6 +143,7 @@ export function draftFrom(t: Transaction, settings: MoneySettings): Draft {
     outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
     inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
     cleared: t.cleared === "uncleared" ? "uncleared" : "cleared",
+    flag: t.flag,
     lines:
       t.subtransactions.length > 0 ? t.subtransactions.map((l) => lineFrom(l, settings)) : null,
   };
@@ -273,6 +277,7 @@ export function createBody(input: Draft, settings: MoneySettings): Result<Create
       categoryId: lines ? null : draft.categoryId,
       memo: draft.memo,
       cleared: draft.cleared,
+      flag: draft.flag,
       ...(lines ? { subtransactions: lines } : {}),
     },
   };
@@ -315,6 +320,7 @@ export function updateBody(
   }
   if (draft.memo !== before.memo) body.memo = draft.memo;
   if (draft.cleared !== before.cleared) body.cleared = draft.cleared;
+  if (draft.flag !== before.flag) body.flag = draft.flag;
   return { ok: true, body };
 }
 

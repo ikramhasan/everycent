@@ -81,6 +81,28 @@ export const payee = pgTable(
 export const CLEARED_STATES = ["uncleared", "cleared", "reconciled"] as const;
 export type ClearedState = (typeof CLEARED_STATES)[number];
 
+/** YNAB's six flag colors; each budget can name them (see `flagName`). */
+export const FLAG_COLORS = ["red", "orange", "yellow", "green", "blue", "purple"] as const;
+export type FlagColor = (typeof FLAG_COLORS)[number];
+
+/**
+ * A budget's name for a flag color (e.g. red = "Reimbursable"), shared by everyone on the budget
+ * as in YNAB. Colors without a row have no name.
+ */
+export const flagName = pgTable(
+  "flag_name",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    color: text({ enum: FLAG_COLORS }).notNull(),
+    name: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("flag_name_budget_color_idx").on(t.budgetId, t.color)],
+);
+
 export const transaction = pgTable(
   "transaction",
   {
@@ -106,6 +128,8 @@ export const transaction = pgTable(
     categoryId: text().references(() => category.id),
     memo: text().notNull().default(""),
     cleared: text({ enum: CLEARED_STATES }).notNull().default("uncleared"),
+    /** Per side on transfers, like memo and cleared. */
+    flag: text({ enum: FLAG_COLORS }),
     approved: boolean().notNull().default(true),
     /**
      * The other side of a transfer, in the account named by this transaction's transfer payee.

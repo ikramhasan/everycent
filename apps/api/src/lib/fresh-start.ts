@@ -5,6 +5,7 @@ import {
   budgetMember,
   category,
   categoryGroup,
+  flagName,
   payee,
 } from "@everycent/db/schema";
 import { formatDate } from "@everycent/engine";
@@ -15,7 +16,7 @@ type BudgetRow = typeof budget.$inferSelect;
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes), payees, and accounts (with their
+ * category groups and categories (order, hidden flags, notes), payees, flag names, and accounts (with their
  * transfer payees), each starting from its working balance on `date`. No transactions come along.
  * Then archives the old budget.
  *
@@ -91,6 +92,15 @@ export async function copyIntoFreshStart(
     await tx
       .insert(payee)
       .values(payees.map((p) => ({ id: newId(), budgetId: newBudgetId, name: p.name })));
+  }
+
+  const flags = await tx.select().from(flagName).where(eq(flagName.budgetId, old.id));
+  if (flags.length > 0) {
+    await tx
+      .insert(flagName)
+      .values(
+        flags.map((f) => ({ id: newId(), budgetId: newBudgetId, color: f.color, name: f.name })),
+      );
   }
 
   const groups = await tx

@@ -37,6 +37,7 @@ const txn: Transaction = {
   cleared: "reconciled",
   transferAccountId: null,
   transferTransactionId: null,
+  flag: null,
   transferFromSplit: false,
   subtransactions: [],
   runningBalance: "0",
@@ -55,6 +56,7 @@ describe("register drafts", () => {
         categoryId: null,
         memo: "",
         cleared: "uncleared",
+        flag: null,
       },
     });
     const income = createBody({ ...draft, outflow: "", inflow: "50", payeeName: " Job " }, usd);

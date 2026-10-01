@@ -8,6 +8,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 import type { Account } from "@/lib/accounts";
+import type { Flag } from "@/lib/flags";
 import type { MoneySettings } from "@/lib/money-input";
 import {
   type CategoryOption,
@@ -19,6 +20,7 @@ import {
   splitRemaining,
   startSplit,
 } from "@/lib/transactions";
+import { FlagMenu } from "./flag-menu";
 import type { ColumnId } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 
@@ -35,6 +37,8 @@ export function TransactionEditor({
   categories,
   dateFormat,
   settings,
+  flags,
+  onRenameFlags,
   label = "New transaction",
   pending,
   error,
@@ -49,6 +53,8 @@ export function TransactionEditor({
   categories: readonly CategoryOption[];
   dateFormat: DateFormat;
   settings: MoneySettings;
+  flags: readonly Flag[];
+  onRenameFlags: (changes: Flag[]) => Promise<void>;
   /** Names the editor's row for screen readers. */
   label?: string;
   pending: boolean;
@@ -89,6 +95,15 @@ export function TransactionEditor({
 
   function cell(column: ColumnId) {
     switch (column) {
+      case "flag":
+        return (
+          <FlagMenu
+            value={draft.flag}
+            flags={flags}
+            onChange={(flag) => set({ flag })}
+            onRename={onRenameFlags}
+          />
+        );
       case "account":
         return (
           <NativeSelect
@@ -312,7 +327,10 @@ export function TransactionEditor({
         onKeyDown={handleKeyDown}
       >
         {columns.map((column) => (
-          <TableCell key={column} className={cn("px-1.5", column === "cleared" && "text-center")}>
+          <TableCell
+            key={column}
+            className={cn("px-1.5", (column === "cleared" || column === "flag") && "text-center")}
+          >
             {cell(column)}
           </TableCell>
         ))}

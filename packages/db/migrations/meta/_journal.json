@@ -57,6 +57,13 @@
       "when": 1790886337253,
       "tag": "0007_splits",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790888585784,
+      "tag": "0008_flags",
+      "breakpoints": true
     }
   ]
 }
