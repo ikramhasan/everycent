@@ -75,6 +75,26 @@ export interface paths {
         patch: operations["updateBudget"];
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/fresh-start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fresh start: archive this budget and continue in a copy without transactions
+         * @description Owner only. The new budget keeps the name, settings, partners, categories and accounts (each starting from its current balance). The old one is renamed '(Archived <date>)'.
+         */
+        post: operations["freshStartBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/categories": {
         parameters: {
             query?: never;
@@ -350,6 +370,11 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "editor";
+            /**
+             * Format: date-time
+             * @description Set when a fresh start replaced this budget; it stays usable
+             */
+            archivedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -396,6 +421,13 @@ export interface components {
              * @enum {string}
              */
             dateFormat?: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY/MM/DD" | "DD-MM-YYYY";
+        };
+        FreshStart: {
+            /**
+             * Format: date
+             * @description The user's today, YYYY-MM-DD
+             */
+            date: string;
         };
         CategoryList: {
             /** @description In display order */
@@ -839,6 +871,77 @@ export interface operations {
             };
             /** @description No such budget, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    freshStartBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FreshStart"];
+            };
+        };
+        responses: {
+            /** @description The new budget */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Only the owner can make a fresh start */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ALREADY_ARCHIVED: this budget was already replaced by a fresh start */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

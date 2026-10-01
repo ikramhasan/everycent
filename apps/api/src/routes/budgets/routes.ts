@@ -20,6 +20,10 @@ export const BudgetSchema = z
     currencySymbolPosition: zCurrencySymbolPosition,
     dateFormat: zDateFormat,
     role: z.enum(BUDGET_ROLES).describe("The signed-in user's role in this budget"),
+    archivedAt: z.iso
+      .datetime()
+      .nullable()
+      .describe("Set when a fresh start replaced this budget; it stays usable"),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
@@ -141,5 +145,42 @@ export const deleteBudget = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("Only the owner can delete a budget"),
     404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const freshStartBudget = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/fresh-start",
+  operationId: "freshStartBudget",
+  tags: ["Budgets"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Fresh start: archive this budget and continue in a copy without transactions",
+  description:
+    "Owner only. The new budget keeps the name, settings, partners, categories and accounts " +
+    "(each starting from its current balance). The old one is renamed '(Archived <date>)'.",
+  request: {
+    params: BudgetParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({ date: z.iso.date().describe("The user's today, YYYY-MM-DD") })
+            .openapi("FreshStart"),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The new budget",
+      content: { "application/json": { schema: BudgetSchema } },
+    },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("Only the owner can make a fresh start"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+    409: jsonError("ALREADY_ARCHIVED: this budget was already replaced by a fresh start"),
   },
 });

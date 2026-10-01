@@ -12,6 +12,7 @@ export const budgetAc = createAccessControl({
   ...defaultStatements,
   category: ["create", "update", "delete"],
   account: ["create", "update", "delete"],
+  budget: ["fresh_start"],
 } as const);
 
 export const budgetRoles = {
@@ -21,6 +22,7 @@ export const budgetRoles = {
     invitation: ["create", "cancel"],
     category: ["create", "update", "delete"],
     account: ["create", "update", "delete"],
+    budget: ["fresh_start"],
   }),
   editor: budgetAc.newRole({
     organization: ["update"],

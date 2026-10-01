@@ -8,6 +8,7 @@ import {
   payee,
   transaction,
 } from "@everycent/db/schema";
+import { type AccountType, isOnBudget } from "@everycent/engine";
 import { and, eq, max } from "drizzle-orm";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -130,3 +131,34 @@ export async function accountBalances(db: Db, budgetId: string) {
 }
 
 export const ZERO_BALANCES: AccountBalances = { cleared: 0n, uncleared: 0n, working: 0n };
+
+/**
+ * An account's Starting Balance, as YNAB records it: money in budget accounts goes to Ready to
+ * Assign; credit debt stays uncategorized until phase 7 (docs/deferred.md); off-budget accounts
+ * never have a category.
+ */
+export async function insertStartingBalance(
+  db: Db,
+  input: {
+    budgetId: string;
+    accountId: string;
+    type: AccountType;
+    amount: bigint;
+    currency: NewTransaction["currency"];
+    date: string;
+  },
+) {
+  const toReadyToAssign = isOnBudget(input.type) && input.amount >= 0n;
+  await insertTransaction(db, {
+    budgetId: input.budgetId,
+    accountId: input.accountId,
+    date: input.date,
+    amount: input.amount,
+    currency: input.currency,
+    payeeId: await internalPayeeId(db, input.budgetId, "starting_balance"),
+    categoryId: toReadyToAssign
+      ? await internalCategoryId(db, input.budgetId, "ready_to_assign")
+      : null,
+    cleared: "cleared",
+  });
+}

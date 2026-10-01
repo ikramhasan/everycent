@@ -331,6 +331,14 @@
             ],
             "description": "The signed-in user's role in this budget"
           },
+          "archivedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Set when a fresh start replaced this budget; it stays usable"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -348,6 +356,7 @@
           "currencySymbolPosition",
           "dateFormat",
           "role",
+          "archivedAt",
           "createdAt",
           "updatedAt"
         ]
@@ -609,6 +618,19 @@
         },
         "additionalProperties": false,
         "description": "The currency can't be changed after creation."
+      },
+      "FreshStart": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today, YYYY-MM-DD"
+          }
+        },
+        "required": [
+          "date"
+        ]
       },
       "CategoryList": {
         "type": "object",
@@ -1969,6 +1991,103 @@
           },
           "404": {
             "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/fresh-start": {
+      "post": {
+        "operationId": "freshStartBudget",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Fresh start: archive this budget and continue in a copy without transactions",
+        "description": "Owner only. The new budget keeps the name, settings, partners, categories and accounts (each starting from its current balance). The old one is renamed '(Archived <date>)'.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreshStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new budget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Budget"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the owner can make a fresh start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ALREADY_ARCHIVED: this budget was already replaced by a fresh start",
             "content": {
               "application/json": {
                 "schema": {

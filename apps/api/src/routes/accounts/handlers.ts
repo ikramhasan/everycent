@@ -10,6 +10,7 @@ import {
   accountBalances,
   createPaymentCategory,
   type Db,
+  insertStartingBalance,
   insertTransaction,
   internalCategoryId,
   internalPayeeId,
@@ -145,21 +146,13 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
       await createPaymentCategory(tx, budgetId, accountId, body.name);
     }
 
-    // Starting balance, like YNAB: money in budget accounts goes to Ready to Assign; credit-card
-    // debt stays uncategorized until phase 7 turns it into debt on the payment category.
-    const amount = BigInt(body.balance);
-    const toReadyToAssign = isOnBudget(body.type) && amount >= 0n;
-    await insertTransaction(tx, {
+    await insertStartingBalance(tx, {
       budgetId,
       accountId,
-      date: body.date,
-      amount,
+      type: body.type,
+      amount: BigInt(body.balance),
       currency: budget.currency,
-      payeeId: await internalPayeeId(tx, budgetId, "starting_balance"),
-      categoryId: toReadyToAssign
-        ? await internalCategoryId(tx, budgetId, "ready_to_assign")
-        : null,
-      cleared: "cleared",
+      date: body.date,
     });
   });
   return c.json(await accountJson(db, budgetId, accountId), 201);

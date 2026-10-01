@@ -27,6 +27,8 @@ export const budget = pgTable("budget", {
   numberFormat: text({ enum: NUMBER_FORMATS }).notNull(),
   currencySymbolPosition: text({ enum: CURRENCY_SYMBOL_POSITIONS }).notNull(),
   dateFormat: text({ enum: DATE_FORMATS }).notNull(),
+  /** Set when a fresh start replaced this budget. It stays fully usable, as in YNAB. */
+  archivedAt: timestamp({ withTimezone: true }),
   ...timestamps,
 });
 

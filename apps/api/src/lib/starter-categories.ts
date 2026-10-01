@@ -2,8 +2,8 @@ import { type Database, newId } from "@everycent/db";
 import { category, categoryGroup } from "@everycent/db/schema";
 
 /**
- * Categories every new budget starts with, in YNAB's default groups. Onboarding (a later
- * sub-project) will let people pick their own.
+ * Categories a new budget starts with, in YNAB's default groups. The setup flow lets people
+ * untick the ones they don't need.
  */
 export const STARTER_CATEGORIES: ReadonlyArray<{ group: string; categories: readonly string[] }> = [
   {
@@ -19,8 +19,8 @@ export const STARTER_CATEGORIES: ReadonlyArray<{ group: string; categories: read
   },
 ];
 
-/** Creates the internal categories and the starter template for a new budget, atomically. */
-export async function seedBudgetCategories(db: Database, budgetId: string): Promise<void> {
+/** Every budget's internal group with Inflow: Ready to Assign and Uncategorized. */
+export async function seedInternalCategories(db: Database, budgetId: string): Promise<void> {
   await db.transaction(async (tx) => {
     const internalGroupId = newId();
     await tx.insert(categoryGroup).values({
@@ -48,7 +48,12 @@ export async function seedBudgetCategories(db: Database, budgetId: string): Prom
         internalKind: "uncategorized",
       },
     ]);
+  });
+}
 
+/** The starter template, for budgets created from scratch (a fresh start copies instead). */
+export async function seedStarterCategories(db: Database, budgetId: string): Promise<void> {
+  await db.transaction(async (tx) => {
     const groups = STARTER_CATEGORIES.map((g, i) => ({ ...g, id: newId(), sortOrder: i }));
     await tx
       .insert(categoryGroup)
