@@ -3,6 +3,7 @@ import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
+import { SORT_COLUMNS } from "./register-query";
 
 const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
 const PayeeName = z.string().trim().min(1).max(200);
@@ -73,7 +74,13 @@ export const TransactionSchema = z
   .openapi("Transaction");
 
 const TransactionListSchema = z
-  .object({ transactions: z.array(TransactionSchema).describe("Newest first") })
+  .object({
+    transactions: z.array(TransactionSchema).describe("One page, in the requested order"),
+    nextCursor: z
+      .string()
+      .nullable()
+      .describe("Pass as `cursor` for the next page; null on the last page"),
+  })
   .openapi("TransactionList");
 
 const BudgetParams = z.object({
@@ -135,15 +142,41 @@ export const listTransactions = createRoute({
   tags: ["Transactions"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "One account's register, or every account's",
+  summary: "One account's register, or every account's, a page at a time",
+  description:
+    "Filters and search narrow the rows but not the running balance: each row keeps the " +
+    "account's real balance at that point, computed over all of its transactions. Pages are " +
+    "keyset-paged: pass the previous page's `nextCursor` (with the same filters and sort).",
   request: {
     params: BudgetParams,
     query: z.object({
       accountId: z.string().optional().describe("Leave out for all accounts"),
+      q: z
+        .string()
+        .max(200)
+        .optional()
+        .describe(
+          "Search payee, category, memo and account names (split lines too), and amounts: " +
+            '"45.10" (in the budget\'s number format) matches that inflow or outflow',
+        ),
+      from: IsoDate.optional().describe("On or after this date"),
+      to: IsoDate.optional().describe("On or before this date"),
+      cleared: z.enum(CLEARED_STATES).optional(),
+      flag: z
+        .enum([...FLAG_COLORS, "none"])
+        .optional()
+        .describe('A flag color, or "none" for unflagged'),
+      categoryId: z.string().optional().describe("Including splits with a line in it"),
+      payeeId: z.string().optional().describe("Including splits with a line for it"),
+      sort: z.enum(SORT_COLUMNS).default("date"),
+      dir: z.enum(["asc", "desc"]).default("desc"),
+      limit: z.coerce.number().int().min(1).max(500).default(100),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
     200: ok("Transactions", TransactionListSchema),
+    400: jsonError("Invalid input, or a cursor from another register or sort (INVALID_CURSOR)"),
     401: jsonError("Not signed in"),
     404: notFound,
   },

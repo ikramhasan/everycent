@@ -127,7 +127,8 @@ and fresh start (after phase 5 core).
 - [x] Split transactions (multiple categories; split transfers)
 - [x] Flags (colors) with custom flag names
 - [x] Running balance column
-- [ ] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
+- [x] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
+- [x] Server-side paging of the register (keyset cursors; balances over the whole account)
 - [ ] Multi-select + bulk edit (category, payee, date, flag, cleared, move to account, delete)
 - [ ] Approve / reject imported transactions (unapproved state)
 - [x] Future-dated transactions (excluded from balances until the date)

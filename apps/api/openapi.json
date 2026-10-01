@@ -1430,11 +1430,19 @@
             "items": {
               "$ref": "#/components/schemas/Transaction"
             },
-            "description": "Newest first"
+            "description": "One page, in the requested order"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page"
           }
         },
         "required": [
-          "transactions"
+          "transactions",
+          "nextCursor"
         ]
       },
       "Transaction": {
@@ -3973,7 +3981,8 @@
             "cookieAuth": []
           }
         ],
-        "summary": "One account's register, or every account's",
+        "summary": "One account's register, or every account's, a page at a time",
+        "description": "Filters and search narrow the rows but not the running balance: each row keeps the account's real balance at that point, computed over all of its transactions. Pages are keyset-paged: pass the previous page's `nextCursor` (with the same filters and sort).",
         "parameters": [
           {
             "schema": {
@@ -3992,6 +4001,141 @@
             "description": "Leave out for all accounts",
             "name": "accountId",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Search payee, category, memo and account names (split lines too), and amounts: \"45.10\" (in the budget's number format) matches that inflow or outflow"
+            },
+            "required": false,
+            "description": "Search payee, category, memo and account names (split lines too), and amounts: \"45.10\" (in the budget's number format) matches that inflow or outflow",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "On or after this date"
+            },
+            "required": false,
+            "description": "On or after this date",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "On or before this date"
+            },
+            "required": false,
+            "description": "On or before this date",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "uncleared",
+                "cleared",
+                "reconciled"
+              ]
+            },
+            "required": false,
+            "name": "cleared",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "red",
+                "orange",
+                "yellow",
+                "green",
+                "blue",
+                "purple",
+                "none"
+              ],
+              "description": "A flag color, or \"none\" for unflagged"
+            },
+            "required": false,
+            "description": "A flag color, or \"none\" for unflagged",
+            "name": "flag",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Including splits with a line in it"
+            },
+            "required": false,
+            "description": "Including splits with a line in it",
+            "name": "categoryId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Including splits with a line for it"
+            },
+            "required": false,
+            "description": "Including splits with a line for it",
+            "name": "payeeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "date",
+                "account",
+                "payee",
+                "category",
+                "memo",
+                "amount",
+                "cleared"
+              ],
+              "default": "date"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "required": false,
+            "name": "dir",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
           }
         ],
         "responses": {
@@ -4001,6 +4145,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TransactionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a cursor from another register or sort (INVALID_CURSOR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

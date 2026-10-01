@@ -300,7 +300,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One account's register, or every account's */
+        /**
+         * One account's register, or every account's, a page at a time
+         * @description Filters and search narrow the rows but not the running balance: each row keeps the account's real balance at that point, computed over all of its transactions. Pages are keyset-paged: pass the previous page's `nextCursor` (with the same filters and sort).
+         */
         get: operations["listTransactions"];
         put?: never;
         /**
@@ -653,8 +656,10 @@ export interface components {
             date: string;
         };
         TransactionList: {
-            /** @description Newest first */
+            /** @description One page, in the requested order */
             transactions: components["schemas"]["Transaction"][];
+            /** @description Pass as `cursor` for the next page; null on the last page */
+            nextCursor: string | null;
         };
         Transaction: {
             id: string;
@@ -2169,6 +2174,23 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
+                /** @description Search payee, category, memo and account names (split lines too), and amounts: "45.10" (in the budget's number format) matches that inflow or outflow */
+                q?: string;
+                /** @description On or after this date */
+                from?: string;
+                /** @description On or before this date */
+                to?: string;
+                cleared?: "uncleared" | "cleared" | "reconciled";
+                /** @description A flag color, or "none" for unflagged */
+                flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "none";
+                /** @description Including splits with a line in it */
+                categoryId?: string;
+                /** @description Including splits with a line for it */
+                payeeId?: string;
+                sort?: "date" | "account" | "payee" | "category" | "memo" | "amount" | "cleared";
+                dir?: "asc" | "desc";
+                limit?: number;
+                cursor?: string;
             };
             header?: never;
             path: {
@@ -2185,6 +2207,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionList"];
+                };
+            };
+            /** @description Invalid input, or a cursor from another register or sort (INVALID_CURSOR) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not signed in */

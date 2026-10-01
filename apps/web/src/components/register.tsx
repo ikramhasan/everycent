@@ -23,30 +23,45 @@ import {
   TableRow,
 } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   Circle,
   CircleCheck,
   Lock,
   MoreHorizontal,
   Plus,
   ReceiptText,
+  Search,
   Split,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
-import { $api } from "@/lib/api";
+import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
+import {
+  isFiltered,
+  nextSort,
+  type RegisterSearch,
+  registerQuery,
+  type SortColumn,
+} from "@/lib/register-filters";
 import {
   type CellColumn,
   categoryOptions,
@@ -56,17 +71,30 @@ import {
   draftFrom,
   emptyDraft,
   payeesQueryOptions,
+  REGISTER_PAGE_SIZE,
   type SubTransaction,
   startSplit,
   type Transaction,
-  transactionsQueryOptions,
   transactionsQueryPrefix,
   updateBody,
 } from "@/lib/transactions";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
+import { RegisterToolbar } from "./register-toolbar";
 import { TransactionEditor } from "./transaction-editor";
+
+/** Columns a header click sorts by; the amount columns both sort by amount. */
+const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
+  account: "account",
+  date: "date",
+  payee: "payee",
+  category: "category",
+  memo: "memo",
+  outflow: "amount",
+  inflow: "amount",
+  cleared: "cleared",
+};
 
 const features = tableFeatures({});
 const column = createColumnHelper<typeof features, Transaction>();
@@ -90,16 +118,56 @@ interface EditingSplit {
 }
 
 /**
- * An account's register, or all accounts' (`accountId` left out), newest first. New
- * transactions get a full row; existing ones are edited a cell at a time, as in YNAB. Rows are
- * virtualized so long histories stay fast. `focusId` scrolls to that transaction and highlights
- * it (the other side of a transfer, when jumping to it).
+ * An account's register, or all accounts' (`accountId` left out), newest first unless sorted.
+ * New transactions get a full row; existing ones are edited a cell at a time, as in YNAB.
+ * The server filters, sorts and pages (`search`, kept in the address by the page); more pages
+ * load as you scroll, and rows are virtualized so long histories stay fast. `focusId` scrolls to
+ * that transaction and highlights it (the other side of a transfer, when jumping to it).
  */
-export function Register({ accountId, focusId }: { accountId?: string; focusId?: string }) {
+export function Register({
+  accountId,
+  focusId,
+  search,
+  onSearchChange,
+}: {
+  accountId?: string;
+  focusId?: string;
+  search: RegisterSearch;
+  onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
+}) {
   const { budget, formatAmount, formatDate } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const transactions = useQuery(transactionsQueryOptions(budget.id, accountId));
+  const query = registerQuery(accountId, search);
+  const transactions = useInfiniteQuery({
+    queryKey: [...transactionsQueryPrefix, budget.id, query],
+    queryFn: async ({ pageParam, signal }) => {
+      // Not `$api.useInfiniteQuery`: it sends `cursor=0` for the first page.
+      const { data, error } = await apiClient.GET("/v1/budgets/{budgetId}/transactions", {
+        params: {
+          path: { budgetId: budget.id },
+          query: {
+            ...query,
+            limit: REGISTER_PAGE_SIZE,
+            ...(pageParam ? { cursor: pageParam } : {}),
+          },
+        },
+        signal,
+      });
+      if (error) throw error;
+      return data;
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    // Keeps the old rows on screen while a new search or filter loads.
+    placeholderData: keepPreviousData,
+  });
+  const loaded = useMemo(
+    () => transactions.data?.pages.flatMap((p) => p.transactions) ?? EMPTY,
+    [transactions.data],
+  );
+  // A running balance only reads in date order (YNAB hides it otherwise).
+  const dateOrder = query.sort === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const payees = useQuery(payeesQueryOptions(budget.id));
@@ -115,7 +183,10 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const [splitError, setSplitError] = useState<string | null>(null);
 
   const allAccounts = accountId === undefined;
-  const columnIds = useMemo(() => registerColumns(allAccounts), [allAccounts]);
+  const columnIds = useMemo(
+    () => registerColumns(allAccounts).filter((c) => c !== "balance" || dateOrder),
+    [allAccounts, dateOrder],
+  );
   const today = todayIso();
   const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
 
@@ -140,7 +211,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const table = useTable({
     features,
     columns: tableColumns,
-    data: transactions.data?.transactions ?? EMPTY,
+    data: loaded,
     getRowId: (t) => t.id,
   });
   const rows = table.getRowModel().rows;
@@ -168,18 +239,31 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   });
   const items = virtualizer.getVirtualItems();
 
+  // Loads the next page as the last loaded rows scroll into view.
+  const lastIndex = items.at(-1)?.index ?? -1;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = transactions;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && lastIndex >= flat.length - 20) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, flat.length]);
+
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const focused = useRef<string | null>(null);
   useEffect(() => {
     if (!focusId || focused.current === focusId) return;
     const index = flat.findIndex((r) => r.key === focusId);
-    if (index === -1) return;
+    if (index === -1) {
+      // The other side of a transfer may be further back; load pages until it shows up.
+      if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+      return;
+    }
     focused.current = focusId;
     virtualizer.scrollToIndex(index, { align: "center" });
     setHighlightId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => clearTimeout(timer);
-  }, [focusId, flat, virtualizer]);
+  }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const paddingTop = items[0]?.start ?? 0;
   const paddingBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
 
@@ -249,6 +333,7 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
 
   function jumpToOtherSide(t: Transaction) {
     if (!t.transferAccountId || !t.transferTransactionId) return;
+    // The other register opens unfiltered, so the other side is in it.
     void navigate({
       to: "/budgets/$budgetId/accounts/$accountId",
       params: { budgetId: budget.id, accountId: t.transferAccountId },
@@ -362,6 +447,16 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
   const canAdd = defaultAccountId !== undefined && (allAccounts || account?.closed === false);
 
   if (transactions.isPending) return <Skeleton className="h-64" />;
+  if (transactions.isError) {
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {apiErrorMessage(transactions.error, "Couldn't load the transactions.")}
+      </p>
+    );
+  }
+  const filtered = isFiltered(search);
+  const sort = query.sort;
+  const dir = query.dir;
 
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
@@ -503,14 +598,28 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
 
   return (
     <div className="grid gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={startAdding} disabled={!canAdd || adding}>
           <Plus /> Add transaction
         </Button>
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
+        <div className="ml-auto">
+          <RegisterToolbar
+            search={search}
+            onChange={onSearchChange}
+            categories={options}
+            payees={payeeList}
+            flags={flags}
+          />
+        </div>
       </div>
+      {filtered && dateOrder && (
+        <p className="text-muted-foreground text-xs">
+          Filtered: each row still shows the account's balance at that point.
+        </p>
+      )}
 
       <Table
         containerRef={scrollRef}
@@ -526,16 +635,45 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id} className="hover:bg-transparent">
               {group.headers.map((header) => {
-                const spec = COLUMN_SPECS[header.column.id as ColumnId];
+                const id = header.column.id as ColumnId;
+                const spec = COLUMN_SPECS[id];
+                const sortBy = SORTABLE[id];
+                // Outflow sorts biggest spend first; inflow biggest income first. Both sort by
+                // amount, so the arrow goes on the one whose natural order is showing.
+                const natural = id === "outflow" ? "asc" : id === "inflow" ? "desc" : undefined;
+                const active =
+                  sortBy !== undefined &&
+                  sortBy === sort &&
+                  (sortBy !== "amount" || id === (dir === "asc" ? "outflow" : "inflow"));
                 return (
                   <TableHead
                     key={header.id}
+                    aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
                     className={cn(
                       "bg-muted text-muted-foreground text-xs uppercase",
                       spec.align === "right" && "text-right",
                     )}
                   >
-                    <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
+                    {sortBy && !spec.srOnly ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex items-center gap-1 uppercase hover:text-foreground",
+                          active && "text-foreground",
+                        )}
+                        onClick={() => onSearchChange(nextSort(search, sortBy, natural))}
+                      >
+                        {spec.header}
+                        {active &&
+                          (dir === "asc" ? (
+                            <ArrowUp className="size-3" aria-hidden />
+                          ) : (
+                            <ArrowDown className="size-3" aria-hidden />
+                          ))}
+                      </button>
+                    ) : (
+                      <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
+                    )}
                   </TableHead>
                 );
               })}
@@ -689,14 +827,21 @@ export function Register({ accountId, focusId }: { accountId?: string; focusId?:
         </TableBody>
       </Table>
 
+      {isFetchingNextPage && (
+        <p className="text-muted-foreground text-xs" aria-live="polite">
+          Loading more…
+        </p>
+      )}
       {rows.length === 0 && !adding && (
         <Empty className="border">
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ReceiptText />
-            </EmptyMedia>
-            <EmptyTitle>No transactions yet</EmptyTitle>
-            <EmptyDescription>Add one to start tracking where your money goes.</EmptyDescription>
+            <EmptyMedia variant="icon">{filtered ? <Search /> : <ReceiptText />}</EmptyMedia>
+            <EmptyTitle>{filtered ? "No matching transactions" : "No transactions yet"}</EmptyTitle>
+            <EmptyDescription>
+              {filtered
+                ? "Try another search, or clear the filters."
+                : "Add one to start tracking where your money goes."}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}

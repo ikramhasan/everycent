@@ -1,20 +1,13 @@
 import { sql } from "@everycent/db";
-import {
-  budgetAccount,
-  category,
-  type FlagColor,
-  payee,
-  subTransaction,
-  transaction,
-} from "@everycent/db/schema";
+import { category, type FlagColor, payee, subTransaction, transaction } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
+import { queryRegister, queryRegisterRow } from "./register-query";
 import type {
   createTransaction,
   deleteTransaction,
@@ -44,120 +37,20 @@ import {
 } from "./splits";
 
 type Env = AppEnv & AuthedEnv;
-type Filter = { accountId?: string; transactionId?: string };
-
-function filterWhere(budgetId: string, filter: Filter) {
-  return and(
-    eq(transaction.budgetId, budgetId),
-    filter.accountId ? eq(transaction.accountId, filter.accountId) : undefined,
-    filter.transactionId ? eq(transaction.id, filter.transactionId) : undefined,
-  );
-}
-
-/** The lines of the split transactions that `filter` selects, grouped by transaction. */
-async function queryLines(db: Db, budgetId: string, filter: Filter) {
-  const other = alias(transaction, "other_side");
-  const rows = await db
-    .select({
-      id: subTransaction.id,
-      transactionId: subTransaction.transactionId,
-      amount: subTransaction.amount,
-      payeeId: subTransaction.payeeId,
-      payeeName: payee.name,
-      categoryId: subTransaction.categoryId,
-      categoryName: category.name,
-      memo: subTransaction.memo,
-      transferAccountId: payee.transferAccountId,
-      transferTransactionId: other.id,
-    })
-    .from(subTransaction)
-    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
-    .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
-    .leftJoin(category, eq(category.id, subTransaction.categoryId))
-    .leftJoin(other, eq(other.transferSubTransactionId, subTransaction.id))
-    .where(filterWhere(budgetId, filter))
-    .orderBy(asc(subTransaction.sortOrder), asc(subTransaction.id));
-  const byTransaction = new Map<string, Omit<(typeof rows)[number], "transactionId">[]>();
-  for (const { transactionId, ...line } of rows) {
-    byTransaction.set(transactionId, [...(byTransaction.get(transactionId) ?? []), line]);
-  }
-  return byTransaction;
-}
-
-/**
- * Register rows with each account's running balance. The window runs over the whole account
- * (oldest first), so filtering by `transactionId` happens outside it.
- */
-async function queryTransactions(db: Db, budgetId: string, filter: Filter) {
-  const rows = db
-    .select({
-      id: transaction.id,
-      accountId: transaction.accountId,
-      accountName: sql<string>`${budgetAccount.name}`.as("account_name"),
-      date: transaction.date,
-      amount: transaction.amount,
-      currency: transaction.currency,
-      payeeId: transaction.payeeId,
-      payeeName: sql<string | null>`${payee.name}`.as("payee_name"),
-      categoryId: transaction.categoryId,
-      categoryName: sql<string | null>`${category.name}`.as("category_name"),
-      memo: transaction.memo,
-      cleared: transaction.cleared,
-      flag: transaction.flag,
-      transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
-      // A split line's transfer points at the split itself.
-      transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
-        select ${subTransaction.transactionId} from ${subTransaction}
-        where ${subTransaction.id} = ${transaction.transferSubTransactionId}
-      ))`.as("transfer_transaction_id"),
-      transferFromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`.as(
-        "transfer_from_split",
-      ),
-      createdAt: transaction.createdAt,
-      runningBalance: sql<string>`sum(${transaction.amount}) over (
-        partition by ${transaction.accountId}
-        order by ${transaction.date}, ${transaction.createdAt}, ${transaction.id}
-      )`.as("running_balance"),
-    })
-    .from(transaction)
-    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
-    .leftJoin(payee, eq(payee.id, transaction.payeeId))
-    .leftJoin(category, eq(category.id, transaction.categoryId))
-    .where(
-      and(
-        eq(transaction.budgetId, budgetId),
-        filter.accountId ? eq(transaction.accountId, filter.accountId) : undefined,
-      ),
-    )
-    .as("register");
-  const result = await db
-    .select()
-    .from(rows)
-    .where(filter.transactionId ? eq(rows.id, filter.transactionId) : undefined)
-    .orderBy(desc(rows.date), desc(rows.createdAt), desc(rows.id));
-  const lines = await queryLines(db, budgetId, filter);
-  return result.map(({ createdAt: _, ...r }) => ({
-    ...r,
-    amount: r.amount.toString(),
-    subtransactions: (lines.get(r.id) ?? []).map((l) => ({ ...l, amount: l.amount.toString() })),
-    // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
-    runningBalance: BigInt(r.runningBalance).toString(),
-  }));
-}
-
 async function transactionJson(db: Db, budgetId: string, accountId: string, id: string) {
-  const [row] = await queryTransactions(db, budgetId, { accountId, transactionId: id });
+  const row = await queryRegisterRow(db, budgetId, accountId, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Transaction not found");
   return row;
 }
 
 export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { accountId } = c.req.valid("query");
+  const { sort, dir, limit, cursor, ...filter } = c.req.valid("query");
   const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
-  if (accountId) await findAccount(db, budgetId, accountId);
-  return c.json({ transactions: await queryTransactions(db, budgetId, { accountId }) }, 200);
+  const { budget } = await loadBudgetAccess(c, budgetId);
+  if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
+  const page = await queryRegister(db, budgetId, filter, { sort, dir, limit, cursor }, budget);
+  return c.json(page, 200);
 };
 
 export const createTransactionHandler: RouteHandler<typeof createTransaction, Env> = async (c) => {

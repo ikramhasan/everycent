@@ -39,8 +39,19 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Transactions and register (phase 5)
 
-- The register API returns an account's whole history in one response (the web virtualizes the
-  rows). Add paging/windowing if big budgets get slow.
+- The register API pages with keyset cursors (100 rows a page) and filters/sorts on the server;
+  each page still computes the running balance over the account's whole history. Measured on a
+  30k-transaction account (local Postgres): about 100 ms a page, most of it the window over all
+  rows. If big accounts get slow, compute the balance before the page's first row with one sum
+  and run the window over the page only, or cache balances.
+- Search uses `ilike` on payee, category, memo and account names (no index; fine at the sizes
+  above). A `pg_trgm` index would help much bigger budgets.
+- Filtered rows show the account's real balance at that point, so it can jump between rows; the
+  register says so above the table. Sorting by anything but date hides the balance, as in YNAB.
+- The register opens on all dates. The filter bar's category and payee lists are plain selects;
+  they'll want a searchable picker once lists get long.
+- Search and filters only find whole transactions: a split shows when one of its lines matches,
+  with all its lines.
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
   account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
   so it only matters to other API clients.

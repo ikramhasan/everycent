@@ -11,14 +11,11 @@ type CreateBody = components["schemas"]["CreateTransaction"];
 type UpdateBody = components["schemas"]["UpdateTransaction"];
 type LineBody = components["schemas"]["SubTransactionInput"];
 
-/** One account's register, or every account's when `accountId` is left out. */
-export const transactionsQueryOptions = (budgetId: string, accountId?: string) =>
-  $api.queryOptions("get", "/v1/budgets/{budgetId}/transactions", {
-    params: { path: { budgetId }, query: accountId ? { accountId } : {} },
-  });
+/** Rows per register page. */
+export const REGISTER_PAGE_SIZE = 100;
 
-/** Prefix that matches every register query (any budget, any account). */
-export const transactionsQueryPrefix = ["get", "/v1/budgets/{budgetId}/transactions"] as const;
+/** Prefix of every register query (any budget, account, filter or sort). */
+export const transactionsQueryPrefix = ["register"] as const;
 
 export const payeesQueryOptions = (budgetId: string) =>
   $api.queryOptions("get", "/v1/budgets/{budgetId}/payees", {

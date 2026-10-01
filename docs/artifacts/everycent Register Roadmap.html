@@ -57,7 +57,7 @@ section { display: grid; gap: 14px; }
 .stat .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .stat .v { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .meter { height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; margin-top: 6px; }
-.meter span { display: block; height: 100%; width: 75%; background: var(--accent); }
+.meter span { display: block; height: 100%; width: 82%; background: var(--accent); }
 @media (max-width: 680px) { .status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Stage rail */
@@ -120,17 +120,17 @@ a { color: var(--accent); }
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · phase 5 · after 5d · 2 Oct 2026</div>
+    <div class="eyebrow">everycent · phase 5 · after 5e · 2 Oct 2026</div>
     <h1>Finishing the register</h1>
-    <p class="lede">The register core, transfers, splits and <strong>flags are built</strong>. What's left of Phase 5 is <strong>two stages plus optional extras</strong>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
+    <p class="lede">The register core, transfers, splits, flags and <strong>server-side search, filter, sort and paging are built</strong>. What's left of Phase 5 is <strong>bulk edit plus optional extras</strong>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
   </header>
 
   <section aria-label="Where things stand">
     <div class="status">
-      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5d-flags</code></span></div>
-      <div class="stat"><span class="k">Phase 5 items</span><span class="v">12 of 16 done</span><div class="meter" aria-hidden="true"><span></span></div></div>
+      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5e-find</code></span></div>
+      <div class="stat"><span class="k">Phase 5 items</span><span class="v">14 of 17 done</span><div class="meter" aria-hidden="true"><span></span></div></div>
       <div class="stat"><span class="k">Checks</span><span class="v"><code>pnpm check</code> passing</span></div>
-      <div class="stat"><span class="k">Next</span><span class="v">5e, sort, search and filter</span></div>
+      <div class="stat"><span class="k">Next</span><span class="v">5f, bulk edit</span></div>
     </div>
   </section>
 
@@ -139,8 +139,8 @@ a { color: var(--accent); }
       <li class="done"><a href="#transfers"><span class="id">5b</span><span class="nm">Transfers</span><span class="sz">done</span></a></li>
       <li class="done"><a href="#splits"><span class="id">5c</span><span class="nm">Splits</span><span class="sz">done</span></a></li>
       <li class="done"><a href="#flags"><span class="id">5d</span><span class="nm">Flags</span><span class="sz">done</span></a></li>
-      <li><a href="#find"><span class="id">5e</span><span class="nm">Sort, search, filter</span><span class="sz">medium · next</span></a></li>
-      <li><a href="#bulk"><span class="id">5f</span><span class="nm">Bulk edit</span><span class="sz">medium</span></a></li>
+      <li class="done"><a href="#find"><span class="id">5e</span><span class="nm">Find &amp; paging</span><span class="sz">done</span></a></li>
+      <li><a href="#bulk"><span class="id">5f</span><span class="nm">Bulk edit</span><span class="sz">medium · next</span></a></li>
       <li class="extra"><a href="#extras"><span class="id">5x</span><span class="nm">Tags, receipts</span><span class="sz">extra</span></a></li>
     </ol>
   </nav>
@@ -227,41 +227,41 @@ a { color: var(--accent); }
     </div>
   </article>
 
-  <article class="stage next" id="find">
-    <div class="head"><span class="sid">5e</span><h2>Sort, search and filter</h2><span class="pill go">Next</span></div>
-    <p class="goal">Finding things in a long register: click a column header to sort, type to search, and narrow by date range and state.</p>
+  <article class="stage done" id="find">
+    <div class="head"><span class="sid">5e</span><h2>Sort, search, filter and paging</h2><span class="pill ok">Done · phase-5e-find</span></div>
+    <p class="goal">Finding things in a long register, with the server doing the work so registers of any size stay fast.</p>
     <div class="cols">
       <div>
-        <h3>Scope</h3>
+        <h3>What shipped</h3>
         <ul class="plain">
-          <li>Sort by date, payee, category, memo, amount, cleared (TanStack Table sorting).</li>
-          <li>Search box matching payee, category, memo and amounts (typing <code>45.10</code> finds that amount).</li>
+          <li>The register API pages with keyset cursors (100 rows a page); more load as you scroll.</li>
+          <li>Search across payee, category, memo, account names and split lines; typing <code>45.10</code> finds that amount.</li>
           <li>Filters: date range (this month, last 3 months, year to date, custom), cleared state, flag, category, payee.</li>
-          <li>Running balance hides while sorted by anything other than date, as YNAB does.</li>
-          <li>The filter state is kept in the URL so a filtered register can be bookmarked.</li>
+          <li>Click a header to sort by date, account, payee, category, memo, amount or cleared.</li>
+          <li>Search, filters and sort live in the address, so a filtered register survives a reload and can be bookmarked.</li>
+          <li>Jumping to a transfer's other side loads older pages until it's there.</li>
         </ul>
       </div>
       <div>
-        <h3>To settle first</h3>
+        <h3>Settled</h3>
         <ul class="plain">
-          <li class="q">Filter on the server or in the browser? Browser is simpler while registers fit in one response; the server is needed once paging exists (see deferred.md).</li>
-          <li class="q">Default view: everything, or YNAB's "this year" date range?</li>
+          <li>Filtering and paging on the server, with paging added to the roadmap: file import and bank sync will bring big histories.</li>
+          <li>Running balances are computed over the whole account, so filtered rows keep the real balance. Sorting by anything but date hides it.</li>
+          <li>The register opens on all dates.</li>
+          <li>About 100 ms a page on a 30k-transaction account; faster options are in <code>deferred.md</code>.</li>
         </ul>
       </div>
-    </div>
-    <div class="done-when">
-      <p><b>Done when</b> searching "costco", filtering to uncleared, and sorting by amount all work together and survive a page reload.</p>
     </div>
   </article>
 
-  <article class="stage" id="bulk">
-    <div class="head"><span class="sid">5f</span><h2>Multi-select and bulk edit</h2><span class="pill">Needs 5d</span></div>
+  <article class="stage next" id="bulk">
+    <div class="head"><span class="sid">5f</span><h2>Multi-select and bulk edit</h2><span class="pill go">Next</span></div>
     <p class="goal">Select several transactions and change them at once, the way YNAB's toolbar does after ticking rows.</p>
     <div class="cols">
       <div>
         <h3>Scope</h3>
         <ul class="plain">
-          <li>Checkbox column with shift-click range select and "select all" for the current filter.</li>
+          <li>Checkbox column with shift-click range select and "select all" for the current filter. With paging, "select all" has to mean the filter on the server, not just the loaded rows.</li>
           <li>Toolbar actions: categorize, change payee, change date, flag, mark cleared or uncleared, move to account, delete.</li>
           <li>One API call per action that applies to all selected transactions in one database transaction.</li>
           <li>Totals of the selection shown in the toolbar.</li>
@@ -314,7 +314,7 @@ a { color: var(--accent); }
     <h2>Picking up</h2>
     <p>Open Claude Code in the BudgetApp repo and start with:</p>
     <div class="prompt">
-      <code id="resume-prompt">Let's start Phase 5e, sort, search and filter. Read docs/deferred.md first.</code>
+      <code id="resume-prompt">Let's start Phase 5f, multi-select and bulk edit. Read docs/deferred.md first.</code>
       <button class="copy" id="copy-btn" type="button">Copy</button>
     </div>
     <p class="q">Each stage: settle its open questions in chat, build on a branch, check every screen in the browser in both themes, pass <code>pnpm check</code>, then merge.</p>

@@ -18,7 +18,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
@@ -29,11 +29,15 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
-  /** `transaction`: scroll to and highlight it (the other side of a transfer). */
-  validateSearch: z.object({ transaction: z.string().optional() }),
+  /**
+   * `transaction`: scroll to and highlight it (the other side of a transfer). The rest is the
+   * register's search, filters and sort.
+   */
+  validateSearch: registerSearchSchema.extend({ transaction: z.string().optional() }),
   component: AccountPage,
 });
 
@@ -41,10 +45,19 @@ type Confirm = "close" | "delete" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
-  const { transaction } = Route.useSearch();
+  const { transaction, ...registerSearch } = Route.useSearch();
   const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const onSearchChange = useCallback(
+    (patch: Partial<RegisterSearch>, replace?: boolean) =>
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, ...patch, transaction: undefined }),
+        replace,
+      }),
+    [navigate],
+  );
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
   const close = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/close");
@@ -148,7 +161,13 @@ function AccountPage() {
         />
       </dl>
 
-      <Register key={accountId} accountId={accountId} focusId={transaction} />
+      <Register
+        key={accountId}
+        accountId={accountId}
+        focusId={transaction}
+        search={registerSearch}
+        onSearchChange={onSearchChange}
+      />
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent>
