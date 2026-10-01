@@ -29,17 +29,30 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 - The setup flow (`/budgets/$id/setup`) covers YNAB's "Personalize plan" and "Add accounts". Its
   third step, "Fund categories" (assign money), needs the phase 6 budget screen.
-- Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories and accounts. When
-  these exist, it must copy them too: targets (phase 8), scheduled transactions (phase 10),
-  payees and rules (phase 12). Payees aren't copied today.
+- Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories, payees and
+  accounts. When these exist, it must copy them too: targets (phase 8), scheduled transactions
+  (phase 10), payee rules (phase 12).
 - By decision, a fresh start drops all transactions, uncleared ones included; each account starts
-  from its working balance as a single cleared Starting Balance.
+  from its working balance on the fresh-start date as a single cleared Starting Balance. That
+  balance leaves out future-dated transactions, so they're lost; phase 10 should carry them over
+  as scheduled transactions.
 
 ## Transactions and register (phase 5)
 
-- Transfer payees ("Transfer : <account>") aren't created yet; phase 5 adds them with transfers.
-- Future-dated transactions are included in balances; phase 5 must exclude them until their date.
-- The account page shows transactions read-only. Adding/editing/deleting them is phase 5.
+- Transfer payees ("Transfer : <account>") aren't created yet; phase 5b adds them with transfers.
+- The register API returns an account's whole history in one response (the web virtualizes the
+  rows). Add paging/windowing if big budgets get slow.
+- Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
+  account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
+  so it only matters to other API clients.
+- Reconciled transactions show a lock and can't be unlocked from the register yet; the API
+  accepts `cleared` on them. Phase 9 adds the reconcile flow and the "unlock?" warning.
+- Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
+  stay in the autocomplete.
+- shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
+  UI's Autocomplete (payee field) with the combobox styling. Replace it if shadcn adds one.
+- Editing an existing transaction is cell by cell (as YNAB does); a transaction can be moved to
+  another account only from the All Accounts register (its account cell).
 
 ## Accounts (phase 3 follow-ups)
 

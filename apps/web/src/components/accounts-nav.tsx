@@ -4,6 +4,11 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { formatAmount, money } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@everycent/ui/components/collapsible";
+import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -129,38 +134,39 @@ function AccountSection({
   budgetId: string;
   format: (minorUnits: bigint) => string;
 }) {
-  const [open, setOpen] = useState(section.id !== "closed");
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel asChild>
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          <ChevronRight className={cn("transition-transform", open && "rotate-90")} />
-          <span className="uppercase tracking-wide">{section.title}</span>
-          {section.id !== "closed" && (
-            <span className="ml-auto tabular-nums">{format(section.total)}</span>
-          )}
-        </button>
-      </SidebarGroupLabel>
-      {open && (
-        <SidebarGroupContent>
-          <SidebarMenu>
-            {ids.map((id, index) => {
-              const account = byId.get(id);
-              return account ? (
-                <AccountItem
-                  key={id}
-                  account={account}
-                  index={index}
-                  section={section.id}
-                  budgetId={budgetId}
-                  format={format}
-                />
-              ) : null;
-            })}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      )}
-    </SidebarGroup>
+    <Collapsible defaultOpen={section.id !== "closed"} className="group/collapsible" asChild>
+      <SidebarGroup>
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger>
+            <ChevronRight className="transition-transform group-data-[state=open]/collapsible:rotate-90" />
+            <span className="uppercase tracking-wide">{section.title}</span>
+            {section.id !== "closed" && (
+              <span className="ml-auto tabular-nums">{format(section.total)}</span>
+            )}
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {ids.map((id, index) => {
+                const account = byId.get(id);
+                return account ? (
+                  <AccountItem
+                    key={id}
+                    account={account}
+                    index={index}
+                    section={section.id}
+                    budgetId={budgetId}
+                    format={format}
+                  />
+                ) : null;
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
   );
 }
 

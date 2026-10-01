@@ -13,6 +13,20 @@ import {
   AlertDialogTitle,
 } from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@everycent/ui/components/collapsible";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@everycent/ui/components/item";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { cn } from "@everycent/ui/lib/utils";
@@ -207,9 +221,12 @@ export function CategoryList({
           })}
         </DragDropProvider>
         {layout.groupOrder.length === 0 && (
-          <p className="p-4 text-muted-foreground text-sm">
-            No categories yet. Add a category group to get started.
-          </p>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No categories yet</EmptyTitle>
+              <EmptyDescription>Add a category group to get started.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
 
@@ -338,12 +355,9 @@ function GroupSection({
                 </>
               )}
               trigger={
-                <button
-                  type="button"
-                  className="truncate rounded px-1 font-semibold text-sm hover:bg-accent"
-                >
+                <Button variant="ghost" size="xs" className="truncate font-semibold text-sm">
                   {group.name}
-                </button>
+                </Button>
               }
             />
             <NamePopover
@@ -437,9 +451,9 @@ function CategoryRow({
           </>
         )}
         trigger={
-          <button type="button" className="truncate rounded px-1 text-sm hover:bg-accent">
+          <Button variant="ghost" size="xs" className="truncate font-normal text-sm">
             {category.name}
-          </button>
+          </Button>
         }
       />
       {category.note && (
@@ -451,14 +465,15 @@ function CategoryRow({
 
 function DragHandle({ ref, label }: { ref: (el: Element | null) => void; label: string }) {
   return (
-    <button
+    <Button
       ref={ref}
-      type="button"
+      variant="ghost"
+      size="icon-xs"
       aria-label={label}
-      className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:bg-accent active:cursor-grabbing"
+      className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
     >
-      <GripVertical className="size-4" />
-    </button>
+      <GripVertical />
+    </Button>
   );
 }
 
@@ -469,55 +484,58 @@ function HiddenSection({
   hidden: ReturnType<typeof hiddenItems>;
   actions: CategoryListActions;
 }) {
-  const [open, setOpen] = useState(false);
   const count = hidden.groups.length + hidden.categories.length;
   if (count === 0) return null;
 
   return (
-    <div className="rounded-lg border">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium text-muted-foreground text-sm hover:bg-accent/50"
-      >
-        <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
-        <EyeOff className="size-4" /> Hidden Categories ({count})
-      </button>
-      {open && (
-        <ul className="divide-y border-t">
+    <Collapsible className="group/hidden rounded-lg border">
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="w-full justify-start rounded-lg font-medium text-muted-foreground"
+        >
+          <ChevronRight className="transition-transform group-data-[state=open]/hidden:rotate-90" />
+          <EyeOff /> Hidden Categories ({count})
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ItemGroup className="border-t">
           {hidden.groups.map((g) => (
-            <li key={g.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-              <span className="truncate font-semibold">{g.name}</span>
-              <span className="text-muted-foreground text-xs">
-                group · {g.categories.length} categories
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto"
-                onClick={() => actions.updateGroup(g.id, { hidden: false })}
-              >
-                Show
-              </Button>
-            </li>
+            <Item key={g.id} size="xs">
+              <ItemContent>
+                <ItemTitle className="font-semibold">{g.name}</ItemTitle>
+                <ItemDescription>group · {g.categories.length} categories</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => actions.updateGroup(g.id, { hidden: false })}
+                >
+                  Show
+                </Button>
+              </ItemActions>
+            </Item>
           ))}
           {hidden.categories.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-              <span className="truncate">{c.name}</span>
-              <span className="text-muted-foreground text-xs">in {c.groupName}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto"
-                onClick={() => actions.updateCategory(c.id, { hidden: false })}
-              >
-                Show
-              </Button>
-            </li>
+            <Item key={c.id} size="xs">
+              <ItemContent>
+                <ItemTitle>{c.name}</ItemTitle>
+                <ItemDescription>in {c.groupName}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => actions.updateCategory(c.id, { hidden: false })}
+                >
+                  Show
+                </Button>
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
-      )}
-    </div>
+        </ItemGroup>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

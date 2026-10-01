@@ -1,18 +1,14 @@
 import type { components } from "@everycent/api-client";
 import { type AccountFamily, accountFamily } from "@everycent/engine";
 import { $api } from "./api";
+import { todayIso } from "./dates";
 
 export type Account = components["schemas"]["Account"];
-export type AccountTransaction = components["schemas"]["Transaction"];
 
-export const accountsQueryOptions = (budgetId: string) =>
+/** Balances leave out transactions dated after the user's today. */
+export const accountsQueryOptions = (budgetId: string, today = todayIso()) =>
   $api.queryOptions("get", "/v1/budgets/{budgetId}/accounts", {
-    params: { path: { budgetId } },
-  });
-
-export const accountTransactionsQueryOptions = (budgetId: string, accountId: string) =>
-  $api.queryOptions("get", "/v1/budgets/{budgetId}/accounts/{accountId}/transactions", {
-    params: { path: { budgetId, accountId } },
+    params: { path: { budgetId }, query: { today } },
   });
 
 export type SidebarSectionId = "budget" | "loans" | "tracking" | "closed";

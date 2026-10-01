@@ -5,6 +5,7 @@ import type { CategoryList as CategoryListData } from "@/lib/categories";
 import { CategoryList, type CategoryListActions } from "./category-list";
 
 const data: CategoryListData = {
+  readyToAssignCategoryId: "rta",
   groups: [
     {
       id: "g1",
@@ -46,6 +47,7 @@ const data: CategoryListData = {
 };
 
 const withCards: CategoryListData = {
+  readyToAssignCategoryId: "rta",
   groups: [
     {
       id: "cc",
@@ -175,10 +177,10 @@ describe("CategoryList", () => {
   it("lists hidden groups and categories and can show them again", async () => {
     const actions = renderList();
     await userEvent.click(screen.getByRole("button", { name: /Hidden Categories \(2\)/ }));
-    const cable = screen.getByText("Cable").closest("li");
+    const cable = screen.getByText("Cable").closest("[data-slot=item]");
     await userEvent.click(within(cable as HTMLElement).getByRole("button", { name: "Show" }));
     expect(actions.updateCategory).toHaveBeenCalledWith("c3", { hidden: false });
-    const old = screen.getByText("Old").closest("li");
+    const old = screen.getByText("Old").closest("[data-slot=item]");
     await userEvent.click(within(old as HTMLElement).getByRole("button", { name: "Show" }));
     expect(actions.updateGroup).toHaveBeenCalledWith("g2", { hidden: false });
   });

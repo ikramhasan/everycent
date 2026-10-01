@@ -1,4 +1,11 @@
 import { Button } from "@everycent/ui/components/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@everycent/ui/components/empty";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
 import { BudgetProvider } from "@/lib/budget-context";
@@ -34,14 +41,16 @@ function BudgetLayout() {
 
 function BudgetNotFound() {
   return (
-    <div className="mx-auto grid max-w-md gap-4 py-12 text-center">
-      <h1 className="font-semibold text-xl">Budget not found</h1>
-      <p className="text-muted-foreground">
-        It may have been deleted, or it isn't shared with you.
-      </p>
-      <Button asChild variant="outline" className="justify-self-center">
-        <Link to="/budgets">View all budgets</Link>
-      </Button>
-    </div>
+    <Empty className="py-12">
+      <EmptyHeader>
+        <EmptyTitle>Budget not found</EmptyTitle>
+        <EmptyDescription>It may have been deleted, or it isn't shared with you.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button asChild variant="outline">
+          <Link to="/budgets">View all budgets</Link>
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }

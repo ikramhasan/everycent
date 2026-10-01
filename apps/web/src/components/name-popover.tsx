@@ -1,6 +1,6 @@
 import { Button } from "@everycent/ui/components/button";
+import { Field, FieldDescription, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
-import { Label } from "@everycent/ui/components/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
@@ -63,8 +63,8 @@ export function NamePopover({
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-80">
         <form onSubmit={handleSubmit} className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${id}-name`}>{title}</Label>
+          <Field>
+            <FieldLabel htmlFor={`${id}-name`}>{title}</FieldLabel>
             <Input
               id={`${id}-name`}
               value={values.name}
@@ -74,20 +74,18 @@ export function NamePopover({
               readOnly={Boolean(nameLockedReason)}
               required
             />
-            {nameLockedReason && (
-              <p className="text-muted-foreground text-xs">{nameLockedReason}</p>
-            )}
-          </div>
+            {nameLockedReason && <FieldDescription>{nameLockedReason}</FieldDescription>}
+          </Field>
           {withNote && (
-            <div className="grid gap-1.5">
-              <Label htmlFor={`${id}-note`}>Note</Label>
+            <Field>
+              <FieldLabel htmlFor={`${id}-note`}>Note</FieldLabel>
               <Textarea
                 id={`${id}-note`}
                 value={values.note}
                 onChange={(e) => setValues((v) => ({ ...v, note: e.target.value }))}
                 rows={3}
               />
-            </div>
+            </Field>
           )}
           <div className="flex flex-wrap items-center gap-2">
             {actions?.(() => setOpen(false))}

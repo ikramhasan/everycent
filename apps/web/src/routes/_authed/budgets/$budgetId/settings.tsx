@@ -114,8 +114,9 @@ function BudgetSettingsPage() {
           <CardHeader>
             <CardTitle>Fresh start</CardTitle>
             <CardDescription>
-              Start over with the same accounts, categories and partners, but no transactions. Each
-              account starts from today's balance. This budget is kept, renamed as archived.
+              Start over with the same accounts, categories, payees and partners, but no
+              transactions. Each account starts from today's balance. This budget is kept, renamed
+              as archived.
             </CardDescription>
           </CardHeader>
           <CardContent>

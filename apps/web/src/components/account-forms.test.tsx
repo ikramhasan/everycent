@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { AddAccountForm, EditAccountForm, type MoneySettings } from "./account-forms";
+import type { MoneySettings } from "@/lib/money-input";
+import { AddAccountForm, EditAccountForm } from "./account-forms";
 
 const usd: MoneySettings = {
   currency: "USD",

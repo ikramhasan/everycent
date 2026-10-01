@@ -1,6 +1,7 @@
 import { Button } from "@everycent/ui/components/button";
+import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
-import { Label } from "@everycent/ui/components/label";
+import { Spinner } from "@everycent/ui/components/spinner";
 import { type FormEvent, useState } from "react";
 
 export interface SignUpValues {
@@ -33,16 +34,16 @@ export function SignUpForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
-      <div className="grid gap-2">
-        <Label htmlFor="name">Name</Label>
+      <Field>
+        <FieldLabel htmlFor="name">Name</FieldLabel>
         <Input id="name" name="name" autoComplete="name" required />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="email">Email</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="email">Email</FieldLabel>
         <Input id="email" name="email" type="email" autoComplete="email" required />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="password">Password</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="password">Password</FieldLabel>
         <Input
           id="password"
           name="password"
@@ -51,13 +52,10 @@ export function SignUpForm({
           minLength={8}
           required
         />
-      </div>
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      </Field>
+      {error && <FieldError>{error}</FieldError>}
       <Button type="submit" disabled={pending}>
+        {pending && <Spinner />}
         {pending ? "Creating account…" : "Create account"}
       </Button>
     </form>

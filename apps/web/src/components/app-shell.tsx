@@ -23,7 +23,7 @@ import {
 } from "@everycent/ui/components/sidebar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronsUpDown, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
+import { ChevronsUpDown, Landmark, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { AccountsNav } from "./accounts-nav";
@@ -85,6 +85,19 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       >
                         <Wallet />
                         <span>Budget</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/budgets/$budgetId/accounts"
+                        params={{ budgetId }}
+                        activeOptions={{ exact: true }}
+                        activeProps={{ "data-active": true }}
+                      >
+                        <Landmark />
+                        <span>All Accounts</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

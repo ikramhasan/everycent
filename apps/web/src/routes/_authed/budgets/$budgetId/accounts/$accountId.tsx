@@ -12,20 +12,23 @@ import {
 import { Badge } from "@everycent/ui/components/badge";
 import { Button } from "@everycent/ui/components/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@everycent/ui/components/dialog";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CircleCheck, Lock, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
-import { accountsQueryOptions, accountTransactionsQueryOptions } from "@/lib/accounts";
+import { Register } from "@/components/register";
+import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
   component: AccountPage,
@@ -35,11 +38,10 @@ type Confirm = "close" | "delete" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
-  const { budget, formatAmount, formatDate } = useBudget();
+  const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const accounts = useQuery(accountsQueryOptions(budget.id));
-  const transactions = useQuery(accountTransactionsQueryOptions(budget.id, accountId));
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
   const close = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/close");
   const reopen = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/reopen");
@@ -54,9 +56,7 @@ function AccountPage() {
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
-      queryClient.invalidateQueries({
-        queryKey: accountTransactionsQueryOptions(budget.id, accountId).queryKey,
-      }),
+      queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
     ]);
   }
@@ -98,15 +98,22 @@ function AccountPage() {
     toast.success(`Deleted “${account?.name}”`);
   }
 
-  if (accounts.isPending) return <Skeleton className="mx-auto h-40 max-w-4xl" />;
+  if (accounts.isPending) return <Skeleton className="h-40" />;
   if (!account) {
-    return <p className="text-center text-muted-foreground">This account doesn't exist.</p>;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Account not found</EmptyTitle>
+          <EmptyDescription>It may have been deleted.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   const working = BigInt(account.balances.working);
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-6">
+    <div className="grid gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -137,53 +144,7 @@ function AccountPage() {
         />
       </dl>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/60 text-left text-muted-foreground text-xs uppercase">
-            <tr>
-              <th className="px-3 py-2 font-medium">Date</th>
-              <th className="px-3 py-2 font-medium">Payee</th>
-              <th className="px-3 py-2 font-medium">Category</th>
-              <th className="px-3 py-2 font-medium">Memo</th>
-              <th className="px-3 py-2 text-right font-medium">Outflow</th>
-              <th className="px-3 py-2 text-right font-medium">Inflow</th>
-              <th className="px-3 py-2">
-                <span className="sr-only">Cleared</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {transactions.data?.transactions.map((t) => {
-              const amount = BigInt(t.amount);
-              const magnitude = (amount < 0n ? -amount : amount).toString();
-              return (
-                <tr key={t.id}>
-                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">{formatDate(t.date)}</td>
-                  <td className="px-3 py-2">{t.payeeName}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{t.categoryName ?? ""}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{t.memo}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-                    {amount < 0n ? show(magnitude) : ""}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-                    {amount > 0n ? show(magnitude) : ""}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {t.cleared === "reconciled" ? (
-                      <Lock className="size-4" aria-label="Reconciled" />
-                    ) : t.cleared === "cleared" ? (
-                      <CircleCheck className="size-4 text-primary" aria-label="Cleared" />
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <p className="border-t px-3 py-2 text-muted-foreground text-xs">
-          Adding and editing transactions comes with the register.
-        </p>
-      </div>
+      <Register key={accountId} accountId={accountId} />
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent>

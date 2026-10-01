@@ -60,7 +60,11 @@ phases — check it before starting a phase, and add to it whenever you defer so
   write hooks into `apps/web/src/hooks` — move them to `packages/ui/src/hooks`. It may also
   import `cn` from an npm package literally named `cn` — rewrite that import to
   `@everycent/ui/lib/utils` and do not add a `cn` dependency. Components under `packages/ui` are
-  owned/vendored code and are lint-exempt (Biome still formats them).
+  owned/vendored code and are lint-exempt (Biome still formats them). The CLI prompts before
+  overwriting an existing component and `-y` doesn't answer that; `-o` overwrites everything
+  (including our local edits), so after `-o` restore existing files with `git checkout`. Local
+  edits to vendored files are marked with an `everycent:` comment (e.g. `table.tsx` container
+  ref, `autocomplete.tsx`).
 - **Boolean `data-*` attributes.** Tailwind's `data-active:` (and similar) variants match the
   attribute's presence, so `data-active={false}` still styles as active. Render
   `data-x={flag || undefined}`; check newly vendored shadcn components for this.

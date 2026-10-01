@@ -14,9 +14,10 @@ import {
   type NumberFormat,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
-import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
+import { Spinner } from "@everycent/ui/components/spinner";
 import { type FormEvent, useState } from "react";
 import { todayIso } from "@/lib/dates";
 import { CurrencyPicker, currencyName } from "./currency-picker";
@@ -72,8 +73,8 @@ export function BudgetForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-5">
-      <div className="grid gap-2">
-        <Label htmlFor="budget-name">Budget name</Label>
+      <Field>
+        <FieldLabel htmlFor="budget-name">Budget name</FieldLabel>
         <Input
           id="budget-name"
           value={values.name}
@@ -82,10 +83,10 @@ export function BudgetForm({
           required
           autoFocus={!currencyLocked}
         />
-      </div>
+      </Field>
 
-      <div className="grid gap-2">
-        <Label htmlFor="budget-currency">Currency</Label>
+      <Field>
+        <FieldLabel htmlFor="budget-currency">Currency</FieldLabel>
         {currencyLocked ? (
           <>
             <Input
@@ -93,9 +94,7 @@ export function BudgetForm({
               value={`${values.currency} — ${currencyName(values.currency)}`}
               disabled
             />
-            <p className="text-muted-foreground text-xs">
-              Currency can't be changed after creation.
-            </p>
+            <FieldDescription>Currency can't be changed after creation.</FieldDescription>
           </>
         ) : (
           <CurrencyPicker
@@ -104,11 +103,11 @@ export function BudgetForm({
             onChange={(code) => set("currency", code)}
           />
         )}
-      </div>
+      </Field>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="grid gap-2">
-          <Label htmlFor="budget-number-format">Number format</Label>
+        <Field>
+          <FieldLabel htmlFor="budget-number-format">Number format</FieldLabel>
           <NativeSelect
             id="budget-number-format"
             value={values.numberFormat}
@@ -124,9 +123,9 @@ export function BudgetForm({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="budget-symbol-position">Currency symbol</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="budget-symbol-position">Currency symbol</FieldLabel>
           <NativeSelect
             id="budget-symbol-position"
             value={values.currencySymbolPosition}
@@ -140,9 +139,9 @@ export function BudgetForm({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="budget-date-format">Date format</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="budget-date-format">Date format</FieldLabel>
           <NativeSelect
             id="budget-date-format"
             value={values.dateFormat}
@@ -154,7 +153,7 @@ export function BudgetForm({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-        </div>
+        </Field>
       </div>
 
       <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
@@ -164,12 +163,9 @@ export function BudgetForm({
         </output>
       </div>
 
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      {error && <FieldError>{error}</FieldError>}
       <Button type="submit" disabled={pending} className="justify-self-start">
+        {pending && <Spinner />}
         {pending ? pendingLabel : submitLabel}
       </Button>
     </form>

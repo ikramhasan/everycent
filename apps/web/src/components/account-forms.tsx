@@ -3,24 +3,15 @@ import {
   ACCOUNT_TYPES,
   type AccountType,
   accountFamily,
-  type BudgetFormatSettings,
-  type CurrencyCode,
-  formatAmount,
   isDebtAccount,
-  MoneyParseError,
-  money,
-  parseAmount,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
-import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { type FormEvent, type ReactNode, useState } from "react";
-
-export interface MoneySettings extends BudgetFormatSettings {
-  currency: CurrencyCode;
-}
+import { type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
 
 const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
   {
@@ -33,30 +24,6 @@ const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
     types: ACCOUNT_TYPES.filter((t) => accountFamily(t) === "tracking"),
   },
 ];
-
-/** Parses an amount typed in the budget's number format into minor units, or explains why not. */
-function parseInput(text: string, settings: MoneySettings): bigint | string {
-  try {
-    return parseAmount(text, settings.currency, settings.numberFormat).amount;
-  } catch (error) {
-    if (error instanceof MoneyParseError) {
-      return `Enter an amount like ${formatAmount(money(123456n, settings.currency), {
-        ...settings,
-        currencySymbolPosition: "none",
-      })}`;
-    }
-    throw error;
-  }
-}
-
-/** Formats minor units for an input field (no symbol), e.g. "1,234.56". */
-function toInput(amount: string | null, settings: MoneySettings) {
-  if (amount === null) return "";
-  return formatAmount(money(BigInt(amount), settings.currency), {
-    ...settings,
-    currencySymbolPosition: "none",
-  });
-}
 
 const RATE = /^\d{1,3}(\.\d{1,3})?$/;
 
@@ -84,7 +51,7 @@ function parseLoan(values: LoanValues, settings: MoneySettings): LoanResult {
   };
   for (const key of ["minimumPayment", "escrowAmount"] as const) {
     if (!values[key].trim()) continue;
-    const parsed = parseInput(values[key], settings);
+    const parsed = parseMoneyInput(values[key], settings);
     if (typeof parsed === "string") return { ok: false, error: parsed };
     amounts[key] = parsed.toString();
   }
@@ -99,8 +66,8 @@ function LoanFields({
   onChange: (values: LoanValues) => void;
 }) {
   const field = (key: keyof LoanValues, label: string, hint?: string) => (
-    <div className="grid gap-1.5">
-      <Label htmlFor={`loan-${key}`}>{label}</Label>
+    <Field>
+      <FieldLabel htmlFor={`loan-${key}`}>{label}</FieldLabel>
       <Input
         id={`loan-${key}`}
         inputMode="decimal"
@@ -108,7 +75,7 @@ function LoanFields({
         onChange={(e) => onChange({ ...values, [key]: e.target.value })}
         placeholder={hint}
       />
-    </div>
+    </Field>
   );
   return (
     <div className="grid gap-4 sm:grid-cols-3">
@@ -135,11 +102,7 @@ function FormShell({
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
       {children}
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      {error && <FieldError>{error}</FieldError>}
       <Button type="submit" disabled={pending} className="justify-self-end">
         {submitLabel}
       </Button>
@@ -179,7 +142,7 @@ export function AddAccountForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = parseInput(balance || "0", settings);
+    const parsed = parseMoneyInput(balance || "0", settings);
     if (typeof parsed === "string") return setError(parsed);
     const loanValues = isLoan ? parseLoan(loan, settings) : null;
     if (loanValues && !loanValues.ok) return setError(loanValues.error);
@@ -204,8 +167,8 @@ export function AddAccountForm({
 
   return (
     <FormShell onSubmit={handleSubmit} error={error} pending={pending} submitLabel="Add account">
-      <div className="grid gap-1.5">
-        <Label htmlFor="account-type">Account type</Label>
+      <Field>
+        <FieldLabel htmlFor="account-type">Account type</FieldLabel>
         <NativeSelect
           id="account-type"
           value={type}
@@ -221,9 +184,9 @@ export function AddAccountForm({
             </optgroup>
           ))}
         </NativeSelect>
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="account-name">Nickname</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="account-name">Nickname</FieldLabel>
         <Input
           id="account-name"
           value={name}
@@ -231,19 +194,19 @@ export function AddAccountForm({
           maxLength={100}
           required
         />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="account-balance">
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="account-balance">
           {debt ? "How much do you owe today?" : "What's the balance today?"}
-        </Label>
+        </FieldLabel>
         <Input
           id="account-balance"
           inputMode="decimal"
           value={balance}
           onChange={(e) => setBalance(e.target.value)}
-          placeholder={toInput("0", settings)}
+          placeholder={toMoneyInput("0", settings)}
         />
-      </div>
+      </Field>
       {isLoan && <LoanFields values={loan} onChange={setLoan} />}
     </FormShell>
   );
@@ -272,8 +235,8 @@ export function EditAccountForm({
   const [type, setType] = useState(initial.type);
   const [loan, setLoan] = useState<LoanValues>({
     interestRate: initial.interestRate ?? "",
-    minimumPayment: toInput(initial.minimumPayment, settings),
-    escrowAmount: toInput(initial.escrowAmount, settings),
+    minimumPayment: toMoneyInput(initial.minimumPayment, settings),
+    escrowAmount: toMoneyInput(initial.escrowAmount, settings),
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -302,8 +265,8 @@ export function EditAccountForm({
 
   return (
     <FormShell onSubmit={handleSubmit} error={error} pending={pending} submitLabel="Save">
-      <div className="grid gap-1.5">
-        <Label htmlFor="edit-account-name">Nickname</Label>
+      <Field>
+        <FieldLabel htmlFor="edit-account-name">Nickname</FieldLabel>
         <Input
           id="edit-account-name"
           value={name}
@@ -311,9 +274,9 @@ export function EditAccountForm({
           maxLength={100}
           required
         />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="edit-account-type">Account type</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="edit-account-type">Account type</FieldLabel>
         <NativeSelect
           id="edit-account-type"
           value={type}
@@ -325,16 +288,16 @@ export function EditAccountForm({
             </NativeSelectOption>
           ))}
         </NativeSelect>
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="edit-account-note">Notes</Label>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="edit-account-note">Notes</FieldLabel>
         <Textarea
           id="edit-account-note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}
         />
-      </div>
+      </Field>
       {isLoan && <LoanFields values={loan} onChange={setLoan} />}
     </FormShell>
   );

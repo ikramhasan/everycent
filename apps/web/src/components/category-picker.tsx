@@ -1,7 +1,8 @@
 import { Button } from "@everycent/ui/components/button";
 import { Checkbox } from "@everycent/ui/components/checkbox";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
-import { Label } from "@everycent/ui/components/label";
+import { Spinner } from "@everycent/ui/components/spinner";
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import type { CategoryList } from "@/lib/categories";
@@ -62,19 +63,19 @@ export function CategoryPicker({
     <div className="grid gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         {groups.map((group) => (
-          <fieldset key={group.id} className="grid content-start gap-2 rounded-lg border p-4">
-            <legend className="px-1 font-semibold text-sm">{group.name}</legend>
+          <FieldSet key={group.id} className="content-start gap-2 rounded-lg border p-4">
+            <FieldLegend variant="label">{group.name}</FieldLegend>
             {group.categories.map((c) => (
-              <div key={c.id} className="flex items-center gap-2">
+              <Field key={c.id} orientation="horizontal">
                 <Checkbox
                   id={`pick-${c.id}`}
                   checked={!unticked.has(c.id)}
                   onCheckedChange={(checked) => toggle(c.id, checked === true)}
                 />
-                <Label htmlFor={`pick-${c.id}`} className="font-normal">
+                <FieldLabel htmlFor={`pick-${c.id}`} className="font-normal">
                   {c.name}
-                </Label>
-              </div>
+                </FieldLabel>
+              </Field>
             ))}
             {(added[group.id] ?? []).map((name, i) => (
               <div key={`${name}-${i}`} className="flex items-center gap-2 text-sm">
@@ -102,7 +103,7 @@ export function CategoryPicker({
                 setAdded((a) => ({ ...a, [group.id]: [...(a[group.id] ?? []), name] }))
               }
             />
-          </fieldset>
+          </FieldSet>
         ))}
       </div>
       <Button
@@ -110,6 +111,7 @@ export function CategoryPicker({
         disabled={pending}
         onClick={() => onContinue(picksFrom(data, unticked, added))}
       >
+        {pending && <Spinner />}
         {pending ? "Saving…" : "Continue"}
       </Button>
     </div>

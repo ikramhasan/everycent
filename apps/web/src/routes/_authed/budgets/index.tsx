@@ -1,6 +1,8 @@
 import { formatDate } from "@everycent/engine";
+import { Alert, AlertTitle } from "@everycent/ui/components/alert";
 import { Button } from "@everycent/ui/components/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@everycent/ui/components/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -28,9 +30,16 @@ function AllBudgetsPage() {
       {budgets.isPending ? (
         <Skeleton className="h-24" />
       ) : budgets.isError ? (
-        <p className="text-muted-foreground">Couldn't load your budgets.</p>
+        <Alert variant="destructive">
+          <AlertTitle>Couldn't load your budgets.</AlertTitle>
+        </Alert>
       ) : budgets.data.budgets.length === 0 ? (
-        <p className="text-muted-foreground">You don't have any budgets yet.</p>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>No budgets yet</EmptyTitle>
+            <EmptyDescription>Create one to start giving every dollar a job.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <>
           <BudgetGrid budgets={budgets.data.budgets.filter((b) => !b.archivedAt)} />

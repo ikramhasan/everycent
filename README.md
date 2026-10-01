@@ -116,19 +116,21 @@ and fresh start (after phase 5 core).
 
 ### 5. Transactions & register
 
-- [ ] Account register: date, payee, category, memo, outflow, inflow, cleared
-- [ ] All-accounts register view
-- [ ] Add / edit / delete transactions inline (keyboard-first entry)
-- [ ] Payees: create on the fly, autocomplete, remember last category per payee
-- [ ] Cleared / uncleared / reconciled states, toggle cleared
+- [x] Account register: date, payee, category, memo, outflow, inflow, cleared
+- [x] All-accounts register view
+- [x] Add / edit / delete transactions inline (keyboard-first entry: Tab, Enter saves, Esc
+      cancels; the full shortcut set is in phase "Keyboard shortcuts")
+- [x] Math in amount fields (`230+30`, `12.50*3`), exact and rounded once
+- [x] Payees: create on the fly, autocomplete, remember last category per payee
+- [x] Cleared / uncleared / reconciled states, toggle cleared
 - [ ] Transfers between accounts (linked pair, transfer payees, on-/off-budget rules)
 - [ ] Split transactions (multiple categories; split transfers)
 - [ ] Flags (colors) with custom flag names
-- [ ] Running balance column
+- [x] Running balance column
 - [ ] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
 - [ ] Multi-select + bulk edit (category, payee, date, flag, cleared, move to account, delete)
 - [ ] Approve / reject imported transactions (unapproved state)
-- [ ] Future-dated transactions (excluded from balances until the date)
+- [x] Future-dated transactions (excluded from balances until the date)
 - [ ] Tags on transactions **(extra)**
 - [ ] Receipt / file attachments **(extra)**
 
