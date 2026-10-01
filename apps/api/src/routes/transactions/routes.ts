@@ -24,6 +24,14 @@ export const TransactionSchema = z
     categoryName: z.string().nullable(),
     memo: z.string(),
     cleared: z.enum(CLEARED_STATES),
+    transferAccountId: z
+      .string()
+      .nullable()
+      .describe('Transfers: the other account (the payee is "Transfer : <account>")'),
+    transferTransactionId: z
+      .string()
+      .nullable()
+      .describe("Transfers: the matching transaction in the other account"),
     runningBalance: zMinorUnits.describe(
       "The account's balance after this transaction, in date order (all of its transactions)",
     ),
@@ -49,11 +57,24 @@ function ok<T extends z.ZodType>(description: string, schema: T) {
 }
 const notFound = jsonError("No such budget, account or transaction, or the caller isn't a member");
 const forbidden = jsonError("The caller's role can't change transactions");
+const reconciled = jsonError(
+  "The other side of the transfer is reconciled, so its date and amount can't change",
+);
 
 const categoryRules =
   "On-budget accounts: a null category means Uncategorized; credit-card payment categories " +
   "can't be used. Tracking accounts never have a category. The payee is matched by name " +
   "(ignoring case) and created if new; null leaves it empty.";
+
+const transferRules =
+  "`transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction " +
+  "with the opposite amount is kept in that account. Only a transfer from a budget account to " +
+  "a tracking account has a category (on the budget side), as money leaves the budget. New " +
+  "transfers need both accounts open.";
+
+const TransferAccountId = z
+  .string()
+  .describe("Make this a transfer to or from that account; leave `payeeName` out");
 
 export const listTransactions = createRoute({
   method: "get",
@@ -83,8 +104,8 @@ export const createTransaction = createRoute({
   tags: ["Transactions"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "Add a transaction",
-  description: categoryRules,
+  summary: "Add a transaction or a transfer",
+  description: `${categoryRules} ${transferRules}`,
   request: {
     params: BudgetParams,
     body: json(
@@ -93,7 +114,8 @@ export const createTransaction = createRoute({
           accountId: z.string(),
           date: IsoDate,
           amount: zMinorUnits.describe("Negative is an outflow"),
-          payeeName: PayeeName.nullable(),
+          payeeName: PayeeName.nullable().default(null),
+          transferAccountId: TransferAccountId.optional(),
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           cleared: SettableCleared.default("uncleared"),
@@ -102,8 +124,11 @@ export const createTransaction = createRoute({
     ),
   },
   responses: {
-    201: ok("Created", TransactionSchema),
-    400: jsonError("Invalid input, a closed account, or a category the account can't use"),
+    201: ok("Created", TransactionSchema.describe("The side in `accountId`")),
+    400: jsonError(
+      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
+        "same account",
+    ),
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
@@ -119,8 +144,11 @@ export const updateTransaction = createRoute({
   middleware: [requireAuth] as const,
   summary: "Edit a transaction, move it to another account, or toggle cleared",
   description:
-    `${categoryRules} Setting \`cleared\` on a reconciled transaction unlocks it. Moving it to ` +
-    "an account that can't use its category resets the category.",
+    `${categoryRules} ${transferRules} On a transfer, date and amount changes apply to both ` +
+    "sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back " +
+    "into a normal transaction and deletes the other side. Setting `cleared` on a reconciled " +
+    "transaction unlocks it. Moving it to an account that can't use its category resets the " +
+    "category.",
   request: {
     params: TransactionParams,
     body: json(
@@ -130,6 +158,7 @@ export const updateTransaction = createRoute({
           date: IsoDate.optional(),
           amount: zMinorUnits.optional(),
           payeeName: PayeeName.nullable().optional(),
+          transferAccountId: TransferAccountId.optional(),
           categoryId: z.string().nullable().optional(),
           memo: Memo.optional(),
           cleared: SettableCleared.optional(),
@@ -139,10 +168,14 @@ export const updateTransaction = createRoute({
   },
   responses: {
     200: ok("Updated", TransactionSchema),
-    400: jsonError("Invalid input, a closed account, or a category the account can't use"),
+    400: jsonError(
+      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
+        "same account",
+    ),
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    409: reconciled,
   },
 });
 
@@ -154,12 +187,14 @@ export const deleteTransaction = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Delete a transaction",
+  description: "Deleting either side of a transfer deletes both.",
   request: { params: TransactionParams },
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    409: reconciled,
   },
 });
 
@@ -181,7 +216,7 @@ export const listPayees = createRoute({
   tags: ["Transactions"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "The budget's payees, by name (built-in ones left out)",
+  summary: "The budget's payees, by name (built-in and transfer ones left out)",
   request: { params: BudgetParams },
   responses: {
     200: ok("Payees", z.object({ payees: z.array(PayeeSchema) }).openapi("PayeeList")),

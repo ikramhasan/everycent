@@ -8,6 +8,7 @@ export {
   hasPaymentCategory,
   isDebtAccount,
   isOnBudget,
+  usesCategory,
   zAccountType,
 } from "./accounts";
 export { allocate } from "./allocate";

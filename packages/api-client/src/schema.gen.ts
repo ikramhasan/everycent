@@ -304,8 +304,8 @@ export interface paths {
         get: operations["listTransactions"];
         put?: never;
         /**
-         * Add a transaction
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty.
+         * Add a transaction or a transfer
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open.
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -324,13 +324,16 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a transaction */
+        /**
+         * Delete a transaction
+         * @description Deleting either side of a transfer deletes both.
+         */
         delete: operations["deleteTransaction"];
         options?: never;
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -342,7 +345,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The budget's payees, by name (built-in ones left out) */
+        /** The budget's payees, by name (built-in and transfer ones left out) */
         get: operations["listPayees"];
         put?: never;
         post?: never;
@@ -642,6 +645,10 @@ export interface components {
             memo: string;
             /** @enum {string} */
             cleared: "uncleared" | "cleared" | "reconciled";
+            /** @description Transfers: the other account (the payee is "Transfer : <account>") */
+            transferAccountId: string | null;
+            /** @description Transfers: the matching transaction in the other account */
+            transferTransactionId: string | null;
             /** @description The account's balance after this transaction, in date order (all of its transactions) */
             runningBalance: string;
         };
@@ -654,7 +661,10 @@ export interface components {
             date: string;
             /** @description Negative is an outflow */
             amount: string;
+            /** @default null */
             payeeName: string | null;
+            /** @description Make this a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
             categoryId: string | null;
             /** @default  */
             memo: string;
@@ -674,6 +684,8 @@ export interface components {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             amount?: string;
             payeeName?: string | null;
+            /** @description Make this a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
             categoryId?: string | null;
             memo?: string;
             /** @enum {string} */
@@ -2119,10 +2131,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Transaction"];
+                    "application/json": components["schemas"]["Transaction"] & unknown;
                 };
             };
-            /** @description Invalid input, a closed account, or a category the account can't use */
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2206,6 +2218,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The other side of the transfer is reconciled, so its date and amount can't change */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     updateTransaction: {
@@ -2233,7 +2254,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"];
                 };
             };
-            /** @description Invalid input, a closed account, or a category the account can't use */
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2262,6 +2283,15 @@ export interface operations {
             };
             /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The other side of the transfer is reconciled, so its date and amount can't change */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

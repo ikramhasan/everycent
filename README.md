@@ -123,7 +123,7 @@ and fresh start (after phase 5 core).
 - [x] Math in amount fields (`230+30`, `12.50*3`), exact and rounded once
 - [x] Payees: create on the fly, autocomplete, remember last category per payee
 - [x] Cleared / uncleared / reconciled states, toggle cleared
-- [ ] Transfers between accounts (linked pair, transfer payees, on-/off-budget rules)
+- [x] Transfers between accounts (linked pair, transfer payees, on-/off-budget rules)
 - [ ] Split transactions (multiple categories; split transfers)
 - [ ] Flags (colors) with custom flag names
 - [x] Running balance column

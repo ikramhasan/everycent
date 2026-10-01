@@ -1,4 +1,4 @@
-import { isOnBudget, money } from "@everycent/engine";
+import { money, usesCategory } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
   DropdownMenu,
@@ -24,10 +24,20 @@ import {
 } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Circle, CircleCheck, Lock, MoreHorizontal, Plus, ReceiptText, Trash2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import {
+  ArrowLeftRight,
+  Circle,
+  CircleCheck,
+  Lock,
+  MoreHorizontal,
+  Plus,
+  ReceiptText,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -64,11 +74,13 @@ interface EditingCell {
 /**
  * An account's register, or all accounts' (`accountId` left out), newest first. New
  * transactions get a full row; existing ones are edited a cell at a time, as in YNAB. Rows are
- * virtualized so long histories stay fast.
+ * virtualized so long histories stay fast. `focusId` scrolls to that transaction and highlights
+ * it (the other side of a transfer, when jumping to it).
  */
-export function Register({ accountId }: { accountId?: string }) {
+export function Register({ accountId, focusId }: { accountId?: string; focusId?: string }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const transactions = useQuery(transactionsQueryOptions(budget.id, accountId));
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
@@ -121,6 +133,19 @@ export function Register({ accountId }: { accountId?: string }) {
     initialRect: { width: 1280, height: 800 },
   });
   const items = virtualizer.getVirtualItems();
+
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const focused = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusId || focused.current === focusId) return;
+    const index = rows.findIndex((r) => r.id === focusId);
+    if (index === -1) return;
+    focused.current = focusId;
+    virtualizer.scrollToIndex(index, { align: "center" });
+    setHighlightId(focusId);
+    const timer = setTimeout(() => setHighlightId(null), 2500);
+    return () => clearTimeout(timer);
+  }, [focusId, rows, virtualizer]);
   const paddingTop = items[0]?.start ?? 0;
   const paddingBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
 
@@ -133,12 +158,35 @@ export function Register({ accountId }: { accountId?: string }) {
     ]);
   }
 
+  /** Whether `t` has a category: not in tracking accounts, nor on in-budget transfers. */
+  function hasCategory(t: Transaction) {
+    const type = accountById.get(t.accountId)?.type ?? "checking";
+    const transferType = t.transferAccountId ? accountById.get(t.transferAccountId)?.type : null;
+    return usesCategory(type, transferType);
+  }
+
   /** The cells of `t` that can be edited, in Tab order. */
   function editableColumns(t: Transaction): CellColumn[] {
-    const onBudget = isOnBudget(accountById.get(t.accountId)?.type ?? "checking");
+    const categorized = hasCategory(t);
     return columnIds.filter(
-      (c): c is CellColumn => isEditable(c) && (c !== "category" || onBudget),
+      (c): c is CellColumn => isEditable(c) && (c !== "category" || categorized),
     );
+  }
+
+  /** Accounts the payee cell offers transfers to: other open ones, plus the current target. */
+  function transferTargets(t: Transaction) {
+    return accountList.filter(
+      (a) => a.id !== t.accountId && (!a.closed || a.id === t.transferAccountId),
+    );
+  }
+
+  function jumpToOtherSide(t: Transaction) {
+    if (!t.transferAccountId || !t.transferTransactionId) return;
+    void navigate({
+      to: "/budgets/$budgetId/accounts/$accountId",
+      params: { budgetId: budget.id, accountId: t.transferAccountId },
+      search: { transaction: t.transferTransactionId },
+    });
   }
 
   function startAdding() {
@@ -165,8 +213,9 @@ export function Register({ accountId }: { accountId?: string }) {
     cell: CellColumn,
     value: string | null,
     exit: CellExit,
+    transferAccountId: string | null,
   ) {
-    const result = cellUpdate(t, cell, value, budget);
+    const result = cellUpdate(t, cell, value, budget, transferAccountId);
     if (!result.ok) {
       toast.error(result.error);
       setEditing({ id: t.id, column: cell });
@@ -205,7 +254,9 @@ export function Register({ accountId }: { accountId?: string }) {
         params: { path: { budgetId: budget.id, transactionId: t.id } },
       });
       await refresh();
-      toast.success("Transaction deleted");
+      toast.success(
+        t.transferAccountId ? "Transfer deleted from both accounts" : "Transaction deleted",
+      );
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't delete the transaction."));
     }
@@ -224,9 +275,31 @@ export function Register({ accountId }: { accountId?: string }) {
       case "date":
         return formatDate(t.date);
       case "payee":
-        return t.payeeName;
+        return t.transferAccountId ? (
+          <span className="flex min-w-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="-ml-1 shrink-0 text-muted-foreground"
+              aria-label={`Go to the matching transaction in ${
+                accountById.get(t.transferAccountId)?.name ?? "the other account"
+              }`}
+              title="Go to the other side of this transfer"
+              onClick={(e) => {
+                e.stopPropagation();
+                jumpToOtherSide(t);
+              }}
+            >
+              <ArrowLeftRight />
+            </Button>
+            <span className="truncate">{t.payeeName}</span>
+          </span>
+        ) : (
+          t.payeeName
+        );
       case "category":
-        return isOnBudget(accountById.get(t.accountId)?.type ?? "checking") ? t.categoryName : "";
+        return hasCategory(t) ? t.categoryName : "";
       case "memo":
         return t.memo;
       case "outflow":
@@ -340,7 +413,11 @@ export function Register({ accountId }: { accountId?: string }) {
                 key={t.id}
                 data-index={item.index}
                 ref={virtualizer.measureElement}
-                className={cn(future && "text-muted-foreground italic")}
+                data-highlighted={highlightId === t.id || undefined}
+                className={cn(
+                  "transition-colors duration-700 data-highlighted:bg-primary/10",
+                  future && "text-muted-foreground italic",
+                )}
                 title={future ? "Upcoming: not in the balance until its date" : undefined}
               >
                 {columnIds.map((id) => {
@@ -355,9 +432,10 @@ export function Register({ accountId }: { accountId?: string }) {
                           dateFormat={budget.dateFormat}
                           accounts={editorAccounts(accountList, t.accountId)}
                           payees={payeeList}
+                          transfers={transferTargets(t)}
                           categories={options}
-                          onCommit={(value, exit) =>
-                            void commitCell(t, editing.column, value, exit)
+                          onCommit={(value, exit, transferAccountId) =>
+                            void commitCell(t, editing.column, value, exit, transferAccountId)
                           }
                           onCancel={() => setEditing(null)}
                         />

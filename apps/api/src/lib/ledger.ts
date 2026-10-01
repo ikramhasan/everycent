@@ -9,7 +9,7 @@ import {
   transaction,
 } from "@everycent/db/schema";
 import { type AccountType, isOnBudget } from "@everycent/engine";
-import { and, eq, lte, max } from "drizzle-orm";
+import { and, eq, isNull, lte, max } from "drizzle-orm";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Db = Database | Tx;
@@ -30,6 +30,35 @@ export async function internalPayeeId(db: Db, budgetId: string, kind: InternalPa
     .from(payee)
     .where(and(eq(payee.budgetId, budgetId), eq(payee.internalKind, kind)));
   if (!row) throw new Error(`Internal payee ${kind} missing`);
+  return row.id;
+}
+
+export function transferPayeeName(accountName: string) {
+  return `Transfer : ${accountName}`;
+}
+
+/**
+ * The account's "Transfer : <account>" payee. Created with the account; accounts from before
+ * transfers existed get theirs here on first use.
+ */
+export async function transferPayeeId(
+  db: Db,
+  account: { id: string; budgetId: string; name: string },
+) {
+  await db
+    .insert(payee)
+    .values({
+      id: newId(),
+      budgetId: account.budgetId,
+      name: transferPayeeName(account.name),
+      transferAccountId: account.id,
+    })
+    .onConflictDoNothing();
+  const [row] = await db
+    .select({ id: payee.id })
+    .from(payee)
+    .where(eq(payee.transferAccountId, account.id));
+  if (!row) throw new Error(`Transfer payee for ${account.id} missing`);
   return row.id;
 }
 
@@ -97,6 +126,7 @@ export interface NewTransaction {
   categoryId: string | null;
   cleared: ClearedState;
   memo?: string;
+  transferTransactionId?: string | null;
 }
 
 export async function insertTransaction(db: Db, values: NewTransaction) {
@@ -107,14 +137,21 @@ export async function insertTransaction(db: Db, values: NewTransaction) {
 
 /**
  * The budget's payee with this name (ignoring case), created if there's none. Internal payees
- * match too, so typing "Starting Balance" picks the real one instead of failing.
+ * match too, so typing "Starting Balance" picks the real one instead of failing. Transfer payees
+ * don't: a transfer is asked for by account.
  */
 export async function findOrCreatePayee(db: Db, budgetId: string, name: string) {
   await db.insert(payee).values({ id: newId(), budgetId, name }).onConflictDoNothing();
   const [row] = await db
     .select({ id: payee.id })
     .from(payee)
-    .where(and(eq(payee.budgetId, budgetId), sql`lower(${payee.name}) = lower(${name})`));
+    .where(
+      and(
+        eq(payee.budgetId, budgetId),
+        isNull(payee.transferAccountId),
+        sql`lower(${payee.name}) = lower(${name})`,
+      ),
+    );
   if (!row) throw new Error(`Payee ${name} missing`);
   return row.id;
 }

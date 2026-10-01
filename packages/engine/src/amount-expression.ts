@@ -18,6 +18,11 @@ const OPERATOR = /[+\-*/()]/;
  * "(100-20)/4". Numbers use the budget's number format. The math is exact (fractions of
  * bigints) and the result is rounded once, half away from zero, to the currency's minor units.
  * A plain number goes through `parseAmount`, so too many decimals is still an error there.
+ *
+ * Hand-written on purpose (see CLAUDE.md on libraries): expression libraries such as mathjs or
+ * expr-eval compute in floats, which breaks the money invariant; the exact ones (bignumber or
+ * fraction modes) are large for four operators and still need the budget's number format parsed
+ * first. This is a small recursive-descent parser over bigint fractions.
  */
 export function evaluateAmount(
   input: string,

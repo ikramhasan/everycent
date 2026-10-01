@@ -39,7 +39,6 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Transactions and register (phase 5)
 
-- Transfer payees ("Transfer : <account>") aren't created yet; phase 5b adds them with transfers.
 - The register API returns an account's whole history in one response (the web virtualizes the
   rows). Add paging/windowing if big budgets get slow.
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
@@ -53,6 +52,19 @@ before starting a roadmap phase** and remove an entry once it's done.
   UI's Autocomplete (payee field) with the combobox styling. Replace it if shadcn adds one.
 - Editing an existing transaction is cell by cell (as YNAB does); a transaction can be moved to
   another account only from the All Accounts register (its account cell).
+
+## Transfers (phase 5b follow-ups)
+
+- A transfer whose other side is reconciled can't change date or amount, be re-pointed or be
+  deleted (409 `TRANSFER_RECONCILED`). Phase 9's "unlock?" flow should offer to unlock it instead.
+- Transfers to and from a credit card carry no category. Phase 7 must treat a payment from a
+  budget account as moving money out of the card's payment category, and spending on the card as
+  moving available money into it.
+- The close-account dialog only zeroes the balance with a Manual Balance Adjustment. YNAB does
+  the same; a "transfer the balance to…" choice was considered and left out for now.
+- Both sides of a transfer use the budget currency. Phase 11 needs a rate on cross-currency
+  transfers.
+- Transfers can't be split yet; a split line that's a transfer comes with 5c.
 
 ## Accounts (phase 3 follow-ups)
 

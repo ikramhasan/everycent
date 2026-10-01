@@ -1657,6 +1657,20 @@
               "reconciled"
             ]
           },
+          "transferAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Transfers: the other account (the payee is \"Transfer : <account>\")"
+          },
+          "transferTransactionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Transfers: the matching transaction in the other account"
+          },
           "runningBalance": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
@@ -1676,6 +1690,8 @@
           "categoryName",
           "memo",
           "cleared",
+          "transferAccountId",
+          "transferTransactionId",
           "runningBalance"
         ]
       },
@@ -1701,7 +1717,12 @@
               "null"
             ],
             "minLength": 1,
-            "maxLength": 200
+            "maxLength": 200,
+            "default": null
+          },
+          "transferAccountId": {
+            "type": "string",
+            "description": "Make this a transfer to or from that account; leave `payeeName` out"
           },
           "categoryId": {
             "type": [
@@ -1727,7 +1748,6 @@
           "accountId",
           "date",
           "amount",
-          "payeeName",
           "categoryId"
         ]
       },
@@ -1754,6 +1774,10 @@
             ],
             "minLength": 1,
             "maxLength": 200
+          },
+          "transferAccountId": {
+            "type": "string",
+            "description": "Make this a transfer to or from that account; leave `payeeName` out"
           },
           "categoryId": {
             "type": [
@@ -3778,8 +3802,8 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Add a transaction",
-        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty.",
+        "summary": "Add a transaction or a transfer",
+        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open.",
         "parameters": [
           {
             "schema": {
@@ -3806,13 +3830,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Transaction"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Transaction"
+                    },
+                    {
+                      "description": "The side in `accountId`"
+                    }
+                  ]
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid input, a closed account, or a category the account can't use",
+            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
             "content": {
               "application/json": {
                 "schema": {
@@ -3866,7 +3897,7 @@
           }
         ],
         "summary": "Edit a transaction, move it to another account, or toggle cleared",
-        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.",
+        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.",
         "parameters": [
           {
             "schema": {
@@ -3907,7 +3938,7 @@
             }
           },
           "400": {
-            "description": "Invalid input, a closed account, or a category the account can't use",
+            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
             "content": {
               "application/json": {
                 "schema": {
@@ -3945,6 +3976,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "The other side of the transfer is reconciled, so its date and amount can't change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -3959,6 +4000,7 @@
           }
         ],
         "summary": "Delete a transaction",
+        "description": "Deleting either side of a transfer deletes both.",
         "parameters": [
           {
             "schema": {
@@ -4010,6 +4052,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "The other side of the transfer is reconciled, so its date and amount can't change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -4025,7 +4077,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "The budget's payees, by name (built-in ones left out)",
+        "summary": "The budget's payees, by name (built-in and transfer ones left out)",
         "parameters": [
           {
             "schema": {

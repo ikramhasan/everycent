@@ -1,5 +1,5 @@
 import { newId } from "@everycent/db";
-import { budgetAccount, category, transaction } from "@everycent/db/schema";
+import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
 import { accountFamily, hasPaymentCategory, isOnBudget } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, isNull, max, ne, or } from "drizzle-orm";
@@ -14,6 +14,8 @@ import {
   insertTransaction,
   internalCategoryId,
   internalPayeeId,
+  transferPayeeId,
+  transferPayeeName,
   ZERO_BALANCES,
 } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
@@ -150,6 +152,7 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
     if (hasPaymentCategory(body.type)) {
       await createPaymentCategory(tx, budgetId, accountId, body.name);
     }
+    await transferPayeeId(tx, { id: accountId, budgetId, name: body.name });
 
     await insertStartingBalance(tx, {
       budgetId,
@@ -193,12 +196,16 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
         escrowAmount: optionalBigInt(body.escrowAmount),
       })
       .where(eq(budgetAccount.id, accountId));
-    // A payment category is named after its account.
+    // A payment category and the transfer payee are named after their account.
     if (body.name !== undefined) {
       await tx
         .update(category)
         .set({ name: body.name })
         .where(eq(category.linkedAccountId, accountId));
+      await tx
+        .update(payee)
+        .set({ name: transferPayeeName(body.name) })
+        .where(eq(payee.transferAccountId, accountId));
     }
   });
   return c.json(await accountJson(db, budgetId, accountId), 200);

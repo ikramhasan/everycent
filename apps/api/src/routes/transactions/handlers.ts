@@ -1,8 +1,8 @@
 import { sql } from "@everycent/db";
 import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
-import { isOnBudget } from "@everycent/engine";
+import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -10,6 +10,7 @@ import {
   findOrCreatePayee,
   insertTransaction,
   internalCategoryId,
+  transferPayeeId,
 } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -47,6 +48,8 @@ async function queryTransactions(
       categoryName: sql<string | null>`${category.name}`.as("category_name"),
       memo: transaction.memo,
       cleared: transaction.cleared,
+      transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
+      transferTransactionId: transaction.transferTransactionId,
       createdAt: transaction.createdAt,
       runningBalance: sql<string>`sum(${transaction.amount}) over (
         partition by ${transaction.accountId}
@@ -94,24 +97,39 @@ async function findAccount(db: Db, budgetId: string, accountId: string) {
 
 function assertOpen(account: AccountRow) {
   if (account.closed) {
-    throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to add transactions to it");
+    throw new AppError(
+      400,
+      "ACCOUNT_CLOSED",
+      `Reopen ${account.name} to add transactions or transfers to it`,
+    );
   }
 }
 
+function usesCategory(account: AccountRow, transferTo: AccountRow | null) {
+  return usesAccountCategory(account.type, transferTo?.type);
+}
+
 /**
- * The category a transaction in `account` is stored with, following YNAB: tracking accounts have
- * none, budget accounts fall back to Uncategorized, and payment categories only receive money by
- * assigning (phase 7), never from a transaction.
+ * The category a transaction in `account` (a transfer if `transferTo` is set) is stored with,
+ * following YNAB: budget accounts fall back to Uncategorized, and payment categories only receive
+ * money by assigning (phase 7), never from a transaction.
  */
 async function resolveCategory(
   db: Db,
   budgetId: string,
   account: AccountRow,
+  transferTo: AccountRow | null,
   categoryId: string | null,
 ) {
-  if (!isOnBudget(account.type)) {
+  if (!usesCategory(account, transferTo)) {
     if (categoryId !== null) {
-      throw new AppError(400, "CATEGORY_NOT_ALLOWED", "Tracking accounts don't use categories");
+      throw new AppError(
+        400,
+        "CATEGORY_NOT_ALLOWED",
+        isOnBudget(account.type)
+          ? "Transfers between budget accounts don't use categories"
+          : "Tracking accounts don't use categories",
+      );
     }
     return null;
   }
@@ -131,6 +149,60 @@ async function resolveCategory(
   return categoryId;
 }
 
+function assertNotSelf(account: AccountRow, transferTo: AccountRow) {
+  if (transferTo.id === account.id) {
+    throw new AppError(400, "TRANSFER_SAME_ACCOUNT", "An account can't transfer to itself");
+  }
+}
+
+function assertOnePayee(body: { payeeName?: string | null; transferAccountId?: string }) {
+  if (body.transferAccountId !== undefined && body.payeeName != null) {
+    throw new AppError(400, "BAD_REQUEST", "Give a payee name or a transfer account, not both");
+  }
+}
+
+/** Adds the other side of a new transfer, in `transferTo`, and links the two. */
+async function insertOtherSide(
+  tx: Db,
+  side: { id: string; budgetId: string; date: string; amount: bigint; memo: string },
+  account: AccountRow,
+  transferTo: AccountRow,
+) {
+  const otherId = await insertTransaction(tx, {
+    budgetId: side.budgetId,
+    accountId: transferTo.id,
+    date: side.date,
+    amount: -side.amount,
+    currency: transferTo.currency,
+    payeeId: await transferPayeeId(tx, account),
+    categoryId: await resolveCategory(tx, side.budgetId, transferTo, account, null),
+    memo: side.memo,
+    cleared: "uncleared",
+    transferTransactionId: side.id,
+  });
+  await tx
+    .update(transaction)
+    .set({ transferTransactionId: otherId })
+    .where(eq(transaction.id, side.id));
+}
+
+async function lockTransaction(tx: Db, budgetId: string, id: string) {
+  const [row] = await tx
+    .select()
+    .from(transaction)
+    .where(and(eq(transaction.id, id), eq(transaction.budgetId, budgetId)))
+    .for("update");
+  return row;
+}
+
+function reconciledOtherSide(): never {
+  throw new AppError(
+    409,
+    "TRANSFER_RECONCILED",
+    "The other side of this transfer is reconciled. Its date and amount can't change.",
+  );
+}
+
 export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const { accountId } = c.req.valid("query");
@@ -145,20 +217,41 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
+  assertOnePayee(body);
   const id = await db.transaction(async (tx) => {
     const account = await findAccount(tx, budgetId, body.accountId);
     assertOpen(account);
-    return insertTransaction(tx, {
+    let transferTo: AccountRow | null = null;
+    if (body.transferAccountId !== undefined) {
+      transferTo = await findAccount(tx, budgetId, body.transferAccountId);
+      assertNotSelf(account, transferTo);
+      assertOpen(transferTo);
+    }
+    const amount = BigInt(body.amount);
+    const id = await insertTransaction(tx, {
       budgetId,
       accountId: account.id,
       date: body.date,
-      amount: BigInt(body.amount),
+      amount,
       currency: account.currency,
-      payeeId: body.payeeName ? await findOrCreatePayee(tx, budgetId, body.payeeName) : null,
-      categoryId: await resolveCategory(tx, budgetId, account, body.categoryId),
+      payeeId: transferTo
+        ? await transferPayeeId(tx, transferTo)
+        : body.payeeName
+          ? await findOrCreatePayee(tx, budgetId, body.payeeName)
+          : null,
+      categoryId: await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
       memo: body.memo,
       cleared: body.cleared,
     });
+    if (transferTo) {
+      await insertOtherSide(
+        tx,
+        { id, budgetId, date: body.date, amount, memo: body.memo },
+        account,
+        transferTo,
+      );
+    }
+    return id;
   });
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };
@@ -168,26 +261,45 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  assertOnePayee(body);
   const accountId = await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(transaction)
-      .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)))
-      .for("update");
+    const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+    const other = existing.transferTransactionId
+      ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
+      : undefined;
 
     const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
     const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
     if (moved) assertOpen(account);
 
+    // The account the other side belongs in: unchanged unless the payee changes.
+    const targetId =
+      body.transferAccountId ?? (body.payeeName !== undefined ? null : (other?.accountId ?? null));
+    const retargeted = targetId !== (other?.accountId ?? null);
+    let transferTo: AccountRow | null = null;
+    if (targetId !== null) {
+      transferTo = await findAccount(tx, budgetId, targetId);
+      assertNotSelf(account, transferTo);
+      if (retargeted) {
+        assertOpen(account);
+        assertOpen(transferTo);
+      }
+    }
+
+    const amount = body.amount === undefined ? existing.amount : BigInt(body.amount);
+    if (other?.cleared === "reconciled") {
+      const dateChanges = body.date !== undefined && body.date !== other.date;
+      if (retargeted || dateChanges || amount !== -other.amount) reconciledOtherSide();
+    }
+
     let categoryId = existing.categoryId;
     if (body.categoryId !== undefined) {
-      categoryId = await resolveCategory(tx, budgetId, account, body.categoryId);
-    } else if (moved) {
-      // Keep the category if the new account can use it, otherwise fall back.
-      categoryId = isOnBudget(account.type)
-        ? await resolveCategory(tx, budgetId, account, existing.categoryId)
-        : null;
+      categoryId = await resolveCategory(tx, budgetId, account, transferTo, body.categoryId);
+    } else if (moved || retargeted) {
+      // Keep the category if it can still be used, otherwise fall back.
+      const keep = usesCategory(account, transferTo) ? existing.categoryId : null;
+      categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
     }
 
     await tx
@@ -196,9 +308,10 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
         accountId: account.id,
         currency: account.currency,
         date: body.date,
-        amount: body.amount === undefined ? undefined : BigInt(body.amount),
-        payeeId:
-          body.payeeName === undefined
+        amount,
+        payeeId: transferTo
+          ? await transferPayeeId(tx, transferTo)
+          : body.payeeName === undefined
             ? undefined
             : body.payeeName === null
               ? null
@@ -206,8 +319,43 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
         categoryId,
         memo: body.memo,
         cleared: body.cleared,
+        transferTransactionId: transferTo ? undefined : null,
       })
       .where(eq(transaction.id, transactionId));
+
+    if (other && !transferTo) {
+      await tx.delete(transaction).where(eq(transaction.id, other.id));
+    } else if (other && transferTo) {
+      // Date and amount are shared; memo, cleared and category stay per side.
+      const keep = usesCategory(transferTo, account) ? other.categoryId : null;
+      await tx
+        .update(transaction)
+        .set({
+          accountId: transferTo.id,
+          currency: transferTo.currency,
+          date: body.date,
+          amount: -amount,
+          payeeId: moved ? await transferPayeeId(tx, account) : undefined,
+          categoryId:
+            moved || retargeted
+              ? await resolveCategory(tx, budgetId, transferTo, account, keep)
+              : undefined,
+        })
+        .where(eq(transaction.id, other.id));
+    } else if (transferTo) {
+      await insertOtherSide(
+        tx,
+        {
+          id: transactionId,
+          budgetId,
+          date: body.date ?? existing.date,
+          amount,
+          memo: body.memo ?? existing.memo,
+        },
+        account,
+        transferTo,
+      );
+    }
     return account.id;
   });
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
@@ -217,11 +365,17 @@ export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, En
   const { budgetId, transactionId } = c.req.valid("param");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["delete"] });
-  const deleted = await db
-    .delete(transaction)
-    .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)))
-    .returning({ id: transaction.id });
-  if (deleted.length === 0) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  await db.transaction(async (tx) => {
+    const existing = await lockTransaction(tx, budgetId, transactionId);
+    if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+    const ids = [existing.id];
+    if (existing.transferTransactionId) {
+      const other = await lockTransaction(tx, budgetId, existing.transferTransactionId);
+      if (other?.cleared === "reconciled") reconciledOtherSide();
+      ids.push(existing.transferTransactionId);
+    }
+    await tx.delete(transaction).where(inArray(transaction.id, ids));
+  });
   return c.body(null, 204);
 };
 
@@ -240,7 +394,13 @@ export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c)
   const payees = await db
     .select({ id: payee.id, name: payee.name, lastCategoryId: last })
     .from(payee)
-    .where(and(eq(payee.budgetId, budgetId), isNull(payee.internalKind)))
+    .where(
+      and(
+        eq(payee.budgetId, budgetId),
+        isNull(payee.internalKind),
+        isNull(payee.transferAccountId),
+      ),
+    )
     .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
   return c.json({ payees }, 200);
 };

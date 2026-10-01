@@ -29,7 +29,11 @@ function renderEditor(accountId = "checking") {
         <TransactionEditor
           initial={emptyDraft(accountId, "2026-10-01")}
           columns={registerColumns(false)}
-          accounts={[account("checking", "checking"), account("brokerage", "asset")]}
+          accounts={[
+            account("checking", "checking"),
+            account("savings", "savings"),
+            account("brokerage", "asset"),
+          ]}
           payees={[{ id: "p1", name: "Market", lastCategoryId: "groceries" }]}
           categories={[
             { id: "rta", name: "Ready to Assign", group: "Inflow" },
@@ -103,5 +107,33 @@ describe("TransactionEditor", () => {
     renderEditor("brokerage");
     expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
     expect(screen.getByText("Category not needed")).toBeInTheDocument();
+  });
+
+  it("drops the category for a transfer within the budget, keeps it for one leaving it", async () => {
+    const { onSave } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "savings");
+    await user.keyboard("{Enter}");
+    expect(screen.getByLabelText("Payee")).toHaveValue("Transfer : savings");
+    expect(screen.getByText("Category not needed")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Payee"));
+    await user.type(screen.getByLabelText("Payee"), "brokerage");
+    await user.keyboard("{Enter}");
+    expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Outflow"), "10{Enter}");
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transferAccountId: "brokerage",
+        payeeName: "Transfer : brokerage",
+      }),
+    );
+  });
+
+  it("doesn't offer the account itself as a transfer", async () => {
+    renderEditor();
+    await userEvent.setup().click(screen.getByLabelText("Payee"));
+    expect(screen.queryByRole("option", { name: "checking" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "savings" })).toBeInTheDocument();
   });
 });

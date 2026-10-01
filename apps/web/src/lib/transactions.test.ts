@@ -32,6 +32,8 @@ const txn: Transaction = {
   categoryName: null,
   memo: "",
   cleared: "reconciled",
+  transferAccountId: null,
+  transferTransactionId: null,
   runningBalance: "0",
 };
 
@@ -52,6 +54,19 @@ describe("register drafts", () => {
     });
     const income = createBody({ ...draft, outflow: "", inflow: "50", payeeName: " Job " }, usd);
     expect(income).toMatchObject({ ok: true, body: { amount: "5000", payeeName: "Job" } });
+  });
+
+  it("asks for a transfer by account instead of a payee name", () => {
+    const draft: Draft = {
+      ...emptyDraft("a1", "2026-10-01"),
+      outflow: "5",
+      payeeName: "Transfer : Savings",
+      transferAccountId: "a2",
+    };
+    expect(createBody(draft, usd)).toMatchObject({
+      ok: true,
+      body: { payeeName: null, transferAccountId: "a2" },
+    });
   });
 
   it("explains an amount it can't read", () => {
@@ -149,6 +164,27 @@ describe("cellUpdate", () => {
     expect(cellUpdate(txn, "date", "2026-10-02", usd)).toEqual({
       ok: true,
       body: { date: "2026-10-02" },
+    });
+  });
+
+  it("switches between payees and transfers", () => {
+    const transfer = { ...txn, payeeName: "Transfer : Savings", transferAccountId: "a2" };
+    expect(cellUpdate(txn, "payee", "Transfer : Savings", usd, "a2")).toEqual({
+      ok: true,
+      body: { transferAccountId: "a2" },
+    });
+    expect(cellUpdate(transfer, "payee", "Transfer : Savings", usd, "a2")).toEqual({
+      ok: true,
+      body: {},
+    });
+    // Same text, but no longer the transfer: it becomes a normal payee.
+    expect(cellUpdate(transfer, "payee", "Transfer : Savings", usd)).toEqual({
+      ok: true,
+      body: { payeeName: "Transfer : Savings" },
+    });
+    expect(cellUpdate(transfer, "payee", "Bank", usd)).toEqual({
+      ok: true,
+      body: { payeeName: "Bank" },
     });
   });
 });

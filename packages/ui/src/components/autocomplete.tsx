@@ -1,12 +1,15 @@
 "use client";
 
 // everycent: shadcn has no Autocomplete wrapper yet. Base UI's Autocomplete (free text with
-// suggestions) shares its input, popup, list and empty parts with Combobox, so this reuses the
-// shadcn combobox styling and only adds the root and item.
+// suggestions) shares its input, popup, list, group and empty parts with Combobox, so this reuses
+// the shadcn combobox styling and only adds the root and item.
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react";
 import {
+  ComboboxCollection as AutocompleteCollection,
   ComboboxContent as AutocompleteContent,
   ComboboxEmpty as AutocompleteEmpty,
+  ComboboxGroup as AutocompleteGroup,
+  ComboboxLabel as AutocompleteGroupLabel,
   ComboboxInput as AutocompleteInput,
   ComboboxList as AutocompleteList,
 } from "@everycent/ui/components/combobox";
@@ -29,8 +32,11 @@ function AutocompleteItem({ className, ...props }: AutocompletePrimitive.Item.Pr
 
 export {
   Autocomplete,
+  AutocompleteCollection,
   AutocompleteContent,
   AutocompleteEmpty,
+  AutocompleteGroup,
+  AutocompleteGroupLabel,
   AutocompleteInput,
   AutocompleteItem,
   AutocompleteList,

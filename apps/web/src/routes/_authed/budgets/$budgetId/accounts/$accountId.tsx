@@ -20,6 +20,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
 import { Register } from "@/components/register";
 import { accountsQueryOptions } from "@/lib/accounts";
@@ -31,6 +32,8 @@ import { todayIso } from "@/lib/dates";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
+  /** `transaction`: scroll to and highlight it (the other side of a transfer). */
+  validateSearch: z.object({ transaction: z.string().optional() }),
   component: AccountPage,
 });
 
@@ -38,6 +41,7 @@ type Confirm = "close" | "delete" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
+  const { transaction } = Route.useSearch();
   const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -144,7 +148,7 @@ function AccountPage() {
         />
       </dl>
 
-      <Register key={accountId} accountId={accountId} />
+      <Register key={accountId} accountId={accountId} focusId={transaction} />
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent>

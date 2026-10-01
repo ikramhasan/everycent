@@ -1,4 +1,4 @@
-import { type DateFormat, isOnBudget } from "@everycent/engine";
+import { type DateFormat, usesCategory } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
@@ -10,7 +10,7 @@ import { type KeyboardEvent, useState } from "react";
 import type { Account } from "@/lib/accounts";
 import type { CategoryOption, Draft, Payee } from "@/lib/transactions";
 import type { ColumnId } from "./register-columns";
-import { CategoryField, DateField, isListOpen, PayeeField } from "./register-fields";
+import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 
 /**
  * The row for a new transaction, like YNAB's: Tab moves between fields, Enter saves, Esc
@@ -43,10 +43,13 @@ export function TransactionEditor({
   const [draft, setDraft] = useState(initial);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const account = accounts.find((a) => a.id === draft.accountId);
-  const needsCategory = account ? isOnBudget(account.type) : true;
+  const transferTo = accounts.find((a) => a.id === draft.transferAccountId);
+  const needsCategory = account ? usesCategory(account.type, transferTo?.type) : true;
+  // Money can move to any other open account.
+  const transfers = accounts.filter((a) => a.id !== draft.accountId);
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (isListOpen(event.target)) return;
+    if (listOwnsKey(event)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel();
@@ -65,9 +68,14 @@ export function TransactionEditor({
             value={draft.accountId}
             onChange={(e) => {
               const next = accounts.find((a) => a.id === e.target.value);
+              // An account can't transfer to itself.
+              const self = draft.transferAccountId === e.target.value;
               set({
                 accountId: e.target.value,
-                ...(next && !isOnBudget(next.type) ? { categoryId: null } : {}),
+                ...(self ? { payeeName: "", transferAccountId: null } : {}),
+                ...(next && !usesCategory(next.type, self ? null : transferTo?.type)
+                  ? { categoryId: null }
+                  : {}),
               });
             }}
             className="h-8 w-full"
@@ -93,15 +101,22 @@ export function TransactionEditor({
           <PayeeField
             value={draft.payeeName}
             payees={payees}
-            onChange={(payeeName, payee) =>
-              setDraft((d) => ({
-                ...d,
-                payeeName,
-                // YNAB fills in the category last used with this payee.
-                ...(payee?.lastCategoryId && needsCategory && d.categoryId === null
-                  ? { categoryId: payee.lastCategoryId }
-                  : {}),
-              }))
+            transfers={transfers}
+            onChange={({ name, transferAccountId, payee }) =>
+              setDraft((d) => {
+                const to = accounts.find((a) => a.id === transferAccountId);
+                const uses = account ? usesCategory(account.type, to?.type) : true;
+                return {
+                  ...d,
+                  payeeName: name,
+                  transferAccountId,
+                  ...(!uses ? { categoryId: null } : {}),
+                  // YNAB fills in the category last used with this payee.
+                  ...(payee?.lastCategoryId && uses && d.categoryId === null
+                    ? { categoryId: payee.lastCategoryId }
+                    : {}),
+                };
+              })
             }
           />
         );

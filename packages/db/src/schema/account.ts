@@ -1,6 +1,7 @@
 import { ACCOUNT_TYPES, type CurrencyCode } from "@everycent/engine";
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   char,
@@ -57,12 +58,20 @@ export const payee = pgTable(
       .references(() => budget.id, { onDelete: "cascade" }),
     name: text().notNull(),
     internalKind: text({ enum: INTERNAL_PAYEE_KINDS }),
+    /**
+     * Set on an account's "Transfer : <account>" payee. Its name follows the account's, so it's
+     * left out of the unique name index (two accounts may share a name).
+     */
+    transferAccountId: text().references(() => budgetAccount.id, { onDelete: "cascade" }),
     ...timestamps,
   },
   (t) => [
     index("payee_budget_id_idx").on(t.budgetId),
     // YNAB treats "Costco" and "costco" as the same payee.
-    uniqueIndex("payee_name_per_budget_idx").on(t.budgetId, sql`lower(${t.name})`),
+    uniqueIndex("payee_name_per_budget_idx")
+      .on(t.budgetId, sql`lower(${t.name})`)
+      .where(sql`${t.transferAccountId} is null`),
+    uniqueIndex("payee_transfer_account_idx").on(t.transferAccountId),
     uniqueIndex("payee_internal_kind_per_budget_idx")
       .on(t.budgetId, t.internalKind)
       .where(sql`${t.internalKind} is not null`),
@@ -88,16 +97,27 @@ export const transaction = pgTable(
     amount: bigint({ mode: "bigint" }).notNull(),
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
     payeeId: text().references(() => payee.id, { onDelete: "set null" }),
-    /** Null for off-budget accounts, credit-card starting debt and (later) transfers. */
+    /**
+     * Null for off-budget accounts, credit-card starting debt and transfers between two budget
+     * accounts (or two tracking accounts).
+     */
     // No action (checked at statement end): a category with transactions can't be deleted on its
     // own, but whole-budget/account cascades still work.
     categoryId: text().references(() => category.id),
     memo: text().notNull().default(""),
     cleared: text({ enum: CLEARED_STATES }).notNull().default("uncleared"),
     approved: boolean().notNull().default(true),
+    /**
+     * The other side of a transfer, in the account named by this transaction's transfer payee.
+     * Both sides point at each other; their amounts are always opposite.
+     */
+    transferTransactionId: text().references((): AnyPgColumn => transaction.id, {
+      onDelete: "set null",
+    }),
     ...timestamps,
   },
   (t) => [
+    uniqueIndex("transaction_transfer_transaction_idx").on(t.transferTransactionId),
     index("transaction_account_date_idx").on(t.accountId, t.date),
     index("transaction_budget_id_idx").on(t.budgetId),
     index("transaction_category_id_idx").on(t.categoryId),

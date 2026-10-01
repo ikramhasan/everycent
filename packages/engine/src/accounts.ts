@@ -68,6 +68,16 @@ export function isOnBudget(type: AccountType): boolean {
   return family === "cash" || family === "credit";
 }
 
+/**
+ * Whether a transaction in an account of `type` has a category. Tracking accounts never do. A
+ * transfer (to or from `transferType`) only does when money leaves the budget: on the budget side
+ * of a transfer with a tracking account (YNAB's rule). Between two budget accounts it stays in
+ * the budget.
+ */
+export function usesCategory(type: AccountType, transferType?: AccountType | null): boolean {
+  return isOnBudget(type) && !(transferType && isOnBudget(transferType));
+}
+
 /** Credit accounts get an automatic payment category. */
 export function hasPaymentCategory(type: AccountType): boolean {
   return FAMILY[type] === "credit";

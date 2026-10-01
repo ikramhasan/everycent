@@ -5,12 +5,22 @@ import {
   hasPaymentCategory,
   isDebtAccount,
   isOnBudget,
+  usesCategory,
 } from "./accounts";
 
 describe("account types", () => {
   it("puts cash and credit accounts on budget, loans and tracking off budget", () => {
     const onBudget = ACCOUNT_TYPES.filter(isOnBudget);
     expect(onBudget).toEqual(["checking", "savings", "cash", "credit_card", "line_of_credit"]);
+  });
+
+  it("categorizes transfers only where money leaves the budget", () => {
+    expect(usesCategory("checking")).toBe(true);
+    expect(usesCategory("asset")).toBe(false);
+    expect(usesCategory("checking", "credit_card")).toBe(false);
+    expect(usesCategory("checking", "mortgage")).toBe(true);
+    expect(usesCategory("mortgage", "checking")).toBe(false);
+    expect(usesCategory("asset", "liability")).toBe(false);
   });
 
   it("gives payment categories to credit accounts only", () => {

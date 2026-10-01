@@ -51,11 +51,18 @@ export function categoryLabel(option: CategoryOption) {
   return option.group === "Inflow" ? `Inflow: ${option.name}` : option.name;
 }
 
+/** How the register names an account's transfer payee (the API stores the same). */
+export function transferLabel(accountName: string) {
+  return `Transfer : ${accountName}`;
+}
+
 /** The fields of the inline editor, as typed. */
 export interface Draft {
   accountId: string;
   date: string;
   payeeName: string;
+  /** Set when the payee is another account's "Transfer : <account>". */
+  transferAccountId: string | null;
   categoryId: string | null;
   memo: string;
   outflow: string;
@@ -68,6 +75,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     accountId,
     date,
     payeeName: "",
+    transferAccountId: null,
     categoryId: null,
     memo: "",
     outflow: "",
@@ -82,6 +90,7 @@ export function draftFrom(t: Transaction, settings: MoneySettings): Draft {
     accountId: t.accountId,
     date: t.date,
     payeeName: t.payeeName ?? "",
+    transferAccountId: t.transferAccountId,
     categoryId: t.categoryId,
     memo: t.memo,
     outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
@@ -111,7 +120,9 @@ export function createBody(draft: Draft, settings: MoneySettings): Result<Create
       accountId: draft.accountId,
       date: draft.date,
       amount: amount.toString(),
-      payeeName: draft.payeeName.trim() || null,
+      ...(draft.transferAccountId
+        ? { payeeName: null, transferAccountId: draft.transferAccountId }
+        : { payeeName: draft.payeeName.trim() || null }),
       categoryId: draft.categoryId,
       memo: draft.memo,
       cleared: draft.cleared,
@@ -135,7 +146,13 @@ export function updateBody(
   if (draft.accountId !== before.accountId) body.accountId = draft.accountId;
   if (draft.date !== before.date) body.date = draft.date;
   if (amount.toString() !== original.amount) body.amount = amount.toString();
-  if (draft.payeeName.trim() !== before.payeeName) body.payeeName = draft.payeeName.trim() || null;
+  if (draft.transferAccountId) {
+    if (draft.transferAccountId !== before.transferAccountId) {
+      body.transferAccountId = draft.transferAccountId;
+    }
+  } else if (before.transferAccountId || draft.payeeName.trim() !== before.payeeName) {
+    body.payeeName = draft.payeeName.trim() || null;
+  }
   if (draft.categoryId !== before.categoryId) body.categoryId = draft.categoryId;
   if (draft.memo !== before.memo) body.memo = draft.memo;
   if (draft.cleared !== before.cleared) body.cleared = draft.cleared;
@@ -163,13 +180,27 @@ export function cellValue(t: Transaction, column: CellColumn, settings: MoneySet
 /**
  * What to send after editing one cell; an empty body means nothing changed. Typing an outflow
  * makes it an outflow (and an inflow an inflow); emptying the amount's own side makes it zero.
+ * For the payee cell, `transferAccountId` is set when a transfer was chosen.
  */
 export function cellUpdate(
   t: Transaction,
   column: CellColumn,
   value: string | null,
   settings: MoneySettings,
+  transferAccountId: string | null = null,
 ): Result<UpdateBody> {
+  if (column === "payee") {
+    if (transferAccountId) {
+      return {
+        ok: true,
+        body: transferAccountId === t.transferAccountId ? {} : { transferAccountId },
+      };
+    }
+    // A normal payee replaces a transfer even if the name reads the same.
+    const name = value?.trim() || null;
+    const same = name === t.payeeName && t.transferAccountId === null;
+    return { ok: true, body: same ? {} : { payeeName: name } };
+  }
   if (column === "outflow" || column === "inflow") {
     const text = value ?? "";
     let amount: bigint;
@@ -190,8 +221,6 @@ export function cellUpdate(
       return value ? { ok: true, body: { accountId: value } } : { ok: true, body: {} };
     case "date":
       return value ? { ok: true, body: { date: value } } : { ok: false, error: "Enter a date." };
-    case "payee":
-      return { ok: true, body: { payeeName: value?.trim() || null } };
     case "category":
       return { ok: true, body: { categoryId: value } };
     case "memo":

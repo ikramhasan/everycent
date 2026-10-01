@@ -43,6 +43,13 @@
       "when": 1790860218697,
       "tag": "0005_far_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790863675963,
+      "tag": "0006_transfers",
+      "breakpoints": true
     }
   ]
 }

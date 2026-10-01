@@ -11,7 +11,14 @@ import {
   type Payee,
   type Transaction,
 } from "@/lib/transactions";
-import { CategoryField, DateField, isInsidePopup, isListOpen, PayeeField } from "./register-fields";
+import {
+  CategoryField,
+  DateField,
+  isInsidePopup,
+  listOwnsKey,
+  PayeeField,
+  type TransferTarget,
+} from "./register-fields";
 
 export type CellExit = "stay" | "next" | "previous";
 
@@ -26,6 +33,7 @@ export function CellEditor({
   dateFormat,
   accounts,
   payees,
+  transfers,
   categories,
   onCommit,
   onCancel,
@@ -36,22 +44,26 @@ export function CellEditor({
   dateFormat: DateFormat;
   accounts: readonly Account[];
   payees: readonly Payee[];
+  /** Accounts the payee cell offers as transfers. */
+  transfers: readonly TransferTarget[];
   categories: readonly CategoryOption[];
-  onCommit: (value: string | null, exit: CellExit) => void;
+  /** `transferAccountId` is set when the payee cell now holds a transfer. */
+  onCommit: (value: string | null, exit: CellExit, transferAccountId: string | null) => void;
   onCancel: () => void;
 }) {
   const [value, setValue] = useState(() => cellValue(transaction, column, settings));
+  const [transferAccountId, setTransferAccountId] = useState(transaction.transferAccountId);
   // Enter/Tab commit and unmount the cell; the blur that may follow must not commit again.
   const done = useRef(false);
 
-  function finish(exit: CellExit, next = value) {
+  function finish(exit: CellExit, next = value, transfer = transferAccountId) {
     if (done.current) return;
     done.current = true;
-    onCommit(next, exit);
+    onCommit(next, exit, transfer);
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (isListOpen(event.target)) return;
+    if (listOwnsKey(event)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       done.current = true;
@@ -110,9 +122,13 @@ export function CellEditor({
         return (
           <PayeeField
             value={value ?? ""}
-            onChange={(name) => setValue(name)}
-            onPick={(name) => finish("stay", name)}
+            onChange={(choice) => {
+              setValue(choice.name);
+              setTransferAccountId(choice.transferAccountId);
+            }}
+            onPick={(choice) => finish("stay", choice.name, choice.transferAccountId)}
             payees={payees}
+            transfers={transfers}
             autoFocus
           />
         );

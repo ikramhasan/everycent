@@ -9,14 +9,15 @@ import {
 } from "@everycent/db/schema";
 import { formatDate } from "@everycent/engine";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
-import { accountBalances, insertStartingBalance, type Tx } from "./ledger";
+import { accountBalances, insertStartingBalance, type Tx, transferPayeeId } from "./ledger";
 
 type BudgetRow = typeof budget.$inferSelect;
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes), payees, and accounts, each starting
- * from its working balance on `date`. No transactions come along. Then archives the old budget.
+ * category groups and categories (order, hidden flags, notes), payees, and accounts (with their
+ * transfer payees), each starting from its working balance on `date`. No transactions come along.
+ * Then archives the old budget.
  *
  * Targets and scheduled transactions will have to be copied too once they exist
  * (docs/deferred.md).
@@ -67,6 +68,7 @@ export async function copyIntoFreshStart(
       minimumPayment: a.minimumPayment,
       escrowAmount: a.escrowAmount,
     });
+    await transferPayeeId(tx, { id, budgetId: newBudgetId, name: a.name });
     await insertStartingBalance(tx, {
       budgetId: newBudgetId,
       accountId: id,
@@ -77,11 +79,14 @@ export async function copyIntoFreshStart(
     });
   }
 
-  // People's payees; the internal ones are recreated on first use.
+  // People's payees; the internal ones are recreated on first use, transfer ones came with the
+  // accounts.
   const payees = await tx
     .select({ name: payee.name })
     .from(payee)
-    .where(and(eq(payee.budgetId, old.id), isNull(payee.internalKind)));
+    .where(
+      and(eq(payee.budgetId, old.id), isNull(payee.internalKind), isNull(payee.transferAccountId)),
+    );
   if (payees.length > 0) {
     await tx
       .insert(payee)
