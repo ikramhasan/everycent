@@ -134,8 +134,9 @@ and fresh start (after phase 5 core).
 
 #### Budget onboarding (moved from phase 2; needs phases 3–5 core)
 
-- [ ] Onboarding flow for a new budget (add first account, pick categories)
-- [ ] Fresh start (archive the old budget, start a new one with the same categories/accounts)
+- [x] Onboarding flow for a new budget (pick categories, add first account)
+- [x] Fresh start (archive the old budget, start a new one with the same categories, accounts and
+      partners)
 
 ### 6. Budget screen (the core loop)
 

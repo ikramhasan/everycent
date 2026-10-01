@@ -10,9 +10,14 @@ export const budgetsQueryOptions = () => $api.queryOptions("get", "/v1/budgets")
 export const budgetQueryOptions = (budgetId: string) =>
   $api.queryOptions("get", "/v1/budgets/{budgetId}", { params: { path: { budgetId } } });
 
-/** Where "/" should send the user: last-used budget, else the first one, else nowhere. */
+/** Where "/" should send the user: last-used budget, else the first active one, else nowhere. */
 export function pickBudgetRedirect(list: BudgetList): string | null {
-  return list.lastUsedBudgetId ?? list.budgets[0]?.id ?? null;
+  return (
+    list.lastUsedBudgetId ??
+    list.budgets.find((b) => !b.archivedAt)?.id ??
+    list.budgets[0]?.id ??
+    null
+  );
 }
 
 /** The `error.code` of an API error thrown by `$api` queries/mutations, if it is one. */

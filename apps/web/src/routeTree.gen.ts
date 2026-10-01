@@ -18,6 +18,7 @@ import { Route as AuthedBudgetsBudgetIdRouteImport } from './routes/_authed/budg
 import { Route as AuthedBudgetsNewRouteImport } from './routes/_authed/budgets/new'
 import { Route as AuthedBudgetsBudgetIdIndexRouteImport } from './routes/_authed/budgets/$budgetId/index'
 import { Route as AuthedBudgetsBudgetIdSettingsRouteImport } from './routes/_authed/budgets/$budgetId/settings'
+import { Route as AuthedBudgetsBudgetIdSetupRouteImport } from './routes/_authed/budgets/$budgetId/setup'
 import { Route as AuthedBudgetsBudgetIdAccountsAccountIdRouteImport } from './routes/_authed/budgets/$budgetId/accounts/$accountId'
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -66,6 +67,12 @@ const AuthedBudgetsBudgetIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => AuthedBudgetsBudgetIdRoute,
   } as any)
+const AuthedBudgetsBudgetIdSetupRoute =
+  AuthedBudgetsBudgetIdSetupRouteImport.update({
+    id: '/setup',
+    path: '/setup',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
 const AuthedBudgetsBudgetIdAccountsAccountIdRoute =
   AuthedBudgetsBudgetIdAccountsAccountIdRouteImport.update({
     id: '/accounts/$accountId',
@@ -81,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/budgets/new': typeof AuthedBudgetsNewRoute
   '/budgets/': typeof AuthedBudgetsIndexRoute
   '/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
+  '/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
   '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
@@ -91,6 +99,7 @@ export interface FileRoutesByTo {
   '/budgets/new': typeof AuthedBudgetsNewRoute
   '/budgets': typeof AuthedBudgetsIndexRoute
   '/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
+  '/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/budgets/$budgetId': typeof AuthedBudgetsBudgetIdIndexRoute
   '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
@@ -104,6 +113,7 @@ export interface FileRoutesById {
   '/_authed/budgets/new': typeof AuthedBudgetsNewRoute
   '/_authed/budgets/': typeof AuthedBudgetsIndexRoute
   '/_authed/budgets/$budgetId/settings': typeof AuthedBudgetsBudgetIdSettingsRoute
+  '/_authed/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/_authed/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
   '/_authed/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/budgets/new'
     | '/budgets/'
     | '/budgets/$budgetId/settings'
+    | '/budgets/$budgetId/setup'
     | '/budgets/$budgetId/'
     | '/budgets/$budgetId/accounts/$accountId'
   fileRoutesByTo: FileRoutesByTo
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/budgets/new'
     | '/budgets'
     | '/budgets/$budgetId/settings'
+    | '/budgets/$budgetId/setup'
     | '/budgets/$budgetId'
     | '/budgets/$budgetId/accounts/$accountId'
   id:
@@ -139,6 +151,7 @@ export interface FileRouteTypes {
     | '/_authed/budgets/new'
     | '/_authed/budgets/'
     | '/_authed/budgets/$budgetId/settings'
+    | '/_authed/budgets/$budgetId/setup'
     | '/_authed/budgets/$budgetId/'
     | '/_authed/budgets/$budgetId/accounts/$accountId'
   fileRoutesById: FileRoutesById
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBudgetsBudgetIdSettingsRouteImport
       parentRoute: typeof AuthedBudgetsBudgetIdRoute
     }
+    '/_authed/budgets/$budgetId/setup': {
+      id: '/_authed/budgets/$budgetId/setup'
+      path: '/setup'
+      fullPath: '/budgets/$budgetId/setup'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdSetupRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
     '/_authed/budgets/$budgetId/accounts/$accountId': {
       id: '/_authed/budgets/$budgetId/accounts/$accountId'
       path: '/accounts/$accountId'
@@ -226,12 +246,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthedBudgetsBudgetIdRouteChildren {
   AuthedBudgetsBudgetIdSettingsRoute: typeof AuthedBudgetsBudgetIdSettingsRoute
+  AuthedBudgetsBudgetIdSetupRoute: typeof AuthedBudgetsBudgetIdSetupRoute
   AuthedBudgetsBudgetIdIndexRoute: typeof AuthedBudgetsBudgetIdIndexRoute
   AuthedBudgetsBudgetIdAccountsAccountIdRoute: typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
 }
 
 const AuthedBudgetsBudgetIdRouteChildren: AuthedBudgetsBudgetIdRouteChildren = {
   AuthedBudgetsBudgetIdSettingsRoute: AuthedBudgetsBudgetIdSettingsRoute,
+  AuthedBudgetsBudgetIdSetupRoute: AuthedBudgetsBudgetIdSetupRoute,
   AuthedBudgetsBudgetIdIndexRoute: AuthedBudgetsBudgetIdIndexRoute,
   AuthedBudgetsBudgetIdAccountsAccountIdRoute:
     AuthedBudgetsBudgetIdAccountsAccountIdRoute,

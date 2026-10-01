@@ -4,13 +4,6 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { formatAmount, money } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@everycent/ui/components/dialog";
-import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -21,7 +14,7 @@ import {
 } from "@everycent/ui/components/sidebar";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { ChevronRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,17 +26,14 @@ import {
 } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { apiErrorMessage, type Budget } from "@/lib/budgets";
-import { categoriesQueryOptions, nextId } from "@/lib/categories";
-import { todayIso } from "@/lib/dates";
-import { AddAccountForm, type NewAccountValues } from "./account-forms";
+import { nextId } from "@/lib/categories";
+import { AddAccountDialog } from "./add-account-dialog";
 
 /** YNAB's account list in the sidebar: sections by type with totals, drag to reorder. */
 export function AccountsNav({ budget }: { budget: Budget }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const moveAccount = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/move");
-  const createAccount = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts");
   const [adding, setAdding] = useState(false);
 
   const serverSections = useMemo(
@@ -61,25 +51,6 @@ export function AccountsNav({ budget }: { budget: Budget }) {
     [accounts.data],
   );
   const format = (minorUnits: bigint) => formatAmount(money(minorUnits, budget.currency), budget);
-
-  async function handleAdd(values: NewAccountValues) {
-    try {
-      const created = await createAccount.mutateAsync({
-        params: { path: { budgetId: budget.id } },
-        body: { ...values, date: todayIso() },
-      });
-      await queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey });
-      await queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey });
-      setAdding(false);
-      await navigate({
-        to: "/budgets/$budgetId/accounts/$accountId",
-        params: { budgetId: budget.id, accountId: created.id },
-      });
-      return null;
-    } catch (error) {
-      return apiErrorMessage(error, "Couldn't add the account.");
-    }
-  }
 
   async function handleMove(accountId: string, beforeAccountId: string | null) {
     try {
@@ -140,17 +111,7 @@ export function AccountsNav({ budget }: { budget: Budget }) {
         </Button>
       </SidebarGroup>
 
-      <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add account</DialogTitle>
-            <DialogDescription>
-              Enter today's balance; everycent records it as the account's starting balance.
-            </DialogDescription>
-          </DialogHeader>
-          <AddAccountForm settings={budget} onSubmit={handleAdd} />
-        </DialogContent>
-      </Dialog>
+      <AddAccountDialog budget={budget} open={adding} onOpenChange={setAdding} />
     </>
   );
 }

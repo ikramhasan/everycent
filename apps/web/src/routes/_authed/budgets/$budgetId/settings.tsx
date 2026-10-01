@@ -24,6 +24,7 @@ import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, budgetQueryOptions, invalidateBudgets } from "@/lib/budgets";
+import { todayIso } from "@/lib/dates";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/settings")({
   component: BudgetSettingsPage,
@@ -35,6 +36,7 @@ function BudgetSettingsPage() {
   const navigate = useNavigate();
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}");
+  const freshStart = $api.useMutation("post", "/v1/budgets/{budgetId}/fresh-start");
   const path = { budgetId: budget.id };
 
   async function handleSave({
@@ -70,6 +72,20 @@ function BudgetSettingsPage() {
     toast.success(`Deleted “${budget.name}”`);
   }
 
+  async function handleFreshStart() {
+    try {
+      const created = await freshStart.mutateAsync({
+        params: { path },
+        body: { date: todayIso() },
+      });
+      await invalidateBudgets(queryClient);
+      await navigate({ to: "/budgets/$budgetId", params: { budgetId: created.id } });
+      toast.success("Fresh start made. Your old budget is archived under All budgets.");
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Couldn't make a fresh start. Try again."));
+    }
+  }
+
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
       <h1 className="font-semibold text-2xl tracking-tight">Budget settings</h1>
@@ -92,6 +108,40 @@ function BudgetSettingsPage() {
           />
         </CardContent>
       </Card>
+
+      {budget.role === "owner" && !budget.archivedAt && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Fresh start</CardTitle>
+            <CardDescription>
+              Start over with the same accounts, categories and partners, but no transactions. Each
+              account starts from today's balance. This budget is kept, renamed as archived.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline">Make a fresh start</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Make a fresh start with “{budget.name}”?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You'll continue in a new copy without any transactions. This budget will be
+                    archived and stays available under All budgets.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleFreshStart}>
+                    Make a fresh start
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
 
       {budget.role === "owner" && (
         <Card className="border-destructive/40">

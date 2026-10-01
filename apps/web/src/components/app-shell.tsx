@@ -60,7 +60,13 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <BudgetSwitcher budgets={budgets.data?.budgets ?? []} currentBudgetId={budgetId} />
+              <BudgetSwitcher
+                // Archived budgets stay reachable from All budgets, like YNAB's plan list.
+                budgets={(budgets.data?.budgets ?? []).filter(
+                  (b) => !b.archivedAt || b.id === budgetId,
+                )}
+                currentBudgetId={budgetId}
+              />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>

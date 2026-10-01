@@ -25,6 +25,16 @@ before starting a roadmap phase** and remove an entry once it's done.
   for on-budget accounts it's categorized to Ready to Assign (as YNAB does). Verify this against
   the phase 6/7 math once it exists, especially for credit cards.
 
+## Onboarding and fresh start
+
+- The setup flow (`/budgets/$id/setup`) covers YNAB's "Personalize plan" and "Add accounts". Its
+  third step, "Fund categories" (assign money), needs the phase 6 budget screen.
+- Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories and accounts. When
+  these exist, it must copy them too: targets (phase 8), scheduled transactions (phase 10),
+  payees and rules (phase 12). Payees aren't copied today.
+- By decision, a fresh start drops all transactions, uncleared ones included; each account starts
+  from its working balance as a single cleared Starting Balance.
+
 ## Transactions and register (phase 5)
 
 - Transfer payees ("Transfer : <account>") aren't created yet; phase 5 adds them with transfers.

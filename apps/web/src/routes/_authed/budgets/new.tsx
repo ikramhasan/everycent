@@ -32,7 +32,7 @@ function NewBudgetPage() {
     try {
       const created = await create.mutateAsync({ body: values });
       await invalidateBudgets(queryClient);
-      await navigate({ to: "/budgets/$budgetId", params: { budgetId: created.id } });
+      await navigate({ to: "/budgets/$budgetId/setup", params: { budgetId: created.id } });
       return null;
     } catch (error) {
       return apiErrorMessage(error, "Couldn't create the budget. Try again.");
