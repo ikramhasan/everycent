@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "payee_name_per_budget_idx" ON "payee" USING btree ("budget_id",lower("name"));--> statement-breakpoint
+CREATE INDEX "transaction_payee_id_idx" ON "transaction" USING btree ("payee_id");

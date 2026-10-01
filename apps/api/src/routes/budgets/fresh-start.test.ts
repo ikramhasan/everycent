@@ -75,6 +75,14 @@ describe("fresh start", () => {
       note: "Due on the 1st",
       hidden: true,
     });
+    const spend = await send("POST", `${base}/transactions`, owner.cookie, {
+      accountId: visa.id,
+      date: TODAY,
+      amount: "-1000",
+      payeeName: "Costco",
+      categoryId: bills?.categories[1]?.id,
+    });
+    expect(spend.status).toBe(201);
 
     const res = await freshStart(budget.id, owner.cookie);
     expect(res.status).toBe(201);
@@ -105,17 +113,24 @@ describe("fresh start", () => {
     ).accounts;
     expect(accounts.map((a) => [a.name, a.type, a.closed, a.balances.working])).toEqual([
       ["Checking", "checking", true, "0"],
-      ["Visa", "credit_card", false, "-37500"],
+      ["Visa", "credit_card", false, "-38500"],
       ["Mortgage", "mortgage", false, "-100000"],
     ]);
     const newVisa = accounts.find((a) => a.name === "Visa");
     const visaTxns = (
       await json<{ transactions: Txn[] }>(
-        await send("GET", `${freshBase}/accounts/${newVisa?.id}/transactions`, owner.cookie),
+        await send("GET", `${freshBase}/transactions?accountId=${newVisa?.id}`, owner.cookie),
       )
     ).transactions;
     expect(visaTxns).toEqual([
-      expect.objectContaining({ amount: "-37500", payeeName: "Starting Balance", date: TODAY }),
+      expect.objectContaining({ amount: "-38500", payeeName: "Starting Balance", date: TODAY }),
+    ]);
+    // Payees come along; with no transactions yet there's no category to suggest.
+    const payees = await json<{ payees: unknown[] }>(
+      await send("GET", `${freshBase}/payees`, owner.cookie),
+    );
+    expect(payees.payees).toEqual([
+      { id: expect.any(String), name: "Costco", lastCategoryId: null },
     ]);
 
     const freshGroups = (

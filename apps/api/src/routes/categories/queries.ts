@@ -2,7 +2,7 @@ import { newId, sql } from "@everycent/db";
 import { category, categoryGroup, transaction } from "@everycent/db/schema";
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
-import type { Db } from "../../lib/ledger";
+import { type Db, internalCategoryId } from "../../lib/ledger";
 
 export type CategoryRow = typeof category.$inferSelect;
 export type CategoryGroupRow = typeof categoryGroup.$inferSelect;
@@ -56,6 +56,7 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .where(eq(transaction.budgetId, budgetId));
   const used = new Set(usedRows.flatMap((u) => (u.id ? [u.id] : [])));
   return {
+    readyToAssignCategoryId: await internalCategoryId(db, budgetId, "ready_to_assign"),
     groups: groups.map((g) =>
       toGroupJson(
         g,

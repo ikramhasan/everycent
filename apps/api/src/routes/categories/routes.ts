@@ -35,7 +35,12 @@ export const CategoryGroupSchema = z
   .openapi("CategoryGroup");
 
 const CategoryListSchema = z
-  .object({ groups: z.array(CategoryGroupSchema).describe("In display order") })
+  .object({
+    groups: z.array(CategoryGroupSchema).describe("In display order"),
+    readyToAssignCategoryId: z
+      .string()
+      .describe("The internal 'Inflow: Ready to Assign' category, for categorizing income"),
+  })
   .openapi("CategoryList");
 
 const BudgetParams = z.object({

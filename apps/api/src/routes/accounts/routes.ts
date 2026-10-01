@@ -1,4 +1,3 @@
-import { CLEARED_STATES } from "@everycent/db/schema";
 import { zAccountType, zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
@@ -13,7 +12,11 @@ const InterestRate = z
 
 const BalancesSchema = z
   .object({ cleared: zMinorUnits, uncleared: zMinorUnits, working: zMinorUnits })
-  .openapi("AccountBalances");
+  .openapi("AccountBalances", {
+    description:
+      "Future-dated transactions don't count until their date. `listAccounts` takes the user's " +
+      "today; other responses use the request's `date`, or the server's UTC date.",
+  });
 
 export const AccountSchema = z
   .object({
@@ -34,19 +37,6 @@ export const AccountSchema = z
 const AccountListSchema = z
   .object({ accounts: z.array(AccountSchema).describe("In sidebar order, closed ones included") })
   .openapi("AccountList");
-
-const TransactionSchema = z
-  .object({
-    id: z.string(),
-    date: IsoDate,
-    amount: zMinorUnits,
-    currency: zCurrencyCode,
-    payeeName: z.string().nullable(),
-    categoryName: z.string().nullable(),
-    memo: z.string(),
-    cleared: z.enum(CLEARED_STATES),
-  })
-  .openapi("Transaction");
 
 const BudgetParams = z.object({
   budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
@@ -71,7 +61,15 @@ export const listAccounts = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "The budget's accounts with their balances",
-  request: { params: BudgetParams },
+  request: {
+    params: BudgetParams,
+    query: z.object({
+      today: IsoDate.optional().describe(
+        "The user's today; later transactions are left out of balances. Defaults to the " +
+          "server's UTC date.",
+      ),
+    }),
+  },
   responses: {
     200: ok("Accounts in sidebar order", AccountListSchema),
     401: jsonError("Not signed in"),
@@ -238,24 +236,5 @@ export const deleteAccount = createRoute({
     403: jsonError("The caller's role can't manage accounts"),
     404: notFound,
     409: jsonError("ACCOUNT_HAS_HISTORY: close the account instead"),
-  },
-});
-
-export const listAccountTransactions = createRoute({
-  method: "get",
-  path: "/budgets/{budgetId}/accounts/{accountId}/transactions",
-  operationId: "listAccountTransactions",
-  tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
-  summary: "An account's transactions, newest first",
-  request: { params: AccountParams },
-  responses: {
-    200: ok(
-      "Transactions",
-      z.object({ transactions: z.array(TransactionSchema) }).openapi("TransactionList"),
-    ),
-    401: jsonError("Not signed in"),
-    404: notFound,
   },
 });

@@ -641,10 +641,15 @@
               "$ref": "#/components/schemas/CategoryGroup"
             },
             "description": "In display order"
+          },
+          "readyToAssignCategoryId": {
+            "type": "string",
+            "description": "The internal 'Inflow: Ready to Assign' category, for categorizing income"
           }
         },
         "required": [
-          "groups"
+          "groups",
+          "readyToAssignCategoryId"
         ]
       },
       "CategoryGroup": {
@@ -1105,7 +1110,8 @@
           "cleared",
           "uncleared",
           "working"
-        ]
+        ],
+        "description": "Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date."
       },
       "CreateAccount": {
         "type": "object",
@@ -1423,7 +1429,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Transaction"
-            }
+            },
+            "description": "Newest first"
           }
         },
         "required": [
@@ -1436,6 +1443,12 @@
           "id": {
             "type": "string"
           },
+          "accountId": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
           "date": {
             "type": "string",
             "format": "date",
@@ -1444,7 +1457,7 @@
           "amount": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+            "description": "Negative is an outflow"
           },
           "currency": {
             "type": "string",
@@ -1609,7 +1622,19 @@
             ],
             "description": "ISO 4217 currency code"
           },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
             "type": [
               "string",
               "null"
@@ -1631,17 +1656,160 @@
               "cleared",
               "reconciled"
             ]
+          },
+          "runningBalance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The account's balance after this transaction, in date order (all of its transactions)"
           }
         },
         "required": [
           "id",
+          "accountId",
+          "accountName",
           "date",
           "amount",
           "currency",
+          "payeeId",
           "payeeName",
+          "categoryId",
           "categoryName",
           "memo",
-          "cleared"
+          "cleared",
+          "runningBalance"
+        ]
+      },
+      "CreateTransaction": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared"
+            ],
+            "default": "uncleared"
+          }
+        },
+        "required": [
+          "accountId",
+          "date",
+          "amount",
+          "payeeName",
+          "categoryId"
+        ]
+      },
+      "UpdateTransaction": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayeeList": {
+        "type": "object",
+        "properties": {
+          "payees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Payee"
+            }
+          }
+        },
+        "required": [
+          "payees"
+        ]
+      },
+      "Payee": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lastCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Category of the payee's latest categorized transaction, suggested for the next"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "lastCategoryId"
         ]
       }
     },
@@ -2014,7 +2182,7 @@
           }
         ],
         "summary": "Fresh start: archive this budget and continue in a copy without transactions",
-        "description": "Owner only. The new budget keeps the name, settings, partners, categories and accounts (each starting from its current balance). The old one is renamed '(Archived <date>)'.",
+        "description": "Owner only. The new budget keeps the name, settings, partners, categories, payees and accounts (each starting from its balance on `date`). The old one is renamed '(Archived <date>)'.",
         "parameters": [
           {
             "schema": {
@@ -2971,6 +3139,17 @@
             "required": true,
             "name": "budgetId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "responses": {
@@ -3524,18 +3703,18 @@
         }
       }
     },
-    "/v1/budgets/{budgetId}/accounts/{accountId}/transactions": {
+    "/v1/budgets/{budgetId}/transactions": {
       "get": {
-        "operationId": "listAccountTransactions",
+        "operationId": "listTransactions",
         "tags": [
-          "Accounts"
+          "Transactions"
         ],
         "security": [
           {
             "cookieAuth": []
           }
         ],
-        "summary": "An account's transactions, newest first",
+        "summary": "One account's register, or every account's",
         "parameters": [
           {
             "schema": {
@@ -3547,11 +3726,13 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Leave out for all accounts"
             },
-            "required": true,
+            "required": false,
+            "description": "Leave out for all accounts",
             "name": "accountId",
-            "in": "path"
+            "in": "query"
           }
         ],
         "responses": {
@@ -3576,7 +3757,308 @@
             }
           },
           "404": {
-            "description": "No such budget or account, or the caller isn't a member",
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Add a transaction",
+        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a closed account, or a category the account can't use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}": {
+      "patch": {
+        "operationId": "updateTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Edit a transaction, move it to another account, or toggle cleared",
+        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a closed account, or a category the account can't use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a transaction",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees": {
+      "get": {
+        "operationId": "listPayees",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The budget's payees, by name (built-in ones left out)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

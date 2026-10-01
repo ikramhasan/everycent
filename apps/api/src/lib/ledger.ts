@@ -9,7 +9,7 @@ import {
   transaction,
 } from "@everycent/db/schema";
 import { type AccountType, isOnBudget } from "@everycent/engine";
-import { and, eq, max } from "drizzle-orm";
+import { and, eq, lte, max } from "drizzle-orm";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Db = Database | Tx;
@@ -100,7 +100,23 @@ export interface NewTransaction {
 }
 
 export async function insertTransaction(db: Db, values: NewTransaction) {
-  await db.insert(transaction).values({ id: newId(), ...values });
+  const id = newId();
+  await db.insert(transaction).values({ id, ...values });
+  return id;
+}
+
+/**
+ * The budget's payee with this name (ignoring case), created if there's none. Internal payees
+ * match too, so typing "Starting Balance" picks the real one instead of failing.
+ */
+export async function findOrCreatePayee(db: Db, budgetId: string, name: string) {
+  await db.insert(payee).values({ id: newId(), budgetId, name }).onConflictDoNothing();
+  const [row] = await db
+    .select({ id: payee.id })
+    .from(payee)
+    .where(and(eq(payee.budgetId, budgetId), sql`lower(${payee.name}) = lower(${name})`));
+  if (!row) throw new Error(`Payee ${name} missing`);
+  return row.id;
 }
 
 export interface AccountBalances {
@@ -109,8 +125,11 @@ export interface AccountBalances {
   working: bigint;
 }
 
-/** Cleared (incl. reconciled), uncleared and working balances for each account of the budget. */
-export async function accountBalances(db: Db, budgetId: string) {
+/**
+ * Cleared (incl. reconciled), uncleared and working balances for each account of the budget, as
+ * of `today` (the user's calendar date): future-dated transactions don't count until their date.
+ */
+export async function accountBalances(db: Db, budgetId: string, today: string) {
   const rows = await db
     .select({
       accountId: transaction.accountId,
@@ -118,7 +137,7 @@ export async function accountBalances(db: Db, budgetId: string) {
       uncleared: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.cleared} = 'uncleared'), 0)`,
     })
     .from(transaction)
-    .where(eq(transaction.budgetId, budgetId))
+    .where(and(eq(transaction.budgetId, budgetId), lte(transaction.date, today)))
     .groupBy(transaction.accountId);
   const balances = new Map<string, AccountBalances>();
   for (const row of rows) {

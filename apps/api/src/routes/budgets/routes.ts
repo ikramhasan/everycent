@@ -157,8 +157,9 @@ export const freshStartBudget = createRoute({
   middleware: [requireAuth] as const,
   summary: "Fresh start: archive this budget and continue in a copy without transactions",
   description:
-    "Owner only. The new budget keeps the name, settings, partners, categories and accounts " +
-    "(each starting from its current balance). The old one is renamed '(Archived <date>)'.",
+    "Owner only. The new budget keeps the name, settings, partners, categories, payees and " +
+    "accounts (each starting from its balance on `date`). The old one is renamed " +
+    "'(Archived <date>)'.",
   request: {
     params: BudgetParams,
     body: {

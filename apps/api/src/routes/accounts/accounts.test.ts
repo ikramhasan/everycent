@@ -63,7 +63,7 @@ async function setup() {
       .accounts;
   const transactions = async (accountId: string) =>
     (
-      (await (await send("GET", `${base}/accounts/${accountId}/transactions`, cookie)).json()) as {
+      (await (await send("GET", `${base}/transactions?accountId=${accountId}`, cookie)).json()) as {
         transactions: Txn[];
       }
     ).transactions;

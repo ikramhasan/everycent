@@ -61,6 +61,8 @@ export const payee = pgTable(
   },
   (t) => [
     index("payee_budget_id_idx").on(t.budgetId),
+    // YNAB treats "Costco" and "costco" as the same payee.
+    uniqueIndex("payee_name_per_budget_idx").on(t.budgetId, sql`lower(${t.name})`),
     uniqueIndex("payee_internal_kind_per_budget_idx")
       .on(t.budgetId, t.internalKind)
       .where(sql`${t.internalKind} is not null`),
@@ -99,5 +101,6 @@ export const transaction = pgTable(
     index("transaction_account_date_idx").on(t.accountId, t.date),
     index("transaction_budget_id_idx").on(t.budgetId),
     index("transaction_category_id_idx").on(t.categoryId),
+    index("transaction_payee_id_idx").on(t.payeeId),
   ],
 );

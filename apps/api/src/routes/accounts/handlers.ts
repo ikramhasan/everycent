@@ -1,8 +1,8 @@
 import { newId } from "@everycent/db";
-import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
+import { budgetAccount, category, transaction } from "@everycent/db/schema";
 import { accountFamily, hasPaymentCategory, isOnBudget } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, desc, eq, isNull, max, ne, or } from "drizzle-orm";
+import { and, asc, eq, isNull, max, ne, or } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -24,7 +24,6 @@ import type {
   createAccount,
   deleteAccount,
   listAccounts,
-  listAccountTransactions,
   moveAccount,
   reopenAccount,
   updateAccount,
@@ -53,7 +52,12 @@ function toAccountJson(a: AccountRow, balances: AccountBalances, paymentCategory
   };
 }
 
-async function listAccountJson(db: Db, budgetId: string) {
+/** The server's calendar date, for responses that weren't given the user's today. */
+export function serverToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function listAccountJson(db: Db, budgetId: string, today: string) {
   const accounts = await db
     .select()
     .from(budgetAccount)
@@ -64,14 +68,14 @@ async function listAccountJson(db: Db, budgetId: string) {
     .from(category)
     .where(eq(category.budgetId, budgetId));
   const paymentByAccount = new Map(payments.map((p) => [p.accountId, p.id]));
-  const balances = await accountBalances(db, budgetId);
+  const balances = await accountBalances(db, budgetId, today);
   return accounts.map((a) =>
     toAccountJson(a, balances.get(a.id) ?? ZERO_BALANCES, paymentByAccount.get(a.id) ?? null),
   );
 }
 
-async function accountJson(db: Db, budgetId: string, accountId: string) {
-  const found = (await listAccountJson(db, budgetId)).find((a) => a.id === accountId);
+async function accountJson(db: Db, budgetId: string, accountId: string, today = serverToday()) {
+  const found = (await listAccountJson(db, budgetId, today)).find((a) => a.id === accountId);
   if (!found) throw new AppError(404, "NOT_FOUND", "Account not found");
   return found;
 }
@@ -106,8 +110,9 @@ const optionalBigInt = (v: string | null | undefined) =>
 
 export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
+  const { today = serverToday() } = c.req.valid("query");
   await loadBudgetAccess(c, budgetId);
-  return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId) }, 200);
+  return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
 };
 
 export const createAccountHandler: RouteHandler<typeof createAccount, Env> = async (c) => {
@@ -155,7 +160,7 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
       date: body.date,
     });
   });
-  return c.json(await accountJson(db, budgetId, accountId), 201);
+  return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
 };
 
 export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = async (c) => {
@@ -222,7 +227,7 @@ export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (
       ),
     );
   });
-  return c.json({ accounts: await listAccountJson(db, budgetId) }, 200);
+  return c.json({ accounts: await listAccountJson(db, budgetId, serverToday()) }, 200);
 };
 
 export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async (c) => {
@@ -233,7 +238,7 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
   await db.transaction(async (tx) => {
     const account = await findAccount(tx, budgetId, accountId);
     if (account.closed) return;
-    const working = (await accountBalances(tx, budgetId)).get(accountId)?.working ?? 0n;
+    const working = (await accountBalances(tx, budgetId, date)).get(accountId)?.working ?? 0n;
     if (working !== 0n) {
       await insertTransaction(tx, {
         budgetId,
@@ -251,7 +256,7 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
     await tx.update(budgetAccount).set({ closed: true }).where(eq(budgetAccount.id, accountId));
     await tx.update(category).set({ hidden: true }).where(eq(category.linkedAccountId, accountId));
   });
-  return c.json(await accountJson(db, budgetId, accountId), 200);
+  return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
 
 export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = async (c) => {
@@ -292,31 +297,4 @@ export const deleteAccountHandler: RouteHandler<typeof deleteAccount, Env> = asy
   // Transactions and the payment category cascade.
   await db.delete(budgetAccount).where(eq(budgetAccount.id, accountId));
   return c.body(null, 204);
-};
-
-export const listAccountTransactionsHandler: RouteHandler<
-  typeof listAccountTransactions,
-  Env
-> = async (c) => {
-  const { budgetId, accountId } = c.req.valid("param");
-  const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
-  await findAccount(db, budgetId, accountId);
-  const rows = await db
-    .select({
-      id: transaction.id,
-      date: transaction.date,
-      amount: transaction.amount,
-      currency: transaction.currency,
-      payeeName: payee.name,
-      categoryName: category.name,
-      memo: transaction.memo,
-      cleared: transaction.cleared,
-    })
-    .from(transaction)
-    .leftJoin(payee, eq(payee.id, transaction.payeeId))
-    .leftJoin(category, eq(category.id, transaction.categoryId))
-    .where(eq(transaction.accountId, accountId))
-    .orderBy(desc(transaction.date), desc(transaction.createdAt), desc(transaction.id));
-  return c.json({ transactions: rows.map((r) => ({ ...r, amount: r.amount.toString() })) }, 200);
 };

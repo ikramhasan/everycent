@@ -10,6 +10,7 @@ import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
+import { transactionsRouter } from "./routes/transactions";
 import type { AppDeps } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -37,6 +38,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", budgetsRouter);
   app.route("/v1", categoriesRouter);
   app.route("/v1", accountsRouter);
+  app.route("/v1", transactionsRouter);
 
   registerDocs(app);
   return app;

@@ -86,7 +86,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories and accounts (each starting from its current balance). The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees and accounts (each starting from its balance on `date`). The old one is renamed '(Archived <date>)'.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -293,15 +293,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/budgets/{budgetId}/accounts/{accountId}/transactions": {
+    "/v1/budgets/{budgetId}/transactions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** An account's transactions, newest first */
-        get: operations["listAccountTransactions"];
+        /** One account's register, or every account's */
+        get: operations["listTransactions"];
+        put?: never;
+        /**
+         * Add a transaction
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty.
+         */
+        post: operations["createTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a transaction */
+        delete: operations["deleteTransaction"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a transaction, move it to another account, or toggle cleared
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category.
+         */
+        patch: operations["updateTransaction"];
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/payees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The budget's payees, by name (built-in ones left out) */
+        get: operations["listPayees"];
         put?: never;
         post?: never;
         delete?: never;
@@ -432,6 +474,8 @@ export interface components {
         CategoryList: {
             /** @description In display order */
             groups: components["schemas"]["CategoryGroup"][];
+            /** @description The internal 'Inflow: Ready to Assign' category, for categorizing income */
+            readyToAssignCategoryId: string;
         };
         CategoryGroup: {
             id: string;
@@ -510,6 +554,7 @@ export interface components {
             paymentCategoryId: string | null;
             balances: components["schemas"]["AccountBalances"];
         };
+        /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             cleared: string;
@@ -571,27 +616,77 @@ export interface components {
             date: string;
         };
         TransactionList: {
+            /** @description Newest first */
             transactions: components["schemas"]["Transaction"][];
         };
         Transaction: {
             id: string;
+            accountId: string;
+            accountName: string;
             /**
              * Format: date
              * @description Calendar date, YYYY-MM-DD
              */
             date: string;
-            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            /** @description Negative is an outflow */
             amount: string;
             /**
              * @description ISO 4217 currency code
              * @enum {string}
              */
             currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            payeeId: string | null;
             payeeName: string | null;
+            categoryId: string | null;
             categoryName: string | null;
             memo: string;
             /** @enum {string} */
             cleared: "uncleared" | "cleared" | "reconciled";
+            /** @description The account's balance after this transaction, in date order (all of its transactions) */
+            runningBalance: string;
+        };
+        CreateTransaction: {
+            accountId: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            payeeName: string | null;
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
+            /**
+             * @default uncleared
+             * @enum {string}
+             */
+            cleared: "uncleared" | "cleared";
+        };
+        UpdateTransaction: {
+            accountId?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount?: string;
+            payeeName?: string | null;
+            categoryId?: string | null;
+            memo?: string;
+            /** @enum {string} */
+            cleared?: "uncleared" | "cleared";
+        };
+        PayeeList: {
+            payees: components["schemas"]["Payee"][];
+        };
+        Payee: {
+            id: string;
+            name: string;
+            /** @description Category of the payee's latest categorized transaction, suggested for the next */
+            lastCategoryId: string | null;
         };
     };
     responses: never;
@@ -1561,7 +1656,10 @@ export interface operations {
     };
     listAccounts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -1957,13 +2055,15 @@ export interface operations {
             };
         };
     };
-    listAccountTransactions: {
+    listTransactions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Leave out for all accounts */
+                accountId?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
-                accountId: string;
             };
             cookie?: never;
         };
@@ -1987,7 +2087,220 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description No such budget or account, or the caller isn't a member */
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTransaction"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            /** @description Invalid input, a closed account, or a category the account can't use */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTransaction"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            /** @description Invalid input, a closed account, or a category the account can't use */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listPayees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payees */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

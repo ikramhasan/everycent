@@ -1,0 +1,246 @@
+import { sql } from "@everycent/db";
+import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
+import { isOnBudget } from "@everycent/engine";
+import type { RouteHandler } from "@hono/zod-openapi";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { loadBudgetAccess } from "../../lib/budget-access";
+import { AppError } from "../../lib/errors";
+import {
+  type Db,
+  findOrCreatePayee,
+  insertTransaction,
+  internalCategoryId,
+} from "../../lib/ledger";
+import type { AuthedEnv } from "../../middleware/require-auth";
+import type { AppEnv } from "../../types";
+import type {
+  createTransaction,
+  deleteTransaction,
+  listPayees,
+  listTransactions,
+  updateTransaction,
+} from "./routes";
+
+type Env = AppEnv & AuthedEnv;
+type AccountRow = typeof budgetAccount.$inferSelect;
+
+/**
+ * Register rows with each account's running balance. The window runs over the whole account
+ * (oldest first), so filtering by `transactionId` happens outside it.
+ */
+async function queryTransactions(
+  db: Db,
+  budgetId: string,
+  filter: { accountId?: string; transactionId?: string },
+) {
+  const rows = db
+    .select({
+      id: transaction.id,
+      accountId: transaction.accountId,
+      accountName: sql<string>`${budgetAccount.name}`.as("account_name"),
+      date: transaction.date,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      payeeId: transaction.payeeId,
+      payeeName: sql<string | null>`${payee.name}`.as("payee_name"),
+      categoryId: transaction.categoryId,
+      categoryName: sql<string | null>`${category.name}`.as("category_name"),
+      memo: transaction.memo,
+      cleared: transaction.cleared,
+      createdAt: transaction.createdAt,
+      runningBalance: sql<string>`sum(${transaction.amount}) over (
+        partition by ${transaction.accountId}
+        order by ${transaction.date}, ${transaction.createdAt}, ${transaction.id}
+      )`.as("running_balance"),
+    })
+    .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
+    .leftJoin(payee, eq(payee.id, transaction.payeeId))
+    .leftJoin(category, eq(category.id, transaction.categoryId))
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        filter.accountId ? eq(transaction.accountId, filter.accountId) : undefined,
+      ),
+    )
+    .as("register");
+  const result = await db
+    .select()
+    .from(rows)
+    .where(filter.transactionId ? eq(rows.id, filter.transactionId) : undefined)
+    .orderBy(desc(rows.date), desc(rows.createdAt), desc(rows.id));
+  return result.map(({ createdAt: _, ...r }) => ({
+    ...r,
+    amount: r.amount.toString(),
+    // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
+    runningBalance: BigInt(r.runningBalance).toString(),
+  }));
+}
+
+async function transactionJson(db: Db, budgetId: string, accountId: string, id: string) {
+  const [row] = await queryTransactions(db, budgetId, { accountId, transactionId: id });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  return row;
+}
+
+async function findAccount(db: Db, budgetId: string, accountId: string) {
+  const [row] = await db
+    .select()
+    .from(budgetAccount)
+    .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)));
+  if (!row) throw new AppError(404, "NOT_FOUND", "Account not found");
+  return row;
+}
+
+function assertOpen(account: AccountRow) {
+  if (account.closed) {
+    throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to add transactions to it");
+  }
+}
+
+/**
+ * The category a transaction in `account` is stored with, following YNAB: tracking accounts have
+ * none, budget accounts fall back to Uncategorized, and payment categories only receive money by
+ * assigning (phase 7), never from a transaction.
+ */
+async function resolveCategory(
+  db: Db,
+  budgetId: string,
+  account: AccountRow,
+  categoryId: string | null,
+) {
+  if (!isOnBudget(account.type)) {
+    if (categoryId !== null) {
+      throw new AppError(400, "CATEGORY_NOT_ALLOWED", "Tracking accounts don't use categories");
+    }
+    return null;
+  }
+  if (categoryId === null) return internalCategoryId(db, budgetId, "uncategorized");
+  const [row] = await db
+    .select({ linkedAccountId: category.linkedAccountId })
+    .from(category)
+    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
+  if (!row) throw new AppError(400, "BAD_REQUEST", "No such category in this budget");
+  if (row.linkedAccountId) {
+    throw new AppError(
+      400,
+      "CATEGORY_NOT_ALLOWED",
+      "Credit card payment categories can't be used on transactions",
+    );
+  }
+  return categoryId;
+}
+
+export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { accountId } = c.req.valid("query");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  if (accountId) await findAccount(db, budgetId, accountId);
+  return c.json({ transactions: await queryTransactions(db, budgetId, { accountId }) }, 200);
+};
+
+export const createTransactionHandler: RouteHandler<typeof createTransaction, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
+  const id = await db.transaction(async (tx) => {
+    const account = await findAccount(tx, budgetId, body.accountId);
+    assertOpen(account);
+    return insertTransaction(tx, {
+      budgetId,
+      accountId: account.id,
+      date: body.date,
+      amount: BigInt(body.amount),
+      currency: account.currency,
+      payeeId: body.payeeName ? await findOrCreatePayee(tx, budgetId, body.payeeName) : null,
+      categoryId: await resolveCategory(tx, budgetId, account, body.categoryId),
+      memo: body.memo,
+      cleared: body.cleared,
+    });
+  });
+  return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
+};
+
+export const updateTransactionHandler: RouteHandler<typeof updateTransaction, Env> = async (c) => {
+  const { budgetId, transactionId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  const accountId = await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)))
+      .for("update");
+    if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+
+    const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
+    const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
+    if (moved) assertOpen(account);
+
+    let categoryId = existing.categoryId;
+    if (body.categoryId !== undefined) {
+      categoryId = await resolveCategory(tx, budgetId, account, body.categoryId);
+    } else if (moved) {
+      // Keep the category if the new account can use it, otherwise fall back.
+      categoryId = isOnBudget(account.type)
+        ? await resolveCategory(tx, budgetId, account, existing.categoryId)
+        : null;
+    }
+
+    await tx
+      .update(transaction)
+      .set({
+        accountId: account.id,
+        currency: account.currency,
+        date: body.date,
+        amount: body.amount === undefined ? undefined : BigInt(body.amount),
+        payeeId:
+          body.payeeName === undefined
+            ? undefined
+            : body.payeeName === null
+              ? null
+              : await findOrCreatePayee(tx, budgetId, body.payeeName),
+        categoryId,
+        memo: body.memo,
+        cleared: body.cleared,
+      })
+      .where(eq(transaction.id, transactionId));
+    return account.id;
+  });
+  return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
+};
+
+export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, Env> = async (c) => {
+  const { budgetId, transactionId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { transaction: ["delete"] });
+  const deleted = await db
+    .delete(transaction)
+    .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)))
+    .returning({ id: transaction.id });
+  if (deleted.length === 0) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  return c.body(null, 204);
+};
+
+export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  // YNAB suggests the category last used with a payee; Uncategorized isn't worth remembering.
+  const last = sql<string | null>`(
+    select t.category_id from ${transaction} t
+    join ${category} c on c.id = t.category_id
+    where t.payee_id = ${payee}.id and c.internal_kind is distinct from 'uncategorized'
+    order by t.date desc, t.created_at desc, t.id desc
+    limit 1
+  )`;
+  const payees = await db
+    .select({ id: payee.id, name: payee.name, lastCategoryId: last })
+    .from(payee)
+    .where(and(eq(payee.budgetId, budgetId), isNull(payee.internalKind)))
+    .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
+  return c.json({ payees }, 200);
+};
