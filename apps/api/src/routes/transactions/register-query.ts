@@ -168,6 +168,25 @@ function filterWhere(r: Register, filter: RegisterFilter, settings: SearchSettin
   return and(...conditions);
 }
 
+/**
+ * The ids (with amount, account and the bits bulk edits check) of every transaction `filter`
+ * matches, for "select all". Same filter as the register, without paging.
+ */
+export function matchingTransactions(
+  db: Db,
+  budgetId: string,
+  filter: RegisterFilter,
+  settings: SearchSettings,
+) {
+  const r = registerCte(db, budgetId, filter.accountId);
+  return db
+    .with(r)
+    .select({ id: r.id })
+    .from(r)
+    .where(filterWhere(r, filter, settings))
+    .as("matching");
+}
+
 /** The sort column as SQL, plus the type its cursor value is cast back to. */
 function sortKey(r: Register, sort: SortColumn): { key: SQL; cast: SQL } {
   const text = sql.raw("text");

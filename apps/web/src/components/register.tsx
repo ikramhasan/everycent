@@ -1,5 +1,6 @@
 import { money, usesCategory } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { Checkbox } from "@everycent/ui/components/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +64,15 @@ import {
   type SortColumn,
 } from "@/lib/register-filters";
 import {
+  isEmpty,
+  isSelected,
+  NOTHING,
+  rangeTo,
+  type Selection,
+  selectionBody,
+  setSelected,
+} from "@/lib/selection";
+import {
   type CellColumn,
   categoryOptions,
   cellUpdate,
@@ -82,6 +92,7 @@ import { CellEditor, type CellExit } from "./cell-editor";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { RegisterToolbar } from "./register-toolbar";
+import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 
 /** Columns a header click sorts by; the amount columns both sort by amount. */
@@ -166,7 +177,7 @@ export function Register({
     () => transactions.data?.pages.flatMap((p) => p.transactions) ?? EMPTY,
     [transactions.data],
   );
-  // A running balance only reads in date order (YNAB hides it otherwise).
+  // A running balance only reads in date order; it hides otherwise (unconfirmed: docs/verify.md).
   const dateOrder = query.sort === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
@@ -181,6 +192,17 @@ export function Register({
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(NOTHING);
+  const anchor = useRef<string | null>(null);
+  const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk");
+  // A new search or filter is a new set of rows, so the selection starts over.
+  const queryKey = JSON.stringify(query);
+  const [selectionKey, setSelectionKey] = useState(queryKey);
+  if (selectionKey !== queryKey) {
+    setSelectionKey(queryKey);
+    setSelection(NOTHING);
+    anchor.current = null;
+  }
 
   const allAccounts = accountId === undefined;
   const columnIds = useMemo(
@@ -264,6 +286,39 @@ export function Register({
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => clearTimeout(timer);
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
+  // The selection's filter is the register's, without the sort.
+  const { sort: _sort, dir: _dir, ...selectionFilter } = query;
+  const summary = $api.useQuery(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/selection",
+    {
+      params: { path: { budgetId: budget.id } },
+      body: { selection: selectionBody(selection, selectionFilter) },
+    },
+    { enabled: !isEmpty(selection) },
+  );
+
+  function toggleRow(id: string, on: boolean, shift: boolean) {
+    const ids = shift ? rangeTo(loadedIds, anchor.current, id) : [id];
+    anchor.current = id;
+    setSelection((s) => setSelected(s, ids, on));
+  }
+
+  async function applyBulk(action: BulkAction) {
+    try {
+      const result = await bulk.mutateAsync({
+        params: { path: { budgetId: budget.id } },
+        body: { selection: selectionBody(selection, selectionFilter), action },
+      });
+      await refresh();
+      setSelection(NOTHING);
+      toast.success(`Updated ${result.updated} transaction${result.updated === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't update the selected transactions."));
+    }
+  }
+
   const paddingTop = items[0]?.start ?? 0;
   const paddingBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
 
@@ -273,6 +328,10 @@ export function Register({
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
+      // The selection's count and total.
+      queryClient.invalidateQueries({
+        queryKey: ["post", "/v1/budgets/{budgetId}/transactions/selection"],
+      }),
     ]);
   }
 
@@ -461,6 +520,17 @@ export function Register({
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
     switch (id) {
+      case "select":
+        return (
+          <Checkbox
+            aria-label={`Select ${t.payeeName ?? "transaction"} on ${formatDate(t.date)}`}
+            checked={isSelected(selection, t.id)}
+            onClick={(e) => {
+              e.preventDefault();
+              toggleRow(t.id, !isSelected(selection, t.id), e.shiftKey);
+            }}
+          />
+        );
       case "flag":
         return (
           <FlagMenu
@@ -615,6 +685,20 @@ export function Register({
           />
         </div>
       </div>
+      {!isEmpty(selection) && (
+        <SelectionBar
+          count={summary.data?.count ?? null}
+          total={summary.data ? show(BigInt(summary.data.total)) : null}
+          allMatching={selection.mode === "all"}
+          canSelectAll={Boolean(hasNextPage) || loaded.length > (summary.data?.count ?? 0)}
+          onSelectAll={() => setSelection({ mode: "all", except: new Set() })}
+          onClear={() => setSelection(NOTHING)}
+          flags={flags}
+          categories={options}
+          pending={bulk.isPending}
+          onAction={(action) => void applyBulk(action)}
+        />
+      )}
       {filtered && dateOrder && (
         <p className="text-muted-foreground text-xs">
           Filtered: each row still shows the account's balance at that point.
@@ -654,7 +738,24 @@ export function Register({
                       spec.align === "right" && "text-right",
                     )}
                   >
-                    {sortBy && !spec.srOnly ? (
+                    {id === "select" ? (
+                      <Checkbox
+                        aria-label={
+                          selection.mode === "all" ? "Unselect all" : "Select all matching"
+                        }
+                        checked={
+                          selection.mode === "all"
+                            ? selection.except.size === 0 || "indeterminate"
+                            : selection.ids.size > 0 && "indeterminate"
+                        }
+                        disabled={loaded.length === 0}
+                        onCheckedChange={() =>
+                          setSelection(
+                            selection.mode === "all" ? NOTHING : { mode: "all", except: new Set() },
+                          )
+                        }
+                      />
+                    ) : sortBy && !spec.srOnly ? (
                       <button
                         type="button"
                         className={cn(

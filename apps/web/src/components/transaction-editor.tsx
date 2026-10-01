@@ -95,6 +95,8 @@ export function TransactionEditor({
 
   function cell(column: ColumnId) {
     switch (column) {
+      case "select":
+        return null;
       case "flag":
         return (
           <FlagMenu

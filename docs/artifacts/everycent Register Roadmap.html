@@ -120,17 +120,17 @@ a { color: var(--accent); }
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · phase 5 · after 5e · 2 Oct 2026</div>
+    <div class="eyebrow">everycent · phase 5 · 5f in part · 2 Oct 2026</div>
     <h1>Finishing the register</h1>
-    <p class="lede">The register core, transfers, splits, flags and <strong>server-side search, filter, sort and paging are built</strong>. What's left of Phase 5 is <strong>bulk edit plus optional extras</strong>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
+    <p class="lede">The register core, transfers, splits, flags and <strong>server-side search, filter, sort and paging are built</strong>. Bulk edit is <strong>partly built</strong>; the rest waits on questions about YNAB in <code>docs/verify.md</code>, each small enough to design in chat, build on its own branch, check in the browser, and merge. They're in dependency order: later stages build on the data model of earlier ones.</p>
   </header>
 
   <section aria-label="Where things stand">
     <div class="status">
-      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5e-find</code></span></div>
+      <div class="stat"><span class="k">Last merged</span><span class="v"><code>phase-5f-bulk</code></span></div>
       <div class="stat"><span class="k">Phase 5 items</span><span class="v">14 of 17 done</span><div class="meter" aria-hidden="true"><span></span></div></div>
       <div class="stat"><span class="k">Checks</span><span class="v"><code>pnpm check</code> passing</span></div>
-      <div class="stat"><span class="k">Next</span><span class="v">5f, bulk edit</span></div>
+      <div class="stat"><span class="k">Next</span><span class="v">Settle <code>docs/verify.md</code>, then finish 5f</span></div>
     </div>
   </section>
 
@@ -140,7 +140,7 @@ a { color: var(--accent); }
       <li class="done"><a href="#splits"><span class="id">5c</span><span class="nm">Splits</span><span class="sz">done</span></a></li>
       <li class="done"><a href="#flags"><span class="id">5d</span><span class="nm">Flags</span><span class="sz">done</span></a></li>
       <li class="done"><a href="#find"><span class="id">5e</span><span class="nm">Find &amp; paging</span><span class="sz">done</span></a></li>
-      <li><a href="#bulk"><span class="id">5f</span><span class="nm">Bulk edit</span><span class="sz">medium · next</span></a></li>
+      <li><a href="#bulk"><span class="id">5f</span><span class="nm">Bulk edit</span><span class="sz">in part</span></a></li>
       <li class="extra"><a href="#extras"><span class="id">5x</span><span class="nm">Tags, receipts</span><span class="sz">extra</span></a></li>
     </ol>
   </nav>
@@ -255,29 +255,31 @@ a { color: var(--accent); }
   </article>
 
   <article class="stage next" id="bulk">
-    <div class="head"><span class="sid">5f</span><h2>Multi-select and bulk edit</h2><span class="pill go">Next</span></div>
-    <p class="goal">Select several transactions and change them at once, the way YNAB's toolbar does after ticking rows.</p>
+    <div class="head"><span class="sid">5f</span><h2>Multi-select and bulk edit</h2><span class="pill go">In part · phase-5f-bulk</span></div>
+    <p class="goal">Select several transactions and change them at once, the way YNAB's action bar does after ticking rows.</p>
     <div class="cols">
       <div>
-        <h3>Scope</h3>
+        <h3>What shipped</h3>
         <ul class="plain">
-          <li>Checkbox column with shift-click range select and "select all" for the current filter. With paging, "select all" has to mean the filter on the server, not just the loaded rows.</li>
-          <li>Toolbar actions: categorize, change payee, change date, flag, mark cleared or uncleared, move to account, delete.</li>
-          <li>One API call per action that applies to all selected transactions in one database transaction.</li>
-          <li>Totals of the selection shown in the toolbar.</li>
+          <li>Checkbox column with shift-click ranges; the header box selects all matching.</li>
+          <li>"Select all matching" covers every transaction the filter matches, loaded or not, minus unticked ones.</li>
+          <li>Action bar with the count and total: mark cleared, mark uncleared, flag, categorize.</li>
+          <li>One API call per action, all or nothing (<code>POST …/transactions/bulk</code>).</li>
         </ul>
       </div>
       <div>
-        <h3>Rules</h3>
+        <h3>Waiting on docs/verify.md</h3>
         <ul class="plain">
-          <li>Moving to another account follows the category rules from 5a and the transfer rules from 5b.</li>
-          <li>Transfer pairs and split lines move or delete together.</li>
-          <li>Bulk delete asks for confirmation inside the page.</li>
+          <li class="q">Bulk move to account and delete with transfers or split transfer lines selected.</li>
+          <li class="q">Bulk delete: confirm, or undo as on single deletes.</li>
+          <li class="q">Bulk categorize with splits selected (refused for now).</li>
+          <li class="q">Bulk cleared with reconciled rows selected (refused for now).</li>
+        </ul>
+        <h3>Not doing</h3>
+        <ul class="plain">
+          <li>Bulk payee and date: YNAB's web app doesn't offer them. Bulk memo comes with the rest.</li>
         </ul>
       </div>
-    </div>
-    <div class="done-when">
-      <p><b>Done when</b> twenty transactions can be selected, recategorized and cleared in two clicks, and the edit is atomic: either all change or none.</p>
     </div>
   </article>
 
@@ -314,7 +316,7 @@ a { color: var(--accent); }
     <h2>Picking up</h2>
     <p>Open Claude Code in the BudgetApp repo and start with:</p>
     <div class="prompt">
-      <code id="resume-prompt">Let's start Phase 5f, multi-select and bulk edit. Read docs/deferred.md first.</code>
+      <code id="resume-prompt">Let's settle docs/verify.md. Read docs/deferred.md and docs/verify.md first.</code>
       <button class="copy" id="copy-btn" type="button">Copy</button>
     </div>
     <p class="q">Each stage: settle its open questions in chat, build on a branch, check every screen in the browser in both themes, pass <code>pnpm check</code>, then merge.</p>

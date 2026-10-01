@@ -129,7 +129,8 @@ and fresh start (after phase 5 core).
 - [x] Running balance column
 - [x] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
 - [x] Server-side paging of the register (keyset cursors; balances over the whole account)
-- [ ] Multi-select + bulk edit (category, payee, date, flag, cleared, move to account, delete)
+- [ ] Multi-select + bulk edit: selection, select all matching, total, cleared, flag and categorize
+      done; memo, move to account and delete still to come (see docs/verify.md)
 - [ ] Approve / reject imported transactions (unapproved state)
 - [x] Future-dated transactions (excluded from balances until the date)
 - [ ] Tags on transactions **(extra)**

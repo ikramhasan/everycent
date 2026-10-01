@@ -317,6 +317,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/transactions/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How many transactions a selection holds and their total */
+        post: operations["summarizeSelection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one action to every selected transaction, all or nothing
+         * @description Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing changed) when the selection holds rows the action isn't settled for yet: reconciled transactions for `cleared`; splits, transfers without a category and tracking-account transactions for `categorize` (see docs/verify.md).
+         */
+        post: operations["bulkUpdateTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/transactions/{transactionId}": {
         parameters: {
             query?: never;
@@ -713,6 +750,64 @@ export interface components {
             transferAccountId: string | null;
             /** @description Transfer lines: the transaction they keep in the other account */
             transferTransactionId: string | null;
+        };
+        SelectionSummary: {
+            count: number;
+            /** @description Sum of the amounts, in the budget's currency */
+            total: string;
+        };
+        TransactionSelection: {
+            /** @description Transactions ticked one by one */
+            ids: string[];
+        } | {
+            filter: components["schemas"]["RegisterFilter"];
+            /**
+             * @description Unticked after selecting all
+             * @default []
+             */
+            exclude: string[];
+        };
+        /** @description Select all: every transaction this filter matches */
+        RegisterFilter: {
+            accountId?: string;
+            q?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            from?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            to?: string;
+            /** @enum {string} */
+            cleared?: "uncleared" | "cleared" | "reconciled";
+            /** @enum {string} */
+            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "none";
+            categoryId?: string;
+            payeeId?: string;
+        };
+        BulkUpdateResult: {
+            updated: number;
+        };
+        BulkAction: {
+            /** @enum {string} */
+            type: "cleared";
+            /** @enum {string} */
+            cleared: "uncleared" | "cleared";
+        } | {
+            /** @enum {string} */
+            type: "flag";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+        } | {
+            /** @enum {string} */
+            type: "categorize";
+            categoryId: string;
         };
         CreateTransaction: {
             accountId: string;
@@ -2263,6 +2358,126 @@ export interface operations {
                 };
             };
             /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    summarizeSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    selection: components["schemas"]["TransactionSelection"];
+                };
+            };
+        };
+        responses: {
+            /** @description Selection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionSummary"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    bulkUpdateTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    selection: components["schemas"]["TransactionSelection"];
+                    action: components["schemas"]["BulkAction"];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateResult"];
+                };
+            };
+            /** @description Invalid input, a category transactions can't use, or rows the action can't take (BULK_NOT_ALLOWED; `details` says which and how many) */
             400: {
                 headers: {
                     [name: string]: unknown;

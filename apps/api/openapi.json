@@ -1798,6 +1798,204 @@
           "transferTransactionId"
         ]
       },
+      "SelectionSummary": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Sum of the amounts, in the budget's currency"
+          }
+        },
+        "required": [
+          "count",
+          "total"
+        ]
+      },
+      "TransactionSelection": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 1000,
+                "description": "Transactions ticked one by one"
+              }
+            },
+            "required": [
+              "ids"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "filter": {
+                "$ref": "#/components/schemas/RegisterFilter"
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "default": [],
+                "description": "Unticked after selecting all"
+              }
+            },
+            "required": [
+              "filter"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "RegisterFilter": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "flag": {
+            "type": "string",
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              "none"
+            ]
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "payeeId": {
+            "type": "string"
+          }
+        },
+        "description": "Select all: every transaction this filter matches"
+      },
+      "BulkUpdateResult": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ]
+      },
+      "BulkAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleared"
+                ]
+              },
+              "cleared": {
+                "type": "string",
+                "enum": [
+                  "uncleared",
+                  "cleared"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "cleared"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "flag"
+                ]
+              },
+              "flag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "red",
+                  "orange",
+                  "yellow",
+                  "green",
+                  "blue",
+                  "purple",
+                  null
+                ],
+                "description": "One of YNAB's six flag colors; null clears it"
+              }
+            },
+            "required": [
+              "type",
+              "flag"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "categorize"
+                ]
+              },
+              "categoryId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "categoryId"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "CreateTransaction": {
         "type": "object",
         "properties": {
@@ -4233,6 +4431,189 @@
           },
           "400": {
             "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/selection": {
+      "post": {
+        "operationId": "summarizeSelection",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "How many transactions a selection holds and their total",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selection": {
+                    "$ref": "#/components/schemas/TransactionSelection"
+                  }
+                },
+                "required": [
+                  "selection"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/bulk": {
+      "post": {
+        "operationId": "bulkUpdateTransactions",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Apply one action to every selected transaction, all or nothing",
+        "description": "Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing changed) when the selection holds rows the action isn't settled for yet: reconciled transactions for `cleared`; splits, transfers without a category and tracking-account transactions for `categorize` (see docs/verify.md).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selection": {
+                    "$ref": "#/components/schemas/TransactionSelection"
+                  },
+                  "action": {
+                    "$ref": "#/components/schemas/BulkAction"
+                  }
+                },
+                "required": [
+                  "selection",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpdateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a category transactions can't use, or rows the action can't take (BULK_NOT_ALLOWED; `details` says which and how many)",
             "content": {
               "application/json": {
                 "schema": {

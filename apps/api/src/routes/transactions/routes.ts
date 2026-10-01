@@ -318,3 +318,92 @@ export const listPayees = createRoute({
     404: notFound,
   },
 });
+
+const RegisterFilterSchema = z
+  .object({
+    accountId: z.string().optional(),
+    q: z.string().max(200).optional(),
+    from: IsoDate.optional(),
+    to: IsoDate.optional(),
+    cleared: z.enum(CLEARED_STATES).optional(),
+    flag: z.enum([...FLAG_COLORS, "none"]).optional(),
+    categoryId: z.string().optional(),
+    payeeId: z.string().optional(),
+  })
+  .describe("The same filter as the register's query parameters")
+  .openapi("RegisterFilter");
+
+const SelectionSchema = z
+  .union([
+    z.strictObject({
+      ids: z.array(z.string()).min(1).max(1000).describe("Transactions ticked one by one"),
+    }),
+    z.strictObject({
+      filter: RegisterFilterSchema.describe("Select all: every transaction this filter matches"),
+      exclude: z.array(z.string()).max(1000).default([]).describe("Unticked after selecting all"),
+    }),
+  ])
+  .openapi("TransactionSelection");
+
+const BulkActionSchema = z
+  .discriminatedUnion("type", [
+    z.strictObject({ type: z.literal("cleared"), cleared: SettableCleared }),
+    z.strictObject({ type: z.literal("flag"), flag: Flag }),
+    z.strictObject({ type: z.literal("categorize"), categoryId: z.string() }),
+  ])
+  .openapi("BulkAction");
+
+export const summarizeSelection = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/selection",
+  operationId: "summarizeSelection",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "How many transactions a selection holds and their total",
+  request: { params: BudgetParams, body: json(z.object({ selection: SelectionSchema })) },
+  responses: {
+    200: ok(
+      "Selection",
+      z
+        .object({
+          count: z.number().int(),
+          total: zMinorUnits.describe("Sum of the amounts, in the budget's currency"),
+        })
+        .openapi("SelectionSummary"),
+    ),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    404: notFound,
+  },
+});
+
+export const bulkUpdateTransactions = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/bulk",
+  operationId: "bulkUpdateTransactions",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Apply one action to every selected transaction, all or nothing",
+  description:
+    "Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every " +
+    "selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing " +
+    "changed) when the selection holds rows the action isn't settled for yet: reconciled " +
+    "transactions for `cleared`; splits, transfers without a category and tracking-account " +
+    "transactions for `categorize` (see docs/verify.md).",
+  request: {
+    params: BudgetParams,
+    body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
+  },
+  responses: {
+    200: ok("Updated", z.object({ updated: z.number().int() }).openapi("BulkUpdateResult")),
+    400: jsonError(
+      "Invalid input, a category transactions can't use, or rows the action can't take " +
+        "(BULK_NOT_ALLOWED; `details` says which and how many)",
+    ),
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: notFound,
+  },
+});

@@ -1,7 +1,23 @@
 # everycent — agent guide
 
 Read `README.md` first, then `docs/deferred.md` (known gaps and work deliberately left for later
-phases — check it before starting a phase, and add to it whenever you defer something).
+phases — check it before starting a phase, and add to it whenever you defer something), then
+`docs/verify.md` (open questions about how YNAB behaves).
+
+## Matching YNAB: confirm, don't assume
+
+everycent follows YNAB's behaviour. Only build YNAB behaviour you've **confirmed** — from YNAB's
+help center (support.ynab.com), its API docs, or the user. When you're unsure how YNAB does
+something:
+
+- Don't guess and don't fill the gap with a "sensible default". Skip that part of the feature.
+- Add an entry to `docs/verify.md`: the question, what you found (with links), the options you
+  see, and what's waiting on the answer.
+- Tell the user what you skipped and that it's in `docs/verify.md`.
+
+The user checks `docs/verify.md` in YNAB and settles the entries in a separate session; then
+build what was skipped and remove the entry. Never write "as YNAB does" in code or docs for
+behaviour you haven't confirmed.
 
 ## Invariants (never break)
 

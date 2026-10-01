@@ -1,4 +1,5 @@
 export type ColumnId =
+  | "select"
   | "flag"
   | "account"
   | "date"
@@ -27,6 +28,7 @@ interface ColumnSpec {
 }
 
 export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
+  select: { header: "Select", width: "2.25rem", align: "center", srOnly: true },
   flag: { header: "Flag", width: "2.5rem", align: "center", srOnly: true },
   account: { header: "Account", width: "9rem" },
   date: { header: "Date", width: "9.25rem" },
@@ -46,6 +48,7 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
  */
 export function registerColumns(allAccounts: boolean): ColumnId[] {
   return [
+    "select",
     "flag",
     ...(allAccounts ? (["account"] as const) : []),
     "date",

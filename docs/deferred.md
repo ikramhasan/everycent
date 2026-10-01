@@ -87,6 +87,21 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Category activity for split lines (phase 6) must read `sub_transaction`, not the split's own
   null category.
 
+## Bulk edit (phase 5f follow-ups)
+
+- Built: ticking rows (shift-click for a range), "Select all matching" (every transaction the
+  filter matches, loaded or not, minus unticked ones), the count and total, and bulk mark
+  cleared/uncleared, flag and categorize, each all or nothing (`POST …/transactions/bulk`).
+- Bulk memo exists in YNAB's web app, but how it treats existing memos isn't documented, so it
+  waits on docs/verify.md.
+- Waiting on docs/verify.md: bulk move to account, bulk delete (and confirm vs. undo), and what bulk
+  categorize does with splits. Until then, categorize refuses a selection with splits, transfers
+  within the budget or tracking-account rows, and cleared refuses reconciled rows; nothing changes
+  and the message says how many to unselect.
+- YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,
+  enter now and make repeating (10).
+- Changing the search or filters clears the selection.
+
 ## Flags (phase 5d follow-ups)
 
 - Flags are per transaction; split lines have none (YNAB is the same). Filtering by flag comes
