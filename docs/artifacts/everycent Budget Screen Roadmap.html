@@ -165,7 +165,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node" href="#s6f"><span class="n">6f</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
     </div>
     <div class="side"><b>Outside Phase 6:</b> credit card payment categories (Phase 7), targets and anything "underfunded" (Phase 8), multi-currency (Phase 11).</div>
-    <div class="then">Main is at <span class="mono">8fbf053</span> (5e); <span class="mono">phase-5f-bulk</span> is at <span class="mono">17eaa3f</span> (5f plus the YNAB-parity rework), not merged yet. To pick up: <span class="mono">Merge phase-5f-bulk into main, then start Phase 6a. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
+    <div class="then">Phase 5 is merged: main has 5f and the YNAB-parity rework (<span class="mono">17eaa3f</span>). To pick up: <span class="mono">Start Phase 6a. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -173,7 +173,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <div class="num">00</div>
       <div class="body">
         <div class="head"><h2>Before Phase 6</h2><span class="pill done">Done</span></div>
-        <p class="why">Every <code>docs/verify.md</code> entry was checked hands-on in YNAB's web app (a test account in Chrome), and the register was rebuilt to match it one to one. Committed on <code>phase-5f-bulk</code> (<span class="mono">17eaa3f</span>); merging into main is the first step of 6a. None of it blocked Phase 6: the open questions were all register behaviour, not budget math.</p>
+        <p class="why">Every <code>docs/verify.md</code> entry was checked hands-on in YNAB's web app (a test account in Chrome), and the register was rebuilt to match it one to one. Merged into main (<span class="mono">17eaa3f</span>). None of it blocked Phase 6: the open questions were all register behaviour, not budget math.</p>
         <div class="meta">
           <div>
             <h3>Built</h3>
@@ -198,7 +198,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           </div>
           <div>
             <h3>Depends on</h3>
-            <ul><li>Phase 4 categories, Phase 5 register</li><li><code>phase-5f-bulk</code> merged</li></ul>
+            <ul><li>Phase 4 categories, Phase 5 register (merged)</li></ul>
             <h3>To check in YNAB</h3>
             <ul><li class="q">Do hidden categories count in group totals?</li><li class="q">Is future-dated spending in a month's Activity before its date?</li><li class="q">How far back and forward can you navigate?</li></ul>
             <h3>Not here</h3>
