@@ -10,7 +10,12 @@ import { type Db, transferPayeeId } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { applyUpdate, deleteWithTransfers } from "./handlers";
-import { matchingTransactions, type RegisterFilter, type SearchSettings } from "./register-query";
+import {
+  matchingTransactions,
+  queryRegisterRows,
+  type RegisterFilter,
+  type SearchSettings,
+} from "./register-query";
 import type { bulkUpdateTransactions, summarizeSelection } from "./routes";
 import {
   type AccountRow,
@@ -134,7 +139,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
   );
   await checkFilterAccount(db, budgetId, selection);
 
-  const updated = await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Lock the selection before reading what the actions below check.
     const where = selectedWhere(tx, budgetId, selection, budget);
     const locked = await tx
@@ -143,33 +148,49 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       .where(where)
       .orderBy(transaction.id)
       .for("update");
-    if (locked.length === 0) return 0;
+    if (locked.length === 0) return { updated: 0, before: [] };
     const lockedIds = locked.map((r) => r.id);
+    const beforeRows = await queryRegisterRows(tx, budgetId, lockedIds);
+    const beforeById = new Map(beforeRows.map((row) => [row.id, row]));
     const rows = await selectedRows(tx, selectedIds(lockedIds));
 
+    let updatedIds: string[];
     switch (action.type) {
       case "cleared": {
         const ids = rows.filter((r) => r.cleared !== "reconciled").map((r) => r.id);
         if (ids.length > 0) {
           await tx.update(transaction).set({ cleared: action.cleared }).where(selectedIds(ids));
         }
-        return ids.length;
+        updatedIds = ids;
+        break;
       }
       case "flag":
         await tx.update(transaction).set({ flag: action.flag }).where(selectedIds(lockedIds));
-        return lockedIds.length;
+        updatedIds = lockedIds;
+        break;
       case "memo":
         await tx.update(transaction).set({ memo: action.memo }).where(selectedIds(lockedIds));
-        return lockedIds.length;
+        updatedIds = lockedIds;
+        break;
       case "categorize":
-        return categorize(tx, budgetId, rows, action.categoryId);
+        updatedIds = await categorize(tx, budgetId, rows, action.categoryId);
+        break;
       case "move":
-        return move(tx, budgetId, lockedIds, action.accountId);
+        updatedIds = await move(tx, budgetId, lockedIds, action.accountId);
+        break;
       case "delete":
-        return remove(tx, budgetId, lockedIds);
+        updatedIds = await remove(tx, budgetId, lockedIds);
+        break;
     }
+    return {
+      updated: updatedIds.length,
+      before: updatedIds.flatMap((id) => {
+        const row = beforeById.get(id);
+        return row ? [row] : [];
+      }),
+    };
   });
-  return c.json({ updated }, 200);
+  return c.json(result, 200);
 };
 
 /**
@@ -216,7 +237,7 @@ async function categorize(tx: Db, budgetId: string, rows: SelectedRow[], categor
   if (categorized.length > 0) {
     await tx.update(transaction).set({ categoryId }).where(selectedIds(categorized));
   }
-  return keepSplit.length + categorized.length;
+  return [...keepSplit, ...categorized];
 }
 
 /**
@@ -226,13 +247,13 @@ async function categorize(tx: Db, budgetId: string, rows: SelectedRow[], categor
 async function move(tx: Db, budgetId: string, ids: readonly string[], accountId: string) {
   const target = await findAccount(tx, budgetId, accountId);
   assertOpen(target);
-  let moved = 0;
+  const moved: string[] = [];
   for (const id of ids) {
     // Read afresh: an earlier move in this loop may have changed it (both sides of a transfer).
     const row = await lockTransaction(tx, budgetId, id);
     if (!row || row.accountId === target.id) continue;
     if (row.transferSubTransactionId) {
-      if (await moveSplitTransferSide(tx, budgetId, row, target)) moved++;
+      if (await moveSplitTransferSide(tx, budgetId, row, target)) moved.push(id);
       continue;
     }
     if (row.transferTransactionId) {
@@ -241,7 +262,7 @@ async function move(tx: Db, budgetId: string, ids: readonly string[], accountId:
     }
     if (await hasTransferLineTo(tx, row.id, target.id)) continue;
     await applyUpdate(tx, budgetId, row.id, { accountId: target.id });
-    moved++;
+    moved.push(id);
   }
   return moved;
 }
@@ -302,13 +323,13 @@ async function moveSplitTransferSide(
  * splits' transfer lines are skipped: they go with their split.
  */
 async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
-  let deleted = 0;
+  const deleted: string[] = [];
   for (const id of ids) {
     // Gone already when it was the other side of a transfer deleted earlier in this loop.
     const row = await lockTransaction(tx, budgetId, id);
     if (!row || row.transferSubTransactionId) continue;
     await deleteWithTransfers(tx, budgetId, row);
-    deleted++;
+    deleted.push(id);
   }
   return deleted;
 }

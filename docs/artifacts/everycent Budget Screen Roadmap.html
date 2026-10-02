@@ -149,23 +149,23 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 6 · plan as of 2 Oct 2026</div>
+    <div class="eyebrow">everycent · roadmap phase 6 · updated 3 Oct 2026 (6a–6e built)</div>
     <h1>Build sequence for the budget screen</h1>
-    <p class="lede">Phase 5 built the register; Phase 6 turns it into a budget. Its fifteen README items are split into <strong>six stages</strong>, built in dependency order, after <strong>closing out Phase 5</strong>. Each stage gets its own branch, and puts its YNAB questions in <code>docs/verify.md</code> before building them.</p>
+    <p class="lede">Phase 5 built the register; Phase 6 turns it into a budget. Its fifteen README items are split into <strong>six stages</strong>, built in dependency order, after <strong>closing out Phase 5</strong>. Each stage gets its own branch, stacked on the one before; all of Phase 6 is merged into main at once when it's done. YNAB behaviour that can't be checked goes to <code>docs/verify.md</code>.</p>
   </header>
 
   <section class="flow" aria-label="Dependency order">
     <div class="lane">
       <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Before Phase 6</span><span class="s">YNAB parity for the register</span></a>
-      <a class="node now" href="#s6a"><span class="n">6a · next</span><span class="t">Month view</span><span class="s">Assigned, activity, available</span></a>
-      <a class="node" href="#s6b"><span class="n">6b</span><span class="t">Assign</span><span class="s">Ready to Assign, future months</span></a>
-      <a class="node" href="#s6c"><span class="n">6c</span><span class="t">Overspending</span><span class="s">Move and cover money</span></a>
-      <a class="node" href="#s6d"><span class="n">6d</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
-      <a class="node" href="#s6e"><span class="n">6e</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
-      <a class="node" href="#s6f"><span class="n">6f</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
+      <a class="node done" href="#s6a"><span class="n">6a · done</span><span class="t">Month view</span><span class="s">Assigned, activity, available</span></a>
+      <a class="node done" href="#s6b"><span class="n">6b · done</span><span class="t">Assign</span><span class="s">Ready to Assign, future months</span></a>
+      <a class="node done" href="#s6c"><span class="n">6c · done</span><span class="t">Overspending</span><span class="s">Move and cover money</span></a>
+      <a class="node done" href="#s6d"><span class="n">6d · done</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
+      <a class="node done" href="#s6e"><span class="n">6e · done</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
+      <a class="node done" href="#s6f"><span class="n">6f · done</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
     </div>
     <div class="side"><b>Outside Phase 6:</b> credit card payment categories (Phase 7), targets and anything "underfunded" (Phase 8), multi-currency (Phase 11).</div>
-    <div class="then">Phase 5 is merged: main has 5f and the YNAB-parity rework (<span class="mono">17eaa3f</span>). To pick up: <span class="mono">Start Phase 6a. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
+    <div class="then">6a–6e are built on stacked branches (<span class="mono">phase-6a-month-view</span> → <span class="mono">phase-6b-assign</span> → <span class="mono">phase-6c-move-money</span> → <span class="mono">phase-6d-inspector</span> → <span class="mono">phase-6e-auto-assign</span>), not yet merged: Phase 6 goes into main in one merge. To pick up: <span class="mono">Start Phase 6f on a branch from phase-6e-auto-assign. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -189,7 +189,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6a">
       <div class="num">6a</div>
       <div class="body">
-        <div class="head"><h2>Month view</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Month view</h2><span class="pill done">Done</span><span class="src">12a936e</span></div>
         <p class="why">The budget page shows every category with what was assigned, spent and is available this month, grouped like the category list. Everything else in Phase 6 reads these numbers.</p>
         <div class="meta">
           <div>
@@ -199,10 +199,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Depends on</h3>
             <ul><li>Phase 4 categories, Phase 5 register (merged)</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">Do hidden categories count in group totals?</li><li class="q">Is future-dated spending in a month's Activity before its date?</li><li class="q">How far back and forward can you navigate?</li></ul>
-            <h3>Not here</h3>
-            <ul><li>Credit card payment categories (Phase 7)</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Hidden categories leave their group's totals; a "Hidden Categories" row carries them and unhides one or all</li><li>Future-dated spending isn't Activity until its date (YNAB makes it a scheduled transaction)</li><li>Months run from the one before the oldest transaction to the one after the current month, or after the latest month with money assigned</li><li>Negative Available starts the next month at zero; an "Uncategorized Transactions" row shows in months that have some</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Where collapsed groups are kept (built: this browser); which month the screen reopens on (built: the current one)</li></ul>
           </div>
         </div>
       </div>
@@ -210,7 +210,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6b">
       <div class="num">6b</div>
       <div class="body">
-        <div class="head"><h2>Assigning and Ready to Assign</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Assigning and Ready to Assign</h2><span class="pill done">Done</span><span class="src">6ea31ed</span></div>
         <p class="why">Give every dollar a job: assign money to categories and see what's left in Ready to Assign, which is a hard-coded zero today.</p>
         <div class="meta">
           <div>
@@ -220,8 +220,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Depends on</h3>
             <ul><li>6a</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">How money assigned in future months counts in Ready to Assign</li><li class="q">Does future-dated income count before its date?</li><li class="q">Where "income for future months" lives today, and what it does</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Ready to Assign = income up to the month − assigned up to it − earlier months' overspending</li><li>Money assigned in later months comes off it, but never pushes a month below zero</li><li>Future-dated income doesn't count until its date</li><li>There's no separate next-month income any more: money is assigned in future months, shown in "Assigned in Future Months"</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Negative wording ("Overdraft?" vs "You assigned more than you have"); where the future-months panel shows</li><li class="q">"Fund categories" setup step: YNAB only runs onboarding for new accounts, so it's skipped</li></ul>
           </div>
         </div>
       </div>
@@ -229,7 +231,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6c">
       <div class="num">6c</div>
       <div class="body">
-        <div class="head"><h2>Overspending and moving money</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Overspending and moving money</h2><span class="pill done">Done</span><span class="src">2082975</span></div>
         <p class="why">When a category goes negative, show it, and make fixing it one step.</p>
         <div class="meta">
           <div>
@@ -239,8 +241,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Depends on</h3>
             <ul><li>6b</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">What happens to cash overspending at month end: does it come out of next month's Ready to Assign?</li><li class="q">Does moving money leave a record you can see later?</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Yes: overspending comes out of the next month's Ready to Assign</li><li>Yes: "Recent Moves" logs every Assigned / Removed / Moved change by day; built</li><li>Moving changes both categories' Assigned; covering moves as much as the source has; "Fix This" un-assigns the shortfall</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Moving more than a category has; deleting a category with money but no transactions; Recent Moves' length; Fix This's month picker</li><li>Progress bars and "Fully Spent" wait for targets (Phase 8)</li></ul>
           </div>
         </div>
       </div>
@@ -248,16 +252,20 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6d">
       <div class="num">6d</div>
       <div class="body">
-        <div class="head"><h2>Category inspector and drill-down</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Category inspector and drill-down</h2><span class="pill done">Done</span></div>
         <p class="why">Click a category to see where its number comes from, and the transactions behind it.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Inspector: cash left over, assigned, activity, available; the category note <span class="src">P6</span></li><li>Activity drill-down: the register searched for that category and month (<code>Category: …</code> plus the date range), as YNAB's search does <span class="src">P6</span></li><li>Budget filters: overspent, money available <span class="src">P6</span></li></ul>
+            <ul><li>Inspector: cash left over, assigned, activity, available; the category note <span class="src">P6</span></li><li>Activity drill-down: the month's transactions for a category, group or Uncategorized; one opens its register <span class="src">P6</span></li><li>Budget filters: overspent, money available <span class="src">P6</span></li></ul>
           </div>
           <div>
             <h3>Depends on</h3>
             <ul><li>6a (6c for overspent)</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Clicking a name selects that category alone (row checkboxes, "Check all"); the sidebar shows its breakdown, the overspent message and an inline note. Several selected, or none, show the month's summary</li><li>Activity opens a popover (Account, Date, Payee, Memo, Amount), not the register; a row opens its register on that transaction</li><li>Views leave hidden categories out, keep across months and reloads, and say so when empty ("That's a win!")</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Where the view is kept; group totals in a view; a tracking account's starting balance in a group's popover</li></ul>
             <h3>Not here</h3>
             <ul><li>The target part of the inspector, and the underfunded and snoozed filters (Phase 8)</li></ul>
           </div>
@@ -267,7 +275,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6e">
       <div class="num">6e</div>
       <div class="body">
-        <div class="head"><h2>Auto-assign</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Auto-assign</h2><span class="pill done">Done</span></div>
         <p class="why">One click to fill categories from history instead of typing every amount.</p>
         <div class="meta">
           <div>
@@ -277,8 +285,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Depends on</h3>
             <ul><li>6b</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">How many months the averages cover, and whether empty months count</li><li class="q">The current names and set of options</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Averages: up to the last 12 months, from the first with money assigned or spent</li><li>An option replaces Assigned; the whole plan gets a preview, a selection applies at once</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Rounding of averages; the banner's Assign pop-up (not built)</li></ul>
             <h3>Not here</h3>
             <ul><li>"Underfunded" needs targets (Phase 8)</li></ul>
           </div>
@@ -288,18 +298,18 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6f">
       <div class="num">6f</div>
       <div class="body">
-        <div class="head"><h2>Undo and redo</h2><span class="pill">Planned</span></div>
-        <p class="why">Take back a budget or transaction edit, including one a partner made on the same budget.</p>
+        <div class="head"><h2>Undo and redo</h2><span class="pill done">Done</span></div>
+        <p class="why">Take back your own budget or transaction edits. Each browser keeps an independent history, while every undo and redo saves its resulting state through the server API.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Undo / redo for assigning, moving money and transaction edits <span class="src">P6</span></li><li>Kept on the server, so it survives a reload and works for both partners</li><li>Undo for deletes too: YNAB deletes (single and bulk) without asking and offers Undo, which we can't yet</li></ul>
+            <ul><li>Undo / redo for assigning, moving money, Auto-Assign and transaction edits <span class="src">P6</span></li><li>Kept in browser memory and scoped to the open budget, so partners cannot undo one another's history</li><li>Undo and redo use authenticated mutations, so the resulting data is saved on the server</li><li>Undo for single and bulk deletes; recreated rows receive new server IDs</li></ul>
           </div>
           <div>
             <h3>Depends on</h3>
             <ul><li>6b and 6c</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">Per person or per budget, and how far back</li><li class="q">What YNAB's undo covers today, and whether it lasts past a refresh</li></ul>
+            <h3>Checked in YNAB</h3>
+            <ul><li>Plan toolbar placement, disabled states and Undo/Redo labels confirmed in the web app</li><li>This implementation follows the user's collaboration rule rather than YNAB's shared/persistent behavior: history is local and ends on reload</li></ul>
           </div>
         </div>
       </div>
@@ -312,7 +322,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <li><strong>Match YNAB one to one; check, don't assume.</strong> When unsure how YNAB behaves, try it in YNAB's web app with the Chrome tool (a test account is signed in). Anything the app can't settle is skipped and listed in <code>docs/verify.md</code>.</li>
       <li><strong>Money is never a float.</strong> Assigned amounts are <code>bigint</code> minor units with a currency, like every other amount.</li>
       <li><strong>The server does the math.</strong> Activity, available and Ready to Assign are computed by the API, as the register's balances are.</li>
-      <li><strong>One branch per stage.</strong> Each is agreed in chat, built, checked in the browser in both themes, and <code>pnpm check</code> passes before it's merged.</li>
+      <li><strong>One branch per stage, one merge for the phase.</strong> Each stage is built on a branch stacked on the last, checked in the browser in both themes, and committed with <code>pnpm check</code> passing; Phase 6 is merged into main as a whole.</li>
     </ul>
   </section>
 

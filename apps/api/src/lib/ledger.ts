@@ -159,6 +159,11 @@ export async function findOrCreatePayee(db: Db, budgetId: string, name: string) 
   return row.id;
 }
 
+/** The server's calendar date, for requests that weren't given the user's today. */
+export function serverToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export interface AccountBalances {
   cleared: bigint;
   uncleared: bigint;

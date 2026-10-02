@@ -1,6 +1,19 @@
+import type { CurrencyCode } from "@everycent/engine";
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  char,
+  date,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { budgetAccount } from "./account";
+import { user } from "./auth";
 import { budget } from "./budget";
 import { timestamps } from "./columns";
 
@@ -72,4 +85,60 @@ export const category = pgTable(
       .on(t.budgetId, t.internalKind)
       .where(sql`${t.internalKind} is not null`),
   ],
+);
+
+/**
+ * Money assigned to a category in one month (YNAB's "Assigned"). A row stays once a month has
+ * been assigned in, even at zero: YNAB keeps such a month (and the one after it) open.
+ */
+export const categoryAssignment = pgTable(
+  "category_assignment",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    categoryId: text()
+      .notNull()
+      .references(() => category.id, { onDelete: "cascade" }),
+    /** First day of the month, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    /** Minor units; negative when money was taken out. */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("category_assignment_category_month_idx").on(t.categoryId, t.month),
+    index("category_assignment_budget_month_idx").on(t.budgetId, t.month),
+  ],
+);
+
+/**
+ * YNAB's "Recent Moves": every change to assigned money. From Ready to Assign (its internal
+ * category) to a category is "Assigned", back to it "Removed", between two categories "Moved".
+ */
+export const moneyMove = pgTable(
+  "money_move",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    /** Who moved the money; kept when they leave the budget. */
+    userId: text().references(() => user.id, { onDelete: "set null" }),
+    fromCategoryId: text()
+      .notNull()
+      .references(() => category.id, { onDelete: "cascade" }),
+    toCategoryId: text()
+      .notNull()
+      .references(() => category.id, { onDelete: "cascade" }),
+    /** First day of the month the money moved in, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    /** Minor units, always positive. */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("money_move_budget_created_idx").on(t.budgetId, t.createdAt)],
 );

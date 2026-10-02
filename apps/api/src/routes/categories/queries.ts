@@ -1,6 +1,14 @@
 import { newId, sql } from "@everycent/db";
-import { category, categoryGroup, subTransaction, transaction } from "@everycent/db/schema";
+import {
+  category,
+  categoryAssignment,
+  categoryGroup,
+  subTransaction,
+  transaction,
+} from "@everycent/db/schema";
+import { monthOf } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
+import { adjustAssigned } from "../../lib/assignments";
 import { AppError } from "../../lib/errors";
 import { type Db, internalCategoryId } from "../../lib/ledger";
 
@@ -168,7 +176,7 @@ export async function reassignHistory(
   categoryIds: readonly string[],
   targetId: string | undefined,
 ) {
-  if (!(await hasHistory(db, categoryIds))) return;
+  if (!targetId && !(await hasHistory(db, categoryIds))) return;
   if (!targetId) {
     throw new AppError(
       409,
@@ -184,7 +192,23 @@ export async function reassignHistory(
   if (categoryIds.includes(target.id) || target.linkedAccountId) {
     throw new AppError(400, "BAD_REQUEST", "History can't be moved to that category");
   }
-  // Phase 6 must move assigned amounts too (docs/deferred.md).
+  // As in YNAB, the assigned money goes along (and with it what's available). Moved to Ready to
+  // Assign or Uncategorized, it just returns to Ready to Assign with the deleted rows.
+  const assignments = target.internalKind
+    ? []
+    : await db
+        .select()
+        .from(categoryAssignment)
+        .where(inArray(categoryAssignment.categoryId, [...categoryIds]));
+  for (const a of assignments) {
+    await adjustAssigned(
+      db,
+      { id: budgetId, currency: a.currency },
+      target.id,
+      monthOf(a.month),
+      a.amount,
+    );
+  }
   await db
     .update(transaction)
     .set({ categoryId: target.id })

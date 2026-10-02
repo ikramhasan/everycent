@@ -436,7 +436,17 @@ export const bulkUpdateTransactions = createRoute({
     body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
   },
   responses: {
-    200: ok("Updated", z.object({ updated: z.number().int() }).openapi("BulkUpdateResult")),
+    200: ok(
+      "Updated",
+      z
+        .object({
+          updated: z.number().int(),
+          before: z
+            .array(TransactionSchema)
+            .describe("Pre-edit rows for the caller's local undo history"),
+        })
+        .openapi("BulkUpdateResult"),
+    ),
     400: jsonError("Invalid input, a category transactions can't use, or a closed account"),
     401: jsonError("Not signed in"),
     403: forbidden,

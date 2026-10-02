@@ -1,0 +1,78 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { AvailableButton, FixThisButton, type MoveActions } from "./move-money";
+
+const format = (a: string) => `$${Number(a) / 100}`;
+
+function makeActions(): MoveActions & { move: ReturnType<typeof vi.fn> } {
+  return {
+    options: [
+      { id: "rta", name: "Ready to Assign", group: "Inflow", available: "100000" },
+      { id: "rent", name: "Rent", group: "Bills", available: "5000" },
+      { id: "phone", name: "Phone", group: "Bills", available: "-1500" },
+      { id: "food", name: "Food", group: "Needs", available: "0" },
+    ],
+    readyToAssignId: "rta",
+    parse: (text) => (/^\d+$/.test(text) ? BigInt(text) * 100n : "Enter an amount"),
+    toInput: (a) => String(Number(a) / 100),
+    move: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe("AvailableButton", () => {
+  it("moves money to another category", async () => {
+    const actions = makeActions();
+    render(
+      <AvailableButton
+        categoryId="rent"
+        categoryName="Rent"
+        amount="5000"
+        format={format}
+        actions={actions}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Move Rent: $50" }));
+    const amount = screen.getByLabelText("Move");
+    expect(amount).toHaveValue("50");
+    await userEvent.clear(amount);
+    await userEvent.type(amount, "20");
+    await userEvent.click(screen.getByRole("combobox", { name: "Move to" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Food/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(actions.move).toHaveBeenCalledWith("rent", "food", 2000n);
+  });
+
+  it("covers overspending with as much as the source has", async () => {
+    const actions = makeActions();
+    render(
+      <AvailableButton
+        categoryId="phone"
+        categoryName="Phone"
+        amount="-8000"
+        format={format}
+        actions={actions}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-80" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Cover overspending from" }));
+    // Only places with money are offered.
+    expect(screen.queryByRole("option", { name: /Food/ })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: /Rent/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(actions.move).toHaveBeenCalledWith("rent", "phone", 5000n);
+  });
+});
+
+describe("FixThisButton", () => {
+  it("un-assigns the shortfall from a category", async () => {
+    const actions = makeActions();
+    render(<FixThisButton readyToAssign="-1200" format={format} actions={actions} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fix This" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Un-assign money from" }));
+    expect(screen.queryByRole("option", { name: /Ready to Assign/ })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: /Rent/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(actions.move).toHaveBeenCalledWith("rent", "rta", 1200n);
+  });
+});

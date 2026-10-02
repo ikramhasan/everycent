@@ -103,13 +103,16 @@ describe("bulk edit", () => {
     const b = await add({ payeeName: "B" });
     const c = await add({ payeeName: "C" });
     const ids = [a.id, b.id];
-    expect(
-      (
-        await json<{ updated: number }>(
-          await bulk({ ids }, { type: "cleared", cleared: "cleared" }),
-        )
-      ).updated,
-    ).toBe(2);
+    const first = await json<{ updated: number; before: Txn[] }>(
+      await bulk({ ids }, { type: "cleared", cleared: "cleared" }),
+    );
+    expect(first.updated).toBe(2);
+    expect(first.before).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: a.id, cleared: "uncleared" }),
+        expect.objectContaining({ id: b.id, cleared: "uncleared" }),
+      ]),
+    );
     await bulk({ ids }, { type: "flag", flag: "green" });
     await bulk({ ids }, { type: "categorize", categoryId: groceries.id });
     const rows = await all();

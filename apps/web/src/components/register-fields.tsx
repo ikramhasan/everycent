@@ -29,7 +29,7 @@ import {
 } from "@everycent/ui/components/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import { type CategoryOption, categoryLabel, type Payee, transferLabel } from "@/lib/transactions";
 
@@ -295,6 +295,8 @@ export function CategoryField({
   onSplit,
   categories,
   autoFocus,
+  placeholder = "Uncategorized",
+  describe,
 }: {
   label?: string;
   value: string | null;
@@ -302,6 +304,9 @@ export function CategoryField({
   onSplit?: () => void;
   categories: readonly CategoryOption[];
   autoFocus?: boolean;
+  placeholder?: string;
+  /** Extra text at the end of an option, e.g. what's available in it. */
+  describe?: (option: CategoryOption) => ReactNode;
 }) {
   const groups = useMemo(() => {
     const byGroup = new Map<string, CategoryOption[]>();
@@ -330,7 +335,7 @@ export function CategoryField({
     >
       <ComboboxInput
         aria-label={label}
-        placeholder="Uncategorized"
+        placeholder={placeholder}
         showTrigger={false}
         showClear={selected !== null}
         autoFocus={autoFocus}
@@ -350,6 +355,11 @@ export function CategoryField({
                       <>
                         <Split className="size-4 text-muted-foreground" /> Split
                       </>
+                    ) : describe ? (
+                      <span className="flex w-full items-center justify-between gap-3">
+                        <span className="truncate">{option.name}</span>
+                        <span className="shrink-0 tabular-nums">{describe(option)}</span>
+                      </span>
                     ) : (
                       option.name
                     )}

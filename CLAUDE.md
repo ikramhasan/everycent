@@ -11,12 +11,18 @@ Only build YNAB behaviour you've **confirmed** — from YNAB's help center (supp
 API docs, the user, or the real YNAB app.
 
 **Check the real app.** Whenever you're unsure how something should work or how YNAB does it,
-open YNAB's web app (app.ynab.com) with the Chrome browser tool (claude-in-chrome) and try it.
+open YNAB's web app (app.ynab.com) in the user's Chrome and try it. Use whichever tool connects
+to that browser in your harness:
+
+- **Claude Code:** the Chrome browser tool, claude-in-chrome.
+- **Other harnesses:** the Chrome MCP server configured there.
+
 The user is signed in there with a test account made for this, so you can add test accounts and
 transactions and run the actions you're checking. Look before asking the user, and note what you
-found (in `docs/verify.md`, or in the commit/plan you're working on).
+found (in `docs/verify.md`, or in the commit/plan you're working on). The same browser is how you
+check your own UI changes in the running app.
 
-If the app can't settle it (the browser tool isn't connected, or the case can't be reproduced):
+If the app can't settle it (no browser tool is connected, or the case can't be reproduced):
 
 - Don't guess and don't fill the gap with a "sensible default". Skip that part of the feature.
 - Add an entry to `docs/verify.md`: the question, what you found (with links), the options you

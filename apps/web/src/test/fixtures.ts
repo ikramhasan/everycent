@@ -1,0 +1,11 @@
+import type { components } from "@everycent/api-client";
+
+/** Auto-Assign amounts of a category without history. */
+export const NO_AUTO_ASSIGN: components["schemas"]["AutoAssignAmounts"] = {
+  assignedLastMonth: "0",
+  spentLastMonth: "0",
+  averageAssigned: "0",
+  averageSpent: "0",
+  resetAvailable: "0",
+  resetAssigned: "0",
+};

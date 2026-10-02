@@ -144,22 +144,25 @@ and fresh start (after phase 5 core).
 
 ### 6. Budget screen (the core loop)
 
-- [ ] Month view: Assigned, Activity, Available per category, group subtotals
-- [ ] Ready to Assign calculation (inflows − assigned, across months)
-- [ ] Assign money to categories; math in the amount field (`+`, `-`, `*`, `/`)
-- [ ] Available rolls over month to month
-- [ ] Cash overspending (reduces next month's Ready to Assign) — highlighted red
-- [ ] Move money between categories (and back to Ready to Assign)
-- [ ] Cover overspending flow
-- [ ] Over-assigned warning (Ready to Assign negative)
-- [ ] Month navigation, budgeting in future months, "assigned in future" indicator
-- [ ] Income for future months (assign next month's income)
-- [ ] Auto-assign / quick budget: underfunded, assigned last month, spent last month,
-      average assigned, average spent, reset available, reset assigned
-- [ ] Category inspector: balance breakdown (cash left over, assigned, activity), target, notes
-- [ ] Category activity drill-down (transactions for category + month)
+- [x] Month view: Assigned, Activity, Available per category, group subtotals
+- [x] Ready to Assign calculation (inflows − assigned, across months)
+- [x] Assign money to categories; math in the amount field (`+`, `-`, `*`, `/`)
+- [x] Available rolls over month to month
+- [x] Cash overspending (reduces next month's Ready to Assign) — highlighted red
+- [x] Move money between categories (and back to Ready to Assign), with Recent Moves
+- [x] Cover overspending flow
+- [x] Over-assigned warning (Ready to Assign negative)
+- [x] Month navigation, budgeting in future months, "assigned in future" indicator
+- [x] Income for future months (assign next month's income): today's YNAB has no separate
+      next-month income; money is assigned in future months instead
+- [x] Auto-assign / quick budget: assigned last month, spent last month, average assigned,
+      average spent, reset available, reset assigned (underfunded needs targets, phase 8)
+- [x] Category inspector: balance breakdown (cash left over, assigned, activity), notes (the
+      target part comes with phase 8)
+- [x] Category activity drill-down (transactions for category + month)
 - [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
-- [ ] Undo / redo for budget and transaction edits
+      (collapse, overspent and money available done; underfunded and snoozed need targets)
+- [x] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt
 

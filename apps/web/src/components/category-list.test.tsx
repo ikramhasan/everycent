@@ -2,6 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { CategoryList as CategoryListData } from "@/lib/categories";
+import type { BudgetMonthData } from "@/lib/months";
+import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import { CategoryList, type CategoryListActions } from "./category-list";
 
 const data: CategoryListData = {
@@ -95,8 +97,8 @@ const withCards: CategoryListData = {
   ],
 };
 
-function renderList(list: CategoryListData = data) {
-  const actions = Object.fromEntries(
+function makeActions() {
+  return Object.fromEntries(
     [
       "createGroup",
       "createCategory",
@@ -107,9 +109,50 @@ function renderList(list: CategoryListData = data) {
       "moveGroup",
       "moveCategory",
     ].map((name) => [name, vi.fn().mockResolvedValue(undefined)]),
-  ) as unknown as { [K in keyof CategoryListActions]: ReturnType<typeof vi.fn> };
-  render(<CategoryList data={list} actions={actions as unknown as CategoryListActions} />);
+  ) as unknown as CategoryListActions & {
+    [K in keyof CategoryListActions]: ReturnType<typeof vi.fn>;
+  };
+}
+
+function renderList(list: CategoryListData = data) {
+  const actions = makeActions();
+  render(<CategoryList data={list} actions={actions} />);
   return actions;
+}
+
+const totals = (assigned: string, activity: string, available: string) => ({
+  assigned,
+  activity,
+  available,
+  autoAssign: NO_AUTO_ASSIGN,
+});
+
+const month: BudgetMonthData = {
+  month: "2026-10",
+  currency: "USD",
+  firstMonth: "2026-09",
+  lastMonth: "2026-11",
+  readyToAssign: "0",
+  assignedInFuture: "0",
+  futureMonths: [],
+  categories: [
+    { categoryId: "c1", ...totals("100", "-30", "70"), autoAssign: NO_AUTO_ASSIGN },
+    { categoryId: "c2", ...totals("0", "-5", "-5"), autoAssign: NO_AUTO_ASSIGN },
+    { categoryId: "c3", ...totals("0", "-2", "-2"), autoAssign: NO_AUTO_ASSIGN },
+  ],
+  groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],
+  hidden: totals("0", "-2", "-2"),
+  uncategorized: { activity: "-9", available: "-9" },
+};
+
+function renderWithFigures() {
+  render(
+    <CategoryList
+      data={data}
+      actions={makeActions()}
+      figures={{ month, format: (a) => `A${a}` }}
+    />,
+  );
 }
 
 describe("CategoryList", () => {
@@ -174,15 +217,63 @@ describe("CategoryList", () => {
     expect(actions.deleteGroup).toHaveBeenCalledWith("g1", undefined);
   });
 
-  it("lists hidden groups and categories and can show them again", async () => {
+  it("unhides a category or group from the Hidden Categories row", async () => {
     const actions = renderList();
-    await userEvent.click(screen.getByRole("button", { name: /Hidden Categories \(2\)/ }));
-    const cable = screen.getByText("Cable").closest("[data-slot=item]");
-    await userEvent.click(within(cable as HTMLElement).getByRole("button", { name: "Show" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hidden Categories" }));
+    expect(screen.getByText("Click to unhide a category")).toBeInTheDocument();
+    expect(screen.getByText("Bills:")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cable" }));
     expect(actions.updateCategory).toHaveBeenCalledWith("c3", { hidden: false });
-    const old = screen.getByText("Old").closest("[data-slot=item]");
-    await userEvent.click(within(old as HTMLElement).getByRole("button", { name: "Show" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hidden Categories" }));
+    await userEvent.click(screen.getByRole("button", { name: "Old" }));
     expect(actions.updateGroup).toHaveBeenCalledWith("g2", { hidden: false });
+  });
+
+  it("shows all hidden categories at once", async () => {
+    const actions = renderList();
+    await userEvent.click(screen.getByRole("button", { name: "Hidden Categories" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show all hidden categories" }));
+    expect(actions.updateCategory).toHaveBeenCalledWith("c3", { hidden: false });
+    expect(actions.updateGroup).toHaveBeenCalledWith("g2", { hidden: false });
+  });
+
+  it("shows the month's numbers for categories, groups and hidden categories", () => {
+    renderWithFigures();
+    const bills = screen.getByRole("region", { name: "Bills" });
+    for (const amount of ["A-30", "A70", "A-35", "A65"]) {
+      expect(within(bills).getByText(amount)).toBeInTheDocument();
+    }
+    expect(within(bills).getAllByText("A-5")).toHaveLength(2);
+    // Hidden categories' totals sit on the Hidden Categories row, not in their group.
+    expect(within(bills).queryByText("A-2")).not.toBeInTheDocument();
+    expect(screen.getAllByText("A-2")).toHaveLength(2);
+    expect(screen.getByText("Uncategorized Transactions")).toBeInTheDocument();
+    expect(screen.getAllByText("A-9")).toHaveLength(2);
+  });
+
+  it("collapses a group and all groups", async () => {
+    const onCollapsedChange = vi.fn();
+    const { rerender } = render(
+      <CategoryList
+        data={data}
+        actions={makeActions()}
+        collapsed={new Set()}
+        onCollapsedChange={onCollapsedChange}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Collapse Bills" }));
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(new Set(["g1"]));
+    rerender(
+      <CategoryList
+        data={data}
+        actions={makeActions()}
+        collapsed={new Set(["g1"])}
+        onCollapsedChange={onCollapsedChange}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Expand all groups" }));
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(new Set());
   });
 
   it("locks the Credit Card Payments group and payment category names", async () => {
@@ -227,5 +318,69 @@ describe("CategoryList", () => {
     expect(within(dialog).queryByLabelText("Move its transactions to")).toBeNull();
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(actions.deleteCategory).toHaveBeenCalledWith("c2", undefined);
+  });
+
+  describe("selecting and views", () => {
+    function renderSelectable(shown?: ReadonlySet<string>) {
+      const selection = {
+        selected: new Set<string>(),
+        toggle: vi.fn(),
+        selectOnly: vi.fn(),
+        setAll: vi.fn(),
+      };
+      const onViewAll = vi.fn();
+      const actions = makeActions();
+      const { rerender } = render(
+        <CategoryList
+          data={data}
+          actions={actions}
+          figures={{
+            month,
+            format: (a) => `A${a}`,
+            selection,
+            shown,
+            emptyView: { message: "Nothing here.", onViewAll },
+          }}
+        />,
+      );
+      return { selection, onViewAll, rerender, actions };
+    }
+
+    it("selects a category from its name or checkbox, and all of them", async () => {
+      const user = userEvent.setup();
+      const { selection } = renderSelectable();
+      await user.click(screen.getByRole("button", { name: "Rent" }));
+      expect(selection.selectOnly).toHaveBeenCalledWith("c1");
+      // Selecting comes first: the name editor stays closed.
+      expect(screen.queryByLabelText("Category name")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("checkbox", { name: "Select Electric" }));
+      expect(selection.toggle).toHaveBeenCalledWith("c2");
+      await user.click(screen.getByRole("checkbox", { name: "Check all" }));
+      expect(selection.setAll).toHaveBeenCalledWith(["uncategorized", "c1", "c2"]);
+      await user.click(screen.getByRole("checkbox", { name: "Select Bills" }));
+      expect(selection.setAll).toHaveBeenLastCalledWith(["c1", "c2"]);
+    });
+
+    it("shows only the categories a view keeps, without the hidden row", () => {
+      renderSelectable(new Set(["c2"]));
+      expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Electric" })).toBeInTheDocument();
+      expect(screen.queryByText("Uncategorized Transactions")).not.toBeInTheDocument();
+      expect(screen.queryByText("Hidden Categories")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Some categories are hidden by your current view."),
+      ).toBeInTheDocument();
+      // A view can't be reordered.
+      expect(screen.queryByRole("button", { name: "Reorder Electric" })).not.toBeInTheDocument();
+    });
+
+    it("says so when a view keeps nothing", async () => {
+      const user = userEvent.setup();
+      const { onViewAll } = renderSelectable(new Set());
+      expect(screen.getByText("Nothing here.")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Bills" })).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "View All" }));
+      expect(onViewAll).toHaveBeenCalled();
+    });
   });
 });

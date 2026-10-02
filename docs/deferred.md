@@ -13,17 +13,49 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Budget math (phases 6–7)
 
+- All overspending counts as cash overspending (it comes out of the next month's Ready to Assign).
+  Phase 7 must treat spending on a credit card as credit overspending (new debt, yellow).
+- Past months' negative banner ("Overdraft?") has no "Next Steps" link (a YNAB help page).
+- The current month doesn't warn when a later month is negative (YNAB's future-months panel:
+  "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
+- YNAB draws a progress bar under every category (green as money is spent, red stripes when
+  overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
+  the bars belong with targets (phase 8), which they mostly show.
+- Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
+  partners cannot undo one another's history. Undo and redo still call the API, so the resulting
+  budget/transaction state is saved on the server. It covers assigning, moving and auto-assign,
+  plus single and bulk transaction create/edit/delete. A later partner edit to the same row can
+  still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
+  real-time collaboration or phase 19 audit history).
+- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
+  (docs/verify.md). Underfunded and Reduce Overfunding wait for targets (phase 8). The assigned
+  field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
+- YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
+  transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
+  so there's no pill yet.
+- YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
+  yet.
+- The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
+  list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
+  phone layout.
+- The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
+  on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
+  Overfunded and Snoozed views wait for targets (phase 8); Credit Spending is always zero until
+  phase 7.
+
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
-  the internal "Inflow: Ready to Assign" category. Ready to Assign on the budget page is still a
-  hard-coded zero until phase 6 computes it.
+  the internal "Inflow: Ready to Assign" category.
 - Credit-card starting debt has **no category**. Phase 7 must treat it as existing debt to be paid
   from the card's payment category (YNAB: "assign money to cover the starting balance directly to
   the Credit Card Payment category").
-- Deleting a category reassigns its **transactions** only. Phase 6 must also move assigned amounts
-  (YNAB reassigns transactions, assigned amounts and available money).
+- Deleting a category moves its transactions and assigned money to the category picked (YNAB
+  reassigns transactions, assigned amounts and available money). Moving to Ready to Assign or
+  Uncategorized returns the money to Ready to Assign.
 - Closing an account with a non-zero balance creates a "Manual Balance Adjustment" transaction;
-  for on-budget accounts it's categorized to Ready to Assign (as YNAB does). Verify this against
-  the phase 6/7 math once it exists, especially for credit cards.
+  for on-budget accounts it's categorized to Ready to Assign (as YNAB does). With the phase 6 math
+  that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
+  its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
 
 ## Onboarding and fresh start
 
@@ -87,17 +119,15 @@ before starting a roadmap phase** and remove an entry once it's done.
   split. The register hides those cells and the delete action.
 - A split with a reconciled transfer side can't drop or re-point that line (409
   `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
-- Category activity for split lines (phase 6) must read `sub_transaction`, not the split's own
-  null category.
 
 ## Bulk edit (phase 5f follow-ups)
 
 - Built, as checked in YNAB: Categorize (un-split dialog; splits with transfer lines stay split),
   Flag, Clear / Mark as Cleared / Mark as Uncleared (reconciled rows skipped), Memo… (replaces),
   Move to Account and Delete (no confirmation), skipping the rows an action doesn't apply to.
-- YNAB deletes with no confirmation because it has Undo/Redo in the register toolbar. We have no
-  undo yet, so a bulk delete can't be taken back. Undo/Redo needs its own design (it covers every
-  register edit, not just bulk ones).
+- YNAB deletes with no confirmation because it has Undo/Redo in the register toolbar. Single and
+  bulk transaction deletes can now be undone locally during the current page lifetime; reloading
+  intentionally clears that history so partners never share an undo stack.
 - YNAB's Categorize menu is category groups with their categories as submenus; ours is the
   category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
 - YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,

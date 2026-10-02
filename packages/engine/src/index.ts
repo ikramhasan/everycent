@@ -56,6 +56,26 @@ export {
   zero,
 } from "./money";
 export {
+  AUTO_ASSIGN_OPTIONS,
+  type AutoAssignOption,
+  addMonths,
+  autoAssignAmounts,
+  BUDGET_MONTH_PATTERN,
+  type BudgetMonth,
+  budgetMonthRange,
+  type CategoryMonth,
+  categoryMonth,
+  categoryOverspending,
+  isBudgetMonth,
+  type MonthAmount,
+  type MonthFigures,
+  monthBounds,
+  monthOf,
+  type ReadyToAssign,
+  readyToAssign,
+  zBudgetMonth,
+} from "./months";
+export {
   type FormatMoneyOptions,
   formatMoney,
   parseMoney,
