@@ -302,3 +302,44 @@ built as found:
 - **Uncategorized message:** "Uncategorized cash transactions still affect your plan! … $2.00
   will be deducted" quoted only the cash part (Available −$3.00). everycent still quotes all of
   it until credit overspending (7c) stops deducting the credit part.
+
+## Funded card spending (phase 7b)
+
+Checked against support.ynab.com ("Credit Card Activity", "Underfunded Alert in the Credit Card
+Payment Category") and in YNAB's web app on 2026-10-03 (test plan: cards Visa, Amex, Citi; test
+categories T1–T6). Confirmed:
+
+- Payment-category Available = Cash Left Over From Last Month + Assigned + Funded Spending −
+  Payments Made (help center). Its Activity = Funded Spending − Payments & Returns; the Activity
+  popover shows Spending, Returns, Total Spending, Funded Spending, Payments & Returns, Total
+  Activity.
+- Only the funded part moves: Rent ($10 assigned) with Wallet −$6 and Visa −$8 moved $4 to Visa's
+  payment category; Rent ended −$4 ("overspent … with credit").
+- Cash is funded first, whatever order the transactions were entered in on the same day:
+  Transportation ($10) with Visa −$8 entered first moved $8, then Wallet −$6 cut it to $4.
+- Spending and returns on the same card in the same category net out: Phone & Internet's Visa
+  −$5, −$7 and +$2 counted as $10 of Funded Spending, not $12 with a $2 return.
+- A card return in a category with no card spending that month moves money out of the payment
+  category into the category, overspent or not: Vacation +$2 and Groceries +$1 on Visa each
+  showed in Visa's Payments & Returns and raised the category's Available.
+
+### Several cards competing for one category's money
+
+- **Found:** with $5 assigned and two −$4 card purchases on the same day, one card got $4 and the
+  other $1, but not by entry order or sidebar order: Medical (Visa then Amex) and Emergency fund
+  (Amex then Visa) both gave Amex $4; Dining out (Citi then Amex) gave Citi $4.
+- **Question:** how does YNAB split a category's money between cards when it can't fund them all
+  (transaction date, account creation, transaction id …)? This is also 7c's "which payment method
+  is funded first" gate.
+
+### Returns on one card, spending on another, in the same category
+
+- **Found:** results didn't follow a single model, and the payment categories' numbers changed
+  after a page reload (Visa Funded Spending $35.00 live, $38.00–$39.00 after reloads with nothing
+  edited in between). Examples after reload: T2 ($0; Amex +$5, Visa −$3) ended Available $2.00;
+  T3 and T4 ($0; Amex +$3, Visa −$3) ended $0.00; Amex's Payments & Returns was $10.00 against
+  $22.00 of categorized Amex returns.
+- **Question:** does a return on one card fund spending on another card in the same category,
+  and how much leaves the returning card's payment category?
+- **Skipped:** 7b is not built until both questions above are settled (they decide what every
+  multi-card month computes).
