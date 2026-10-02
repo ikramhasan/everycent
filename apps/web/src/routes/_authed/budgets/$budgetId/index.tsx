@@ -16,6 +16,7 @@ import { MonthNav } from "@/components/month-nav";
 import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
+import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -40,6 +41,7 @@ import {
   toMoney,
   useCollapsedGroups,
 } from "@/lib/months";
+import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
@@ -61,6 +63,7 @@ function BudgetPage() {
     placeholderData: keepPreviousData,
   });
   const actions = useCategoryActions(budget.id);
+  const history = useUndo();
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
@@ -126,18 +129,40 @@ function BudgetPage() {
     const parse = (text: string) => parseMoneyInput(text, settings);
     const toInput = (amount: string) => toMoneyInput(amount, settings);
 
-    /** Saves a change to assigned money and shows the month it returns. */
-    async function save(work: () => Promise<BudgetMonthData>, failure: string) {
+    /** Saves a change to assigned money and records its local inverse. */
+    async function save(
+      work: () => Promise<BudgetMonthData>,
+      inverse: () => Promise<BudgetMonthData>,
+      label: string,
+      failure: string,
+      replay = work,
+    ) {
       try {
         const updated = await work();
         queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+        history.record({
+          label,
+          undo: () => saveHistory(inverse),
+          redo: () => saveHistory(replay),
+        });
       } catch (error) {
         toast.error(apiErrorMessage(error, failure));
       } finally {
-        // Every other month's Ready to Assign and Available depend on it, and it's a new move.
-        void invalidateMonths(queryClient);
-        void queryClient.invalidateQueries({ queryKey: movesQueryOptions(budget.id).queryKey });
+        await refreshBudget();
       }
+    }
+
+    async function saveHistory(work: () => Promise<BudgetMonthData>) {
+      const updated = await work();
+      queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+      await refreshBudget();
+    }
+
+    async function refreshBudget() {
+      await Promise.all([
+        invalidateMonths(queryClient),
+        queryClient.invalidateQueries({ queryKey: movesQueryOptions(budget.id).queryKey }),
+      ]);
     }
 
     return {
@@ -165,35 +190,60 @@ function BudgetPage() {
       assign: {
         parse,
         toInput,
-        assign: (categoryId, amount) =>
-          save(
-            () =>
-              assignMutation.mutateAsync({
-                params: { path: { budgetId: budget.id, month: data.month, categoryId } },
-                body: { assigned: amount.toString(), today: todayIso() },
-              }),
+        assign: (categoryId, amount) => {
+          const before = data.categories.find((c) => c.categoryId === categoryId)?.assigned ?? "0";
+          const delta = amount - BigInt(before);
+          const readyToAssignId = categories.data?.readyToAssignCategoryId;
+          const assign = () =>
+            assignMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month: data.month, categoryId } },
+              body: { assigned: amount.toString(), today: todayIso() },
+            });
+          const moveDelta = (reverse: boolean) => {
+            if (!readyToAssignId || delta === 0n) return assign();
+            const positive = delta > 0n !== reverse;
+            return moveMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month: data.month } },
+              body: {
+                fromCategoryId: positive ? readyToAssignId : categoryId,
+                toCategoryId: positive ? categoryId : readyToAssignId,
+                amount: (delta > 0n ? delta : -delta).toString(),
+                today: todayIso(),
+              },
+            });
+          };
+          return save(
+            assign,
+            () => moveDelta(true),
+            "assigned amount",
             "Couldn't assign the money.",
-          ),
+            () => moveDelta(false),
+          );
+        },
       },
       move: categories.data && {
         options: moneyOptions(categories.data, data),
         readyToAssignId: categories.data.readyToAssignCategoryId,
         parse,
         toInput,
-        move: (fromCategoryId, toCategoryId, amount) =>
-          save(
-            () =>
-              moveMutation.mutateAsync({
-                params: { path: { budgetId: budget.id, month: data.month } },
-                body: {
-                  fromCategoryId,
-                  toCategoryId,
-                  amount: amount.toString(),
-                  today: todayIso(),
-                },
-              }),
+        move: (fromCategoryId, toCategoryId, amount) => {
+          const mutate = (from: string, to: string) =>
+            moveMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month: data.month } },
+              body: {
+                fromCategoryId: from,
+                toCategoryId: to,
+                amount: amount.toString(),
+                today: todayIso(),
+              },
+            });
+          return save(
+            () => mutate(fromCategoryId, toCategoryId),
+            () => mutate(toCategoryId, fromCategoryId),
+            "money move",
             "Couldn't move the money.",
-          ),
+          );
+        },
       },
     };
     // mutateAsync is stable; the mutation objects themselves change every render.
@@ -208,6 +258,7 @@ function BudgetPage() {
     filter,
     setFilter,
     selection,
+    history,
   ]);
 
   return (
@@ -284,14 +335,17 @@ function BudgetPage() {
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
               toolbar={
-                listFigures && (
-                  <RecentMoves
-                    budgetId={budget.id}
-                    categories={categories.data}
-                    format={listFigures.format}
-                    formatDate={formatDate}
-                  />
-                )
+                <div className="flex items-center gap-1">
+                  <UndoRedoButtons />
+                  {listFigures && (
+                    <RecentMoves
+                      budgetId={budget.id}
+                      categories={categories.data}
+                      format={listFigures.format}
+                      formatDate={formatDate}
+                    />
+                  )}
+                </div>
               }
             />
           </div>
@@ -327,8 +381,15 @@ function BudgetPage() {
                         ? [...shown].filter((id) => id !== UNCATEGORIZED)
                         : [];
                   if ((selection.size > 0 || shown) && categoryIds.length === 0) return;
-                  try {
-                    const updated = await autoAssignMutation.mutateAsync({
+                  const before = Object.fromEntries(
+                    listFigures.month.categories
+                      .filter((category) =>
+                        categoryIds.length ? categoryIds.includes(category.categoryId) : true,
+                      )
+                      .map((category) => [category.categoryId, category.assigned]),
+                  );
+                  const apply = () =>
+                    autoAssignMutation.mutateAsync({
                       params: { path: { budgetId: budget.id, month } },
                       body: {
                         option,
@@ -336,14 +397,66 @@ function BudgetPage() {
                         today: todayIso(),
                       },
                     });
+                  const readyToAssignId = listFigures.move?.readyToAssignId;
+                  if (!readyToAssignId) return;
+                  let deltas: Record<string, bigint> = {};
+                  const moveDeltas = async (reverse: boolean) => {
+                    let updated = listFigures.month;
+                    for (const [categoryId, delta] of Object.entries(deltas)) {
+                      if (delta === 0n) continue;
+                      const positive = delta > 0n !== reverse;
+                      updated = await moveMutation.mutateAsync({
+                        params: { path: { budgetId: budget.id, month } },
+                        body: {
+                          fromCategoryId: positive ? readyToAssignId : categoryId,
+                          toCategoryId: positive ? categoryId : readyToAssignId,
+                          amount: (delta > 0n ? delta : -delta).toString(),
+                          today: todayIso(),
+                        },
+                      });
+                    }
+                    return updated;
+                  };
+                  const refresh = async () => {
+                    await Promise.all([
+                      invalidateMonths(queryClient),
+                      queryClient.invalidateQueries({
+                        queryKey: movesQueryOptions(budget.id).queryKey,
+                      }),
+                    ]);
+                  };
+                  try {
+                    const updated = await apply();
+                    deltas = Object.fromEntries(
+                      updated.categories
+                        .filter((category) => category.categoryId in before)
+                        .map((category) => [
+                          category.categoryId,
+                          BigInt(category.assigned) - BigInt(before[category.categoryId] ?? "0"),
+                        ]),
+                    );
                     queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
+                    history.record({
+                      label: "auto-assign",
+                      undo: async () => {
+                        queryClient.setQueryData(
+                          monthQueryOptions(budget.id, month).queryKey,
+                          await moveDeltas(true),
+                        );
+                        await refresh();
+                      },
+                      redo: async () => {
+                        queryClient.setQueryData(
+                          monthQueryOptions(budget.id, month).queryKey,
+                          await moveDeltas(false),
+                        );
+                        await refresh();
+                      },
+                    });
                   } catch (error) {
                     toast.error(apiErrorMessage(error, "Couldn't assign the money."));
                   } finally {
-                    void invalidateMonths(queryClient);
-                    void queryClient.invalidateQueries({
-                      queryKey: movesQueryOptions(budget.id).queryKey,
-                    });
+                    void refresh();
                   }
                 }}
               />

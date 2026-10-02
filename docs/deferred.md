@@ -21,7 +21,12 @@ before starting a roadmap phase** and remove an entry once it's done.
 - YNAB draws a progress bar under every category (green as money is spent, red stripes when
   overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
   the bars belong with targets (phase 8), which they mostly show.
-- Moves can't be undone yet (phase 6f).
+- Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
+  partners cannot undo one another's history. Undo and redo still call the API, so the resulting
+  budget/transaction state is saved on the server. It covers assigning, moving and auto-assign,
+  plus single and bulk transaction create/edit/delete. A later partner edit to the same row can
+  still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
+  real-time collaboration or phase 19 audit history).
 - Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
   (docs/verify.md). Underfunded and Reduce Overfunding wait for targets (phase 8). The assigned
   field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
@@ -120,9 +125,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Built, as checked in YNAB: Categorize (un-split dialog; splits with transfer lines stay split),
   Flag, Clear / Mark as Cleared / Mark as Uncleared (reconciled rows skipped), Memo… (replaces),
   Move to Account and Delete (no confirmation), skipping the rows an action doesn't apply to.
-- YNAB deletes with no confirmation because it has Undo/Redo in the register toolbar. We have no
-  undo yet, so a bulk delete can't be taken back. Undo/Redo needs its own design (it covers every
-  register edit, not just bulk ones).
+- YNAB deletes with no confirmation because it has Undo/Redo in the register toolbar. Single and
+  bulk transaction deletes can now be undone locally during the current page lifetime; reloading
+  intentionally clears that history so partners never share an undo stack.
 - YNAB's Categorize menu is category groups with their categories as submenus; ours is the
   category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
 - YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,

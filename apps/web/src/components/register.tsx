@@ -75,6 +75,7 @@ import {
   selectionBody,
   setSelected,
 } from "@/lib/selection";
+import { createBodyFromTransaction, updateBodyFromTransaction } from "@/lib/transaction-history";
 import {
   type CellColumn,
   categoryOptions,
@@ -91,6 +92,7 @@ import {
   transactionsQueryPrefix,
   updateBody,
 } from "@/lib/transactions";
+import { useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
@@ -98,6 +100,7 @@ import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
 import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
+import { UndoRedoButtons } from "./undo-redo-buttons";
 
 /** Columns a header click sorts by; the amount columns both sort by amount. */
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
@@ -151,6 +154,7 @@ export function Register({
   onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
 }) {
   const { budget, formatAmount, formatDate } = useBudget();
+  const history = useUndo();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [view, setView] = useRegisterView(budget.id, accountId ?? "all");
@@ -325,6 +329,7 @@ export function Register({
         params: { path: { budgetId: budget.id } },
         body: { selection: selectionBody(selection, selectionFilter), action },
       });
+      if (result.updated > 0) recordBulk(action, result.before);
       await refresh();
       setSelection(NOTHING);
       const n = `${result.updated} transaction${result.updated === 1 ? "" : "s"}`;
@@ -355,6 +360,73 @@ export function Register({
         queryKey: ["post", "/v1/budgets/{budgetId}/transactions/selection"],
       }),
     ]);
+  }
+
+  function recordBulk(action: BulkAction, before: Transaction[]) {
+    let current = before;
+    const restore = async () => {
+      if (action.type === "delete") {
+        const restored: Transaction[] = [];
+        for (const transaction of before) {
+          restored.push(
+            await create.mutateAsync({
+              params: { path: { budgetId: budget.id } },
+              body: createBodyFromTransaction(transaction),
+            }),
+          );
+        }
+        current = restored;
+      } else {
+        for (const transaction of before) {
+          await update.mutateAsync({
+            params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+            body: updateBodyFromTransaction(transaction),
+          });
+        }
+        current = before;
+      }
+      await refresh();
+    };
+    const reapply = async () => {
+      if (action.type === "delete") {
+        for (const transaction of current) {
+          await remove.mutateAsync({
+            params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+          });
+        }
+      } else {
+        await bulk.mutateAsync({
+          params: { path: { budgetId: budget.id } },
+          body: { selection: { ids: current.map((transaction) => transaction.id) }, action },
+        });
+      }
+      await refresh();
+    };
+    history.record({
+      label: `${action.type} ${before.length} transaction${before.length === 1 ? "" : "s"}`,
+      undo: restore,
+      redo: reapply,
+    });
+  }
+
+  function recordUpdate(label: string, before: Transaction, after: Transaction) {
+    history.record({
+      label,
+      undo: async () => {
+        await update.mutateAsync({
+          params: { path: { budgetId: budget.id, transactionId: before.id } },
+          body: updateBodyFromTransaction(before),
+        });
+        await refresh();
+      },
+      redo: async () => {
+        await update.mutateAsync({
+          params: { path: { budgetId: budget.id, transactionId: after.id } },
+          body: updateBodyFromTransaction(after),
+        });
+        await refresh();
+      },
+    });
   }
 
   /** Whether `t` has a category: not in tracking accounts, nor on in-budget transfers. */
@@ -393,10 +465,11 @@ export function Register({
     if (!result.ok) return setSplitError(result.error);
     try {
       if (Object.keys(result.body).length > 0) {
-        await update.mutateAsync({
+        const after = await update.mutateAsync({
           params: { path: { budgetId: budget.id, transactionId: t.id } },
           body: result.body,
         });
+        recordUpdate("transaction edit", t, after);
         await refresh();
       }
       setEditingSplit(null);
@@ -434,7 +507,27 @@ export function Register({
     const result = createBody(draft, budget);
     if (!result.ok) return setNewError(result.error);
     try {
-      await create.mutateAsync({ params: { path: { budgetId: budget.id } }, body: result.body });
+      const created = await create.mutateAsync({
+        params: { path: { budgetId: budget.id } },
+        body: result.body,
+      });
+      let current = created;
+      history.record({
+        label: "new transaction",
+        undo: async () => {
+          await remove.mutateAsync({
+            params: { path: { budgetId: budget.id, transactionId: current.id } },
+          });
+          await refresh();
+        },
+        redo: async () => {
+          current = await create.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: createBodyFromTransaction(created),
+          });
+          await refresh();
+        },
+      });
       setAdding(false);
       await refresh();
     } catch (e) {
@@ -460,10 +553,11 @@ export function Register({
     setEditing(exit !== "stay" && next ? { id: t.id, column: next } : null);
     if (Object.keys(result.body).length === 0) return;
     try {
-      await update.mutateAsync({
+      const after = await update.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
         body: result.body,
       });
+      recordUpdate("transaction edit", t, after);
       await refresh();
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't save the change."));
@@ -472,10 +566,11 @@ export function Register({
 
   async function setFlag(t: Transaction, flag: FlagColor | null) {
     try {
-      await update.mutateAsync({
+      const after = await update.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
         body: { flag },
       });
+      recordUpdate("transaction flag", t, after);
       await refresh();
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't change the flag."));
@@ -501,10 +596,11 @@ export function Register({
 
   async function toggleCleared(t: Transaction) {
     try {
-      await update.mutateAsync({
+      const after = await update.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
         body: { cleared: t.cleared === "uncleared" ? "cleared" : "uncleared" },
       });
+      recordUpdate("transaction cleared state", t, after);
       await refresh();
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't update the transaction."));
@@ -515,6 +611,24 @@ export function Register({
     try {
       await remove.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
+      });
+      let current: Transaction | null = null;
+      history.record({
+        label: "deleted transaction",
+        undo: async () => {
+          current = await create.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: createBodyFromTransaction(t),
+          });
+          await refresh();
+        },
+        redo: async () => {
+          if (!current) return;
+          await remove.mutateAsync({
+            params: { path: { budgetId: budget.id, transactionId: current.id } },
+          });
+          await refresh();
+        },
       });
       await refresh();
       const transfers = t.transferAccountId || t.subtransactions.some((l) => l.transferAccountId);
@@ -698,6 +812,7 @@ export function Register({
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
         <div className="ml-auto flex items-center gap-1">
+          <UndoRedoButtons />
           <RegisterViewMenu view={view} onChange={setView} runningBalance={!allAccounts} />
           <RegisterSearchBox
             value={search.q ?? ""}

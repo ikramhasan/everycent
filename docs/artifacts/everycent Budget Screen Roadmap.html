@@ -162,7 +162,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s6c"><span class="n">6c · done</span><span class="t">Overspending</span><span class="s">Move and cover money</span></a>
       <a class="node done" href="#s6d"><span class="n">6d · done</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
       <a class="node done" href="#s6e"><span class="n">6e · done</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
-      <a class="node now" href="#s6f"><span class="n">6f · next</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
+      <a class="node done" href="#s6f"><span class="n">6f · done</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
     </div>
     <div class="side"><b>Outside Phase 6:</b> credit card payment categories (Phase 7), targets and anything "underfunded" (Phase 8), multi-currency (Phase 11).</div>
     <div class="then">6a–6e are built on stacked branches (<span class="mono">phase-6a-month-view</span> → <span class="mono">phase-6b-assign</span> → <span class="mono">phase-6c-move-money</span> → <span class="mono">phase-6d-inspector</span> → <span class="mono">phase-6e-auto-assign</span>), not yet merged: Phase 6 goes into main in one merge. To pick up: <span class="mono">Start Phase 6f on a branch from phase-6e-auto-assign. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
@@ -298,18 +298,18 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6f">
       <div class="num">6f</div>
       <div class="body">
-        <div class="head"><h2>Undo and redo</h2><span class="pill">Planned</span></div>
-        <p class="why">Take back a budget or transaction edit, including one a partner made on the same budget.</p>
+        <div class="head"><h2>Undo and redo</h2><span class="pill done">Done</span></div>
+        <p class="why">Take back your own budget or transaction edits. Each browser keeps an independent history, while every undo and redo saves its resulting state through the server API.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Undo / redo for assigning, moving money and transaction edits <span class="src">P6</span></li><li>Kept on the server, so it survives a reload and works for both partners</li><li>Undo for deletes too: YNAB deletes (single and bulk) without asking and offers Undo, which we can't yet</li></ul>
+            <ul><li>Undo / redo for assigning, moving money, Auto-Assign and transaction edits <span class="src">P6</span></li><li>Kept in browser memory and scoped to the open budget, so partners cannot undo one another's history</li><li>Undo and redo use authenticated mutations, so the resulting data is saved on the server</li><li>Undo for single and bulk deletes; recreated rows receive new server IDs</li></ul>
           </div>
           <div>
             <h3>Depends on</h3>
             <ul><li>6b and 6c</li></ul>
-            <h3>To check in YNAB</h3>
-            <ul><li class="q">Per person or per budget, and how far back</li><li class="q">What YNAB's undo covers today, and whether it lasts past a refresh</li></ul>
+            <h3>Checked in YNAB</h3>
+            <ul><li>Plan toolbar placement, disabled states and Undo/Redo labels confirmed in the web app</li><li>This implementation follows the user's collaboration rule rather than YNAB's shared/persistent behavior: history is local and ends on reload</li></ul>
           </div>
         </div>
       </div>

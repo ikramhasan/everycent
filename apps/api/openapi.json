@@ -1940,10 +1940,18 @@
         "properties": {
           "updated": {
             "type": "integer"
+          },
+          "before": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "description": "Pre-edit rows for the caller's local undo history"
           }
         },
         "required": [
-          "updated"
+          "updated",
+          "before"
         ]
       },
       "BulkAction": {

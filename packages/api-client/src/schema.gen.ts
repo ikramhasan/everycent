@@ -917,6 +917,8 @@ export interface components {
         };
         BulkUpdateResult: {
             updated: number;
+            /** @description Pre-edit rows for the caller's local undo history */
+            before: components["schemas"]["Transaction"][];
         };
         BulkAction: {
             /** @enum {string} */

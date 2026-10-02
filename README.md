@@ -162,7 +162,7 @@ and fresh start (after phase 5 core).
 - [x] Category activity drill-down (transactions for category + month)
 - [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
       (collapse, overspent and money available done; underfunded and snoozed need targets)
-- [ ] Undo / redo for budget and transaction edits
+- [x] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt
 

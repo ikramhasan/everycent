@@ -509,6 +509,13 @@ async function someHidden(
   return Boolean(row);
 }
 
+/** Transactions as the register shows them (with each account's running balance). */
+export async function queryRegisterRows(db: Db, budgetId: string, ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  const r = registerCte(db, budgetId);
+  return toJson(db, await selectPage(db, r).where(inArray(r.id, [...ids])));
+}
+
 /** One transaction as the register shows it (with its running balance). */
 export async function queryRegisterRow(db: Db, budgetId: string, accountId: string, id: string) {
   const r = registerCte(db, budgetId, accountId);
