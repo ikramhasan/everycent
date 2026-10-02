@@ -74,6 +74,7 @@ export {
   monthOf,
   type ReadyToAssign,
   readyToAssign,
+  splitOverspending,
   zBudgetMonth,
 } from "./months";
 export {

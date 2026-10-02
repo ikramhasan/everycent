@@ -23,8 +23,17 @@ const Activity = {
   ),
 };
 
+const Overspent = {
+  cashOverspent: zMinorUnits.describe(
+    "The cash part of a negative Available (taken from next month's Ready to Assign); 0 otherwise",
+  ),
+  creditOverspent: zMinorUnits.describe(
+    "The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise",
+  ),
+};
+
 const Totals = z
-  .object({ assigned: zMinorUnits, ...Activity, available: zMinorUnits })
+  .object({ assigned: zMinorUnits, ...Activity, available: zMinorUnits, ...Overspent })
   .openapi("MonthTotals");
 
 const AutoAssignSchema = z
@@ -41,8 +50,25 @@ const AutoAssignSchema = z
   )
   .openapi("AutoAssignAmounts");
 
+const PaymentSchema = z
+  .object({
+    balance: zMinorUnits.describe(
+      "The card's working balance at the end of the month (up to today)",
+    ),
+    underfunded: zMinorUnits.describe(
+      "What's owed beyond what's set aside (YNAB's Total Underfunded); 0 when Available covers it",
+    ),
+    overspentCategories: zMinorUnits.describe(
+      "The part of underfunded that is this month's credit overspending on the card",
+    ),
+  })
+  .nullable()
+  .describe("Set on a credit account's payment category")
+  .openapi("PaymentDetails");
+
 const MonthCategorySchema = Totals.extend({
   categoryId: z.string(),
+  payment: PaymentSchema,
   autoAssign: AutoAssignSchema,
 }).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");
@@ -76,7 +102,7 @@ const MonthSchema = z
       .describe("Each group's totals over its categories that aren't hidden"),
     hidden: Totals.describe("Totals of hidden categories and of every category in hidden groups"),
     uncategorized: z
-      .object({ ...Activity, available: zMinorUnits })
+      .object({ ...Activity, available: zMinorUnits, ...Overspent })
       .nullable()
       .describe("Spending without a category; null in months without any"),
   })

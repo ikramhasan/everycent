@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { CategoryInspector, MonthSummary } from "./category-inspector";
+import { CategoryInspector, MonthSummary, PaymentInspector } from "./category-inspector";
 
 const format = (a: string) => `A${a}`;
 
@@ -19,6 +19,8 @@ describe("CategoryInspector", () => {
           cashActivity: -1000n,
           creditActivity: -3000n,
           available: -2500n,
+          cashOverspent: -1000n,
+          creditOverspent: -1500n,
         }}
         format={format}
         available={<span>pill</span>}
@@ -35,7 +37,11 @@ describe("CategoryInspector", () => {
     ]) {
       expect(screen.getByText(label as string).nextSibling).toHaveTextContent(amount as string);
     }
-    expect(screen.getByText(/You've overspent this category by A2500/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /You've overspent this category by A2500 with cash and credit\. Add at least A1000/,
+      ),
+    ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Notes"), "Quarterly");
     expect(onNoteChange).not.toHaveBeenCalled();
@@ -55,6 +61,8 @@ describe("CategoryInspector", () => {
           cashActivity: -200n,
           creditActivity: -100n,
           available: -300n,
+          cashOverspent: -200n,
+          creditOverspent: -100n,
         }}
         format={format}
         available={null}
@@ -64,9 +72,103 @@ describe("CategoryInspector", () => {
     );
     expect(screen.getByText("Assigned This Month").nextSibling).toHaveTextContent("–");
     expect(screen.getByText("Credit Spending").nextSibling).toHaveTextContent("A-100");
-    // Until credit overspending (phase 7c), all of it comes out of next month's Ready to Assign.
-    expect(screen.getByText(/A300 will be deducted/)).toBeInTheDocument();
+    // Only the cash part comes out of next month's Ready to Assign.
+    expect(screen.getByText(/A200 will be deducted/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Notes")).not.toBeInTheDocument();
+  });
+});
+
+describe("CategoryInspector overspending", () => {
+  const breakdown = (available: bigint, cash: bigint, credit: bigint) => ({
+    carried: 0n,
+    assigned: 0n,
+    activity: available,
+    cashActivity: 0n,
+    creditActivity: available,
+    available,
+    cashOverspent: cash,
+    creditOverspent: credit,
+  });
+  const show = (totals: ReturnType<typeof breakdown>) =>
+    render(
+      <CategoryInspector
+        name="Rent"
+        totals={totals}
+        format={format}
+        available={null}
+        note=""
+        onNoteChange={vi.fn()}
+      />,
+    );
+
+  it("says credit overspending creates debt", () => {
+    show(breakdown(-400n, 0n, -400n));
+    expect(
+      screen.getByText(
+        "You've overspent this category by A400 with credit. Cover this overspending to avoid creating debt!",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for the cash part of a mixed shortfall", () => {
+    show(breakdown(-300n, -100n, -200n));
+    expect(
+      screen.getByText(/by A300 with cash and credit\. Add at least A100 to this category/),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("PaymentInspector", () => {
+  const totals = {
+    carried: 0n,
+    assigned: 1000n,
+    activity: 200n,
+    cashActivity: 0n,
+    creditActivity: 0n,
+    available: 1200n,
+    cashOverspent: 0n,
+    creditOverspent: 0n,
+  };
+  const show = (payment: Parameters<typeof PaymentInspector>[0]["payment"], warn = true) =>
+    render(
+      <PaymentInspector
+        name="Card A"
+        totals={totals}
+        payment={payment}
+        format={format}
+        available={<span>pill</span>}
+        note=""
+        onNoteChange={vi.fn()}
+        warn={warn}
+      />,
+    );
+
+  it("splits what's underfunded (YNAB's Card A)", () => {
+    show({ balance: -10400n, underfunded: 9200n, overspentCategories: 200n });
+    expect(screen.getByText(/Cover A200 in overspent categories/)).toBeInTheDocument();
+    for (const [label, amount] of [
+      ["Total Underfunded", "A9200"],
+      ["Overspent Categories", "A200"],
+      ["Underfunded", "A9000"],
+      ["Current Balance", "A-10400"],
+      ["Assigned", "A1000"],
+      ["Funded Spending", "A200"],
+    ]) {
+      expect(screen.getByText(label as string).nextSibling).toHaveTextContent(amount as string);
+    }
+  });
+
+  it("asks for the rest of the balance without overspending", () => {
+    show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n });
+    expect(screen.getByText(/You need to assign A2900 more/)).toBeInTheDocument();
+  });
+
+  it("celebrates a paid-off card and stays quiet in past months", () => {
+    show({ balance: 200n, underfunded: 0n, overspentCategories: 0n });
+    expect(screen.getByText(/Your Card A is paid off!/)).toBeInTheDocument();
+    cleanup();
+    show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n }, false);
+    expect(screen.queryByText("Total Underfunded")).not.toBeInTheDocument();
   });
 });
 
@@ -82,6 +184,8 @@ describe("MonthSummary", () => {
           cashActivity: -3000n,
           creditActivity: 0n,
           available: -3000n,
+          cashOverspent: -3000n,
+          creditOverspent: 0n,
         }}
         format={format}
         selectedNames={["Power", "Food"]}

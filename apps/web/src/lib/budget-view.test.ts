@@ -3,6 +3,7 @@ import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import {
   breakdown,
   filteredIds,
+  isCaution,
   matchesFilter,
   overspentCount,
   summarize,
@@ -17,6 +18,9 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   cashActivity: activity,
   creditActivity: "0",
   available,
+  cashOverspent: available.startsWith("-") ? available : "0",
+  creditOverspent: "0",
+  payment: null,
   autoAssign: NO_AUTO_ASSIGN,
 });
 
@@ -42,12 +46,16 @@ const month: BudgetMonthData = {
     cashActivity: "0",
     creditActivity: "0",
     available: "300",
+    cashOverspent: "0",
+    creditOverspent: "0",
   },
   uncategorized: {
     activity: "-200",
     cashActivity: "-50",
     creditActivity: "-150",
     available: "-200",
+    cashOverspent: "-50",
+    creditOverspent: "-150",
   },
 };
 const visible = new Set(["rent", "power", "food", "zero"]);
@@ -75,6 +83,8 @@ describe("budget views", () => {
       cashActivity: -500n,
       creditActivity: 0n,
       available: 1500n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
     });
   });
 
@@ -86,6 +96,28 @@ describe("budget views", () => {
       cashActivity: -2550n,
       creditActivity: -150n,
       available: 1300n,
+      cashOverspent: -2550n,
+      creditOverspent: -150n,
     });
+  });
+});
+
+describe("isCaution", () => {
+  const totals = (available: string, cashOverspent: string) => ({ available, cashOverspent });
+  it("is yellow for credit overspending only", () => {
+    expect(isCaution(totals("-400", "0"), "2026-10", "2026-10")).toBe(true);
+    expect(isCaution(totals("-400", "-100"), "2026-10", "2026-10")).toBe(false);
+    expect(isCaution(totals("400", "0"), "2026-10", "2026-10")).toBe(false);
+  });
+
+  it("warns on an underfunded payment category from the current month on", () => {
+    const payment = (underfunded: string) => ({
+      ...totals("100", "0"),
+      payment: { underfunded },
+    });
+    expect(isCaution(payment("200"), "2026-10", "2026-10")).toBe(true);
+    expect(isCaution(payment("200"), "2026-11", "2026-10")).toBe(true);
+    expect(isCaution(payment("200"), "2026-09", "2026-10")).toBe(false);
+    expect(isCaution(payment("0"), "2026-10", "2026-10")).toBe(false);
   });
 });

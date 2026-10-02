@@ -44,15 +44,19 @@ before starting a roadmap phase** and remove an entry once it's done.
   Overfunded and Snoozed views wait for targets (phase 8).
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
-  (docs/verify.md). Not yet: credit overspending (the unfunded part still counts as cash
-  overspending, 7c), payments out of the payment category (7d), positive card balances acting as
+  (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
+  Assign. Not yet: payments out of the payment category (7d), positive card balances acting as
   cash (7e), and uncategorized card spending or card inflows to Ready to Assign moving payment
-  money (7c–7d).
+  money (7d). Uncategorized card spending counts as credit overspending, as YNAB's
+  "Uncategorized cash transactions … $2.00 will be deducted" note suggests (cash part only).
 - A payment category's Activity is plain text, not a drill-down: YNAB's card activity window
-  (Spending, Returns, Funded Spending, Payments & Returns) comes with payments in 7d. Its
-  inspector still shows the spending breakdown; YNAB's Payment/Underfunded/Current Balance panel
-  needs 7c. Auto-Assign on payment categories (YNAB: Underfunded, Paid Last Month, Average Paid)
-  is still the spending set. Uncategorized's "will be deducted" note still quotes its whole Available;
+  (Spending, Returns, Funded Spending, Payments & Returns) comes with payments in 7d. Its inspector
+  (7c) has no "Payments Made" line, no Prior Balance / Spending and Outflows / Payments and
+  Inflows breakdown of the Current Balance (7d), no "Cover Overspent Categories" button and no
+  "Create a Debt Payoff Target" (phase 8). Auto-Assign on payment categories (YNAB: Underfunded,
+  Paid Last Month, Average Paid) is still the spending set.
+- The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
+  cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;
   YNAB quotes only the cash part (docs/verify.md).
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
   listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded

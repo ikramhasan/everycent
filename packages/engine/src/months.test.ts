@@ -8,6 +8,7 @@ import {
   monthBounds,
   monthOf,
   readyToAssign,
+  splitOverspending,
 } from "./months";
 
 describe("month helpers", () => {
@@ -65,6 +66,8 @@ describe("categoryMonth", () => {
       cashActivity: 0n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 0n,
     });
   });
@@ -78,6 +81,8 @@ describe("categoryMonth", () => {
       cashActivity: 0n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 7500n,
     });
     expect(categoryMonth(history, "2026-10")).toEqual({
@@ -87,6 +92,8 @@ describe("categoryMonth", () => {
       cashActivity: -1000n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 7000n,
     });
     expect(categoryMonth(history, "2026-12").available).toBe(7000n);
@@ -102,6 +109,8 @@ describe("categoryMonth", () => {
       cashActivity: 0n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 0n,
     });
     const later = [...history, m("2026-12", 1000n, -200n)];
@@ -112,6 +121,8 @@ describe("categoryMonth", () => {
       cashActivity: -200n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 800n,
     });
   });
@@ -125,6 +136,8 @@ describe("categoryMonth", () => {
       cashActivity: -400n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
       available: 800n,
     });
   });
@@ -228,7 +241,54 @@ describe("readyToAssign", () => {
   });
 });
 
+describe("overspending: cash or credit", () => {
+  const e = (assigned: bigint, activity: bigint, creditActivity: bigint) => ({
+    month: "2026-10",
+    assigned,
+    activity,
+    creditActivity,
+  });
+
+  // YNAB's test plan (2026-10-03), docs/verify.md phase 7c.
+  it.each([
+    // [case, entry, cash overspent, credit overspent]
+    ["cash only (Utilities −$25)", e(0n, -2500n, 0n), -2500n, 0n],
+    ["card only (Rent $10: $6 cash, $8 card)", e(1000n, -1400n, -800n), 0n, -400n],
+    ["unfunded card spending (R1 −$6)", e(0n, -600n, -600n), 0n, -600n],
+    ["mixed, nothing assigned (R2)", e(0n, -500n, -200n), -300n, -200n],
+    ["mixed, $2 assigned (R2)", e(200n, -500n, -200n), -100n, -200n],
+    ["mixed, $4 assigned (R2)", e(400n, -500n, -200n), 0n, -100n],
+    ["not overspent", e(1000n, -500n, -500n), 0n, 0n],
+    // A card return in an overspent cash category: Groceries −$5 cash, +$1 Visa.
+    ["a card return can't make cash overspending credit", e(0n, -400n, 100n), -400n, 0n],
+  ])("%s", (_, entry, cash, credit) => {
+    expect(categoryMonth([entry], "2026-10")).toMatchObject({
+      cashOverspent: cash,
+      creditOverspent: credit,
+    });
+  });
+
+  it("splits a negative Available into its cash and credit parts", () => {
+    expect(splitOverspending(-500n, -300n)).toEqual({
+      cashOverspent: -300n,
+      creditOverspent: -200n,
+    });
+    expect(splitOverspending(-500n, -900n)).toEqual({ cashOverspent: -500n, creditOverspent: 0n });
+    expect(splitOverspending(-500n, 200n)).toEqual({ cashOverspent: 0n, creditOverspent: -500n });
+    expect(splitOverspending(100n, -300n)).toEqual({ cashOverspent: 0n, creditOverspent: 0n });
+  });
+});
+
 describe("categoryOverspending", () => {
+  it("leaves credit overspending out (it's new card debt)", () => {
+    expect(
+      categoryOverspending([
+        { month: "2026-09", assigned: 0n, activity: -500n, creditActivity: -500n },
+        { month: "2026-10", assigned: 0n, activity: -500n, creditActivity: -200n },
+      ]),
+    ).toEqual([{ month: "2026-10", amount: -300n }]);
+  });
+
   it("lists the months a category ended below zero", () => {
     const history = [
       { month: "2026-08", assigned: 0n, activity: -300n },

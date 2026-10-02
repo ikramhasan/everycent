@@ -34,7 +34,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { type Db, internalCategoryId, serverToday } from "../../lib/ledger";
+import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type { assignCategory, autoAssign, getBudgetMonth, listMoves, moveMoney } from "./routes";
@@ -137,8 +137,8 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
   // Card inflows to Ready to Assign (statement credits) and uncategorized card spending move no
   // payment money here; how YNAB handles them is phases 7c–7d.
   const skip = new Set(rows.filter((r) => r.accountId || r.internalKind).map((r) => r.id));
-  await addFundedSpending(db, budgetId, cutoff, history, byAccount, skip);
-  return history;
+  const creditOverspent = await addFundedSpending(db, budgetId, cutoff, history, byAccount, skip);
+  return { history, paymentAccounts: byAccount, creditOverspent };
 }
 
 /** Each category's net activity per month on each credit account, up to `cutoff`. */
@@ -200,6 +200,8 @@ async function addFundedSpending(
 ) {
   const cards = await cardActivity(db, budgetId, cutoff);
   const funded = new Map<string, MonthFigures[]>();
+  /** accountId → month → that card's unfunded spending (credit overspending, positive). */
+  const unfunded = new Map<string, Map<BudgetMonth, bigint>>();
   for (const [categoryId, months] of cards) {
     if (skip.has(categoryId)) continue;
     const entries = history.get(categoryId) ?? [];
@@ -211,6 +213,12 @@ async function addFundedSpending(
         amount,
       }));
       for (const [accountId, amount] of fundedCardSpending(cash, activity)) {
+        const spent = -(byAccount.get(accountId) ?? 0n);
+        if (spent > amount) {
+          const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
+          months.set(month, (months.get(month) ?? 0n) + spent - amount);
+          unfunded.set(accountId, months);
+        }
         const paymentId = paymentCategoryByAccount.get(accountId);
         if (!paymentId || amount === 0n) continue;
         const list = funded.get(paymentId) ?? [];
@@ -222,6 +230,7 @@ async function addFundedSpending(
   for (const [paymentId, entries] of funded) {
     history.set(paymentId, [...(history.get(paymentId) ?? []), ...entries]);
   }
+  return unfunded;
 }
 
 const ZERO: CategoryMonth = {
@@ -232,6 +241,8 @@ const ZERO: CategoryMonth = {
   creditActivity: 0n,
   fundedSpending: 0n,
   available: 0n,
+  cashOverspent: 0n,
+  creditOverspent: 0n,
 };
 
 function addTo(sum: CategoryMonth, n: CategoryMonth): CategoryMonth {
@@ -242,6 +253,8 @@ function addTo(sum: CategoryMonth, n: CategoryMonth): CategoryMonth {
     cashActivity: sum.cashActivity + n.cashActivity,
     creditActivity: sum.creditActivity + n.creditActivity,
     fundedSpending: sum.fundedSpending + n.fundedSpending,
+    cashOverspent: sum.cashOverspent + n.cashOverspent,
+    creditOverspent: sum.creditOverspent + n.creditOverspent,
     available: sum.available + n.available,
   };
 }
@@ -252,6 +265,8 @@ const totalsJson = (n: CategoryMonth) => ({
   cashActivity: n.cashActivity.toString(),
   creditActivity: n.creditActivity.toString(),
   available: n.available.toString(),
+  cashOverspent: n.cashOverspent.toString(),
+  creditOverspent: n.creditOverspent.toString(),
 });
 
 /** The months the budget shows, as of the user's `today`. */
@@ -305,7 +320,7 @@ export async function budgetMonthJson(
   const { end } = monthBounds(month);
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
-  const history = await budgetHistory(db, budgetId, cutoff);
+  const { history, paymentAccounts, creditOverspent } = await budgetHistory(db, budgetId, cutoff);
 
   const range = await monthRange(db, budgetId, today);
 
@@ -338,8 +353,8 @@ export async function budgetMonthJson(
       income.push(...entries.map((e) => ({ month: e.month, amount: e.activity })));
       continue;
     }
-    // Every category's overspending comes out of the next month's Ready to Assign, hidden and
-    // Uncategorized included (credit overspending is phase 7c).
+    // Cash overspending comes out of the next month's Ready to Assign, hidden categories and
+    // Uncategorized included; credit overspending is new card debt and doesn't.
     overspent.push(...categoryOverspending(entries));
     assigned.push(...entries.map((e) => ({ month: e.month, amount: e.assigned })));
     const figures = categoryMonth(entries, month);
@@ -359,6 +374,26 @@ export async function budgetMonthJson(
     .select({ id: categoryGroup.id })
     .from(categoryGroup)
     .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)));
+
+  // Each card's payment details: what's owed at the end of the month (up to today) against what's
+  // set aside, and how much of the shortfall is this month's credit overspending.
+  const balances = await accountBalances(db, budgetId, cutoff);
+  const accountOf = new Map([...paymentAccounts].map(([accountId, id]) => [id, accountId]));
+  const paymentJson = (categoryId: string, figures: CategoryMonth) => {
+    const accountId = accountOf.get(categoryId);
+    if (!accountId) return null;
+    const balance = balances.get(accountId)?.working ?? 0n;
+    const owed = balance < 0n ? -balance : 0n;
+    const short = owed - figures.available;
+    const underfunded = short > 0n ? short : 0n;
+    const overspentNow = creditOverspent.get(accountId)?.get(month) ?? 0n;
+    const fromOverspending = overspentNow < underfunded ? overspentNow : underfunded;
+    return {
+      balance: balance.toString(),
+      underfunded: underfunded.toString(),
+      overspentCategories: fromOverspending.toString(),
+    };
+  };
 
   const rta = readyToAssign({ month, income, assigned, overspent });
   const future = new Map<BudgetMonth, bigint>();
@@ -380,6 +415,7 @@ export async function budgetMonthJson(
     categories: listed.map((l) => ({
       categoryId: l.categoryId,
       ...totalsJson(l.figures),
+      payment: paymentJson(l.categoryId, l.figures),
       autoAssign: Object.fromEntries(
         Object.entries(l.auto).map(([option, amount]) => [option, amount.toString()]),
       ) as Record<AutoAssignOption, string>,
@@ -391,6 +427,8 @@ export async function budgetMonthJson(
       cashActivity: uncategorized.cashActivity.toString(),
       creditActivity: uncategorized.creditActivity.toString(),
       available: uncategorized.available.toString(),
+      cashOverspent: uncategorized.cashOverspent.toString(),
+      creditOverspent: uncategorized.creditOverspent.toString(),
     },
   };
 }
@@ -483,7 +521,7 @@ export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c)
   const targets = categoryIds ? rows : rows.filter((r) => !r.hidden && !r.groupHidden);
 
   const { end } = monthBounds(month);
-  const history = await budgetHistory(db, budgetId, end < today ? end : today);
+  const { history } = await budgetHistory(db, budgetId, end < today ? end : today);
   await db.transaction(async (tx) => {
     const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
     for (const { id } of targets) {

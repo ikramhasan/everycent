@@ -355,3 +355,51 @@ categories T1–T6). Confirmed:
 - **How to settle it:** with the two new cards above (balances below zero throughout), a category
   with $0 assigned: Card A +$5 dated 10/01, Card B −$3 dated 10/02; reload twice and read both
   payment categories and the category. Then the same with the dates swapped.
+
+## Credit overspending and existing debt (phase 7c)
+
+Checked against support.ynab.com ("Handling Credit Card Overspending", "Underfunded Alert in the
+Credit Card Payment Category") and in YNAB's web app on 2026-10-03 (test categories R1–R3).
+Built as found:
+
+- The unfunded part of card spending is credit overspending: the category's Available goes
+  negative and is drawn yellow ("You've overspent this category by $4.00 with credit. Cover this
+  overspending to avoid creating debt!"); it is not deducted from next month's Ready to Assign.
+  November's breakdown listed "Cash overspending in October −$31.00", which was exactly the
+  red (cash) categories: Utilities $25, Groceries $4, Uncategorized $2.
+- A mixed shortfall is cash first: R2 with Wallet −$3 and Citi −$2 and $0 assigned was red
+  −$5.00 and added $3.00 (the cash part) to November's cash overspending; with $2 assigned it was
+  red −$3.00 and added $1.00, Citi got nothing; with $4 assigned it turned yellow −$1.00, added
+  nothing, and Citi got $1.00. So cash spending is funded first, the uncovered cash is cash
+  overspending, and the rest is credit overspending. Red wins while any cash part is uncovered.
+- Covering credit overspending in the same month moves the money on: R1 (Citi −$6, $0) was
+  −$6.00 yellow; assigning $4 left it −$2.00 and Citi's payment category rose $4.00.
+- Credit overspending doesn't roll over: R3's −$5.00 in September (Citi) started October at $0.00
+  and October's Ready to Assign didn't change. Covering it afterwards (assigning $5 in September)
+  moved $5 into September's Citi payment category, which carried into October (Citi $9.00 →
+  $14.00) — the help center's "that money stays in the spending category" is about covering in a
+  later month, which YNAB doesn't propagate back.
+- Existing debt (a negative starting balance) gets no category and moves nothing; money assigned
+  directly to the payment category reserves cash for it: Card A ($100 starting debt, $2 funded
+  spending) with $10 assigned showed Available $12.00 = Assigned $10.00 + Funded Spending $2.00,
+  Ready to Assign −$10.00.
+- A payment category's pill is yellow ("cautious") whenever Available is below what's owed, and
+  green when it covers it (Amex, positive balance, "Your Amex is paid off!"). The inspector shows
+  "Total Underfunded" = Overspent Categories (this month's credit overspending on the card) +
+  Underfunded (the rest of the balance), Current Balance (Prior Balance, Spending and Outflows,
+  Payments and Inflows) and Available for Payment (Cash Left Over, Assigned, Funded Spending,
+  Payments Made).
+
+### Payment category messages and the next month
+
+- **Found:** in October, Visa said "Overspent Categories — Cover $29.00 in overspent categories in
+  order to pay off your current balance" with "Cover Overspent Categories" and "Create a Debt
+  Payoff Target"; November said "Underfunded — You need to assign $29.00 more to pay off your
+  current balance." Card A (with old debt as well) listed both lines under Total Underfunded.
+- **Question:** what does the payment category say when both apply, what does "Cover Overspent
+  Categories" do (one click, or a picker?), and is the pill yellow in past months (the help center
+  says previous months show green)?
+- **Built so far (before this rule):** the pill is yellow when Available is below what's owed in
+  the current month and later, green before it. The inspector lists Total Underfunded with its two
+  parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button and the
+  Debt Payoff Target (phase 8) aren't built.

@@ -2631,13 +2631,25 @@
                 "type": "string",
                 "pattern": "^(0|-?[1-9]\\d*)$",
                 "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "cashOverspent": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The cash part of a negative Available (taken from next month's Ready to Assign); 0 otherwise"
+              },
+              "creditOverspent": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise"
               }
             },
             "required": [
               "activity",
               "cashActivity",
               "creditActivity",
-              "available"
+              "available",
+              "cashOverspent",
+              "creditOverspent"
             ],
             "description": "Spending without a category; null in months without any"
           }
@@ -2667,16 +2679,49 @@
               "categoryId": {
                 "type": "string"
               },
+              "payment": {
+                "$ref": "#/components/schemas/PaymentDetails"
+              },
               "autoAssign": {
                 "$ref": "#/components/schemas/AutoAssignAmounts"
               }
             },
             "required": [
               "categoryId",
+              "payment",
               "autoAssign"
             ]
           }
         ]
+      },
+      "PaymentDetails": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "balance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The card's working balance at the end of the month (up to today)"
+          },
+          "underfunded": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "What's owed beyond what's set aside (YNAB's Total Underfunded); 0 when Available covers it"
+          },
+          "overspentCategories": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The part of underfunded that is this month's credit overspending on the card"
+          }
+        },
+        "required": [
+          "balance",
+          "underfunded",
+          "overspentCategories"
+        ],
+        "description": "Set on a credit account's payment category"
       },
       "AutoAssignAmounts": {
         "type": "object",
@@ -2749,6 +2794,16 @@
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "cashOverspent": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The cash part of a negative Available (taken from next month's Ready to Assign); 0 otherwise"
+          },
+          "creditOverspent": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise"
           }
         },
         "required": [
@@ -2756,7 +2811,9 @@
           "activity",
           "cashActivity",
           "creditActivity",
-          "available"
+          "available",
+          "cashOverspent",
+          "creditOverspent"
         ]
       },
       "MonthGroup": {

@@ -116,6 +116,7 @@ export function CategoryInspector({
 }) {
   const overspent = totals.available < 0n;
   const shortfall = format((-totals.available).toString());
+  const cashShortfall = format((-totals.cashOverspent).toString());
   return (
     <Panel label={`${name} inspector`}>
       <h2 className="truncate font-semibold">{name}</h2>
@@ -138,14 +139,151 @@ export function CategoryInspector({
         <Line label="Credit Spending" value={totals.creditActivity} format={format} />
       </dl>
       {overspent && (
-        <p className="text-destructive text-sm">
-          {uncategorized
-            ? `Uncategorized cash transactions still affect your plan! Assign them to categories or ${shortfall} will be deducted from the amount you have available to assign next month.`
-            : `You've overspent this category by ${shortfall}. Cover this overspending or you can't trust your plan balances!`}
-        </p>
+        <OverspentMessage
+          totals={totals}
+          uncategorized={uncategorized}
+          {...{ shortfall, cashShortfall }}
+        />
       )}
       {!uncategorized && <NoteField key={name} note={note} onChange={onNoteChange} />}
     </Panel>
+  );
+}
+
+export interface PaymentFigures {
+  /** The card's working balance (negative: owed). */
+  balance: bigint;
+  /** What's owed beyond Available (YNAB's Total Underfunded). */
+  underfunded: bigint;
+  /** The part of underfunded from this month's credit overspending. */
+  overspentCategories: bigint;
+}
+
+/**
+ * The inspector for a credit card's payment category (YNAB's "Payment" panel, checked in its web
+ * app on 2026-10-03): whether Available covers the balance, the Total Underfunded split into this
+ * month's overspent categories and the rest, then Current Balance and Available for Payment with
+ * where the money came from. Payments Made and the card's Prior Balance breakdown come with
+ * payments (phase 7d); "Cover Overspent Categories" and Debt Payoff Targets aren't built.
+ */
+export function PaymentInspector({
+  name,
+  totals,
+  payment,
+  format,
+  available,
+  note,
+  onNoteChange,
+  warn,
+}: {
+  name: string;
+  totals: Breakdown;
+  payment: PaymentFigures;
+  format: Format;
+  available: ReactNode;
+  note: string;
+  onNoteChange: (note: string) => Promise<void>;
+  /** YNAB only shows the Underfunded alert from the current month on. */
+  warn: boolean;
+}) {
+  const f = (n: bigint) => format(n.toString());
+  const rest = payment.underfunded - payment.overspentCategories;
+  return (
+    <Panel label={`${name} inspector`}>
+      <h2 className="truncate font-semibold">{name}</h2>
+      <section aria-label="Payment" className="grid gap-1 text-sm">
+        <h3 className="font-semibold">Payment</h3>
+        {warn && payment.overspentCategories > 0n ? (
+          <p>
+            <span className="font-medium">Overspent Categories.</span> Cover{" "}
+            {f(payment.overspentCategories)} in overspent categories in order to pay off your
+            current balance.
+          </p>
+        ) : warn && payment.underfunded > 0n ? (
+          <p>
+            <span className="font-medium">Underfunded.</span> You need to assign{" "}
+            {f(payment.underfunded)} more to pay off your current balance.
+          </p>
+        ) : payment.balance >= 0n ? (
+          <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
+        ) : null}
+      </section>
+      {warn && payment.underfunded > 0n && (
+        <dl className="grid gap-2">
+          <Line label="Total Underfunded" value={payment.underfunded} format={format} />
+          {payment.overspentCategories > 0n && (
+            <Line
+              label="Overspent Categories"
+              value={payment.overspentCategories}
+              format={format}
+            />
+          )}
+          {payment.overspentCategories > 0n && rest > 0n && (
+            <Line label="Underfunded" value={rest} format={format} />
+          )}
+        </dl>
+      )}
+      <dl className="grid gap-2">
+        <Line label="Current Balance" value={payment.balance} format={format} />
+      </dl>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-sm">Available for Payment</span>
+        {available}
+      </div>
+      <dl className="grid gap-2">
+        <Line label="Cash Left Over From Last Month" value={totals.carried} format={format} />
+        <Line label="Assigned" value={totals.assigned} format={format} />
+        <Line label="Funded Spending" value={totals.activity} format={format} />
+      </dl>
+      <NoteField key={name} note={note} onChange={onNoteChange} />
+    </Panel>
+  );
+}
+
+/**
+ * YNAB's overspending message, by kind (checked in its web app on 2026-10-03): cash only, credit
+ * only ("…with credit. Cover this overspending to avoid creating debt!") or both ("…with cash and
+ * credit. Add at least $1.00 …", the cash part). Uncategorized quotes only its cash part.
+ */
+function OverspentMessage({
+  totals,
+  uncategorized,
+  shortfall,
+  cashShortfall,
+}: {
+  totals: Breakdown;
+  uncategorized: boolean;
+  shortfall: string;
+  cashShortfall: string;
+}) {
+  const cash = totals.cashOverspent < 0n;
+  const credit = totals.creditOverspent < 0n;
+  if (uncategorized) {
+    if (!cash) return null;
+    return (
+      <p className="text-destructive text-sm">
+        {`Uncategorized cash transactions still affect your plan! Assign them to categories or ${cashShortfall} will be deducted from the amount you have available to assign next month.`}
+      </p>
+    );
+  }
+  if (cash && credit) {
+    return (
+      <p className="text-destructive text-sm">
+        {`You've overspent this category by ${shortfall} with cash and credit. Add at least ${cashShortfall} to this category or you can't trust your plan balances!`}
+      </p>
+    );
+  }
+  if (credit) {
+    return (
+      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+        {`You've overspent this category by ${shortfall} with credit. Cover this overspending to avoid creating debt!`}
+      </p>
+    );
+  }
+  return (
+    <p className="text-destructive text-sm">
+      {`You've overspent this category by ${shortfall}. Cover this overspending or you can't trust your plan balances!`}
+    </p>
   );
 }
 

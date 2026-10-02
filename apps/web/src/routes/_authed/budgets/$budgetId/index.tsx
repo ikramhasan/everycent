@@ -10,7 +10,7 @@ import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
-import { CategoryInspector, MonthSummary } from "@/components/category-inspector";
+import { CategoryInspector, MonthSummary, PaymentInspector } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
 import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
@@ -23,6 +23,7 @@ import { useBudget } from "@/lib/budget-context";
 import {
   breakdown,
   filteredIds,
+  isCaution,
   overspentCount,
   summarize,
   UNCATEGORIZED,
@@ -167,6 +168,7 @@ function BudgetPage() {
 
     return {
       month: data,
+      currentMonth: today,
       format: (amount) => formatAmount(toMoney(amount, data.currency)),
       activity: { budgetId: budget.id, formatDate },
       shown,
@@ -259,6 +261,7 @@ function BudgetPage() {
     setFilter,
     selection,
     history,
+    today,
   ]);
 
   return (
@@ -506,24 +509,43 @@ function Inspector({
   const category = only ? listed.get(only) : undefined;
   const totals = only ? month.categories.find((c) => c.categoryId === only) : undefined;
   if (only && category && totals) {
+    const caution = isCaution(totals, month.month, figures.currentMonth);
+    const available = figures.move ? (
+      <AvailableButton
+        categoryId={only}
+        categoryName={category.name}
+        amount={totals.available}
+        format={format}
+        actions={figures.move}
+        caution={caution}
+      />
+    ) : (
+      <AvailablePill amount={totals.available} format={format} caution={caution} />
+    );
+    if (totals.payment) {
+      return (
+        <PaymentInspector
+          name={category.name}
+          totals={breakdown(totals)}
+          payment={{
+            balance: BigInt(totals.payment.balance),
+            underfunded: BigInt(totals.payment.underfunded),
+            overspentCategories: BigInt(totals.payment.overspentCategories),
+          }}
+          format={format}
+          available={available}
+          note={category.note}
+          onNoteChange={(note) => onNoteChange(only, note)}
+          warn={month.month >= figures.currentMonth}
+        />
+      );
+    }
     return (
       <CategoryInspector
         name={category.name}
         totals={breakdown(totals)}
         format={format}
-        available={
-          figures.move ? (
-            <AvailableButton
-              categoryId={only}
-              categoryName={category.name}
-              amount={totals.available}
-              format={format}
-              actions={figures.move}
-            />
-          ) : (
-            <AvailablePill amount={totals.available} format={format} />
-          )
-        }
+        available={available}
         note={category.note}
         onNoteChange={(note) => onNoteChange(only, note)}
       />

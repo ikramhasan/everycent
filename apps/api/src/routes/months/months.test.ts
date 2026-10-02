@@ -22,7 +22,10 @@ type Month = {
   readyToAssign: string;
   assignedInFuture: string;
   futureMonths: { month: string; assigned: string }[];
-  categories: (Totals & { categoryId: string })[];
+  categories: (Totals & {
+    categoryId: string;
+    payment: { balance: string; underfunded: string; overspentCategories: string } | null;
+  })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
   uncategorized: Omit<Totals, "assigned"> | null;
@@ -124,6 +127,39 @@ const t = (assigned: string, activity: string, available: string) => ({
   available,
 });
 
+/** setup() plus two credit cards, Visa (owing `visaDebt`) and Amex. */
+async function cards(visaDebt = 0n) {
+  const ctx = await setup();
+  const card = async (name: string, debt = 0n) => {
+    const acct = await json<{ id: string; paymentCategoryId: string }>(
+      await send("POST", `${ctx.base}/accounts`, ctx.cookie, {
+        name,
+        type: "credit_card",
+        balance: (-debt).toString(),
+        date: "2026-08-20",
+      }),
+    );
+    return acct;
+  };
+  const visa = await card("Visa", visaDebt);
+  const amex = await card("Amex");
+  const { groups } = await json<{ groups: Group[] }>(
+    await send("GET", `${ctx.base}/categories`, ctx.cookie),
+  );
+  const credit = groups.find((g) => g.kind === "credit_card_payments");
+  if (!credit) throw new Error("Credit Card Payments group missing");
+  const create = async (input: Record<string, unknown>) => {
+    const res = await send("POST", `${ctx.base}/transactions`, ctx.cookie, {
+      accountId: ctx.account.id,
+      categoryId: null,
+      ...input,
+    });
+    expect(res.status).toBe(201);
+    return json<{ id: string }>(res);
+  };
+  return { ...ctx, visa, amex, credit, create };
+}
+
 describe("budget months", () => {
   it("adds up each category's activity in the month, split lines one by one", async () => {
     const { month, spend, rent, phone, groceries, bills, savings } = await setup();
@@ -204,38 +240,6 @@ describe("budget months", () => {
   });
 
   describe("funded card spending", () => {
-    async function cards() {
-      const ctx = await setup();
-      const card = async (name: string) => {
-        const acct = await json<{ id: string; paymentCategoryId: string }>(
-          await send("POST", `${ctx.base}/accounts`, ctx.cookie, {
-            name,
-            type: "credit_card",
-            balance: "0",
-            date: "2026-08-20",
-          }),
-        );
-        return acct;
-      };
-      const visa = await card("Visa");
-      const amex = await card("Amex");
-      const { groups } = await json<{ groups: Group[] }>(
-        await send("GET", `${ctx.base}/categories`, ctx.cookie),
-      );
-      const credit = groups.find((g) => g.kind === "credit_card_payments");
-      if (!credit) throw new Error("Credit Card Payments group missing");
-      const create = async (input: Record<string, unknown>) => {
-        const res = await send("POST", `${ctx.base}/transactions`, ctx.cookie, {
-          accountId: ctx.account.id,
-          categoryId: null,
-          ...input,
-        });
-        expect(res.status).toBe(201);
-        return json<{ id: string }>(res);
-      };
-      return { ...ctx, visa, amex, credit, create };
-    }
-
     it("moves only the funded part, cash first (YNAB: Rent $10, Wallet −$6, Visa −$8)", async () => {
       const { month, assign, create, rent, visa } = await cards();
       await assign(rent.id, "2026-10", 1000n);
@@ -333,6 +337,90 @@ describe("budget months", () => {
     });
   });
 
+  describe("credit overspending and existing debt", () => {
+    const over = (cash: string, credit: string) => ({
+      cashOverspent: cash,
+      creditOverspent: credit,
+    });
+
+    it("keeps credit overspending out of next month's Ready to Assign", async () => {
+      const { month, assign, create, rent, phone, visa } = await cards();
+      await assign(rent.id, "2026-10", 1000n);
+      // YNAB: Rent $10, Wallet −$6, Visa −$8 → −$4 credit; Phone −$25 cash.
+      await create({ date: "2026-10-01", amount: "-600", categoryId: rent.id });
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-800", categoryId: rent.id });
+      await create({ date: "2026-10-01", amount: "-2500", categoryId: phone.id });
+
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "-400", ...over("0", "-400") });
+      expect(oct.byCategory(phone.id)).toMatchObject(over("-2500", "0"));
+      expect(oct.readyToAssign).toBe("99000");
+      // Only the $25 of cash overspending comes out of November.
+      expect((await month("2026-11")).readyToAssign).toBe("96500");
+    });
+
+    it("splits a mixed shortfall cash first (YNAB's R2)", async () => {
+      const { month, put, create, rent, visa } = await cards();
+      await create({ date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-200", categoryId: rent.id });
+      const check = async (cash: string, credit: string, funded: string, november: string) => {
+        const oct = await month("2026-10");
+        expect(oct.byCategory(rent.id)).toMatchObject(over(cash, credit));
+        expect(oct.byCategory(visa.paymentCategoryId)?.available).toBe(funded);
+        expect((await month("2026-11")).readyToAssign).toBe(november);
+      };
+      await check("-300", "-200", "0", "99700");
+      await put(rent.id, "2026-10", "200");
+      await check("-100", "-200", "0", "99700");
+      await put(rent.id, "2026-10", "400");
+      await check("0", "-100", "100", "99600");
+    });
+
+    it("moves money on when credit overspending is covered, even in a past month", async () => {
+      const { month, assign, create, rent, visa } = await cards();
+      // YNAB's R3: Citi −$5 in September, covered in September afterwards.
+      await create({ accountId: visa.id, date: "2026-09-15", amount: "-500", categoryId: rent.id });
+      expect((await month("2026-09")).byCategory(rent.id)).toMatchObject(over("0", "-500"));
+      // It doesn't roll over, and October's Ready to Assign doesn't lose it.
+      const before = await month("2026-10");
+      expect(before.byCategory(rent.id)?.available).toBe("0");
+      expect(before.readyToAssign).toBe("100000");
+      await assign(rent.id, "2026-09", 500n);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(visa.paymentCategoryId)?.available).toBe("500");
+    });
+
+    it("reports what each card owes against what's set aside", async () => {
+      // Visa starts with $100 of old debt, like YNAB's Card A.
+      const { month, put, create, rent, visa, amex } = await cards(10000n);
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-400", categoryId: rent.id });
+      await put(rent.id, "2026-10", "200");
+      const pay = async () => (await month("2026-10")).byCategory(visa.paymentCategoryId);
+
+      // $2 funded of $4: $2 credit overspending plus $100 of old debt is underfunded.
+      expect(await pay()).toMatchObject({
+        available: "200",
+        payment: { balance: "-10400", underfunded: "10200", overspentCategories: "200" },
+      });
+      // Old debt is funded by assigning straight to the payment category (from Ready to Assign).
+      const res = await put(visa.paymentCategoryId, "2026-10", "1000");
+      expect(res.status).toBe(200);
+      expect(await pay()).toMatchObject({
+        assigned: "1000",
+        available: "1200",
+        payment: { underfunded: "9200", overspentCategories: "200" },
+      });
+      expect((await month("2026-10")).readyToAssign).toBe("98800");
+      // Nothing owed: nothing underfunded. Other categories have no payment details.
+      expect((await month("2026-10")).byCategory(amex.paymentCategoryId)?.payment).toEqual({
+        balance: "0",
+        underfunded: "0",
+        overspentCategories: "0",
+      });
+      expect((await month("2026-10")).byCategory(rent.id)?.payment).toBeNull();
+    });
+  });
+
   it("leaves transactions dated after the user's today out", async () => {
     const { month, spend, rent } = await setup();
     await spend({ date: "2026-10-20", amount: "-2500", categoryId: rent.id });
@@ -385,6 +473,8 @@ describe("budget months", () => {
       cashActivity: "-200",
       creditActivity: "0",
       available: "-200",
+      cashOverspent: "-200",
+      creditOverspent: "0",
     });
     expect((await month("2026-11")).uncategorized).toBeNull();
   });

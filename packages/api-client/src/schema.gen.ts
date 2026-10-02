@@ -1075,12 +1075,26 @@ export interface components {
                 creditActivity: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 available: string;
+                /** @description The cash part of a negative Available (taken from next month's Ready to Assign); 0 otherwise */
+                cashOverspent: string;
+                /** @description The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise */
+                creditOverspent: string;
             } | null;
         };
         MonthCategory: components["schemas"]["MonthTotals"] & {
             categoryId: string;
+            payment: components["schemas"]["PaymentDetails"];
             autoAssign: components["schemas"]["AutoAssignAmounts"];
         };
+        /** @description Set on a credit account's payment category */
+        PaymentDetails: {
+            /** @description The card's working balance at the end of the month (up to today) */
+            balance: string;
+            /** @description What's owed beyond what's set aside (YNAB's Total Underfunded); 0 when Available covers it */
+            underfunded: string;
+            /** @description The part of underfunded that is this month's credit overspending on the card */
+            overspentCategories: string;
+        } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
         AutoAssignAmounts: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -1107,6 +1121,10 @@ export interface components {
             creditActivity: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             available: string;
+            /** @description The cash part of a negative Available (taken from next month's Ready to Assign); 0 otherwise */
+            cashOverspent: string;
+            /** @description The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise */
+            creditOverspent: string;
         };
         MonthGroup: components["schemas"]["MonthTotals"] & {
             groupId: string;

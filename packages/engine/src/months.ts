@@ -79,6 +79,29 @@ export interface CategoryMonth {
   /** Payment categories: money moved in this month for funded card spending (YNAB's Funded Spending). */
   fundedSpending: bigint;
   available: bigint;
+  /**
+   * The part of a negative Available that's cash overspending (it comes out of next month's Ready
+   * to Assign); zero when Available isn't negative.
+   */
+  cashOverspent: bigint;
+  /** The rest of a negative Available: credit overspending, new card debt. */
+  creditOverspent: bigint;
+}
+
+/**
+ * How a month's overspending divides between cash and credit (YNAB, checked in its web app on
+ * 2026-10-03): cash spending is funded first, so the cash shortfall is cash overspending (as much
+ * of the negative Available as the cash spending accounts for) and the rest is credit. R2: Wallet
+ * −$3 and Citi −$2 with $0 → $3 cash, $2 credit; with $2 → $1 cash, $2 credit; with $4 → $1 credit.
+ */
+export function splitOverspending(
+  available: bigint,
+  cashBeforeCards: bigint,
+): { cashOverspent: bigint; creditOverspent: bigint } {
+  if (available >= 0n) return { cashOverspent: 0n, creditOverspent: 0n };
+  const cash =
+    cashBeforeCards < 0n ? (cashBeforeCards < available ? available : cashBeforeCards) : 0n;
+  return { cashOverspent: cash, creditOverspent: available - cash };
 }
 
 /**
@@ -127,16 +150,21 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       creditActivity: 0n,
       fundedSpending: 0n,
       available: carried,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
     };
   }
+  const cashActivity = activity - creditActivity - fundedSpending;
   return {
     carried,
     assigned,
     activity,
-    cashActivity: activity - creditActivity - fundedSpending,
+    cashActivity,
     creditActivity,
     fundedSpending,
     available,
+    // What it had before card spending: carried in, assigned and cash activity.
+    ...splitOverspending(available, available - creditActivity - fundedSpending),
   };
 }
 
@@ -150,15 +178,16 @@ export interface MonthAmount {
 }
 
 /**
- * What a category overspent in each month: its negative Available at the end of the month (YNAB's
- * cash overspending). Only months with activity or assignments can end negative, because what a
- * category carries in is never negative.
+ * What a category overspent in cash in each month: the cash part of its negative Available at the
+ * end of the month (YNAB's cash overspending, which comes out of the next month's Ready to Assign).
+ * Credit overspending is new card debt and isn't listed. Only months with activity or assignments
+ * can end negative, because what a category carries in is never negative.
  */
 export function categoryOverspending(history: readonly MonthFigures[]): MonthAmount[] {
   const months = [...new Set(history.map((h) => h.month))].sort();
   return months.flatMap((month) => {
-    const { available } = categoryMonth(history, month);
-    return available < 0n ? [{ month, amount: available }] : [];
+    const { cashOverspent } = categoryMonth(history, month);
+    return cashOverspent < 0n ? [{ month, amount: cashOverspent }] : [];
   });
 }
 
