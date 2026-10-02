@@ -7,7 +7,13 @@ const { app, db, close } = createTestApp();
 beforeEach(() => resetDatabase(db));
 afterAll(close);
 
-type Totals = { assigned: string; activity: string; available: string };
+type Totals = {
+  assigned: string;
+  activity: string;
+  cashActivity: string;
+  creditActivity: string;
+  available: string;
+};
 type Month = {
   month: string;
   currency: string;
@@ -19,7 +25,7 @@ type Month = {
   categories: (Totals & { categoryId: string })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
-  uncategorized: { activity: string; available: string } | null;
+  uncategorized: Omit<Totals, "assigned"> | null;
 };
 type Category = { id: string; name: string };
 type Group = { id: string; kind: string | null; categories: Category[] };
@@ -146,6 +152,57 @@ describe("budget months", () => {
     expect(oct.uncategorized).toBeNull();
   });
 
+  it("splits activity into cash and credit spending by account", async () => {
+    const { cookie, base, month, spend, phone, groceries, bills, savings } = await setup();
+    const card = async (name: string) =>
+      json<{ id: string }>(
+        await send("POST", `${base}/accounts`, cookie, {
+          name,
+          type: name === "Visa" ? "credit_card" : "line_of_credit",
+          balance: "0",
+          date: "2026-08-20",
+        }),
+      );
+    const visa = await card("Visa");
+    const amex = await card("Amex");
+    // YNAB's test plan (2026-10-03): Phone & Internet paid from cash, two cards and a split.
+    await spend({ date: "2026-10-01", amount: "-400", categoryId: phone.id });
+    await spend({ date: "2026-10-01", amount: "1000", categoryId: phone.id });
+    await spend({ accountId: visa.id, date: "2026-10-01", amount: "-500", categoryId: phone.id });
+    await spend({ accountId: visa.id, date: "2026-10-01", amount: "200", categoryId: phone.id });
+    await spend({
+      accountId: visa.id,
+      date: "2026-10-01",
+      amount: "-600",
+      subtransactions: [
+        { amount: "-700", categoryId: phone.id },
+        { amount: "100", categoryId: groceries.id },
+      ],
+    });
+    await spend({ accountId: amex.id, date: "2026-10-02", amount: "-300", categoryId: phone.id });
+    await spend({ accountId: amex.id, date: "2026-10-02", amount: "-100" });
+    await spend({ date: "2026-10-02", amount: "-200" });
+    // Card payments and transfers between budget accounts have no category.
+    await spend({ date: "2026-10-02", amount: "-900", transferAccountId: visa.id });
+    await spend({ date: "2026-10-02", amount: "-900", transferAccountId: savings.id });
+    // Future-dated card spending doesn't count yet, as in Phase 6.
+    await spend({ accountId: visa.id, date: "2026-10-20", amount: "-5000", categoryId: phone.id });
+
+    const oct = await month("2026-10");
+    const split = (activity: string, cash: string, credit: string) => ({
+      activity,
+      cashActivity: cash,
+      creditActivity: credit,
+    });
+    expect(oct.byCategory(phone.id)).toMatchObject(split("-700", "600", "-1300"));
+    expect(oct.byCategory(groceries.id)).toMatchObject(split("100", "0", "100"));
+    expect(oct.byGroup(bills.id)).toMatchObject(split("-700", "600", "-1300"));
+    expect(oct.uncategorized).toMatchObject(split("-300", "-200", "-100"));
+    // Observation only: Available and Ready to Assign are what they were before the split.
+    expect(oct.byCategory(phone.id)).toMatchObject({ assigned: "0", available: "-700" });
+    expect((await month("2026-11")).byCategory(phone.id)).toMatchObject(split("0", "0", "0"));
+  });
+
   it("leaves transactions dated after the user's today out", async () => {
     const { month, spend, rent } = await setup();
     await spend({ date: "2026-10-20", amount: "-2500", categoryId: rent.id });
@@ -185,7 +242,7 @@ describe("budget months", () => {
 
     const oct = await month("2026-10");
     expect(oct.byGroup(bills.id)).toMatchObject(t("0", "-100", "-100"));
-    expect(oct.hidden).toEqual(t("0", "-2540", "-2540"));
+    expect(oct.hidden).toMatchObject(t("0", "-2540", "-2540"));
     // Hidden categories still have their own numbers.
     expect(oct.byCategory(rent.id)).toMatchObject(t("0", "-2500", "-2500"));
   });
@@ -195,6 +252,8 @@ describe("budget months", () => {
     await spend({ date: "2026-10-01", amount: "-200" });
     expect((await month("2026-10")).uncategorized).toEqual({
       activity: "-200",
+      cashActivity: "-200",
+      creditActivity: "0",
       available: "-200",
     });
     expect((await month("2026-11")).uncategorized).toBeNull();

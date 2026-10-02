@@ -41,8 +41,14 @@ before starting a roadmap phase** and remove an entry once it's done.
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
   on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
-  Overfunded and Snoozed views wait for targets (phase 8); Credit Spending is always zero until
-  phase 7.
+  Overfunded and Snoozed views wait for targets (phase 8).
+- Cash Spending and Credit Spending are split by account family (phase 7a), but nothing acts on
+  the split yet: credit spending still counts as cash overspending, and no money moves to payment
+  categories (7b–7c). Uncategorized's "will be deducted" note still quotes its whole Available;
+  YNAB quotes only the cash part (docs/verify.md).
+- The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
+  listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded
+  first, a 7c verification gate.
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category.

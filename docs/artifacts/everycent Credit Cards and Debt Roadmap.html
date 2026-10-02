@@ -1,0 +1,359 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>everycent Credit Cards and Debt Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger-style sequence, as on the Phase 2 build sequence. A dependency strip on top, then one entry per stage, read top to bottom. */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --ink: #16211e;
+  --muted: #5b6b66;
+  --rule: #d9e1de;
+  --accent: #0f6b58;
+  --accent-soft: #e2f0ec;
+  --side: #7a5a12;
+  --side-soft: #f6eedb;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+    --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+  --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 16px;
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 880px; margin-inline: auto; display: grid; gap: 40px; }
+
+header { display: grid; gap: 10px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05; letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+}
+.lede { margin: 0; max-width: 65ch; color: var(--muted); font-size: 16px; }
+.lede strong { color: var(--ink); font-weight: 600; }
+
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: -0.01em; margin: 0; text-wrap: balance;
+}
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+
+/* Dependency strip */
+.flow { display: grid; gap: 14px; }
+.lane {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;
+  position: relative;
+}
+.node {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px 12px 14px; display: grid; gap: 4px; min-width: 0; position: relative;
+}
+.node .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+.node .t { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.node .s { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+a.node { color: inherit; text-decoration: none; }
+a.node:hover { border-color: var(--accent); }
+a.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step { scroll-margin-top: 16px; }
+.node.now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.node:not(:last-child)::after {
+  content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%);
+  color: var(--muted); font-size: 14px; background: var(--bg); line-height: 1; padding: 2px 0;
+  z-index: 1;
+}
+.side {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+  background: var(--side-soft); border: 1px dashed var(--side); border-radius: 6px;
+  padding: 10px 12px; font-size: 13.5px;
+}
+.side b { color: var(--side); font-weight: 600; }
+.then { font-size: 13.5px; color: var(--muted); }
+.then .mono { color: var(--ink); }
+
+@media (max-width: 860px) {
+  .lane { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .node:not(:last-child)::after {
+    content: "↓"; right: 50%; top: auto; bottom: -9px; transform: translate(50%, 50%);
+    padding: 0 4px;
+  }
+}
+
+/* Entries */
+.steps { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.step {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px;
+  padding-block: 26px; border-bottom: 1px solid var(--rule);
+}
+.num {
+  font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.body { display: grid; gap: 12px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.pill {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted);
+  white-space: nowrap;
+}
+.pill.now { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pill.done { color: var(--muted); }
+.node.done { opacity: .6; }
+.why { margin: 0; max-width: 65ch; }
+.meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.meta h3 {
+  margin: 0 0 6px; font-family: var(--font-mono); font-weight: 500; font-size: 11.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.meta ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.meta li::marker { color: var(--muted); }
+.src { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.full { grid-column: 1 / -1; }
+.meta li.q { color: var(--muted); }
+.meta ul + h3 { margin-top: 14px; }
+@media (max-width: 680px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .meta { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Rules */
+.rules { display: grid; gap: 14px; }
+.rules ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; max-width: 70ch; }
+.rules li::marker { color: var(--accent); }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a built)</div>
+    <h1>Build sequence for credit cards and debt</h1>
+    <p class="lede">Phase 6 made the plan usable; Phase 7 makes debt accounts tell the truth. Its eight README items are split into <strong>seven stages</strong>: five build credit-card budgeting on the existing register and payment categories, then two add loan activity and payoff planning. Build top to bottom. YNAB behaviour that support material and the real app cannot settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
+  </header>
+
+  <section class="flow" aria-label="Dependency order">
+    <div class="lane">
+      <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Accounts, transfers, budget math</span></a>
+      <a class="node done" href="#s7a"><span class="n">7a · done</span><span class="t">Credit math</span><span class="s">Cash vs credit activity</span></a>
+      <a class="node now" href="#s7b"><span class="n">7b · next</span><span class="t">Funded spending</span><span class="s">Money reserved to pay</span></a>
+      <a class="node" href="#s7c"><span class="n">7c</span><span class="t">Debt</span><span class="s">Overspending and old balances</span></a>
+      <a class="node" href="#s7d"><span class="n">7d</span><span class="t">Payments</span><span class="s">Transfers, returns, refunds</span></a>
+      <a class="node" href="#s7e"><span class="n">7e</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
+      <a class="node" href="#s7f"><span class="n">7f–7g</span><span class="t">Loans</span><span class="s">Activity, interest, planner</span></a>
+    </div>
+    <div class="side"><b>Outside Phase 7:</b> debt-payment targets and target-driven Underfunded (Phase 8), reconciliation (Phase 9), scheduled payments (Phase 10), foreign-currency debt (Phase 11).</div>
+    <div class="then">7a is built on <span class="mono">main</span> (after <span class="mono">acd3f9b</span>). To pick up: <span class="mono">Start 7b from main. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
+  </section>
+
+  <section class="steps" aria-label="Stages">
+    <article class="step" id="s00">
+      <div class="num">00</div>
+      <div class="body">
+        <div class="head"><h2>Foundation already in place</h2><span class="pill done">Done</span></div>
+        <p class="why">Phase 7 starts with real credit and loan accounts, linked payment categories, transfers, split transactions, exact budget-month history and server-side money math. Do not rebuild these foundations.</p>
+        <div class="meta">
+          <div>
+            <h3>Built</h3>
+            <ul><li>Credit card and line-of-credit account types; loan account families and stored loan terms <span class="src">P3</span></li><li>One managed payment category per credit account, linked by <code>linkedAccountId</code> / <code>paymentCategoryId</code> <span class="src">P4</span></li><li>Linked transfer pairs, split transfers, starting balances, account close/reopen and register undo <span class="src">P5–6</span></li><li>Assigned, Activity, Available and Ready to Assign calculated from transaction and assignment history <span class="src">P6</span></li></ul>
+          </div>
+          <div>
+            <h3>Known gaps entering Phase 7</h3>
+            <ul><li>Every overspent category is currently treated as cash overspending</li><li>Payment categories behave like ordinary categories (Credit Spending is real since 7a)</li><li>Loan terms are stored but do not affect transactions or projections</li><li>Credit-card close adjustments and cross-family account type changes need debt-aware rules</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7a">
+      <div class="num">7a</div>
+      <div class="body">
+        <div class="head"><h2>Credit-aware budget math</h2><span class="pill done">Done</span></div>
+        <p class="why">Separate cash spending from credit spending before moving any money. Every later card rule needs an exact answer to how much category activity was paid with cash, with a card, or by a mix of both.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Classify transaction and split-line activity by account family without changing total Activity</li><li>Return real Cash Spending and Credit Spending in category/month breakdowns</li><li>Engine primitives for funded credit activity, credit overspending and card balance by month: <em>moved to 7b/7c</em>, because the funded-first ordering is still a 7c verification gate</li><li>Keep uncategorized card spending and future-dated card transactions in the same cutoff rules as Phase 6</li><li>Build table-driven engine tests first: cash only, card only, mixed accounts, splits, returns and multiple cards</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>Phase 6 month history and category inspector</li></ul>
+            <h3>Acceptance</h3>
+            <ul><li>The category's Activity is unchanged; Cash Spending + Credit Spending explains its outflows</li><li>No money moves to a payment category yet—this stage changes observation, not behavior</li><li>All amounts remain <code>bigint</code> minor units; classification happens on the server</li></ul>
+            <h3>Found in YNAB (web app, 3 Oct 2026)</h3>
+            <ul><li>Cash Spending and Credit Spending are each the net of the month's activity in that account family, refunds included: Wallet −$4 and +$10 showed Cash Spending <b>$6.00</b> (positive); Visa −$5, +$2, a −$7 split line and Amex −$3 showed Credit Spending <b>−$13.00</b></li><li>A split line is classified by its transaction's account; a +$1 Groceries line on Visa showed Credit Spending $1.00</li><li>Uncategorized splits the same way (Cash −$2.00, Credit −$1.00); its "will be deducted" note quoted only the cash part ($2.00), which is 7c credit overspending</li><li>The category Activity popover lists each transaction with its account (Wallet, Visa, Amex); a payment category's popover is a different breakdown (Spending, Returns, Funded Spending, Payments &amp; Returns) — evidence for 7b in <code>docs/verify.md</code></li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7b">
+      <div class="num">7b</div>
+      <div class="body">
+        <div class="head"><h2>Funded card spending and payment categories</h2><span class="pill now">Next</span></div>
+        <p class="why">A funded card purchase spends a category's cash while reserving the same amount for the card payment. This is the core credit-card loop and must be derived from history, not maintained by fragile side-effect rows.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Spending on a credit account moves the funded portion into that account's linked payment category <span class="src">P7</span></li><li>Payment-category Available = direct Assigned + carried payment money + funded card spending − payments/refunds that release it</li><li>Credit Card Payments group subtotals and each card's Available pill</li><li>Edits, deletes, category changes, splits and undo/redo recompute the reservation correctly</li><li>Several cards spending from one category reserve money independently for each card</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>7a credit activity classification</li></ul>
+            <h3>Confirmed behavior</h3>
+            <ul><li>YNAB moves money only for the funded part of a categorized purchase</li><li>The spending category falls and the card's payment category rises by the same funded amount</li><li>A genuinely positive card balance behaves as cash; automatic movement resumes only after the balance becomes negative</li></ul>
+            <h3>Design constraint</h3>
+            <ul><li>Compute from immutable transaction/assignment history where possible; if persisted derived rows are required, update them atomically with the source edit and prove replay safety</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7c">
+      <div class="num">7c</div>
+      <div class="body">
+        <div class="head"><h2>Credit overspending and existing debt</h2><span class="pill">Planned</span></div>
+        <p class="why">Not every card purchase has cash behind it. The unfunded part becomes debt instead of reducing next month's Ready to Assign, while debt that existed before everycent is funded directly in the payment category.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Credit overspending shown yellow and excluded from next month's cash-overspending deduction <span class="src">P7</span></li><li>Mixed overspending: split the category shortfall between cash and credit using YNAB's confirmed ordering rule</li><li>Negative credit starting balance creates debt but no category activity or automatic payment money</li><li>Assigning directly to the payment category reserves cash to pay existing debt</li><li>Payment-category funded/underfunded comparison against the amount owed, without implementing Phase 8 targets</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>7b payment-category math</li></ul>
+            <h3>Confirmed behavior</h3>
+            <ul><li>If a spending category has no cash, YNAB cannot move payment money; the card balance grows and the payment category does not</li><li>Old card debt is funded by assigning money directly to the card's payment category</li><li>Target-controlled debt payoff remains Phase 8</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li class="q">When one category contains cash and card spending beyond Available, which payment method YNAB treats as funded first</li><li class="q">Whether covering same-month credit overspending later retroactively moves payment money; support material appears to say it does not, so reproduce it before building</li><li class="q">Exact payment-category warning and color rules before Phase 8 targets exist</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7d">
+      <div class="num">7d</div>
+      <div class="body">
+        <div class="head"><h2>Payments, returns and refunds</h2><span class="pill">Planned</span></div>
+        <p class="why">Transfers and inflows close the loop: paying the card consumes reserved payment money, while a return unwinds the original spending category and its card reservation.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>A transfer from a budget cash account to a credit account reduces payment-category Available <span class="src">P7</span></li><li>Payments reduce the card balance and cash account balance without ordinary category Activity</li><li>Returns categorized to the original spending category reverse card activity and payment money</li><li>Statement credits / inflows to Ready to Assign follow YNAB's distinct behavior</li><li>Overpayment makes the payment category red when more was paid than Available</li><li>Split payments, partial refunds, deleted transfer sides and undo/redo stay consistent</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>7b funded reservations; 7c debt state</li></ul>
+            <h3>Confirmed behavior</h3>
+            <ul><li>Card payments are account transfers and carry no category</li><li>A refund should normally use the purchase category so money returns there and the amount reserved for payment is reduced</li><li>A positive balance from overpayment enters the plan differently from a categorized refund</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li class="q">Refund across month/year boundaries: which month's payment Available is unwound and how much can roll back</li><li class="q">Refund against credit overspending vs funded spending; refunds larger than the original purchase</li><li class="q">Payment from a tracking account, payment into a card already positive, and payment reversal</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7e">
+      <div class="num">7e</div>
+      <div class="body">
+        <div class="head"><h2>Credit lifecycle and parity pass</h2><span class="pill">Planned</span></div>
+        <p class="why">Card math must remain correct when the account crosses zero, is closed, or changes family. Finish the credit track by removing Phase 7 deferrals and checking the whole UI in the real app.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Positive card balances: Ready to Assign treatment, cash-like purchases until zero, then credit reservations resume</li><li>Close/reopen with positive, zero and negative balances; linked payment category hide/show and remaining Available</li><li>Cross-family account type changes create/remove payment categories and move money into/out of the plan <span class="src">deferred</span></li><li>Credit-aware Manual Balance Adjustment behavior</li><li>Card activity drill-down, inspector copy, filters, Recent Moves and local undo/redo integration</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>7a–7d</li></ul>
+            <h3>Acceptance</h3>
+            <ul><li>For a paid-in-full card, payment Available can be reconciled to the amount owed after every supported edit</li><li>No category or Ready to Assign money is created or destroyed when a card crosses zero</li><li>Every Phase 7 credit case has API integration tests against PostgreSQL and browser coverage in both themes</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li class="q">Exact close-account and cross-family conversion dialogs and where leftover payment money goes</li><li class="q">Line of credit differences, if any, from credit card behavior</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7f">
+      <div class="num">7f</div>
+      <div class="body">
+        <div class="head"><h2>Loan activity and amortization</h2><span class="pill">Planned</span></div>
+        <p class="why">Loan accounts need a purpose-built activity model: a payment is principal, interest and optional escrow/fees, with the loan balance changing only by principal and capitalized activity.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Loan payment transfer flow with principal, interest, escrow and extra payment breakdown <span class="src">P7</span></li><li>Monthly interest estimate from exact decimal rate math—never binary floats</li><li>First payment in a month applies interest and escrow/fees before principal</li><li>Add/edit manual interest and escrow activity for current and past months</li><li>Account activity timeline and current principal balance</li><li>Multiple and partial payments in one month, edits, deletes and undo/redo</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>Existing loan types and terms; transaction transfer foundation</li></ul>
+            <h3>Confirmed behavior</h3>
+            <ul><li>YNAB models standard amortization with interest compounded monthly</li><li>Estimated monthly interest = current balance × annual rate ÷ 12, then the first payment of the month covers interest (and escrow/fees) before principal</li><li>Interest does not accrue automatically without a payment; the user can add it manually</li><li>Users can edit interest and escrow activity to match the lender</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li class="q">Exact rounding at the minor unit, effective balance/date used for a mid-month first payment, and negative-amortization behavior</li><li class="q">How linked plan categories and payees are created for existing vs new loans</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="s7g">
+      <div class="num">7g</div>
+      <div class="body">
+        <div class="head"><h2>Loan planner and finish Phase 7</h2><span class="pill">Planned</span></div>
+        <p class="why">Once recorded loan activity is trustworthy, project the payoff: show what the current payment costs in time and interest, then let the user compare extra-payment scenarios without mutating the ledger.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Projected payoff month and total remaining interest from current balance, rate and payment</li><li>What-if extra monthly payment: new payoff date, months saved and interest saved <span class="src">P7</span></li><li>Escrow excluded from debt reduction; minimum payment and extra principal modeled separately</li><li>Impossible-plan states: zero/too-small payment, zero rate, already paid off and missing loan terms</li><li>Pure engine amortization schedule with deterministic tests; compact account-page planner UI</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>7f loan balance and activity semantics</li></ul>
+            <h3>Acceptance</h3>
+            <ul><li>Projection never writes transactions or assignments</li><li>Displayed totals exactly equal the generated schedule's principal and interest sums</li><li>Known amortization examples and YNAB test-account scenarios agree to the minor unit after confirmed rounding</li><li><code>pnpm check</code> passes; OpenAPI/client and any migrations are generated and committed</li></ul>
+            <h3>Not here</h3>
+            <ul><li>Debt-payment targets and target progress (Phase 8)</li><li>Scheduled recurring loan payments (Phase 10)</li><li>Daily-variable or foreign-currency loan models</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="rules">
+    <h2>Ground rules</h2>
+    <ul>
+      <li><strong>Match YNAB one to one; check, don't assume.</strong> Reproduce each verification gate in the signed-in YNAB test plan before implementing it. If it cannot be settled, add the exact question and evidence to <code>docs/verify.md</code> and skip that behavior.</li>
+      <li><strong>Money and rates stay exact.</strong> Currency uses <code>bigint</code> minor units. Interest rates need a fixed-scale integer/rational representation; never <code>Number(amount)</code>, <code>parseFloat</code> or floating-point amortization.</li>
+      <li><strong>The server owns derived debt math.</strong> Clients render payment Available, funded credit activity, principal and projections returned by tested engine/API code.</li>
+      <li><strong>History must replay.</strong> Editing, deleting, splitting, transferring, undoing and redoing a transaction must derive the same card/loan state as entering the final history from scratch.</li>
+      <li><strong>Build one vertical stage at a time.</strong> Engine rule → PostgreSQL integration test → API schema → generated client → UI → browser parity check. Run <code>pnpm check</code> before marking a stage done.</li>
+    </ul>
+  </section>
+
+  <footer>References: Phase 7 in <code>README.md</code>; Phase 7 entries in <code>docs/deferred.md</code>; YNAB Help Center articles “Handling Credit Cards”, “Credit Card Refunds and Returns”, “Handling Credit Card Overspending”, “Loan Accounts” and “Handling Interest in Loan Accounts”; and the signed-in YNAB web test plan.</footer>
+</div>
+
+</body></html>

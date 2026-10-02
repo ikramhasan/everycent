@@ -123,6 +123,8 @@ function renderList(list: CategoryListData = data) {
 const totals = (assigned: string, activity: string, available: string) => ({
   assigned,
   activity,
+  cashActivity: activity,
+  creditActivity: "0",
   available,
   autoAssign: NO_AUTO_ASSIGN,
 });
@@ -142,7 +144,7 @@ const month: BudgetMonthData = {
   ],
   groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],
   hidden: totals("0", "-2", "-2"),
-  uncategorized: { activity: "-9", available: "-9" },
+  uncategorized: { activity: "-9", cashActivity: "-9", creditActivity: "0", available: "-9" },
 };
 
 function renderWithFigures() {

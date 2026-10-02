@@ -93,8 +93,8 @@ export function MonthSummary({
 }
 
 /**
- * The inspector for one category: where its Available comes from, and its note. Credit spending
- * stays zero until phase 7 treats credit card spending apart (docs/deferred.md).
+ * The inspector for one category: where its Available comes from (activity split into what was
+ * paid with cash and with credit accounts), and its note.
  */
 export function CategoryInspector({
   name,
@@ -134,8 +134,8 @@ export function CategoryInspector({
           value={uncategorized ? null : totals.assigned}
           format={format}
         />
-        <Line label="Cash Spending" value={totals.activity} format={format} />
-        <Line label="Credit Spending" value={uncategorized ? null : 0n} format={format} />
+        <Line label="Cash Spending" value={totals.cashActivity} format={format} />
+        <Line label="Credit Spending" value={totals.creditActivity} format={format} />
       </dl>
       {overspent && (
         <p className="text-destructive text-sm">

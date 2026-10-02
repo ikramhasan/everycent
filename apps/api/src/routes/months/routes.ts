@@ -13,8 +13,18 @@ const zBudgetMonth = z
   .regex(BUDGET_MONTH_PATTERN, "Expected a month as YYYY-MM")
   .describe("A month, YYYY-MM");
 
+const Activity = {
+  activity: zMinorUnits,
+  cashActivity: zMinorUnits.describe(
+    "The part of activity in cash accounts, refunds included (YNAB's Cash Spending)",
+  ),
+  creditActivity: zMinorUnits.describe(
+    "The part of activity in credit accounts, refunds included (YNAB's Credit Spending)",
+  ),
+};
+
 const Totals = z
-  .object({ assigned: zMinorUnits, activity: zMinorUnits, available: zMinorUnits })
+  .object({ assigned: zMinorUnits, ...Activity, available: zMinorUnits })
   .openapi("MonthTotals");
 
 const AutoAssignSchema = z
@@ -66,7 +76,7 @@ const MonthSchema = z
       .describe("Each group's totals over its categories that aren't hidden"),
     hidden: Totals.describe("Totals of hidden categories and of every category in hidden groups"),
     uncategorized: z
-      .object({ activity: zMinorUnits, available: zMinorUnits })
+      .object({ ...Activity, available: zMinorUnits })
       .nullable()
       .describe("Spending without a category; null in months without any"),
   })

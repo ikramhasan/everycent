@@ -2617,6 +2617,16 @@
                 "pattern": "^(0|-?[1-9]\\d*)$",
                 "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
               },
+              "cashActivity": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The part of activity in cash accounts, refunds included (YNAB's Cash Spending)"
+              },
+              "creditActivity": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The part of activity in credit accounts, refunds included (YNAB's Credit Spending)"
+              },
               "available": {
                 "type": "string",
                 "pattern": "^(0|-?[1-9]\\d*)$",
@@ -2625,6 +2635,8 @@
             },
             "required": [
               "activity",
+              "cashActivity",
+              "creditActivity",
               "available"
             ],
             "description": "Spending without a category; null in months without any"
@@ -2723,6 +2735,16 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
           },
+          "cashActivity": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The part of activity in cash accounts, refunds included (YNAB's Cash Spending)"
+          },
+          "creditActivity": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The part of activity in credit accounts, refunds included (YNAB's Credit Spending)"
+          },
           "available": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
@@ -2732,6 +2754,8 @@
         "required": [
           "assigned",
           "activity",
+          "cashActivity",
+          "creditActivity",
           "available"
         ]
       },

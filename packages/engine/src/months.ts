@@ -58,6 +58,8 @@ export interface MonthFigures {
   month: BudgetMonth;
   assigned: bigint;
   activity: bigint;
+  /** The part of `activity` on credit accounts (the rest was paid with cash). Defaults to zero. */
+  creditActivity?: bigint;
 }
 
 export interface CategoryMonth {
@@ -65,6 +67,10 @@ export interface CategoryMonth {
   carried: bigint;
   assigned: bigint;
   activity: bigint;
+  /** The month's activity in cash accounts (YNAB's Cash Spending). */
+  cashActivity: bigint;
+  /** The month's activity in credit accounts (YNAB's Credit Spending). */
+  creditActivity: bigint;
   available: bigint;
 }
 
@@ -72,6 +78,11 @@ export interface CategoryMonth {
  * A category's numbers for `month`, from its assigned amounts and activity in every month. What's
  * available rolls into the next month; a negative balance (overspending) doesn't, the category
  * starts the next month at zero.
+ *
+ * Activity is also split by how it was paid, as YNAB's inspector shows it (checked in its web app
+ * on 2026-10-03): Cash Spending is the net of the month's activity in cash accounts and Credit
+ * Spending the net in credit accounts, refunds included (−$4 and +$10 in cash showed as $6.00).
+ * The split changes nothing else here; how credit spending moves money is phase 7b.
  */
 export function categoryMonth(history: readonly MonthFigures[], month: BudgetMonth): CategoryMonth {
   const sorted = [...history].filter((h) => h.month <= month).sort(byMonth);
@@ -79,6 +90,7 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
   let available = 0n;
   let assigned = 0n;
   let activity = 0n;
+  let creditActivity = 0n;
   let previous: BudgetMonth | null = null;
   for (const entry of sorted) {
     if (entry.month !== previous) {
@@ -86,18 +98,34 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       available = carried;
       assigned = 0n;
       activity = 0n;
+      creditActivity = 0n;
       previous = entry.month;
     }
     assigned += entry.assigned;
     activity += entry.activity;
+    creditActivity += entry.creditActivity ?? 0n;
     available += entry.assigned + entry.activity;
   }
   if (previous !== month) {
     // Nothing happened in `month` itself: it starts from what the last active month left.
     carried = previous === null || available < 0n ? 0n : available;
-    return { carried, assigned: 0n, activity: 0n, available: carried };
+    return {
+      carried,
+      assigned: 0n,
+      activity: 0n,
+      cashActivity: 0n,
+      creditActivity: 0n,
+      available: carried,
+    };
   }
-  return { carried, assigned, activity, available };
+  return {
+    carried,
+    assigned,
+    activity,
+    cashActivity: activity - creditActivity,
+    creditActivity,
+    available,
+  };
 }
 
 function byMonth(a: MonthFigures, b: MonthFigures) {

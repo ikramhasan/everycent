@@ -14,6 +14,8 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   categoryId,
   assigned,
   activity,
+  cashActivity: activity,
+  creditActivity: "0",
   available,
   autoAssign: NO_AUTO_ASSIGN,
 });
@@ -34,8 +36,19 @@ const month: BudgetMonthData = {
     cat("zero", "0", "0", "0"),
   ],
   groups: [],
-  hidden: { assigned: "300", activity: "0", available: "300" },
-  uncategorized: { activity: "-200", available: "-200" },
+  hidden: {
+    assigned: "300",
+    activity: "0",
+    cashActivity: "0",
+    creditActivity: "0",
+    available: "300",
+  },
+  uncategorized: {
+    activity: "-200",
+    cashActivity: "-50",
+    creditActivity: "-150",
+    available: "-200",
+  },
 };
 const visible = new Set(["rent", "power", "food", "zero"]);
 
@@ -59,6 +72,8 @@ describe("budget views", () => {
       carried: 1000n,
       assigned: 1000n,
       activity: -500n,
+      cashActivity: -500n,
+      creditActivity: 0n,
       available: 1500n,
     });
   });
@@ -68,6 +83,8 @@ describe("budget views", () => {
       carried: 0n,
       assigned: 4000n,
       activity: -2700n,
+      cashActivity: -2550n,
+      creditActivity: -150n,
       available: 1300n,
     });
   });

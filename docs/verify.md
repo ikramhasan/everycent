@@ -274,3 +274,31 @@ as found:
 - **Found (help center):** with nothing selected, "there's a prompt to confirm that decision".
 - **Built so far (before this rule):** the same preview every option gets, which needs a click on
   "Update Assigned Amounts".
+
+## Cash and credit spending (phase 7a)
+
+Checked in YNAB's web app on 2026-10-03 (test plan: cards "Visa" and "Amex" added at $0.00) and
+built as found:
+
+- The inspector's Cash Spending and Credit Spending are the net of the month's activity in cash
+  and credit accounts, refunds included. Phone & Internet ($20.00 assigned): Wallet −$4.00 and
+  +$10.00, Visa −$5.00, +$2.00 and a −$7.00 split line, Amex −$3.00 showed Cash Spending $6.00
+  (positive, no sign) and Credit Spending −$13.00, Available $13.00.
+- A split line counts by its transaction's account: the same Visa split's +$1.00 Groceries line
+  showed Groceries' Credit Spending as $1.00 (Cash Spending −$5.00).
+- Uncategorized splits the same way (Cash −$2.00, Credit −$1.00 from an Amex outflow with no
+  category); see 7c below for its message.
+- A category's Activity popover lists every transaction with its account; Visa and Amex rows sit
+  beside Wallet's.
+
+### Evidence for 7b and 7c (not built yet)
+
+- **Payment category activity:** with the transactions above, the Visa payment category showed
+  Activity $9.00 and Available $9.00 ("You have $9.00 set aside for payment"); Amex $3.00. Visa's
+  Activity popover: Spending −$12.00, Returns +$3.00, Total Spending −$9.00, Funded Spending
+  +$10.00, Payments & Returns −$1.00, Total Activity +$9.00. So the +$1.00 Groceries return on
+  Visa (Groceries was overspent) seems to take $1.00 out of the payment category rather than
+  count as funded; 7b/7d have to reproduce that before building it.
+- **Uncategorized message:** "Uncategorized cash transactions still affect your plan! … $2.00
+  will be deducted" quoted only the cash part (Available −$3.00). everycent still quotes all of
+  it until credit overspending (7c) stops deducting the credit part.

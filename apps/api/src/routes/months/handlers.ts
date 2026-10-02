@@ -1,5 +1,6 @@
 import { sql } from "@everycent/db";
 import {
+  budgetAccount,
   category,
   categoryAssignment,
   categoryGroup,
@@ -9,7 +10,9 @@ import {
   user,
 } from "@everycent/db/schema";
 import {
+  ACCOUNT_TYPES,
   type AutoAssignOption,
+  accountFamily,
   autoAssignAmounts,
   type BudgetMonth,
   budgetMonthRange,
@@ -39,10 +42,14 @@ type Env = AppEnv & AuthedEnv;
 const monthKey = (date: AnyPgColumn) => sql<string>`to_char(${date}, 'YYYY-MM')`;
 // Postgres returns numeric sums as strings; BigInt parses them exactly.
 const total = (amount: AnyPgColumn) => sql<string>`sum(${amount})`;
+const CREDIT_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "credit");
+/** The part of `amount`'s sum on credit accounts (YNAB's Credit Spending). */
+const creditTotal = (amount: AnyPgColumn) =>
+  sql<string>`coalesce(sum(${amount}) filter (where ${inArray(budgetAccount.type, CREDIT_TYPES)}), 0)`;
 
 /**
- * Each category's activity per month up to `cutoff`, and its assigned amounts in every month (money
- * assigned in later months counts toward Ready to Assign).
+ * Each category's activity per month up to `cutoff` (and the part of it on credit accounts), and its
+ * assigned amounts in every month (money assigned in later months counts toward Ready to Assign).
  */
 async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
   const rows = await db
@@ -50,8 +57,10 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
       categoryId: transaction.categoryId,
       month: monthKey(transaction.date),
       amount: total(transaction.amount),
+      credit: creditTotal(transaction.amount),
     })
     .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
     .where(
       and(
         eq(transaction.budgetId, budgetId),
@@ -66,9 +75,11 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
       categoryId: subTransaction.categoryId,
       month: monthKey(transaction.date),
       amount: total(subTransaction.amount),
+      credit: creditTotal(subTransaction.amount),
     })
     .from(subTransaction)
     .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
     .where(
       and(
         eq(transaction.budgetId, budgetId),
@@ -94,20 +105,34 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
     history.set(categoryId, list);
   };
   for (const r of [...rows, ...lines]) {
-    push(r.categoryId, { month: r.month, assigned: 0n, activity: BigInt(r.amount) });
+    push(r.categoryId, {
+      month: r.month,
+      assigned: 0n,
+      activity: BigInt(r.amount),
+      creditActivity: BigInt(r.credit),
+    });
   }
   for (const r of assigned)
     push(r.categoryId, { month: r.month, assigned: r.amount, activity: 0n });
   return history;
 }
 
-const ZERO: CategoryMonth = { carried: 0n, assigned: 0n, activity: 0n, available: 0n };
+const ZERO: CategoryMonth = {
+  carried: 0n,
+  assigned: 0n,
+  activity: 0n,
+  cashActivity: 0n,
+  creditActivity: 0n,
+  available: 0n,
+};
 
 function addTo(sum: CategoryMonth, n: CategoryMonth): CategoryMonth {
   return {
     carried: sum.carried + n.carried,
     assigned: sum.assigned + n.assigned,
     activity: sum.activity + n.activity,
+    cashActivity: sum.cashActivity + n.cashActivity,
+    creditActivity: sum.creditActivity + n.creditActivity,
     available: sum.available + n.available,
   };
 }
@@ -115,6 +140,8 @@ function addTo(sum: CategoryMonth, n: CategoryMonth): CategoryMonth {
 const totalsJson = (n: CategoryMonth) => ({
   assigned: n.assigned.toString(),
   activity: n.activity.toString(),
+  cashActivity: n.cashActivity.toString(),
+  creditActivity: n.creditActivity.toString(),
   available: n.available.toString(),
 });
 
@@ -252,6 +279,8 @@ export async function budgetMonthJson(
     hidden: totalsJson(hidden),
     uncategorized: uncategorized && {
       activity: uncategorized.activity.toString(),
+      cashActivity: uncategorized.cashActivity.toString(),
+      creditActivity: uncategorized.creditActivity.toString(),
       available: uncategorized.available.toString(),
     },
   };

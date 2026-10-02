@@ -1069,6 +1069,10 @@ export interface components {
             uncategorized: {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 activity: string;
+                /** @description The part of activity in cash accounts, refunds included (YNAB's Cash Spending) */
+                cashActivity: string;
+                /** @description The part of activity in credit accounts, refunds included (YNAB's Credit Spending) */
+                creditActivity: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 available: string;
             } | null;
@@ -1097,6 +1101,10 @@ export interface components {
             assigned: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             activity: string;
+            /** @description The part of activity in cash accounts, refunds included (YNAB's Cash Spending) */
+            cashActivity: string;
+            /** @description The part of activity in credit accounts, refunds included (YNAB's Credit Spending) */
+            creditActivity: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             available: string;
         };

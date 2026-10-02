@@ -44,6 +44,10 @@ export interface Breakdown {
   carried: bigint;
   assigned: bigint;
   activity: bigint;
+  /** The part of activity in cash accounts (YNAB's Cash Spending). */
+  cashActivity: bigint;
+  /** The part of activity in credit accounts (YNAB's Credit Spending). */
+  creditActivity: bigint;
   available: bigint;
 }
 
@@ -52,7 +56,14 @@ export function breakdown(totals: MonthTotals): Breakdown {
   const assigned = BigInt(totals.assigned);
   const activity = BigInt(totals.activity);
   const available = BigInt(totals.available);
-  return { carried: available - assigned - activity, assigned, activity, available };
+  return {
+    carried: available - assigned - activity,
+    assigned,
+    activity,
+    cashActivity: BigInt(totals.cashActivity),
+    creditActivity: BigInt(totals.creditActivity),
+    available,
+  };
 }
 
 /**
@@ -61,7 +72,14 @@ export function breakdown(totals: MonthTotals): Breakdown {
  */
 export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakdown {
   const byId = new Map(month.categories.map((c) => [c.categoryId, c]));
-  const sum: Breakdown = { carried: 0n, assigned: 0n, activity: 0n, available: 0n };
+  const sum: Breakdown = {
+    carried: 0n,
+    assigned: 0n,
+    activity: 0n,
+    cashActivity: 0n,
+    creditActivity: 0n,
+    available: 0n,
+  };
   for (const id of ids) {
     const totals =
       id === UNCATEGORIZED
@@ -72,6 +90,8 @@ export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakd
     sum.carried += b.carried;
     sum.assigned += b.assigned;
     sum.activity += b.activity;
+    sum.cashActivity += b.cashActivity;
+    sum.creditActivity += b.creditActivity;
     sum.available += b.available;
   }
   return sum;

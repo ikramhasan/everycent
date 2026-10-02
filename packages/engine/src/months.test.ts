@@ -62,6 +62,8 @@ describe("categoryMonth", () => {
       carried: 0n,
       assigned: 0n,
       activity: 0n,
+      cashActivity: 0n,
+      creditActivity: 0n,
       available: 0n,
     });
   });
@@ -72,12 +74,16 @@ describe("categoryMonth", () => {
       carried: 7500n,
       assigned: 0n,
       activity: 0n,
+      cashActivity: 0n,
+      creditActivity: 0n,
       available: 7500n,
     });
     expect(categoryMonth(history, "2026-10")).toEqual({
       carried: 7500n,
       assigned: 500n,
       activity: -1000n,
+      cashActivity: -1000n,
+      creditActivity: 0n,
       available: 7000n,
     });
     expect(categoryMonth(history, "2026-12").available).toBe(7000n);
@@ -90,6 +96,8 @@ describe("categoryMonth", () => {
       carried: 0n,
       assigned: 0n,
       activity: 0n,
+      cashActivity: 0n,
+      creditActivity: 0n,
       available: 0n,
     });
     const later = [...history, m("2026-12", 1000n, -200n)];
@@ -97,6 +105,8 @@ describe("categoryMonth", () => {
       carried: 0n,
       assigned: 1000n,
       activity: -200n,
+      cashActivity: -200n,
+      creditActivity: 0n,
       available: 800n,
     });
   });
@@ -107,12 +117,64 @@ describe("categoryMonth", () => {
       carried: 1000n,
       assigned: 200n,
       activity: -400n,
+      cashActivity: -400n,
+      creditActivity: 0n,
       available: 800n,
     });
   });
 
   it("ignores later months", () => {
     expect(categoryMonth([m("2026-11", 5000n, 0n)], "2026-10").available).toBe(0n);
+  });
+
+  describe("cash and credit activity", () => {
+    const e = (month: string, activity: bigint, creditActivity: bigint) => ({
+      month,
+      assigned: 0n,
+      activity,
+      creditActivity,
+    });
+
+    it.each([
+      // [case, entries, activity, cash, credit]
+      ["cash only", [e("2026-10", -400n, 0n)], -400n, -400n, 0n],
+      ["card only", [e("2026-10", -500n, -500n)], -500n, 0n, -500n],
+      // YNAB's test plan (2026-10-03), Phone & Internet: Wallet −$4 and +$10, Visa −$5, +$2 and a
+      // −$7 split line, Amex −$3. Cash Spending $6.00, Credit Spending −$13.00.
+      [
+        "mixed accounts, returns, splits and two cards",
+        [
+          e("2026-10", -400n, 0n),
+          e("2026-10", 1000n, 0n),
+          e("2026-10", -1000n, -1000n),
+          e("2026-10", -300n, -300n),
+        ],
+        -700n,
+        600n,
+        -1300n,
+      ],
+      // A split line returned on a card (Groceries +$1 on Visa) is positive Credit Spending.
+      ["a card return", [e("2026-10", -500n, 0n), e("2026-10", 100n, 100n)], -400n, -500n, 100n],
+    ])("%s", (_, entries, activity, cash, credit) => {
+      expect(categoryMonth(entries, "2026-10")).toMatchObject({
+        activity,
+        cashActivity: cash,
+        creditActivity: credit,
+      });
+    });
+
+    it("counts only the month's own activity", () => {
+      const entries = [e("2026-09", -200n, -200n), { ...e("2026-10", 0n, 0n), assigned: 1000n }];
+      expect(categoryMonth(entries, "2026-10")).toMatchObject({
+        activity: 0n,
+        cashActivity: 0n,
+        creditActivity: 0n,
+      });
+      expect(categoryMonth(entries, "2026-11")).toMatchObject({
+        cashActivity: 0n,
+        creditActivity: 0n,
+      });
+    });
   });
 });
 
