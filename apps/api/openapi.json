@@ -1438,11 +1438,19 @@
               "null"
             ],
             "description": "Pass as `cursor` for the next page; null on the last page"
+          },
+          "someHidden": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the search, dates or hidden reconciled transactions leave any of the register out (first page only; null on later pages)"
           }
         },
         "required": [
           "transactions",
-          "nextCursor"
+          "nextCursor",
+          "someHidden"
         ]
       },
       "Transaction": {
@@ -1709,7 +1717,17 @@
           "runningBalance": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "The account's balance after this transaction, in date order (all of its transactions)"
+            "description": "The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest)"
+          },
+          "matchingLineIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Under a search: the split lines that match it (the register shows only those). Null without a search"
           }
         },
         "required": [
@@ -1730,7 +1748,8 @@
           "transferTransactionId",
           "transferFromSplit",
           "subtransactions",
-          "runningBalance"
+          "runningBalance",
+          "matchingLineIds"
         ]
       },
       "SubTransaction": {
@@ -1808,11 +1827,42 @@
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Sum of the amounts, in the budget's currency"
+          },
+          "uncleared": {
+            "type": "integer"
+          },
+          "cleared": {
+            "type": "integer"
+          },
+          "reconciled": {
+            "type": "integer"
+          },
+          "categorizable": {
+            "type": "integer",
+            "description": "Transactions that take a category (not transfers within the budget, nor tracking accounts)"
+          },
+          "splits": {
+            "type": "integer"
+          },
+          "splitsWithTransfers": {
+            "type": "integer",
+            "description": "Splits with a transfer line, which categorize keeps split"
+          },
+          "deletable": {
+            "type": "integer",
+            "description": "All but the other sides of splits' transfer lines (deleted with the split)"
           }
         },
         "required": [
           "count",
-          "total"
+          "total",
+          "uncleared",
+          "cleared",
+          "reconciled",
+          "categorizable",
+          "splits",
+          "splitsWithTransfers",
+          "deletable"
         ]
       },
       "TransactionSelection": {
@@ -1866,7 +1916,8 @@
           },
           "q": {
             "type": "string",
-            "maxLength": 200
+            "maxLength": 500,
+            "description": "YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one."
           },
           "from": {
             "type": "string",
@@ -1878,31 +1929,8 @@
             "format": "date",
             "description": "Calendar date, YYYY-MM-DD"
           },
-          "cleared": {
-            "type": "string",
-            "enum": [
-              "uncleared",
-              "cleared",
-              "reconciled"
-            ]
-          },
-          "flag": {
-            "type": "string",
-            "enum": [
-              "red",
-              "orange",
-              "yellow",
-              "green",
-              "blue",
-              "purple",
-              "none"
-            ]
-          },
-          "categoryId": {
-            "type": "string"
-          },
-          "payeeId": {
-            "type": "string"
+          "hideReconciled": {
+            "type": "boolean"
           }
         },
         "description": "Select all: every transaction this filter matches"
@@ -1991,6 +2019,61 @@
             "required": [
               "type",
               "categoryId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memo"
+                ]
+              },
+              "memo": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "type",
+              "memo"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "move"
+                ]
+              },
+              "accountId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "accountId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "delete"
+                ]
+              }
+            },
+            "required": [
+              "type"
             ],
             "additionalProperties": false
           }
@@ -4203,11 +4286,11 @@
           {
             "schema": {
               "type": "string",
-              "maxLength": 200,
-              "description": "Search payee, category, memo and account names (split lines too), and amounts: \"45.10\" (in the budget's number format) matches that inflow or outflow"
+              "maxLength": 500,
+              "description": "YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one."
             },
             "required": false,
-            "description": "Search payee, category, memo and account names (split lines too), and amounts: \"45.10\" (in the budget's number format) matches that inflow or outflow",
+            "description": "YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one.",
             "name": "q",
             "in": "query"
           },
@@ -4236,53 +4319,11 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "uncleared",
-                "cleared",
-                "reconciled"
-              ]
+              "description": "The View menu's \"Show Reconciled Transactions\" turned off"
             },
             "required": false,
-            "name": "cleared",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "red",
-                "orange",
-                "yellow",
-                "green",
-                "blue",
-                "purple",
-                "none"
-              ],
-              "description": "A flag color, or \"none\" for unflagged"
-            },
-            "required": false,
-            "description": "A flag color, or \"none\" for unflagged",
-            "name": "flag",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Including splits with a line in it"
-            },
-            "required": false,
-            "description": "Including splits with a line in it",
-            "name": "categoryId",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Including splits with a line for it"
-            },
-            "required": false,
-            "description": "Including splits with a line for it",
-            "name": "payeeId",
+            "description": "The View menu's \"Show Reconciled Transactions\" turned off",
+            "name": "hideReconciled",
             "in": "query"
           },
           {
@@ -4567,8 +4608,8 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Apply one action to every selected transaction, all or nothing",
-        "description": "Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing changed) when the selection holds rows the action isn't settled for yet: reconciled transactions for `cleared`; splits, transfers without a category and tracking-account transactions for `categorize` (see docs/verify.md).",
+        "summary": "Apply one action to every selected transaction it applies to",
+        "description": "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.",
         "parameters": [
           {
             "schema": {
@@ -4613,7 +4654,7 @@
             }
           },
           "400": {
-            "description": "Invalid input, a category transactions can't use, or rows the action can't take (BULK_NOT_ALLOWED; `details` says which and how many)",
+            "description": "Invalid input, a category transactions can't use, or a closed account",
             "content": {
               "application/json": {
                 "schema": {
@@ -4644,6 +4685,16 @@
           },
           "404": {
             "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Moving or deleting would change a transfer whose other side is reconciled (TRANSFER_RECONCILED); nothing changed",
             "content": {
               "application/json": {
                 "schema": {

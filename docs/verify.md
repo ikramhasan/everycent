@@ -4,73 +4,81 @@ How YNAB behaves in cases we couldn't confirm from its help center. Each entry i
 app until it's settled here (see "Matching YNAB" in `CLAUDE.md`). Check each one in YNAB, write
 down the answer, and a later session builds it and removes the entry.
 
-## Register (phase 5)
+Entries marked **Built so far (before this rule)** are small gaps inside a feature that was
+otherwise confirmed in YNAB (web app, 2026-10-02); the app needed some behaviour to work at all,
+so it has one. Change it if YNAB differs.
 
-### Bulk categorize with a split in the selection (5f)
+## Register search (phase 5e, rebuilt to YNAB's search syntax)
 
-- **Question:** selecting a split together with other transactions and choosing Categorize: does
-  YNAB un-split it, set every line to that category, skip it, or refuse?
-- **Found:** YNAB's web action bar offers Categorize on a selection, and bulk categorize can't be
-  used on credit card payments
-  ([How to Edit and Delete Transactions](https://support.ynab.com/en_us/how-to-edit-and-delete-transactions-BJG4oS1s)).
-  Nothing about splits.
-- **Options:** un-split (loses lines and their transfers); set every line's category (keeps the
-  lines); skip splits and say how many; ask each time.
-- **Waiting on it:** bulk Categorize refuses a selection that includes a split (nothing changes;
-  the message says how many to unselect). Transfers within the budget and tracking-account rows
-  are refused too, since a single edit can't give them a category either.
+### How a picked "equals" amount or a date reads in the search box
 
-### Bulk move or delete with transfers and split transfer lines in the selection (5f)
+- **Question:** picking "Outflow more or equal to $25.00" writes `Outflow: >=25,`. What does
+  "Outflow equals $25.00" write (`Outflow: 25`? `Outflow: =25`?), and what do "On 10/02/2026",
+  "On or before …" and "On or after …" write?
+- **Built so far (before this rule):** `Outflow: 25`, `On: 10/02/2026`, `Before: …`, `After: …`.
+  The search accepts `25` and `=25` both.
 
-- **Question:** when a selection includes one side of a transfer, or the other side of a split's
-  transfer line, what do bulk Move to Account and Delete do? Move/delete the pair together, skip
-  those rows, or refuse?
-- **Found:** single-transaction rules only: a transfer shows in both accounts
-  ([Transfer Transactions](https://support.ynab.com/en_us/transfer-transactions-a-guide-HJOsZz4Jj)).
-  Nothing on bulk.
-- **Waiting on it:** bulk Move to Account and bulk Delete aren't built yet.
+### What "Find … in any field" searches
 
-### Bulk delete: confirm or undo (5f)
+- **Question:** free text (and "Find "x" in any field") matched payee, category and memo in YNAB,
+  and a number matched an exact amount. Does it also match the account name?
+- **Built so far (before this rule):** payee, category, memo, account name, and exact amounts.
 
-- **Question:** the web help says Delete is under More and offers Undo until you refresh; the
-  mobile apps ask to confirm. Does web bulk delete (many rows) also go straight to Undo with no
-  confirmation?
-- **Found:** [How to Edit and Delete Transactions](https://support.ynab.com/en_us/how-to-edit-and-delete-transactions-BJG4oS1s)
-  (single delete on web: no confirmation, Undo button).
-- **Waiting on it:** bulk Delete isn't built yet (with the entry above).
+### The hidden-rows note when both a search and a filter hide rows
 
-### Bulk mark cleared/uncleared with reconciled transactions selected (5f)
+- **Question:** YNAB says "Some transactions are hidden by your search for "…"" or "Some
+  transactions are hidden by filters." Which does it show when both a search and the date range
+  (or hidden reconciled transactions) hide rows?
+- **Built so far (before this rule):** the search message.
 
-- **Question:** does YNAB's bulk Mark as Cleared/Uncleared skip reconciled transactions, unlock
-  them, or refuse?
-- **Waiting on it:** the bulk action refuses a selection with reconciled rows.
+## View menu (phase 5e)
 
-### Bulk memo: replace or add (5f)
+### Where view options are kept
 
-- **Question:** YNAB's web action bar can set a memo on many transactions. Does it replace each
-  memo, add to it, or fill only empty ones? Does it ask first when some already have memos?
-- **Found:** "it is possible to bulk edit memos in the web app"
-  ([How to Edit and Delete Transactions](https://support.ynab.com/en_us/how-to-edit-and-delete-transactions-BJG4oS1s)).
-  Nothing on how.
-- **Waiting on it:** bulk Memo isn't built.
+- **Question:** YNAB keeps the View menu's options per account (and for All Accounts). Are they
+  saved to the account (the same on another browser or device) or only in this browser?
+- **Built so far (before this rule):** this browser (`localStorage`).
 
-### Running balance while filtered (5e)
+### The From/To pickers on All Dates
 
-- **Question:** with a search or filter on, does YNAB show each row's real account balance,
-  hide the balance column, or show a total of only the matching rows?
-- **Found:** [Searching, Sorting, and Filtering Transactions](https://support.ynab.com/en_us/searching-transactions-a-guide-r1gxyQryj)
-  wasn't read for this.
-- **Built so far (before this rule):** each row keeps the real account balance, with a note above
-  the table. Change it if YNAB differs.
+- **Question:** with All Dates, YNAB's pickers showed October 2026 to October 2036 in a budget
+  whose transactions were all in October 2026. Is "From" the month of the oldest transaction, or
+  the current month?
+- **Built so far (before this rule):** the current month to ten years on.
 
-### Register's default date range (5e)
+## Bulk edit (phase 5f)
 
-- **Question:** what date range does a YNAB register open with (all dates, this year, …)?
-- **Built so far (before this rule):** all dates. Change it if YNAB differs.
+### Un-split dialog when every selected split has a transfer line
 
-### Hiding the running balance when sorted by another column (5e)
+- **Found:** YNAB asks before un-splitting ("Un-split and Categorize Split Transaction(s)?"). One
+  split with a transfer line alone got no dialog (its other lines were categorized silently).
+- **Question:** with two or more splits selected that all have transfer lines (nothing to
+  un-split), is there a dialog?
+- **Built so far (before this rule):** no dialog unless some selected split will be un-split.
 
-- **Question:** does YNAB hide the running balance (or the column) when you sort by payee,
-  amount and so on?
-- **Built so far (before this rule):** the balance column hides unless sorted by date. The code
-  comment calling this YNAB's behaviour was an assumption.
+### Moving a split into an account one of its transfer lines goes to
+
+- **Question:** bulk Move to Account with a split whose transfer line points at the target account
+  (the line would transfer to its own account). Does YNAB skip the split, drop the line's
+  transfer, or refuse?
+- **Built so far (before this rule):** skipped, like a transfer moved into its own other account.
+
+### Move or delete when a transfer's other side is reconciled
+
+- **Question:** bulk Move or Delete with a transfer whose other side is reconciled. Skip, unlock,
+  or refuse?
+- **Built so far (before this rule):** the whole action is refused (409 `TRANSFER_RECONCILED`), as
+  a single edit is.
+
+### "Move to Account" in All Accounts
+
+- **Found:** in an account's register the submenu lists the budget's other accounts.
+- **Question:** what does it list in All Accounts (every account? closed ones?)
+- **Built so far (before this rule):** every open account.
+
+### The Clear button when every selected row is cleared
+
+- **Found:** a selection of uncleared rows shows "Clear"; mixed states move "Mark as Cleared" /
+  "Mark as Uncleared" into More.
+- **Question:** with only cleared rows selected, does "Clear" mark them uncleared?
+- **Built so far (before this rule):** yes, it toggles them to uncleared.

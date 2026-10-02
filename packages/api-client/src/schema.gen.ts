@@ -344,8 +344,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Apply one action to every selected transaction, all or nothing
-         * @description Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing changed) when the selection holds rows the action isn't settled for yet: reconciled transactions for `cleared`; splits, transfers without a category and tracking-account transactions for `categorize` (see docs/verify.md).
+         * Apply one action to every selected transaction it applies to
+         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.
          */
         post: operations["bulkUpdateTransactions"];
         delete?: never;
@@ -697,6 +697,8 @@ export interface components {
             transactions: components["schemas"]["Transaction"][];
             /** @description Pass as `cursor` for the next page; null on the last page */
             nextCursor: string | null;
+            /** @description Whether the search, dates or hidden reconciled transactions leave any of the register out (first page only; null on later pages) */
+            someHidden: boolean | null;
         };
         Transaction: {
             id: string;
@@ -734,8 +736,10 @@ export interface components {
             transferFromSplit: boolean;
             /** @description A split's lines, in order (empty when not split); the split has no category */
             subtransactions: components["schemas"]["SubTransaction"][];
-            /** @description The account's balance after this transaction, in date order (all of its transactions) */
+            /** @description The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest) */
             runningBalance: string;
+            /** @description Under a search: the split lines that match it (the register shows only those). Null without a search */
+            matchingLineIds: string[] | null;
         };
         SubTransaction: {
             id: string;
@@ -755,6 +759,16 @@ export interface components {
             count: number;
             /** @description Sum of the amounts, in the budget's currency */
             total: string;
+            uncleared: number;
+            cleared: number;
+            reconciled: number;
+            /** @description Transactions that take a category (not transfers within the budget, nor tracking accounts) */
+            categorizable: number;
+            splits: number;
+            /** @description Splits with a transfer line, which categorize keeps split */
+            splitsWithTransfers: number;
+            /** @description All but the other sides of splits' transfer lines (deleted with the split) */
+            deletable: number;
         };
         TransactionSelection: {
             /** @description Transactions ticked one by one */
@@ -770,6 +784,7 @@ export interface components {
         /** @description Select all: every transaction this filter matches */
         RegisterFilter: {
             accountId?: string;
+            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
             q?: string;
             /**
              * Format: date
@@ -781,12 +796,7 @@ export interface components {
              * @description Calendar date, YYYY-MM-DD
              */
             to?: string;
-            /** @enum {string} */
-            cleared?: "uncleared" | "cleared" | "reconciled";
-            /** @enum {string} */
-            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "none";
-            categoryId?: string;
-            payeeId?: string;
+            hideReconciled?: boolean;
         };
         BulkUpdateResult: {
             updated: number;
@@ -808,6 +818,17 @@ export interface components {
             /** @enum {string} */
             type: "categorize";
             categoryId: string;
+        } | {
+            /** @enum {string} */
+            type: "memo";
+            memo: string;
+        } | {
+            /** @enum {string} */
+            type: "move";
+            accountId: string;
+        } | {
+            /** @enum {string} */
+            type: "delete";
         };
         CreateTransaction: {
             accountId: string;
@@ -2269,19 +2290,14 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
-                /** @description Search payee, category, memo and account names (split lines too), and amounts: "45.10" (in the budget's number format) matches that inflow or outflow */
+                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
                 q?: string;
                 /** @description On or after this date */
                 from?: string;
                 /** @description On or before this date */
                 to?: string;
-                cleared?: "uncleared" | "cleared" | "reconciled";
-                /** @description A flag color, or "none" for unflagged */
-                flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "none";
-                /** @description Including splits with a line in it */
-                categoryId?: string;
-                /** @description Including splits with a line for it */
-                payeeId?: string;
+                /** @description The View menu's "Show Reconciled Transactions" turned off */
+                hideReconciled?: string;
                 sort?: "date" | "account" | "payee" | "category" | "memo" | "amount" | "cleared";
                 dir?: "asc" | "desc";
                 limit?: number;
@@ -2477,7 +2493,7 @@ export interface operations {
                     "application/json": components["schemas"]["BulkUpdateResult"];
                 };
             };
-            /** @description Invalid input, a category transactions can't use, or rows the action can't take (BULK_NOT_ALLOWED; `details` says which and how many) */
+            /** @description Invalid input, a category transactions can't use, or a closed account */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2506,6 +2522,15 @@ export interface operations {
             };
             /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Moving or deleting would change a transfer whose other side is reconciled (TRANSFER_RECONCILED); nothing changed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

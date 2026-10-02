@@ -103,10 +103,11 @@ describe("transactions", () => {
 
     await add({ accountId: checking.id, amount: "-450", payeeName: "corner shop" });
     const rows = await register(checking.id);
-    // Newest first; the second one reused the payee despite the different case.
+    // The same day: the largest outflow on top, as YNAB sorts, and the balance runs from the
+    // bottom. The second one reused the payee despite the different case.
     expect(rows.map((r) => [r.amount, r.payeeName, r.runningBalance])).toEqual([
-      ["-450", "Corner Shop", "97000"],
-      ["-2550", "Corner Shop", "97450"],
+      ["-2550", "Corner Shop", "97000"],
+      ["-450", "Corner Shop", "99550"],
       ["100000", "Starting Balance", "100000"],
     ]);
     expect(await balances(checking.id)).toEqual({

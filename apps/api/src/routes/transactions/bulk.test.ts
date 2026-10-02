@@ -9,13 +9,23 @@ afterAll(close);
 
 type Txn = {
   id: string;
+  accountId: string;
   cleared: string;
   flag: string | null;
   categoryId: string | null;
   payeeName: string | null;
+  memo: string;
+  transferAccountId: string | null;
+  transferTransactionId: string | null;
+  subtransactions: {
+    id: string;
+    categoryId: string | null;
+    transferAccountId: string | null;
+    transferTransactionId: string | null;
+  }[];
 };
 type Category = { id: string; name: string };
-type ErrorBody = { error: { code: string; details?: Record<string, number> } };
+type ErrorBody = { error: { code: string } };
 
 function send(method: string, path: string, cookie: string, body?: unknown) {
   return app.request(path, {
@@ -58,16 +68,32 @@ async function setup() {
   const bulk = (selection: unknown, action: unknown) =>
     send("POST", `${base}/transactions/bulk`, cookie, { selection, action });
   const summary = async (selection: unknown) =>
-    json<{ count: number; total: string }>(
+    json<Record<string, number | string>>(
       await send("POST", `${base}/transactions/selection`, cookie, { selection }),
     );
-  const all = async () =>
+  const all = async (accountId = checking.id) =>
     (
       await json<{ transactions: Txn[] }>(
-        await send("GET", `${base}/transactions?accountId=${checking.id}&limit=500`, cookie),
+        await send("GET", `${base}/transactions?accountId=${accountId}&limit=500`, cookie),
       )
     ).transactions;
-  return { cookie, base, checking, addAccount, add, bulk, summary, all, groceries, household };
+  const updated = async (res: Response) => {
+    expect(res.status, await res.clone().text()).toBe(200);
+    return (await json<{ updated: number }>(res)).updated;
+  };
+  return {
+    cookie,
+    base,
+    checking,
+    addAccount,
+    add,
+    bulk,
+    summary,
+    all,
+    updated,
+    groceries,
+    household,
+  };
 }
 
 describe("bulk edit", () => {
@@ -105,9 +131,12 @@ describe("bulk edit", () => {
     const costco: Txn[] = [];
     for (let i = 0; i < 120; i++) costco.push(await add({ payeeName: "Costco", amount: "-250" }));
     await add({ payeeName: "Bakery" });
-    const filter = { accountId: checking.id, q: "costco" };
+    const filter = { accountId: checking.id, q: "Payee: costco" };
     const keep = costco[0]?.id ?? "";
-    expect(await summary({ filter, exclude: [keep] })).toEqual({ count: 119, total: "-29750" });
+    expect(await summary({ filter, exclude: [keep] })).toMatchObject({
+      count: 119,
+      total: "-29750",
+    });
     const res = await bulk({ filter, exclude: [keep] }, { type: "flag", flag: "red" });
     expect((await json<{ updated: number }>(res)).updated).toBe(119);
     const rows = await all();
@@ -116,34 +145,186 @@ describe("bulk edit", () => {
     expect(rows.find((t) => t.payeeName === "Bakery")?.flag).toBeNull();
   });
 
-  it("changes nothing when part of the selection can't take the action", async () => {
-    const { checking, addAccount, add, bulk, all, groceries, household } = await setup();
+  it("sums up what the action bar needs to know about the selection", async () => {
+    const { addAccount, add, summary, groceries, household } = await setup();
     const savings = await addAccount("Savings", "savings");
-    const plain = await add({ payeeName: "Plain" });
+    const plain = await add({ payeeName: "Plain", cleared: "cleared" });
     const split = await add({
-      payeeName: "Split",
       subtransactions: [
         { amount: "-40", categoryId: groceries.id },
         { amount: "-60", categoryId: household.id },
       ],
     });
+    const transferSplit = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
     const transfer = await add({ transferAccountId: savings.id });
-    const res = await bulk(
-      { ids: [plain.id, split.id, transfer.id] },
-      { type: "categorize", categoryId: groceries.id },
-    );
-    expect(res.status).toBe(400);
-    const body = await json<ErrorBody>(res);
-    expect(body.error.code).toBe("BULK_NOT_ALLOWED");
-    expect(body.error.details).toEqual({ splits: 1, noCategory: 1 });
-    expect((await all()).find((t) => t.id === plain.id)?.categoryId).not.toBe(groceries.id);
+    const otherSide = transferSplit.subtransactions[1]?.transferTransactionId ?? "";
+    expect(
+      await summary({ ids: [plain.id, split.id, transferSplit.id, transfer.id, otherSide] }),
+    ).toEqual({
+      count: 5,
+      total: "-340",
+      uncleared: 4,
+      cleared: 1,
+      reconciled: 0,
+      categorizable: 3,
+      splits: 2,
+      splitsWithTransfers: 1,
+      deletable: 4,
+    });
+  });
 
-    await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, plain.id));
-    const reconciled = await bulk(
-      { filter: { accountId: checking.id } },
-      { type: "cleared", cleared: "uncleared" },
+  it("categorizes as YNAB does: un-splits splits, keeps ones with transfers, skips the rest", async () => {
+    const { addAccount, add, bulk, all, updated, groceries, household } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const house = await addAccount("House", "asset");
+    const plain = await add({ payeeName: "Plain" });
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", categoryId: household.id },
+      ],
+    });
+    const transferSplit = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: household.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
+    const transfer = await add({ transferAccountId: savings.id });
+    const tracking = (await all(house.id))[0];
+    const n = await updated(
+      await bulk(
+        { ids: [plain.id, split.id, transferSplit.id, transfer.id, tracking?.id] },
+        { type: "categorize", categoryId: groceries.id },
+      ),
     );
-    expect((await json<ErrorBody>(reconciled)).error.details).toEqual({ reconciled: 1 });
+    expect(n).toBe(3);
+    const rows = await all();
+    expect(rows.find((t) => t.id === plain.id)?.categoryId).toBe(groceries.id);
+    expect(rows.find((t) => t.id === split.id)).toMatchObject({
+      categoryId: groceries.id,
+      subtransactions: [],
+    });
+    const kept = rows.find((t) => t.id === transferSplit.id);
+    expect(kept?.categoryId).toBeNull();
+    expect(kept?.subtransactions.map((l) => [l.categoryId, l.transferAccountId])).toEqual([
+      [groceries.id, null],
+      [null, savings.id],
+    ]);
+    expect(rows.find((t) => t.id === transfer.id)?.categoryId).toBeNull();
+    expect((await all(house.id))[0]?.categoryId).toBeNull();
+  });
+
+  it("marks cleared, skipping reconciled transactions", async () => {
+    const { add, bulk, all, updated } = await setup();
+    const a = await add({});
+    const b = await add({});
+    await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, a.id));
+    expect(
+      await updated(await bulk({ ids: [a.id, b.id] }, { type: "cleared", cleared: "cleared" })),
+    ).toBe(1);
+    const rows = await all();
+    expect(rows.find((t) => t.id === a.id)?.cleared).toBe("reconciled");
+    expect(rows.find((t) => t.id === b.id)?.cleared).toBe("cleared");
+  });
+
+  it("replaces the memo of every selected transaction", async () => {
+    const { add, bulk, all, updated, groceries, household } = await setup();
+    const a = await add({ memo: "old memo" });
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id, memo: "line" },
+        { amount: "-60", categoryId: household.id },
+      ],
+    });
+    expect(
+      await updated(await bulk({ ids: [a.id, split.id] }, { type: "memo", memo: "bulk" })),
+    ).toBe(2);
+    const rows = await all();
+    expect(rows.find((t) => t.id === a.id)?.memo).toBe("bulk");
+    expect(rows.find((t) => t.id === split.id)?.memo).toBe("bulk");
+    expect((await bulk({ ids: [a.id] }, { type: "memo", memo: "" })).status).toBe(400);
+  });
+
+  it("moves transactions; transfers keep their other side, which follows", async () => {
+    const { checking, addAccount, add, bulk, all, updated, groceries } = await setup();
+    const wallet = await addAccount("Wallet", "cash");
+    const savings = await addAccount("Savings", "savings");
+    const plain = await add({ payeeName: "Plain" });
+    const toWallet = await add({ transferAccountId: wallet.id });
+    const intoOwnSide = await add({ transferAccountId: savings.id });
+    const n = await updated(
+      await bulk(
+        { ids: [plain.id, toWallet.id, intoOwnSide.id] },
+        { type: "move", accountId: savings.id },
+      ),
+    );
+    // The transfer to Savings can't move into Savings: skipped.
+    expect(n).toBe(2);
+    const inSavings = await all(savings.id);
+    expect(inSavings.find((t) => t.id === plain.id)).toBeDefined();
+    expect(inSavings.find((t) => t.id === toWallet.id)?.transferAccountId).toBe(wallet.id);
+    const walletSide = (await all(wallet.id)).find((t) => t.id === toWallet.transferTransactionId);
+    expect(walletSide?.transferAccountId).toBe(savings.id);
+    expect((await all()).find((t) => t.id === intoOwnSide.id)).toBeDefined();
+
+    // The other side of a split's transfer line moves too; the line then points at its account.
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: wallet.id },
+      ],
+    });
+    const lineSide = split.subtransactions[1]?.transferTransactionId ?? "";
+    expect(
+      await updated(await bulk({ ids: [lineSide] }, { type: "move", accountId: savings.id })),
+    ).toBe(1);
+    const moved = (await all()).find((t) => t.id === split.id);
+    expect(moved?.subtransactions[1]?.transferAccountId).toBe(savings.id);
+    expect((await all(savings.id)).find((t) => t.id === lineSide)?.transferAccountId).toBe(
+      checking.id,
+    );
+    // Not into the split's own account, nor a split into an account one of its lines goes to.
+    expect(
+      await updated(await bulk({ ids: [lineSide] }, { type: "move", accountId: checking.id })),
+    ).toBe(0);
+    expect(
+      await updated(await bulk({ ids: [split.id] }, { type: "move", accountId: savings.id })),
+    ).toBe(0);
+  });
+
+  it("deletes transactions with their transfers, but not a split's transfer side alone", async () => {
+    const { addAccount, add, bulk, all, updated, groceries } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const plain = await add({ payeeName: "Plain" });
+    const transfer = await add({ transferAccountId: savings.id });
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
+    const lineSide = split.subtransactions[1]?.transferTransactionId ?? "";
+    expect(
+      await updated(
+        await bulk(
+          { ids: [plain.id, transfer.transferTransactionId, lineSide] },
+          { type: "delete" },
+        ),
+      ),
+    ).toBe(2);
+    const ids = (await all()).map((t) => t.id);
+    expect(ids).not.toContain(plain.id);
+    expect(ids).not.toContain(transfer.id);
+    expect((await all(savings.id)).map((t) => t.id)).toContain(lineSide);
+    // Deleting the split takes its transfer's other side with it.
+    expect(await updated(await bulk({ ids: [split.id] }, { type: "delete" }))).toBe(1);
+    expect((await all(savings.id)).map((t) => t.id)).not.toContain(lineSide);
   });
 
   it("only touches the caller's budget, and needs edit rights", async () => {
@@ -175,7 +356,7 @@ describe("bulk edit", () => {
     const payment = groups.find((g) => g.kind)?.categories[0];
     const res = await bulk({ ids: [a.id] }, { type: "categorize", categoryId: payment?.id });
     expect((await json<ErrorBody>(res)).error.code).toBe("CATEGORY_NOT_ALLOWED");
-    expect((await bulk({ ids: [a.id] }, { type: "delete" })).status).toBe(400);
+    expect((await bulk({ ids: [a.id] }, { type: "archive" })).status).toBe(400);
     expect((await bulk({ ids: [] }, { type: "flag", flag: "red" })).status).toBe(400);
   });
 });

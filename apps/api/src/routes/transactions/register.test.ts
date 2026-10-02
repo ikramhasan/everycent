@@ -1,3 +1,5 @@
+import { transaction } from "@everycent/db/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
 
@@ -12,8 +14,10 @@ type Txn = {
   payeeName: string | null;
   memo: string;
   runningBalance: string;
+  subtransactions: { id: string }[];
+  matchingLineIds: string[] | null;
 };
-type Page = { transactions: Txn[]; nextCursor: string | null };
+type Page = { transactions: Txn[]; nextCursor: string | null; someHidden: boolean | null };
 type Category = { id: string; name: string };
 
 function send(method: string, path: string, cookie: string, body?: unknown) {
@@ -118,36 +122,105 @@ describe("register search, filters, sort and paging", () => {
     expect(await payees("0%")).toEqual(["100% Juice"]);
   });
 
-  it("filters by date, cleared, flag, category and payee", async () => {
-    const { add, list, groceries, household } = await setup();
+  it("filters with YNAB's search terms, all of which must match", async () => {
+    const { base, cookie, add, list, groceries, household } = await setup();
+    await send("PUT", `${base}/flags/blue`, cookie, { name: "Reimburse" });
     const a = await add({
       date: "2026-02-01",
       amount: "-100",
-      payeeName: "A",
+      payeeName: "Ann",
       categoryId: groceries.id,
       cleared: "cleared",
       flag: "red",
     });
-    const b = await add({ date: "2026-03-01", amount: "-200", payeeName: "B", flag: "blue" });
+    const b = await add({ date: "2026-03-01", amount: "-200", payeeName: "Bob", flag: "blue" });
     const split = await add({
       date: "2026-04-01",
       amount: "-300",
-      payeeName: "C",
+      payeeName: "Cid",
       subtransactions: [
         { amount: "-100", categoryId: household.id },
-        { amount: "-200", categoryId: groceries.id, payeeName: "A" },
+        { amount: "-200", categoryId: groceries.id, payeeName: "Ann" },
       ],
     });
-    const ids = async (query: Record<string, string>) =>
-      (await list(query)).transactions.map((t) => t.id);
-    expect(await ids({ from: "2026-02-15", to: "2026-03-31" })).toEqual([b.id]);
-    expect(await ids({ cleared: "cleared" })).toContain(a.id);
-    expect(await ids({ cleared: "cleared" })).not.toContain(b.id);
-    expect(await ids({ flag: "red" })).toEqual([a.id]);
-    expect((await ids({ flag: "none" })).includes(a.id)).toBe(false);
-    expect(await ids({ categoryId: groceries.id })).toEqual([split.id, a.id]);
-    const payeeA = (await list({ q: "A" })).transactions.find((t) => t.id === a.id);
-    expect(payeeA).toBeDefined();
+    const income = await add({ date: "2026-04-02", amount: "5000", payeeName: "Work" });
+    const ids = async (q: string, query: Record<string, string> = {}) =>
+      (await list({ q, ...query })).transactions.map((t) => t.id);
+    expect(await ids("", { from: "2026-02-15", to: "2026-03-31" })).toEqual([b.id]);
+    expect(await ids("Is: Cleared")).toContain(a.id);
+    expect(await ids("Is: Cleared")).not.toContain(b.id);
+    expect(await ids("is: unreconciled")).toContain(b.id);
+    expect(await ids("Flag: Red")).toEqual([a.id]);
+    expect(await ids("Flag: reimburse")).toEqual([b.id]);
+    expect(await ids("Flag: None")).not.toContain(a.id);
+    expect(await ids(`Category: ${groceries.name}`)).toEqual([split.id, a.id]);
+    expect(await ids("Category: Split")).toEqual([split.id]);
+    expect(await ids("Payee: ann")).toEqual([split.id, a.id]);
+    expect(await ids("Outflow: >=2")).toEqual([split.id, b.id]);
+    expect(await ids("Outflow: 3")).toEqual([split.id]);
+    expect(await ids("Inflow: <=50")).toEqual([income.id]);
+    expect(await ids("Before: 03/01/2026, After: 03/01/2026")).toEqual([b.id]);
+    expect(await ids("On: 02/01/2026")).toEqual([a.id]);
+    // Every term must match the same transaction or the same split line.
+    expect(await ids("Payee: Bob, Is: Cleared")).toEqual([]);
+    expect(await ids("Payee: Ann, Outflow: 2")).toEqual([split.id]);
+  });
+
+  it("shows only the split lines a search matches", async () => {
+    const { add, list, groceries, household } = await setup();
+    const split = await add({
+      date: "2026-02-01",
+      amount: "-300",
+      payeeName: "Store",
+      memo: "weekly",
+      subtransactions: [
+        { amount: "-100", categoryId: household.id },
+        { amount: "-200", categoryId: groceries.id, payeeName: "Other" },
+      ],
+    });
+    const [householdLine, groceriesLine] = split.subtransactions;
+    const row = async (q: string) =>
+      (await list({ q })).transactions.find((t) => t.id === split.id);
+    // A line without its own payee has the split's.
+    expect((await row("Payee: store"))?.matchingLineIds).toEqual([householdLine?.id]);
+    expect((await row(`Category: ${groceries.name}`))?.matchingLineIds).toEqual([
+      groceriesLine?.id,
+    ]);
+    // The split itself matches, none of its lines do.
+    expect((await row("Outflow: 3"))?.matchingLineIds).toEqual([]);
+    expect((await row("weekly"))?.matchingLineIds).toEqual([]);
+    expect((await list()).transactions[0]?.matchingLineIds).toBeNull();
+  });
+
+  it("hides reconciled transactions and says when anything is hidden", async () => {
+    const { add, list } = await setup();
+    // The starting balance is cleared; reconcile it straight in the database.
+    const { transactions } = await list();
+    const start = transactions[0];
+    if (!start) throw new Error("no starting balance");
+    await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, start.id));
+    const shop = await add({ date: "2026-02-01", amount: "-100", payeeName: "Shop" });
+    expect((await list()).someHidden).toBe(false);
+    const hidden = await list({ hideReconciled: "true" });
+    expect(hidden.transactions.map((t) => t.id)).toEqual([shop.id]);
+    expect(hidden.someHidden).toBe(true);
+    expect((await list({ q: "nothing like it" })).someHidden).toBe(true);
+    expect((await list({ q: "Shop", from: "2026-01-01" })).someHidden).toBe(true);
+    expect((await list({ limit: "1" })).someHidden).toBe(false);
+  });
+
+  it("puts a day's largest outflow on top, and runs the balance from the bottom", async () => {
+    const { add, list } = await setup();
+    await add({ date: "2026-02-01", amount: "-100", payeeName: "Small" });
+    await add({ date: "2026-02-01", amount: "500", payeeName: "Refund" });
+    await add({ date: "2026-02-01", amount: "-900", payeeName: "Big" });
+    const { transactions } = await list();
+    expect(transactions.map((t) => [t.payeeName, t.runningBalance])).toEqual([
+      ["Big", "99500"],
+      ["Small", "100400"],
+      ["Refund", "100500"],
+      ["Starting Balance", "100000"],
+    ]);
   });
 
   it("sorts by any column, both ways, and pages in that order", async () => {

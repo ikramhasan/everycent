@@ -24,7 +24,8 @@ createRoot(rootElement).render(
           <RouterProvider router={router} />
         </TooltipProvider>
       </QueryClientProvider>
-      <Toaster />
+      {/* Above the register's floating selection bar, which sits at the bottom. */}
+      <Toaster offset={{ bottom: "5.5rem" }} />
     </ThemeProvider>
   </StrictMode>,
 );

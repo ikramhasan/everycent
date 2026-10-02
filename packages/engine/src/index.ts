@@ -61,6 +61,18 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export {
+  type AmountOp,
+  DATE_LABELS,
+  type DateOp,
+  IS_LABELS,
+  IS_STATES,
+  type IsState,
+  parseDate,
+  parseSearch,
+  type SearchSettings,
+  type SearchTerm,
+} from "./register-search";
 export { divideRounded, type RoundingMode } from "./rounding";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export { fromWire, type MoneyWire, toWire, zCurrencyCode, zMinorUnits, zMoney } from "./wire";

@@ -1,36 +1,28 @@
 import { describe, expect, it } from "vitest";
-import {
-  isFiltered,
-  nextSort,
-  rangeDates,
-  registerQuery,
-  registerSearchSchema,
-} from "./register-filters";
+import { nextSort, registerQuery, registerSearchSchema, searchText } from "./register-filters";
+import { DEFAULT_VIEW } from "./register-view";
 
 describe("register filters", () => {
-  it("turns date ranges into from/to", () => {
-    expect(rangeDates({ range: "this_month" }, "2026-10-15")).toEqual({ from: "2026-10-01" });
-    expect(rangeDates({ range: "last_3_months" }, "2026-02-10")).toEqual({ from: "2025-12-01" });
-    expect(rangeDates({ range: "this_year" }, "2026-10-15")).toEqual({ from: "2026-01-01" });
-    expect(rangeDates({ range: "custom", from: "2026-01-05", to: "2026-02-01" })).toEqual({
-      from: "2026-01-05",
-      to: "2026-02-01",
-    });
-    expect(rangeDates({})).toEqual({});
-  });
-
-  it("builds the API query, newest first by default", () => {
-    expect(registerQuery("a1", { q: "  costco ", cleared: "uncleared" })).toEqual({
+  it("builds the API query from the search and the view, newest first by default", () => {
+    expect(registerQuery("a1", { q: "Payee: costco, " }, DEFAULT_VIEW)).toEqual({
       accountId: "a1",
-      q: "costco",
-      cleared: "uncleared",
+      q: "Payee: costco",
+      hideReconciled: "true",
       sort: "date",
       dir: "desc",
     });
-    expect(registerQuery(undefined, { sort: "amount", dir: "asc" })).toEqual({
-      sort: "amount",
-      dir: "asc",
-    });
+    expect(
+      registerQuery(
+        undefined,
+        { sort: "amount", dir: "asc" },
+        { ...DEFAULT_VIEW, showReconciled: true, range: "custom", from: "2026-01", to: "2026-02" },
+      ),
+    ).toEqual({ from: "2026-01-01", to: "2026-02-28", sort: "amount", dir: "asc" });
+  });
+
+  it("quotes the search without its trailing comma", () => {
+    expect(searchText({ q: "Category: Groceries, " })).toBe("Category: Groceries");
+    expect(searchText({})).toBe("");
   });
 
   it("flips a column's direction and starts new ones in their natural order", () => {
@@ -47,11 +39,8 @@ describe("register filters", () => {
   });
 
   it("drops bad values from the address instead of failing", () => {
-    expect(registerSearchSchema.parse({ cleared: "maybe", q: "x", sort: "nope" })).toEqual({
+    expect(registerSearchSchema.parse({ q: "x", sort: "nope", cleared: "maybe" })).toEqual({
       q: "x",
     });
-    expect(isFiltered({ sort: "amount" })).toBe(false);
-    expect(isFiltered({ q: " " })).toBe(false);
-    expect(isFiltered({ flag: "red" })).toBe(true);
   });
 });

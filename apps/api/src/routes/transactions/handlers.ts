@@ -32,6 +32,7 @@ import {
   assertLinesAddUp,
   assertSplitAllowed,
   deleteLineTransfers,
+  type LineInput,
   splitLines,
   syncLines,
 } from "./splits";
@@ -120,136 +121,158 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   assertOnePayee(body);
-  const accountId = await db.transaction(async (tx) => {
-    const existing = await lockTransaction(tx, budgetId, transactionId);
-    if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
-    if (existing.transferSubTransactionId) {
-      return updateSplitTransferSide(tx, budgetId, existing, body);
+  const accountId = await db.transaction((tx) => applyUpdate(tx, budgetId, transactionId, body));
+  return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
+};
+
+/** What `updateTransaction` takes. */
+export interface UpdateBody {
+  accountId?: string;
+  date?: string;
+  amount?: string;
+  payeeName?: string | null;
+  transferAccountId?: string;
+  categoryId?: string | null;
+  memo?: string;
+  cleared?: "uncleared" | "cleared";
+  flag?: FlagColor | null;
+  subtransactions?: LineInput[];
+}
+
+/** One transaction's edit (as `updateTransaction` describes it); returns its account. */
+export async function applyUpdate(
+  tx: Db,
+  budgetId: string,
+  transactionId: string,
+  body: UpdateBody,
+) {
+  const existing = await lockTransaction(tx, budgetId, transactionId);
+  if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  if (existing.transferSubTransactionId) {
+    return updateSplitTransferSide(tx, budgetId, existing, body);
+  }
+  const other = existing.transferTransactionId
+    ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
+    : undefined;
+
+  const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
+  const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
+  if (moved) assertOpen(account);
+
+  // The account the other side belongs in: unchanged unless the payee changes.
+  const targetId =
+    body.transferAccountId ?? (body.payeeName !== undefined ? null : (other?.accountId ?? null));
+  const retargeted = targetId !== (other?.accountId ?? null);
+  let transferTo: AccountRow | null = null;
+  if (targetId !== null) {
+    transferTo = await findAccount(tx, budgetId, targetId);
+    assertNotSelf(account, transferTo);
+    if (retargeted) {
+      assertOpen(account);
+      assertOpen(transferTo);
     }
-    const other = existing.transferTransactionId
-      ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
-      : undefined;
+  }
 
-    const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
-    const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
-    if (moved) assertOpen(account);
+  const amount = body.amount === undefined ? existing.amount : BigInt(body.amount);
+  if (other?.cleared === "reconciled") {
+    const dateChanges = body.date !== undefined && body.date !== other.date;
+    if (retargeted || dateChanges || amount !== -other.amount) reconciledOtherSide();
+  }
 
-    // The account the other side belongs in: unchanged unless the payee changes.
-    const targetId =
-      body.transferAccountId ?? (body.payeeName !== undefined ? null : (other?.accountId ?? null));
-    const retargeted = targetId !== (other?.accountId ?? null);
-    let transferTo: AccountRow | null = null;
-    if (targetId !== null) {
-      transferTo = await findAccount(tx, budgetId, targetId);
-      assertNotSelf(account, transferTo);
-      if (retargeted) {
-        assertOpen(account);
-        assertOpen(transferTo);
-      }
-    }
+  // A split stays one until it gets a category (or becomes a transfer); see `syncLines`.
+  const existingLines = await splitLines(tx, transactionId);
+  const wasSplit = existingLines.length > 0;
+  const lines = body.subtransactions;
+  if (lines && body.categoryId !== undefined) categoryOnSplit();
+  const unsplit = wasSplit && !lines && (body.categoryId !== undefined || transferTo !== null);
+  const split = lines !== undefined || (wasSplit && !unsplit);
+  if (split) {
+    if (transferTo) notSplittable();
+    assertSplitAllowed(account);
+    if (lines) assertLinesAddUp(lines, amount);
+    else
+      assertLinesAddUp(
+        existingLines.map((l) => ({ amount: l.amount.toString() })),
+        amount,
+      );
+  }
 
-    const amount = body.amount === undefined ? existing.amount : BigInt(body.amount);
-    if (other?.cleared === "reconciled") {
-      const dateChanges = body.date !== undefined && body.date !== other.date;
-      if (retargeted || dateChanges || amount !== -other.amount) reconciledOtherSide();
-    }
+  let categoryId = existing.categoryId;
+  if (split) {
+    categoryId = null;
+  } else if (body.categoryId !== undefined) {
+    categoryId = await resolveCategory(tx, budgetId, account, transferTo, body.categoryId);
+  } else if (moved || retargeted) {
+    // Keep the category if it can still be used, otherwise fall back.
+    const keep = usesCategory(account, transferTo) ? existing.categoryId : null;
+    categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
+  }
 
-    // A split stays one until it gets a category (or becomes a transfer); see `syncLines`.
-    const existingLines = await splitLines(tx, transactionId);
-    const wasSplit = existingLines.length > 0;
-    const lines = body.subtransactions;
-    if (lines && body.categoryId !== undefined) categoryOnSplit();
-    const unsplit = wasSplit && !lines && (body.categoryId !== undefined || transferTo !== null);
-    const split = lines !== undefined || (wasSplit && !unsplit);
-    if (split) {
-      if (transferTo) notSplittable();
-      assertSplitAllowed(account);
-      if (lines) assertLinesAddUp(lines, amount);
-      else
-        assertLinesAddUp(
-          existingLines.map((l) => ({ amount: l.amount.toString() })),
-          amount,
-        );
-    }
+  await tx
+    .update(transaction)
+    .set({
+      accountId: account.id,
+      currency: account.currency,
+      date: body.date,
+      amount,
+      payeeId: transferTo
+        ? await transferPayeeId(tx, transferTo)
+        : body.payeeName === undefined
+          ? undefined
+          : body.payeeName === null
+            ? null
+            : await findOrCreatePayee(tx, budgetId, body.payeeName),
+      categoryId,
+      memo: body.memo,
+      cleared: body.cleared,
+      flag: body.flag,
+      transferTransactionId: transferTo ? undefined : null,
+    })
+    .where(eq(transaction.id, transactionId));
 
-    let categoryId = existing.categoryId;
-    if (split) {
-      categoryId = null;
-    } else if (body.categoryId !== undefined) {
-      categoryId = await resolveCategory(tx, budgetId, account, transferTo, body.categoryId);
-    } else if (moved || retargeted) {
-      // Keep the category if it can still be used, otherwise fall back.
-      const keep = usesCategory(account, transferTo) ? existing.categoryId : null;
-      categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
-    }
+  if (split || wasSplit) {
+    await syncLines(
+      tx,
+      { budgetId, parentId: transactionId, date: body.date ?? existing.date, account, moved },
+      unsplit ? [] : lines,
+    );
+  }
 
+  if (other && !transferTo) {
+    await tx.delete(transaction).where(eq(transaction.id, other.id));
+  } else if (other && transferTo) {
+    // Date and amount are shared; memo, cleared and category stay per side.
+    const keep = usesCategory(transferTo, account) ? other.categoryId : null;
     await tx
       .update(transaction)
       .set({
-        accountId: account.id,
-        currency: account.currency,
+        accountId: transferTo.id,
+        currency: transferTo.currency,
         date: body.date,
-        amount,
-        payeeId: transferTo
-          ? await transferPayeeId(tx, transferTo)
-          : body.payeeName === undefined
-            ? undefined
-            : body.payeeName === null
-              ? null
-              : await findOrCreatePayee(tx, budgetId, body.payeeName),
-        categoryId,
-        memo: body.memo,
-        cleared: body.cleared,
-        flag: body.flag,
-        transferTransactionId: transferTo ? undefined : null,
+        amount: -amount,
+        payeeId: moved ? await transferPayeeId(tx, account) : undefined,
+        categoryId:
+          moved || retargeted
+            ? await resolveCategory(tx, budgetId, transferTo, account, keep)
+            : undefined,
       })
-      .where(eq(transaction.id, transactionId));
-
-    if (split || wasSplit) {
-      await syncLines(
-        tx,
-        { budgetId, parentId: transactionId, date: body.date ?? existing.date, account, moved },
-        unsplit ? [] : lines,
-      );
-    }
-
-    if (other && !transferTo) {
-      await tx.delete(transaction).where(eq(transaction.id, other.id));
-    } else if (other && transferTo) {
-      // Date and amount are shared; memo, cleared and category stay per side.
-      const keep = usesCategory(transferTo, account) ? other.categoryId : null;
-      await tx
-        .update(transaction)
-        .set({
-          accountId: transferTo.id,
-          currency: transferTo.currency,
-          date: body.date,
-          amount: -amount,
-          payeeId: moved ? await transferPayeeId(tx, account) : undefined,
-          categoryId:
-            moved || retargeted
-              ? await resolveCategory(tx, budgetId, transferTo, account, keep)
-              : undefined,
-        })
-        .where(eq(transaction.id, other.id));
-    } else if (transferTo) {
-      await insertOtherSide(
-        tx,
-        {
-          id: transactionId,
-          budgetId,
-          date: body.date ?? existing.date,
-          amount,
-          memo: body.memo ?? existing.memo,
-        },
-        account,
-        transferTo,
-      );
-    }
-    return account.id;
-  });
-  return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
-};
+      .where(eq(transaction.id, other.id));
+  } else if (transferTo) {
+    await insertOtherSide(
+      tx,
+      {
+        id: transactionId,
+        budgetId,
+        date: body.date ?? existing.date,
+        amount,
+        memo: body.memo ?? existing.memo,
+      },
+      account,
+      transferTo,
+    );
+  }
+  return account.id;
+}
 
 export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
@@ -259,17 +282,26 @@ export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, En
     const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
     if (existing.transferSubTransactionId) transferInSplit();
-    await deleteLineTransfers(tx, existing.id);
-    const ids = [existing.id];
-    if (existing.transferTransactionId) {
-      const other = await lockTransaction(tx, budgetId, existing.transferTransactionId);
-      if (other?.cleared === "reconciled") reconciledOtherSide();
-      ids.push(existing.transferTransactionId);
-    }
-    await tx.delete(transaction).where(inArray(transaction.id, ids));
+    await deleteWithTransfers(tx, budgetId, existing);
   });
   return c.body(null, 204);
 };
+
+/** Deletes a transaction with its transfer's other side, or a split with its lines' ones. */
+export async function deleteWithTransfers(
+  tx: Db,
+  budgetId: string,
+  existing: typeof transaction.$inferSelect,
+) {
+  await deleteLineTransfers(tx, existing.id);
+  const ids = [existing.id];
+  if (existing.transferTransactionId) {
+    const other = await lockTransaction(tx, budgetId, existing.transferTransactionId);
+    if (other?.cleared === "reconciled") reconciledOtherSide();
+    ids.push(existing.transferTransactionId);
+  }
+  await tx.delete(transaction).where(inArray(transaction.id, ids));
+}
 
 function notSplittable(): never {
   throw new AppError(
@@ -295,18 +327,7 @@ async function updateSplitTransferSide(
   tx: Db,
   budgetId: string,
   existing: typeof transaction.$inferSelect,
-  body: {
-    accountId?: string;
-    date?: string;
-    amount?: string;
-    payeeName?: string | null;
-    transferAccountId?: string;
-    categoryId?: string | null;
-    memo?: string;
-    cleared?: "uncleared" | "cleared";
-    flag?: FlagColor | null;
-    subtransactions?: unknown;
-  },
+  body: UpdateBody,
 ) {
   const locked =
     (body.accountId !== undefined && body.accountId !== existing.accountId) ||

@@ -1,18 +1,19 @@
 import { sql } from "@everycent/db";
 import {
   budgetAccount,
-  type ClearedState,
   category,
-  type FlagColor,
+  flagName,
   payee,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
-import { type CurrencyCode, type NumberFormat, parseAmount } from "@everycent/engine";
+import { parseSearch, type SearchSettings, type SearchTerm } from "@everycent/engine";
 import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
+
+export type { SearchSettings };
 
 export const SORT_COLUMNS = [
   "date",
@@ -27,15 +28,12 @@ export type SortColumn = (typeof SORT_COLUMNS)[number];
 
 export interface RegisterFilter {
   accountId?: string;
-  /** Matches payee, category, memo and account names, and amounts ("45.10"), split lines too. */
+  /** YNAB's search syntax (see `parseSearch`); split lines are matched one by one. */
   q?: string;
   from?: string;
   to?: string;
-  cleared?: ClearedState;
-  /** A color, or "none" for unflagged. */
-  flag?: FlagColor | "none";
-  categoryId?: string;
-  payeeId?: string;
+  /** The View menu's "Show Reconciled Transactions" turned off. */
+  hideReconciled?: boolean;
 }
 
 export interface RegisterPage {
@@ -45,16 +43,12 @@ export interface RegisterPage {
   cursor?: string;
 }
 
-/** What `q` is read with: amounts are typed in the budget's number format. */
-export interface SearchSettings {
-  currency: CurrencyCode;
-  numberFormat: NumberFormat;
-}
-
 /**
  * Every transaction of the budget (or of one account) with its running balance. The window runs
  * over the whole account, oldest first, so filtering and paging happen outside it and every row
- * keeps the account's real balance at that point.
+ * keeps the account's real balance at that point. Within a day it runs inflows first, then
+ * outflows from smallest to largest: the reverse of the register's default order (YNAB puts the
+ * largest outflow of a day on top and the largest inflow at the bottom).
  */
 function registerCte(db: Db, budgetId: string, accountId?: string) {
   return db.$with("register").as(
@@ -86,7 +80,8 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
         runningBalance: sql<string>`sum(${transaction.amount}) over (
           partition by ${transaction.accountId}
-          order by ${transaction.date}, ${transaction.createdAt}, ${transaction.id}
+          order by ${transaction.date}, ${transaction.amount} desc, ${transaction.createdAt},
+            ${transaction.id}
         )`.as("running_balance"),
       })
       .from(transaction)
@@ -109,21 +104,100 @@ function likePattern(q: string) {
   return `%${q.replace(/[\\%_]/g, "\\$&")}%`;
 }
 
-/** The amount `q` reads as (unsigned minor units), if it's a number. */
-function searchAmount(q: string, settings: SearchSettings): bigint | null {
-  try {
-    const { amount } = parseAmount(
-      q.replace(/^[-+]/, ""),
-      settings.currency,
-      settings.numberFormat,
-    );
-    return amount < 0n ? -amount : amount;
-  } catch {
-    return null;
-  }
+/**
+ * What a search term is checked against: the transaction itself, or one line of a split. A line
+ * has its own payee (or the split's, when it has none), category, memo and amount; the rest is
+ * the split's.
+ */
+interface Unit {
+  payee: SQL;
+  category: SQL;
+  memo: SQL;
+  amount: SQL;
+  isSplit: SQL;
 }
 
-/** A split line of the register row matches `condition` (over `st`, `sp`, `sc`). */
+function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string): SQL {
+  switch (term.kind) {
+    case "text": {
+      const pattern = likePattern(term.text);
+      return sql`(${unit.payee} ilike ${pattern} or ${unit.category} ilike ${pattern}
+        or ${unit.memo} ilike ${pattern} or ${r.accountName} ilike ${pattern}
+        ${term.amount === null ? sql`` : sql`or abs(${unit.amount}) = ${term.amount}`})`;
+    }
+    case "payee":
+      return sql`coalesce(${unit.payee} ilike ${likePattern(term.text)}, false)`;
+    case "category":
+      return sql`coalesce(${unit.category} ilike ${likePattern(term.text)}, false)`;
+    case "memo":
+      return sql`coalesce(${unit.memo} ilike ${likePattern(term.text)}, false)`;
+    case "account":
+      return sql`${r.accountName} ilike ${likePattern(term.text)}`;
+    case "split":
+      return unit.isSplit;
+    case "flag": {
+      const text = term.text.toLowerCase();
+      if (text === "none") return sql`${r.flag} is null`;
+      return sql`(${r.flag} = ${text} or ${r.flag} in (
+        select ${flagName.color} from ${flagName}
+        where ${flagName.budgetId} = ${budgetId} and lower(${flagName.name}) = ${text}
+      ))`;
+    }
+    case "is":
+      switch (term.state) {
+        case "uncleared":
+        case "cleared":
+        case "reconciled":
+          return sql`${r.cleared} = ${term.state}`;
+        case "unreconciled":
+          return sql`${r.cleared} <> 'reconciled'`;
+        case "cleared_or_reconciled":
+          return sql`${r.cleared} in ('cleared', 'reconciled')`;
+      }
+      break;
+    case "amount": {
+      const signed = term.direction === "outflow" ? sql`-(${unit.amount})` : unit.amount;
+      const op = sql.raw(term.op === "eq" ? "=" : term.op === "gte" ? ">=" : "<=");
+      return sql`(${signed} > 0 and ${signed} ${op} ${term.amount})`;
+    }
+    case "date": {
+      const op = sql.raw(term.op === "on" ? "=" : term.op === "before" ? "<=" : ">=");
+      return sql`${r.date} ${op} ${term.date}`;
+    }
+  }
+  throw new Error("unreachable");
+}
+
+function allTerms(r: Register, unit: Unit, terms: readonly SearchTerm[], budgetId: string) {
+  return sql.join(
+    terms.map((t) => sql`(${termWhere(r, unit, t, budgetId)})`),
+    sql` and `,
+  );
+}
+
+/** The transaction as a search unit. */
+function parentUnit(r: Register): Unit {
+  return {
+    payee: sql`${r.payeeName}`,
+    category: sql`${r.categoryName}`,
+    memo: sql`${r.memo}`,
+    amount: sql`${r.amount}`,
+    isSplit: sql`exists (select 1 from ${subTransaction} where ${subTransaction.transactionId} = ${r.id})`,
+  };
+}
+
+/** A split line (`st`, its payee `sp` and category `sc`) as a search unit. */
+function lineUnit(r: Register): Unit {
+  return {
+    payee: sql`coalesce(sp.name, ${r.payeeName})`,
+    category: sql`sc.name`,
+    memo: sql`st.memo`,
+    amount: sql`st.amount`,
+    isSplit: sql`false`,
+  };
+}
+
+/** `condition` over a split line of the register row, joined as `st`, `sp` and `sc`. */
 function lineMatches(r: Register, condition: SQL) {
   return sql`exists (
     select 1 from ${subTransaction} st
@@ -133,38 +207,31 @@ function lineMatches(r: Register, condition: SQL) {
   )`;
 }
 
-function filterWhere(r: Register, filter: RegisterFilter, settings: SearchSettings) {
+function searchTerms(filter: RegisterFilter, settings: SearchSettings) {
+  return filter.q ? parseSearch(filter.q, settings) : [];
+}
+
+/**
+ * A transaction shows when it, or one of its split lines, matches every search term (YNAB then
+ * shows only the lines that match). Dates and reconciled rows are the View menu's.
+ */
+function filterWhere(
+  r: Register,
+  budgetId: string,
+  filter: RegisterFilter,
+  settings: SearchSettings,
+) {
   const conditions: (SQL | undefined)[] = [];
-  const q = filter.q?.trim();
-  if (q) {
-    const pattern = likePattern(q);
-    const amount = searchAmount(q, settings);
+  const terms = searchTerms(filter, settings);
+  if (terms.length > 0) {
     conditions.push(sql`(
-      ${r.payeeName} ilike ${pattern} or ${r.categoryName} ilike ${pattern}
-      or ${r.memo} ilike ${pattern} or ${r.accountName} ilike ${pattern}
-      ${amount === null ? sql`` : sql`or abs(${r.amount}) = ${amount}`}
-      or ${lineMatches(
-        r,
-        sql`sp.name ilike ${pattern} or sc.name ilike ${pattern} or st.memo ilike ${pattern}
-          ${amount === null ? sql`` : sql`or abs(st.amount) = ${amount}`}`,
-      )}
+      (${allTerms(r, parentUnit(r), terms, budgetId)})
+      or ${lineMatches(r, allTerms(r, lineUnit(r), terms, budgetId))}
     )`);
   }
   if (filter.from) conditions.push(sql`${r.date} >= ${filter.from}`);
   if (filter.to) conditions.push(sql`${r.date} <= ${filter.to}`);
-  if (filter.cleared) conditions.push(sql`${r.cleared} = ${filter.cleared}`);
-  if (filter.flag === "none") conditions.push(sql`${r.flag} is null`);
-  else if (filter.flag) conditions.push(sql`${r.flag} = ${filter.flag}`);
-  if (filter.categoryId) {
-    conditions.push(
-      sql`(${r.categoryId} = ${filter.categoryId} or ${lineMatches(r, sql`st.category_id = ${filter.categoryId}`)})`,
-    );
-  }
-  if (filter.payeeId) {
-    conditions.push(
-      sql`(${r.payeeId} = ${filter.payeeId} or ${lineMatches(r, sql`st.payee_id = ${filter.payeeId}`)})`,
-    );
-  }
+  if (filter.hideReconciled) conditions.push(sql`${r.cleared} <> 'reconciled'`);
   return and(...conditions);
 }
 
@@ -183,7 +250,7 @@ export function matchingTransactions(
     .with(r)
     .select({ id: r.id })
     .from(r)
-    .where(filterWhere(r, filter, settings))
+    .where(filterWhere(r, budgetId, filter, settings))
     .as("matching");
 }
 
@@ -211,7 +278,15 @@ function sortKey(r: Register, sort: SortColumn): { key: SQL; cast: SQL } {
   }
 }
 
-type Cursor = [sort: SortColumn, key: string, date: string, createdAt: string, id: string];
+type Cursor = [
+  sort: SortColumn,
+  key: string,
+  date: string,
+  /** The amount, negated: a day's largest outflow sorts first. */
+  tie: string,
+  createdAt: string,
+  id: string,
+];
 
 function encodeCursor(cursor: Cursor) {
   return Buffer.from(JSON.stringify(cursor)).toString("base64url");
@@ -222,7 +297,7 @@ function decodeCursor(text: string, sort: SortColumn): Cursor {
     const value: unknown = JSON.parse(Buffer.from(text, "base64url").toString());
     if (
       Array.isArray(value) &&
-      value.length === 5 &&
+      value.length === 6 &&
       value.every((v) => typeof v === "string") &&
       value[0] === sort
     ) {
@@ -296,7 +371,15 @@ function selectPage(db: Db, r: Register) {
   return db.with(r).select(columns(r)).from(r);
 }
 
-async function toJson(db: Db, rows: readonly Row[]) {
+/**
+ * `matching`: under a search, the ids of the split lines that matched it, by transaction (YNAB
+ * shows only those). Null when there's no search.
+ */
+async function toJson(
+  db: Db,
+  rows: readonly Row[],
+  matching: ReadonlyMap<string, string[]> | null = null,
+) {
   const lines = await queryLines(
     db,
     rows.map((row) => row.id),
@@ -305,6 +388,7 @@ async function toJson(db: Db, rows: readonly Row[]) {
     ...row,
     amount: row.amount.toString(),
     subtransactions: (lines.get(row.id) ?? []).map((l) => ({ ...l, amount: l.amount.toString() })),
+    matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
     // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
     runningBalance: BigInt(row.runningBalance).toString(),
   }));
@@ -321,23 +405,26 @@ export function registerPageQuery(
   const r = registerCte(db, budgetId, filter.accountId);
   const { key, cast } = sortKey(r, page.sort);
   const dir = page.dir === "asc" ? sql.raw("asc") : sql.raw("desc");
-  // Ties break by date, then creation, then id, all in the sort's direction, so the order is
-  // total and keyset paging never skips or repeats a row.
+  // Ties break by date, then amount (newest first, a day's largest outflow on top, as YNAB sorts
+  // by default), then creation, then id, all in the sort's direction, so the order is total and
+  // keyset paging never skips or repeats a row.
+  const tie = sql`(-${r.amount})`;
   let after: SQL | undefined;
   if (page.cursor) {
-    const [, k, d, c, id] = decodeCursor(page.cursor, page.sort);
+    const [, k, d, t, c, id] = decodeCursor(page.cursor, page.sort);
     const op = page.dir === "asc" ? sql.raw(">") : sql.raw("<");
-    after = sql`(${key}, ${r.date}, ${r.createdAt}::timestamptz, ${r.id}) ${op}
-      (${k}::${cast}, ${d}::date, ${c}::timestamptz, ${id})`;
+    after = sql`(${key}, ${r.date}, ${tie}, ${r.createdAt}::timestamptz, ${r.id}) ${op}
+      (${k}::${cast}, ${d}::date, ${t}::bigint, ${c}::timestamptz, ${id})`;
   }
   return db
     .with(r)
-    .select({ ...columns(r), sortKey: sql<string>`(${key})::text` })
+    .select({ ...columns(r), sortKey: sql<string>`(${key})::text`, tie: sql<string>`${tie}::text` })
     .from(r)
-    .where(and(filterWhere(r, filter, settings), after))
+    .where(and(filterWhere(r, budgetId, filter, settings), after))
     .orderBy(
       sql`${key} ${dir}`,
       sql`${r.date} ${dir}`,
+      sql`${tie} ${dir}`,
       sql`${r.createdAt}::timestamptz ${dir}`,
       sql`${r.id} ${dir}`,
     )
@@ -356,13 +443,70 @@ export async function queryRegister(
   const more = rows.length > page.limit;
   const pageRows = rows.slice(0, page.limit);
   const last = pageRows.at(-1);
+  const terms = searchTerms(filter, settings);
+  const matching =
+    terms.length > 0
+      ? await matchingLines(
+          db,
+          budgetId,
+          filter.accountId,
+          pageRows.map((row) => row.id),
+          terms,
+        )
+      : null;
   return {
-    transactions: await toJson(db, pageRows),
+    transactions: await toJson(db, pageRows, matching),
+    // Asked once, with the first page.
+    someHidden: page.cursor ? null : await someHidden(db, budgetId, filter, settings),
     nextCursor:
       more && last
-        ? encodeCursor([page.sort, last.sortKey, last.date, last.createdAt, last.id])
+        ? encodeCursor([page.sort, last.sortKey, last.date, last.tie, last.createdAt, last.id])
         : null,
   };
+}
+
+/** Of these transactions' split lines, the ones that match every term, by transaction. */
+async function matchingLines(
+  db: Db,
+  budgetId: string,
+  accountId: string | undefined,
+  ids: readonly string[],
+  terms: readonly SearchTerm[],
+) {
+  const byTransaction = new Map<string, string[]>();
+  if (ids.length === 0) return byTransaction;
+  const r = registerCte(db, budgetId, accountId);
+  const rows = await db
+    .with(r)
+    .select({ id: sql<string>`st.id`, transactionId: r.id })
+    .from(r)
+    .innerJoin(sql`${subTransaction} st`, sql`st.transaction_id = ${r.id}`)
+    .leftJoin(sql`${payee} sp`, sql`sp.id = st.payee_id`)
+    .leftJoin(sql`${category} sc`, sql`sc.id = st.category_id`)
+    .where(and(inArray(r.id, [...ids]), allTerms(r, lineUnit(r), terms, budgetId)));
+  for (const { id, transactionId } of rows) {
+    byTransaction.set(transactionId, [...(byTransaction.get(transactionId) ?? []), id]);
+  }
+  return byTransaction;
+}
+
+/** Whether the search, date range or hidden reconciled rows leave any of the register out. */
+async function someHidden(
+  db: Db,
+  budgetId: string,
+  filter: RegisterFilter,
+  settings: SearchSettings,
+) {
+  const r = registerCte(db, budgetId, filter.accountId);
+  const where = filterWhere(r, budgetId, filter, settings);
+  if (!where) return false;
+  const [row] = await db
+    .with(r)
+    .select({ hidden: sql<boolean>`true` })
+    .from(r)
+    .where(sql`not coalesce((${where}), false)`)
+    .limit(1);
+  return Boolean(row);
 }
 
 /** One transaction as the register shows it (with its running balance). */

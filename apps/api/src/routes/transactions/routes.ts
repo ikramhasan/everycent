@@ -6,6 +6,17 @@ import { requireAuth } from "../../middleware/require-auth";
 import { SORT_COLUMNS } from "./register-query";
 
 const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
+const SearchText = z
+  .string()
+  .max(500)
+  .describe(
+    "YNAB's search: comma-separated terms that must all match, each free text (payee, " +
+      "category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` " +
+      "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
+      "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), " +
+      "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
+      "budget's format; before and after include the day). Split lines are matched one by one.",
+  );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
 /** People toggle between these two; reconciling is its own flow. */
@@ -68,8 +79,16 @@ export const TransactionSchema = z
       .array(SubTransactionSchema)
       .describe("A split's lines, in order (empty when not split); the split has no category"),
     runningBalance: zMinorUnits.describe(
-      "The account's balance after this transaction, in date order (all of its transactions)",
+      "The account's balance after this transaction, in date order (all of its transactions; " +
+        "within a day, inflows first, then outflows from smallest to largest)",
     ),
+    matchingLineIds: z
+      .array(z.string())
+      .nullable()
+      .describe(
+        "Under a search: the split lines that match it (the register shows only those). Null " +
+          "without a search",
+      ),
   })
   .openapi("Transaction");
 
@@ -80,6 +99,13 @@ const TransactionListSchema = z
       .string()
       .nullable()
       .describe("Pass as `cursor` for the next page; null on the last page"),
+    someHidden: z
+      .boolean()
+      .nullable()
+      .describe(
+        "Whether the search, dates or hidden reconciled transactions leave any of the register " +
+          "out (first page only; null on later pages)",
+      ),
   })
   .openapi("TransactionList");
 
@@ -151,23 +177,13 @@ export const listTransactions = createRoute({
     params: BudgetParams,
     query: z.object({
       accountId: z.string().optional().describe("Leave out for all accounts"),
-      q: z
-        .string()
-        .max(200)
-        .optional()
-        .describe(
-          "Search payee, category, memo and account names (split lines too), and amounts: " +
-            '"45.10" (in the budget\'s number format) matches that inflow or outflow',
-        ),
+      q: SearchText.optional(),
       from: IsoDate.optional().describe("On or after this date"),
       to: IsoDate.optional().describe("On or before this date"),
-      cleared: z.enum(CLEARED_STATES).optional(),
-      flag: z
-        .enum([...FLAG_COLORS, "none"])
+      hideReconciled: z
+        .stringbool()
         .optional()
-        .describe('A flag color, or "none" for unflagged'),
-      categoryId: z.string().optional().describe("Including splits with a line in it"),
-      payeeId: z.string().optional().describe("Including splits with a line for it"),
+        .describe('The View menu\'s "Show Reconciled Transactions" turned off'),
       sort: z.enum(SORT_COLUMNS).default("date"),
       dir: z.enum(["asc", "desc"]).default("desc"),
       limit: z.coerce.number().int().min(1).max(500).default(100),
@@ -322,13 +338,10 @@ export const listPayees = createRoute({
 const RegisterFilterSchema = z
   .object({
     accountId: z.string().optional(),
-    q: z.string().max(200).optional(),
+    q: SearchText.optional(),
     from: IsoDate.optional(),
     to: IsoDate.optional(),
-    cleared: z.enum(CLEARED_STATES).optional(),
-    flag: z.enum([...FLAG_COLORS, "none"]).optional(),
-    categoryId: z.string().optional(),
-    payeeId: z.string().optional(),
+    hideReconciled: z.boolean().optional(),
   })
   .describe("The same filter as the register's query parameters")
   .openapi("RegisterFilter");
@@ -350,6 +363,9 @@ const BulkActionSchema = z
     z.strictObject({ type: z.literal("cleared"), cleared: SettableCleared }),
     z.strictObject({ type: z.literal("flag"), flag: Flag }),
     z.strictObject({ type: z.literal("categorize"), categoryId: z.string() }),
+    z.strictObject({ type: z.literal("memo"), memo: Memo.min(1) }),
+    z.strictObject({ type: z.literal("move"), accountId: z.string() }),
+    z.strictObject({ type: z.literal("delete") }),
   ])
   .openapi("BulkAction");
 
@@ -369,6 +385,24 @@ export const summarizeSelection = createRoute({
         .object({
           count: z.number().int(),
           total: zMinorUnits.describe("Sum of the amounts, in the budget's currency"),
+          uncleared: z.number().int(),
+          cleared: z.number().int(),
+          reconciled: z.number().int(),
+          categorizable: z
+            .number()
+            .int()
+            .describe(
+              "Transactions that take a category (not transfers within the budget, nor tracking accounts)",
+            ),
+          splits: z.number().int(),
+          splitsWithTransfers: z
+            .number()
+            .int()
+            .describe("Splits with a transfer line, which categorize keeps split"),
+          deletable: z
+            .number()
+            .int()
+            .describe("All but the other sides of splits' transfer lines (deleted with the split)"),
         })
         .openapi("SelectionSummary"),
     ),
@@ -385,25 +419,31 @@ export const bulkUpdateTransactions = createRoute({
   tags: ["Transactions"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "Apply one action to every selected transaction, all or nothing",
+  summary: "Apply one action to every selected transaction it applies to",
   description:
-    "Actions: mark cleared or uncleared, flag (null clears it), categorize. Either every " +
-    "selected transaction changes or none does. Refused (400 `BULK_NOT_ALLOWED`, nothing " +
-    "changed) when the selection holds rows the action isn't settled for yet: reconciled " +
-    "transactions for `cleared`; splits, transfers without a category and tracking-account " +
-    "transactions for `categorize` (see docs/verify.md).",
+    "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` " +
+    "counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within " +
+    "the budget and tracking-account rows; it un-splits splits, except splits with a transfer " +
+    "line, which stay split with every other line given the category. `memo` replaces the " +
+    "memo (a split's own, not its lines'). `move` moves rows to another account like a " +
+    "single edit (a transfer keeps its other side, which then points at the new account) and " +
+    "skips rows already there, transfers into their own other account and splits with a " +
+    "transfer line to it. `delete` deletes transfers' other sides too and skips the other " +
+    "sides of splits' transfer lines (they go with the split). All of it happens in one " +
+    "database transaction.",
   request: {
     params: BudgetParams,
     body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
   },
   responses: {
     200: ok("Updated", z.object({ updated: z.number().int() }).openapi("BulkUpdateResult")),
-    400: jsonError(
-      "Invalid input, a category transactions can't use, or rows the action can't take " +
-        "(BULK_NOT_ALLOWED; `details` says which and how many)",
-    ),
+    400: jsonError("Invalid input, a category transactions can't use, or a closed account"),
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    409: jsonError(
+      "Moving or deleting would change a transfer whose other side is reconciled " +
+        "(TRANSFER_RECONCILED); nothing changed",
+    ),
   },
 });

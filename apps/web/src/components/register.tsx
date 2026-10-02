@@ -14,6 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@everycent/ui/components/empty";
+import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import {
   Table,
@@ -39,11 +40,11 @@ import {
   ArrowUp,
   Circle,
   CircleCheck,
+  CircleHelp,
   Lock,
   MoreHorizontal,
   Plus,
   ReceiptText,
-  Search,
   Split,
   Trash2,
 } from "lucide-react";
@@ -57,12 +58,13 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
 import {
-  isFiltered,
   nextSort,
   type RegisterSearch,
   registerQuery,
   type SortColumn,
+  searchText,
 } from "@/lib/register-filters";
+import { useRegisterView } from "@/lib/register-view";
 import {
   isEmpty,
   isSelected,
@@ -91,7 +93,8 @@ import {
 import { CellEditor, type CellExit } from "./cell-editor";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
-import { RegisterToolbar } from "./register-toolbar";
+import { RegisterSearchBox } from "./register-search-box";
+import { RegisterViewMenu } from "./register-view-menu";
 import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 
@@ -149,7 +152,8 @@ export function Register({
   const { budget, formatAmount, formatDate } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const query = registerQuery(accountId, search);
+  const [view, setView] = useRegisterView(budget.id, accountId ?? "all");
+  const query = registerQuery(accountId, search, view);
   const transactions = useInfiniteQuery({
     queryKey: [...transactionsQueryPrefix, budget.id, query],
     queryFn: async ({ pageParam, signal }) => {
@@ -177,7 +181,7 @@ export function Register({
     () => transactions.data?.pages.flatMap((p) => p.transactions) ?? EMPTY,
     [transactions.data],
   );
-  // A running balance only reads in date order; it hides otherwise (unconfirmed: docs/verify.md).
+  const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
   const dateOrder = query.sort === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
@@ -206,8 +210,11 @@ export function Register({
 
   const allAccounts = accountId === undefined;
   const columnIds = useMemo(
-    () => registerColumns(allAccounts).filter((c) => c !== "balance" || dateOrder),
-    [allAccounts, dateOrder],
+    () =>
+      registerColumns(allAccounts).filter(
+        (c) => (c !== "balance" || view.showRunningBalance) && (c !== "flag" || view.showFlags),
+      ),
+    [allAccounts, view.showRunningBalance, view.showFlags],
   );
   const today = todayIso();
   const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
@@ -222,6 +229,10 @@ export function Register({
   );
   const payeeList = payees.data?.payees ?? [];
   const flags = flagList.data?.flags ?? [];
+  const searchSources = useMemo(
+    () => ({ categories: options, accounts: accountList, flags, settings: budget }),
+    [options, accountList, flags, budget],
+  );
 
   const tableColumns = useMemo(
     () =>
@@ -242,9 +253,10 @@ export function Register({
     () =>
       rows.flatMap(({ original: t }): Item[] => [
         { kind: "transaction", key: t.id, t },
-        ...t.subtransactions.map(
-          (line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line }),
-        ),
+        // Under a search, YNAB shows only the lines that match it.
+        ...t.subtransactions
+          .filter((line) => t.matchingLineIds === null || t.matchingLineIds.includes(line.id))
+          .map((line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line })),
       ]),
     [rows],
   );
@@ -288,7 +300,8 @@ export function Register({
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
   // The selection's filter is the register's, without the sort.
-  const { sort: _sort, dir: _dir, ...selectionFilter } = query;
+  const { sort: _sort, dir: _dir, hideReconciled, ...rest } = query;
+  const selectionFilter = { ...rest, ...(hideReconciled ? { hideReconciled: true } : {}) };
   const summary = $api.useQuery(
     "post",
     "/v1/budgets/{budgetId}/transactions/selection",
@@ -313,7 +326,14 @@ export function Register({
       });
       await refresh();
       setSelection(NOTHING);
-      toast.success(`Updated ${result.updated} transaction${result.updated === 1 ? "" : "s"}`);
+      const n = `${result.updated} transaction${result.updated === 1 ? "" : "s"}`;
+      toast.success(
+        action.type === "delete"
+          ? `Deleted ${n}`
+          : action.type === "move"
+            ? `Moved ${n}`
+            : `Updated ${n}`,
+      );
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't update the selected transactions."));
     }
@@ -513,7 +533,7 @@ export function Register({
       </p>
     );
   }
-  const filtered = isFiltered(search);
+  const q = searchText(search);
   const sort = query.sort;
   const dir = query.dir;
 
@@ -675,19 +695,19 @@ export function Register({
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
-        <div className="ml-auto">
-          <RegisterToolbar
-            search={search}
-            onChange={onSearchChange}
-            categories={options}
-            payees={payeeList}
-            flags={flags}
+        <div className="ml-auto flex items-center gap-1">
+          <RegisterViewMenu view={view} onChange={setView} runningBalance={!allAccounts} />
+          <RegisterSearchBox
+            value={search.q ?? ""}
+            onCommit={(text) => onSearchChange({ q: text.trim() ? text : undefined })}
+            placeholder={allAccounts ? "Search All Accounts" : `Search ${account?.name ?? ""}`}
+            sources={searchSources}
           />
         </div>
       </div>
       {!isEmpty(selection) && (
         <SelectionBar
-          count={summary.data?.count ?? null}
+          summary={summary.data}
           total={summary.data ? show(BigInt(summary.data.total)) : null}
           allMatching={selection.mode === "all"}
           canSelectAll={Boolean(hasNextPage) || loaded.length > (summary.data?.count ?? 0)}
@@ -695,20 +715,16 @@ export function Register({
           onClear={() => setSelection(NOTHING)}
           flags={flags}
           categories={options}
+          moveTargets={openAccounts.filter((a) => a.id !== accountId)}
           pending={bulk.isPending}
           onAction={(action) => void applyBulk(action)}
         />
-      )}
-      {filtered && dateOrder && (
-        <p className="text-muted-foreground text-xs">
-          Filtered: each row still shows the account's balance at that point.
-        </p>
       )}
 
       <Table
         containerRef={scrollRef}
         containerClassName="max-h-[70vh] overflow-auto rounded-lg border"
-        className="min-w-[66rem] table-fixed"
+        className="min-w-[74rem] table-fixed"
       >
         <colgroup>
           {columnIds.map((id) => (
@@ -754,6 +770,11 @@ export function Register({
                             selection.mode === "all" ? NOTHING : { mode: "all", except: new Set() },
                           )
                         }
+                      />
+                    ) : id === "balance" ? (
+                      <BalanceHeader
+                        sorted={!dateOrder}
+                        onResetSort={() => onSearchChange({ sort: undefined, dir: undefined })}
                       />
                     ) : sortBy && !spec.srOnly ? (
                       <button
@@ -933,20 +954,74 @@ export function Register({
           Loading more…
         </p>
       )}
-      {rows.length === 0 && !adding && (
+      {someHidden && (
+        <div className="grid justify-items-center gap-2 py-2 text-sm">
+          <p className="text-muted-foreground">
+            {q ? (
+              <>
+                Some transactions are hidden by your search for "
+                <strong className="text-foreground">{q}</strong>".
+              </>
+            ) : (
+              "Some transactions are hidden by filters."
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setView({ range: "all", from: undefined, to: undefined, showReconciled: true });
+              onSearchChange({ q: undefined });
+            }}
+          >
+            View All
+          </Button>
+        </div>
+      )}
+      {rows.length === 0 && !adding && !someHidden && (
         <Empty className="border">
           <EmptyHeader>
-            <EmptyMedia variant="icon">{filtered ? <Search /> : <ReceiptText />}</EmptyMedia>
-            <EmptyTitle>{filtered ? "No matching transactions" : "No transactions yet"}</EmptyTitle>
-            <EmptyDescription>
-              {filtered
-                ? "Try another search, or clear the filters."
-                : "Add one to start tracking where your money goes."}
-            </EmptyDescription>
+            <EmptyMedia variant="icon">
+              <ReceiptText />
+            </EmptyMedia>
+            <EmptyTitle>No transactions yet</EmptyTitle>
+            <EmptyDescription>Add one to start tracking where your money goes.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}
     </div>
+  );
+}
+
+/**
+ * The running balance is always in date order. Sorted by anything else, YNAB keeps the column
+ * and explains: clicking it goes back to the default order.
+ */
+function BalanceHeader({ sorted, onResetSort }: { sorted: boolean; onResetSort: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        className="uppercase hover:text-foreground"
+        title="Sort by date (the balance's order)"
+        onClick={onResetSort}
+      >
+        Balance
+      </button>
+      {sorted && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="About the balance" className="hover:text-foreground">
+              <CircleHelp className="size-3" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 text-sm normal-case">
+            Click the column header to return to the default balance sort order.
+          </PopoverContent>
+        </Popover>
+      )}
+    </span>
   );
 }
 

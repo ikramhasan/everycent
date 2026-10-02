@@ -44,14 +44,17 @@ before starting a roadmap phase** and remove an entry once it's done.
   30k-transaction account (local Postgres): about 100 ms a page, most of it the window over all
   rows. If big accounts get slow, compute the balance before the page's first row with one sum
   and run the window over the page only, or cache balances.
-- Search uses `ilike` on payee, category, memo and account names (no index; fine at the sizes
-  above). A `pg_trgm` index would help much bigger budgets.
-- Filtered rows show the account's real balance at that point, so it can jump between rows; the
-  register says so above the table. Sorting by anything but date hides the balance, as in YNAB.
-- The register opens on all dates. The filter bar's category and payee lists are plain selects;
-  they'll want a searchable picker once lists get long.
-- Search and filters only find whole transactions: a split shows when one of its lines matches,
-  with all its lines.
+- Search follows YNAB's syntax (`parseSearch` in `@everycent/engine`) and uses `ilike` (no
+  index; fine at the sizes above). A `pg_trgm` index would help much bigger budgets.
+- Search terms YNAB has that wait for their phases: `Income:` (income for future months, phase 6)
+  and `Is:` Matched, Approved, Unapproved, Needs Category, Unapproved or Needs Category (phase
+  13). Typed, they're searched as free text for now.
+- Like YNAB, a term can't contain a comma (commas separate terms), so amounts with a thousands
+  separator ("1,000") don't work as one term; type "1000".
+- Sorting: YNAB stacks sorts (sort by payee, then date: date then payee) and sorts Outflow and
+  Inflow, the flag column and pending transactions separately. We sort by one column at a time;
+  Outflow and Inflow both sort by amount, and there's no flag sort.
+- The View menu has no "Show Images" (no attachments yet).
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
   account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
   so it only matters to other API clients.
@@ -89,17 +92,16 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Bulk edit (phase 5f follow-ups)
 
-- Built: ticking rows (shift-click for a range), "Select all matching" (every transaction the
-  filter matches, loaded or not, minus unticked ones), the count and total, and bulk mark
-  cleared/uncleared, flag and categorize, each all or nothing (`POST …/transactions/bulk`).
-- Bulk memo exists in YNAB's web app, but how it treats existing memos isn't documented, so it
-  waits on docs/verify.md.
-- Waiting on docs/verify.md: bulk move to account, bulk delete (and confirm vs. undo), and what bulk
-  categorize does with splits. Until then, categorize refuses a selection with splits, transfers
-  within the budget or tracking-account rows, and cleared refuses reconciled rows; nothing changes
-  and the message says how many to unselect.
+- Built, as checked in YNAB: Categorize (un-split dialog; splits with transfer lines stay split),
+  Flag, Clear / Mark as Cleared / Mark as Uncleared (reconciled rows skipped), Memo… (replaces),
+  Move to Account and Delete (no confirmation), skipping the rows an action doesn't apply to.
+- YNAB deletes with no confirmation because it has Undo/Redo in the register toolbar. We have no
+  undo yet, so a bulk delete can't be taken back. Undo/Redo needs its own design (it covers every
+  register edit, not just bulk ones).
+- YNAB's Categorize menu is category groups with their categories as submenus; ours is the
+  category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
 - YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,
-  enter now and make repeating (10).
+  enter now and make repeating (10), and Export (no phase yet).
 - Changing the search or filters clears the selection.
 
 ## Flags (phase 5d follow-ups)

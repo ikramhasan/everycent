@@ -41,6 +41,7 @@ const txn: Transaction = {
   transferFromSplit: false,
   subtransactions: [],
   runningBalance: "0",
+  matchingLineIds: null,
 };
 
 describe("register drafts", () => {

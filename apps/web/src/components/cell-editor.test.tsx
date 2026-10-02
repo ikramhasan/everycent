@@ -31,6 +31,7 @@ const txn: Transaction = {
   transferFromSplit: false,
   subtransactions: [],
   runningBalance: "0",
+  matchingLineIds: null,
 };
 
 function renderCell(column: CellColumn, transaction = txn, payees: Payee[] = []) {
