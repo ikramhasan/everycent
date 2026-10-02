@@ -45,15 +45,16 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
-  Assign. Not yet: payments out of the payment category (7d), positive card balances acting as
-  cash (7e), and uncategorized card spending or card inflows to Ready to Assign moving payment
-  money (7d). Uncategorized card spending counts as credit overspending, as YNAB's
+  Assign. Payments from budget accounts come out of the payment category (7d); statement credits
+  and cash advances don't move payment money. Not yet: positive card balances acting as cash (7e),
+  and transfers into a card from a tracking account (docs/verify.md). Uncategorized card spending counts as credit overspending, as YNAB's
   "Uncategorized cash transactions … $2.00 will be deducted" note suggests (cash part only).
-- A payment category's Activity is plain text, not a drill-down: YNAB's card activity window
-  (Spending, Returns, Funded Spending, Payments & Returns) comes with payments in 7d. Its inspector
-  (7c) has no "Payments Made" line, no Prior Balance / Spending and Outflows / Payments and
-  Inflows breakdown of the Current Balance (7d), no "Cover Overspent Categories" button and no
-  "Create a Debt Payoff Target" (phase 8). Auto-Assign on payment categories (YNAB: Underfunded,
+- A payment category's Activity opens the card's register for the month with YNAB's Spending /
+  Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
+  transactions with their categories; ours uses the same columns as other categories (Account,
+  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button and no
+  "Create a Debt Payoff Target" (phase 8); its Current Balance and Available for Payment lines
+  aren't collapsible as YNAB's are. Auto-Assign on payment categories (YNAB: Underfunded,
   Paid Last Month, Average Paid) is still the spending set.
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
   cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;

@@ -129,12 +129,24 @@ describe("PaymentInspector", () => {
     cashOverspent: 0n,
     creditOverspent: 0n,
   };
-  const show = (payment: Parameters<typeof PaymentInspector>[0]["payment"], warn = true) =>
+  type Payment = Parameters<typeof PaymentInspector>[0]["payment"];
+  const base = {
+    priorBalance: 0n,
+    spendingAndOutflows: 0n,
+    paymentsAndInflows: 0n,
+    fundedSpending: 0n,
+    paymentsMade: 0n,
+  };
+  const show = (
+    payment: Pick<Payment, "balance" | "underfunded" | "overspentCategories"> & Partial<Payment>,
+    warn = true,
+    available = totals.available,
+  ) =>
     render(
       <PaymentInspector
         name="Card A"
-        totals={totals}
-        payment={payment}
+        totals={{ ...totals, available }}
+        payment={{ ...base, ...payment }}
         format={format}
         available={<span>pill</span>}
         note=""
@@ -144,13 +156,22 @@ describe("PaymentInspector", () => {
     );
 
   it("splits what's underfunded (YNAB's Card A)", () => {
-    show({ balance: -10400n, underfunded: 9200n, overspentCategories: 200n });
+    show({
+      balance: -10400n,
+      underfunded: 9200n,
+      overspentCategories: 200n,
+      priorBalance: -10000n,
+      spendingAndOutflows: -400n,
+      fundedSpending: 200n,
+    });
     expect(screen.getByText(/Cover A200 in overspent categories/)).toBeInTheDocument();
     for (const [label, amount] of [
       ["Total Underfunded", "A9200"],
       ["Overspent Categories", "A200"],
       ["Underfunded", "A9000"],
       ["Current Balance", "A-10400"],
+      ["Prior Balance", "A-10000"],
+      ["Spending and Outflows", "A-400"],
       ["Assigned", "A1000"],
       ["Funded Spending", "A200"],
     ]) {
@@ -161,6 +182,18 @@ describe("PaymentInspector", () => {
   it("asks for the rest of the balance without overspending", () => {
     show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n });
     expect(screen.getByText(/You need to assign A2900 more/)).toBeInTheDocument();
+  });
+
+  it("warns when more was paid than set aside (YNAB's Citi)", () => {
+    show(
+      { balance: -600n, underfunded: 0n, overspentCategories: 0n, paymentsMade: -1600n },
+      true,
+      -200n,
+    );
+    expect(
+      screen.getByText("You sent more to Card A than you had set aside for the payment."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Payments Made").nextSibling).toHaveTextContent("A-1600");
   });
 
   it("celebrates a paid-off card and stays quiet in past months", () => {

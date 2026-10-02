@@ -40,7 +40,7 @@ import {
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
-import { ActivityButton, type ActivityTarget } from "./category-activity";
+import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 
@@ -690,7 +690,7 @@ function CategoryRow({
   index: number;
   groupId: string;
   actions: CategoryListActions;
-  totals: MonthTotals | undefined;
+  totals: BudgetMonthData["categories"][number] | undefined;
   figures: CategoryFigures | undefined;
   reorderable: boolean;
   onDelete: () => void;
@@ -803,18 +803,15 @@ function CategoryRow({
             <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
           )}
           <span className={cn(FIGURE, "text-sm")}>
-            {/* A payment category's activity is moved money, not its own transactions; YNAB's card
-                activity window comes with payments (phase 7d, docs/deferred.md). */}
-            {isPayment && format
-              ? format(totals.activity)
-              : figures && (
-                  <Activity
-                    figures={figures}
-                    target={{ categoryId: category.id }}
-                    name={category.name}
-                    amount={totals.activity}
-                  />
-                )}
+            {figures && (
+              <Activity
+                figures={figures}
+                target={{ categoryId: category.id }}
+                name={category.name}
+                amount={totals.activity}
+                card={isPayment ? totals.payment : undefined}
+              />
+            )}
           </span>
           <span className={FIGURE}>
             {move ? (
@@ -884,11 +881,14 @@ function Activity({
   target,
   name,
   amount,
+  card,
 }: {
   figures: CategoryFigures;
   target: ActivityTarget;
   name: string;
   amount: string;
+  /** A payment category's card figures: the popover adds YNAB's card summary. */
+  card?: CardSummary | null;
 }) {
   if (!figures.activity) return <>{figures.format(amount)}</>;
   return (
@@ -898,6 +898,7 @@ function Activity({
       target={target}
       name={name}
       amount={amount}
+      card={card ?? undefined}
       format={figures.format}
       formatDate={figures.activity.formatDate}
     />

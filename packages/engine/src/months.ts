@@ -65,6 +65,8 @@ export interface MonthFigures {
    * (negative for returns). Defaults to zero.
    */
   fundedSpending?: bigint;
+  /** Payment categories: the part of `activity` that is card payments (negative). Defaults to zero. */
+  payments?: bigint;
 }
 
 export interface CategoryMonth {
@@ -78,6 +80,8 @@ export interface CategoryMonth {
   creditActivity: bigint;
   /** Payment categories: money moved in this month for funded card spending (YNAB's Funded Spending). */
   fundedSpending: bigint;
+  /** Payment categories: this month's card payments, negative (YNAB's Payments Made). */
+  payments: bigint;
   available: bigint;
   /**
    * The part of a negative Available that's cash overspending (it comes out of next month's Ready
@@ -122,6 +126,7 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
   let activity = 0n;
   let creditActivity = 0n;
   let fundedSpending = 0n;
+  let payments = 0n;
   let previous: BudgetMonth | null = null;
   for (const entry of sorted) {
     if (entry.month !== previous) {
@@ -131,12 +136,14 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       activity = 0n;
       creditActivity = 0n;
       fundedSpending = 0n;
+      payments = 0n;
       previous = entry.month;
     }
     assigned += entry.assigned;
     activity += entry.activity;
     creditActivity += entry.creditActivity ?? 0n;
     fundedSpending += entry.fundedSpending ?? 0n;
+    payments += entry.payments ?? 0n;
     available += entry.assigned + entry.activity;
   }
   if (previous !== month) {
@@ -149,12 +156,13 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       cashActivity: 0n,
       creditActivity: 0n,
       fundedSpending: 0n,
+      payments: 0n,
       available: carried,
       cashOverspent: 0n,
       creditOverspent: 0n,
     };
   }
-  const cashActivity = activity - creditActivity - fundedSpending;
+  const cashActivity = activity - creditActivity - fundedSpending - payments;
   return {
     carried,
     assigned,
@@ -162,8 +170,10 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
     cashActivity,
     creditActivity,
     fundedSpending,
+    payments,
     available,
-    // What it had before card spending: carried in, assigned and cash activity.
+    // What it had before card spending: carried in, assigned and cash activity. A payment category
+    // paid below zero is cash overspending (YNAB: red, deducted from next month).
     ...splitOverspending(available, available - creditActivity - fundedSpending),
   };
 }

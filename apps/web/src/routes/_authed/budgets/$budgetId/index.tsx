@@ -474,6 +474,13 @@ function BudgetPage() {
   );
 }
 
+/** A payment category's details from the API, as bigints. */
+const paymentFigures = (p: NonNullable<BudgetMonthData["categories"][number]["payment"]>) =>
+  Object.fromEntries(Object.entries(p).map(([k, v]) => [k, BigInt(v)])) as Record<
+    keyof typeof p,
+    bigint
+  >;
+
 /**
  * YNAB's inspector: one selected category's breakdown and note, or the month's summary over the
  * selection (two or more) or over the rows in view (nothing selected).
@@ -527,11 +534,7 @@ function Inspector({
         <PaymentInspector
           name={category.name}
           totals={breakdown(totals)}
-          payment={{
-            balance: BigInt(totals.payment.balance),
-            underfunded: BigInt(totals.payment.underfunded),
-            overspentCategories: BigInt(totals.payment.overspentCategories),
-          }}
+          payment={paymentFigures(totals.payment)}
           format={format}
           available={available}
           note={category.note}

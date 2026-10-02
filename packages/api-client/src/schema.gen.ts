@@ -1090,10 +1090,20 @@ export interface components {
         PaymentDetails: {
             /** @description The card's working balance at the end of the month (up to today) */
             balance: string;
+            /** @description The card's balance before the month began */
+            priorBalance: string;
+            /** @description The month's outflows on the card (purchases, cash advances, adjustments), negative */
+            spendingAndOutflows: string;
+            /** @description The month's inflows on the card (payments, returns, statement credits), positive */
+            paymentsAndInflows: string;
             /** @description What's owed beyond what's set aside (YNAB's Total Underfunded); 0 when Available covers it */
             underfunded: string;
             /** @description The part of underfunded that is this month's credit overspending on the card */
             overspentCategories: string;
+            /** @description Money moved in this month for funded card spending, less returns (YNAB's Funded Spending) */
+            fundedSpending: string;
+            /** @description This month's payments to the card, negative */
+            paymentsMade: string;
         } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
         AutoAssignAmounts: {

@@ -403,3 +403,50 @@ Built as found:
   the current month and later, green before it. The inspector lists Total Underfunded with its two
   parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button and the
   Debt Payoff Target (phase 8) aren't built.
+
+## Payments, returns and statement credits (phase 7d)
+
+Checked against support.ynab.com ("Credit Card Refunds and Returns", "How to Handle Credit Card
+Rewards and Statement Credits", "Paid in Full Credit Cards") and in YNAB's web app on 2026-10-03
+(Citi card, Wallet, test category R4). Built as found:
+
+- A payment is a transfer from a budget account to the card (register category "Credit Card
+  Payments: Citi"). It takes the amount out of the card's payment category in the payment's month
+  (Citi $14.00 → $8.00 for $6.00) and leaves Ready to Assign alone. The Activity popover lists it
+  under Payments & Returns; the inspector under "Payments Made" and the balance's "Payments and
+  Inflows".
+- Paying more than is set aside makes the payment category negative and red (−$2.00: "You sent
+  more to Citi than you had set aside for the payment."). That negative is cash overspending: it
+  came out of November's Ready to Assign (cash overspending in October $31.00 → $33.00) and
+  November's payment category started at $0.00.
+- A payment while the money isn't there (R4: $5 of card spending, unfunded) still takes it out:
+  Citi −$2.00 → −$7.00.
+- A card inflow to Inflow: Ready to Assign (a statement credit) only lowers the card's balance:
+  Ready to Assign and the payment category didn't change (support.ynab.com: "It also won't change
+  the amount you have set aside for payment or the amount in Ready to Assign (unless that inflow
+  creates a positive balance on your credit card)").
+- A card refund categorized to a spending category moves money from the payment category to that
+  category (support.ynab.com; 7b found it for funded and overspent categories). It can push the
+  payment category negative (support.ynab.com: "If you've already used the $10 from the original
+  purchase to pay down the balance"); there's no cap.
+- A transfer out of a card to a budget account (a cash advance, Visa → Wallet $1.00) has no
+  category: it raised Ready to Assign by nothing and left Visa's payment category alone — but it
+  raised the card's debt (Spending −$69.00) with no money set aside for it, so the payment category
+  is $1.00 more underfunded. (Ready to Assign moved $11,997.00 → $11,998.00 here; that was the
+  undone R4 money in November, not the advance.)
+
+### A refund larger than what was funded, and refunds in a later month
+
+- **Question:** R4 had $5 of unfunded credit spending and a $5 refund on the same card in the same
+  month; the category went to $0 and Citi didn't change (netting, 7b). A refund in a later month
+  than the purchase, or one larger than the month's purchases, would take money out of the
+  payment category in the refund's month (support.ynab.com) — not checked in the app.
+- **Built so far (before this rule):** the refund's month and the card's net activity in that
+  month decide it, as 7b computes (a later-month refund moves its whole amount out).
+
+### Payment from a tracking account, and payments into a positive card
+
+- **Question:** a "payment" from an off-budget account (the transfer gets a category on the
+  budget side, phase 5 rules) and paying a card that's already positive (7e).
+- **Skipped:** a transfer into a card from a tracking account moves no payment money here; a
+  positive card balance is phase 7e.

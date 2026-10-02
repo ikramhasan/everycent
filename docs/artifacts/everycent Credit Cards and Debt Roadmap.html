@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a–7c built; 7b multi-card rules provisional)</div>
+    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a–7d built; 7b multi-card rules provisional)</div>
     <h1>Build sequence for credit cards and debt</h1>
     <p class="lede">Phase 6 made the plan usable; Phase 7 makes debt accounts tell the truth. Its eight README items are split into <strong>seven stages</strong>: five build credit-card budgeting on the existing register and payment categories, then two add loan activity and payoff planning. Build top to bottom. YNAB behaviour that support material and the real app cannot settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -160,12 +160,12 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s7a"><span class="n">7a · done</span><span class="t">Credit math</span><span class="s">Cash vs credit activity</span></a>
       <a class="node done" href="#s7b"><span class="n">7b · done</span><span class="t">Funded spending</span><span class="s">Money reserved to pay</span></a>
       <a class="node done" href="#s7c"><span class="n">7c · done</span><span class="t">Debt</span><span class="s">Overspending and old balances</span></a>
-      <a class="node now" href="#s7d"><span class="n">7d · next</span><span class="t">Payments</span><span class="s">Transfers, returns, refunds</span></a>
-      <a class="node" href="#s7e"><span class="n">7e</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
+      <a class="node done" href="#s7d"><span class="n">7d · done</span><span class="t">Payments</span><span class="s">Transfers, returns, refunds</span></a>
+      <a class="node now" href="#s7e"><span class="n">7e · next</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
       <a class="node" href="#s7f"><span class="n">7f–7g</span><span class="t">Loans</span><span class="s">Activity, interest, planner</span></a>
     </div>
     <div class="side"><b>Outside Phase 7:</b> debt-payment targets and target-driven Underfunded (Phase 8), reconciliation (Phase 9), scheduled payments (Phase 10), foreign-currency debt (Phase 11).</div>
-    <div class="then">7a–7c are on stacked branches <span class="mono">phase-7a-credit-activity</span> → <span class="mono">phase-7b-funded-spending</span> → <span class="mono">phase-7c-credit-overspending</span>, not merged. To pick up: <span class="mono">Start 7d on a branch from phase-7c-credit-overspending. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
+    <div class="then">7a–7c are on stacked branches <span class="mono">phase-7a-credit-activity</span> → <span class="mono">phase-7b-funded-spending</span> → <span class="mono">phase-7c-credit-overspending</span> → <span class="mono">phase-7d-payments</span>, not merged. To pick up: <span class="mono">Start 7e on a branch from phase-7d-payments. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -256,7 +256,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7d">
       <div class="num">7d</div>
       <div class="body">
-        <div class="head"><h2>Payments, returns and refunds</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Payments, returns and refunds</h2><span class="pill done">Done</span></div>
         <p class="why">Transfers and inflows close the loop: paying the card consumes reserved payment money, while a return unwinds the original spending category and its card reservation.</p>
         <div class="meta">
           <div>
@@ -268,8 +268,8 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
             <ul><li>7b funded reservations; 7c debt state</li></ul>
             <h3>Confirmed behavior</h3>
             <ul><li>Card payments are account transfers and carry no category</li><li>A refund should normally use the purchase category so money returns there and the amount reserved for payment is reduced</li><li>A positive balance from overpayment enters the plan differently from a categorized refund</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li class="q">Refund across month/year boundaries: which month's payment Available is unwound and how much can roll back</li><li class="q">Refund against credit overspending vs funded spending; refunds larger than the original purchase</li><li class="q">Payment from a tracking account, payment into a card already positive, and payment reversal</li></ul>
+            <h3>Found in YNAB (web app, 3 Oct 2026)</h3>
+            <ul><li>A payment from a budget account takes its amount out of the payment category in its month; overpaying turns it red and is cash overspending (deducted next month)</li><li>Statement credits to Ready to Assign and cash advances leave the payment category alone</li><li class="q">Still open: refunds in a later month or larger than the purchase, payments from tracking accounts (<code>docs/verify.md</code>)</li></ul>
           </div>
         </div>
       </div>
@@ -278,7 +278,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7e">
       <div class="num">7e</div>
       <div class="body">
-        <div class="head"><h2>Credit lifecycle and parity pass</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Credit lifecycle and parity pass</h2><span class="pill now">Next</span></div>
         <p class="why">Card math must remain correct when the account crosses zero, is closed, or changes family. Finish the credit track by removing Phase 7 deferrals and checking the whole UI in the real app.</p>
         <div class="meta">
           <div>

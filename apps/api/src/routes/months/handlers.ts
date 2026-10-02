@@ -22,6 +22,7 @@ import {
   categoryMonth,
   categoryOverspending,
   fundedCardSpending,
+  isOnBudget,
   type MonthAmount,
   type MonthFigures,
   monthBounds,
@@ -29,8 +30,8 @@ import {
   readyToAssign,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, inArray, isNotNull, isNull, lte, max, min } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, max, min, or } from "drizzle-orm";
+import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
@@ -45,6 +46,7 @@ const monthKey = (date: AnyPgColumn) => sql<string>`to_char(${date}, 'YYYY-MM')`
 // Postgres returns numeric sums as strings; BigInt parses them exactly.
 const total = (amount: AnyPgColumn) => sql<string>`sum(${amount})`;
 const CREDIT_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "credit");
+const BUDGET_TYPES = ACCOUNT_TYPES.filter(isOnBudget);
 /** The part of `amount`'s sum on credit accounts (YNAB's Credit Spending). */
 const creditTotal = (amount: AnyPgColumn) =>
   sql<string>`coalesce(sum(${amount}) filter (where ${inArray(budgetAccount.type, CREDIT_TYPES)}), 0)`;
@@ -134,11 +136,66 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
     .from(category)
     .where(eq(category.budgetId, budgetId));
   const byAccount = new Map(rows.flatMap((p) => (p.accountId ? [[p.accountId, p.id]] : [])));
-  // Card inflows to Ready to Assign (statement credits) and uncategorized card spending move no
-  // payment money here; how YNAB handles them is phases 7c–7d.
+  // Card inflows to Ready to Assign (statement credits) only lower the card's balance (YNAB: "It
+  // also won't change the amount you have set aside for payment"); uncategorized card spending is
+  // credit overspending in Uncategorized. Neither moves payment money.
   const skip = new Set(rows.filter((r) => r.accountId || r.internalKind).map((r) => r.id));
   const creditOverspent = await addFundedSpending(db, budgetId, cutoff, history, byAccount, skip);
+  await addPayments(db, budgetId, cutoff, history, byAccount);
   return { history, paymentAccounts: byAccount, creditOverspent };
+}
+
+/**
+ * Adds each payment category's Payments Made to `history`: money moved into a card from a budget
+ * account comes out of the card's payment category in the payment's month (YNAB, checked in its
+ * web app on 2026-10-03: Citi $14.00 → $8.00 for a $6.00 payment from Wallet; paying more than
+ * is set aside leaves it negative). Money moved out of a card to a budget account (a cash advance)
+ * only raises what's owed. Transfers from tracking accounts are skipped (docs/verify.md).
+ */
+async function addPayments(
+  db: Db,
+  budgetId: string,
+  cutoff: string,
+  history: Map<string, MonthFigures[]>,
+  paymentCategoryByAccount: ReadonlyMap<string, string>,
+) {
+  const other = alias(transaction, "other_side");
+  const otherAccount = alias(budgetAccount, "other_account");
+  const otherLine = alias(subTransaction, "other_line");
+  const otherLineTx = alias(transaction, "other_line_tx");
+  const otherLineAccount = alias(budgetAccount, "other_line_account");
+  // Inflows to a card whose other side (a transaction or a split's line) is in a budget account.
+  const rows = await db
+    .select({
+      accountId: transaction.accountId,
+      month: monthKey(transaction.date),
+      amount: total(transaction.amount),
+    })
+    .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
+    .leftJoin(other, eq(other.id, transaction.transferTransactionId))
+    .leftJoin(otherAccount, eq(otherAccount.id, other.accountId))
+    .leftJoin(otherLine, eq(otherLine.id, transaction.transferSubTransactionId))
+    .leftJoin(otherLineTx, eq(otherLineTx.id, otherLine.transactionId))
+    .leftJoin(otherLineAccount, eq(otherLineAccount.id, otherLineTx.accountId))
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        inArray(budgetAccount.type, CREDIT_TYPES),
+        gt(transaction.amount, 0n),
+        lte(transaction.date, cutoff),
+        or(inArray(otherAccount.type, BUDGET_TYPES), inArray(otherLineAccount.type, BUDGET_TYPES)),
+      ),
+    )
+    .groupBy(transaction.accountId, monthKey(transaction.date));
+  for (const r of rows) {
+    const paymentId = paymentCategoryByAccount.get(r.accountId);
+    if (!paymentId) continue;
+    const amount = -BigInt(r.amount);
+    const list = history.get(paymentId) ?? [];
+    list.push({ month: r.month, assigned: 0n, activity: amount, payments: amount });
+    history.set(paymentId, list);
+  }
 }
 
 /** Each category's net activity per month on each credit account, up to `cutoff`. */
@@ -240,6 +297,7 @@ const ZERO: CategoryMonth = {
   cashActivity: 0n,
   creditActivity: 0n,
   fundedSpending: 0n,
+  payments: 0n,
   available: 0n,
   cashOverspent: 0n,
   creditOverspent: 0n,
@@ -253,6 +311,7 @@ function addTo(sum: CategoryMonth, n: CategoryMonth): CategoryMonth {
     cashActivity: sum.cashActivity + n.cashActivity,
     creditActivity: sum.creditActivity + n.creditActivity,
     fundedSpending: sum.fundedSpending + n.fundedSpending,
+    payments: sum.payments + n.payments,
     cashOverspent: sum.cashOverspent + n.cashOverspent,
     creditOverspent: sum.creditOverspent + n.creditOverspent,
     available: sum.available + n.available,
@@ -378,20 +437,48 @@ export async function budgetMonthJson(
   // Each card's payment details: what's owed at the end of the month (up to today) against what's
   // set aside, and how much of the shortfall is this month's credit overspending.
   const balances = await accountBalances(db, budgetId, cutoff);
+  const { start } = monthBounds(month);
+  // The card's month in its register: what it owed before, and its outflows and inflows since.
+  const cardMonth = await db
+    .select({
+      accountId: transaction.accountId,
+      prior: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} < ${start}), 0)`,
+      outflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} < 0), 0)`,
+      inflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} > 0), 0)`,
+    })
+    .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        inArray(budgetAccount.type, CREDIT_TYPES),
+        lte(transaction.date, cutoff),
+      ),
+    )
+    .groupBy(transaction.accountId);
+  const register = new Map(cardMonth.map((r) => [r.accountId, r]));
   const accountOf = new Map([...paymentAccounts].map(([accountId, id]) => [id, accountId]));
   const paymentJson = (categoryId: string, figures: CategoryMonth) => {
     const accountId = accountOf.get(categoryId);
     if (!accountId) return null;
     const balance = balances.get(accountId)?.working ?? 0n;
     const owed = balance < 0n ? -balance : 0n;
-    const short = owed - figures.available;
-    const underfunded = short > 0n ? short : 0n;
+    // A negative Available is overpayment (cash overspending, shown red); what's underfunded is
+    // the debt the money set aside doesn't reach.
+    const setAside = figures.available > 0n ? figures.available : 0n;
+    const underfunded = owed > setAside ? owed - setAside : 0n;
     const overspentNow = creditOverspent.get(accountId)?.get(month) ?? 0n;
     const fromOverspending = overspentNow < underfunded ? overspentNow : underfunded;
+    const reg = register.get(accountId);
     return {
       balance: balance.toString(),
+      priorBalance: reg?.prior ?? "0",
+      spendingAndOutflows: reg?.outflows ?? "0",
+      paymentsAndInflows: reg?.inflows ?? "0",
       underfunded: underfunded.toString(),
       overspentCategories: fromOverspending.toString(),
+      fundedSpending: figures.fundedSpending.toString(),
+      paymentsMade: figures.payments.toString(),
     };
   };
 

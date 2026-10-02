@@ -55,12 +55,23 @@ const PaymentSchema = z
     balance: zMinorUnits.describe(
       "The card's working balance at the end of the month (up to today)",
     ),
+    priorBalance: zMinorUnits.describe("The card's balance before the month began"),
+    spendingAndOutflows: zMinorUnits.describe(
+      "The month's outflows on the card (purchases, cash advances, adjustments), negative",
+    ),
+    paymentsAndInflows: zMinorUnits.describe(
+      "The month's inflows on the card (payments, returns, statement credits), positive",
+    ),
     underfunded: zMinorUnits.describe(
       "What's owed beyond what's set aside (YNAB's Total Underfunded); 0 when Available covers it",
     ),
     overspentCategories: zMinorUnits.describe(
       "The part of underfunded that is this month's credit overspending on the card",
     ),
+    fundedSpending: zMinorUnits.describe(
+      "Money moved in this month for funded card spending, less returns (YNAB's Funded Spending)",
+    ),
+    paymentsMade: zMinorUnits.describe("This month's payments to the card, negative"),
   })
   .nullable()
   .describe("Set on a credit account's payment category")

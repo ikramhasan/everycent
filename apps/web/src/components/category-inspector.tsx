@@ -153,18 +153,25 @@ export function CategoryInspector({
 export interface PaymentFigures {
   /** The card's working balance (negative: owed). */
   balance: bigint;
+  /** Its balance before the month, and the month's outflows (negative) and inflows. */
+  priorBalance: bigint;
+  spendingAndOutflows: bigint;
+  paymentsAndInflows: bigint;
   /** What's owed beyond Available (YNAB's Total Underfunded). */
   underfunded: bigint;
   /** The part of underfunded from this month's credit overspending. */
   overspentCategories: bigint;
+  /** Money moved in for funded spending, less returns. */
+  fundedSpending: bigint;
+  /** The month's payments, negative. */
+  paymentsMade: bigint;
 }
 
 /**
  * The inspector for a credit card's payment category (YNAB's "Payment" panel, checked in its web
  * app on 2026-10-03): whether Available covers the balance, the Total Underfunded split into this
  * month's overspent categories and the rest, then Current Balance and Available for Payment with
- * where the money came from. Payments Made and the card's Prior Balance breakdown come with
- * payments (phase 7d); "Cover Overspent Categories" and Debt Payoff Targets aren't built.
+ * where the money came from. "Cover Overspent Categories" and Debt Payoff Targets aren't built.
  */
 export function PaymentInspector({
   name,
@@ -193,7 +200,11 @@ export function PaymentInspector({
       <h2 className="truncate font-semibold">{name}</h2>
       <section aria-label="Payment" className="grid gap-1 text-sm">
         <h3 className="font-semibold">Payment</h3>
-        {warn && payment.overspentCategories > 0n ? (
+        {totals.available < 0n ? (
+          <p className="text-destructive">
+            You sent more to {name} than you had set aside for the payment.
+          </p>
+        ) : warn && payment.overspentCategories > 0n ? (
           <p>
             <span className="font-medium">Overspent Categories.</span> Cover{" "}
             {f(payment.overspentCategories)} in overspent categories in order to pay off your
@@ -225,6 +236,9 @@ export function PaymentInspector({
       )}
       <dl className="grid gap-2">
         <Line label="Current Balance" value={payment.balance} format={format} />
+        <Line label="Prior Balance" value={payment.priorBalance} format={format} />
+        <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
+        <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
       </dl>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-sm">Available for Payment</span>
@@ -233,7 +247,8 @@ export function PaymentInspector({
       <dl className="grid gap-2">
         <Line label="Cash Left Over From Last Month" value={totals.carried} format={format} />
         <Line label="Assigned" value={totals.assigned} format={format} />
-        <Line label="Funded Spending" value={totals.activity} format={format} />
+        <Line label="Funded Spending" value={payment.fundedSpending} format={format} />
+        <Line label="Payments Made" value={payment.paymentsMade} format={format} />
       </dl>
       <NoteField key={name} note={note} onChange={onNoteChange} />
     </Panel>
