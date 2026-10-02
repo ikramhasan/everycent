@@ -6,9 +6,17 @@ phases — check it before starting a phase, and add to it whenever you defer so
 
 ## Matching YNAB: confirm, don't assume
 
-everycent follows YNAB's behaviour. Only build YNAB behaviour you've **confirmed** — from YNAB's
-help center (support.ynab.com), its API docs, or the user. When you're unsure how YNAB does
-something:
+everycent follows YNAB's behaviour, one to one: feature parity comes first, our own ideas later.
+Only build YNAB behaviour you've **confirmed** — from YNAB's help center (support.ynab.com), its
+API docs, the user, or the real YNAB app.
+
+**Check the real app.** Whenever you're unsure how something should work or how YNAB does it,
+open YNAB's web app (app.ynab.com) with the Chrome browser tool (claude-in-chrome) and try it.
+The user is signed in there with a test account made for this, so you can add test accounts and
+transactions and run the actions you're checking. Look before asking the user, and note what you
+found (in `docs/verify.md`, or in the commit/plan you're working on).
+
+If the app can't settle it (the browser tool isn't connected, or the case can't be reproduced):
 
 - Don't guess and don't fill the gap with a "sensible default". Skip that part of the feature.
 - Add an entry to `docs/verify.md`: the question, what you found (with links), the options you

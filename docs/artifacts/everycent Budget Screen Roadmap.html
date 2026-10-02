@@ -1,0 +1,322 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>everycent Budget Screen Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger-style sequence, as on the Phase 2 build sequence. A dependency strip on top, then one entry per stage, read top to bottom. */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --ink: #16211e;
+  --muted: #5b6b66;
+  --rule: #d9e1de;
+  --accent: #0f6b58;
+  --accent-soft: #e2f0ec;
+  --side: #7a5a12;
+  --side-soft: #f6eedb;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+    --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+  --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 16px;
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 880px; margin-inline: auto; display: grid; gap: 40px; }
+
+header { display: grid; gap: 10px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05; letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+}
+.lede { margin: 0; max-width: 65ch; color: var(--muted); font-size: 16px; }
+.lede strong { color: var(--ink); font-weight: 600; }
+
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: -0.01em; margin: 0; text-wrap: balance;
+}
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+
+/* Dependency strip */
+.flow { display: grid; gap: 14px; }
+.lane {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;
+  position: relative;
+}
+.node {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px 12px 14px; display: grid; gap: 4px; min-width: 0; position: relative;
+}
+.node .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+.node .t { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.node .s { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+a.node { color: inherit; text-decoration: none; }
+a.node:hover { border-color: var(--accent); }
+a.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step { scroll-margin-top: 16px; }
+.node.now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.node:not(:last-child)::after {
+  content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%);
+  color: var(--muted); font-size: 14px; background: var(--bg); line-height: 1; padding: 2px 0;
+  z-index: 1;
+}
+.side {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+  background: var(--side-soft); border: 1px dashed var(--side); border-radius: 6px;
+  padding: 10px 12px; font-size: 13.5px;
+}
+.side b { color: var(--side); font-weight: 600; }
+.then { font-size: 13.5px; color: var(--muted); }
+.then .mono { color: var(--ink); }
+
+@media (max-width: 860px) {
+  .lane { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .node:not(:last-child)::after {
+    content: "↓"; right: 50%; top: auto; bottom: -9px; transform: translate(50%, 50%);
+    padding: 0 4px;
+  }
+}
+
+/* Entries */
+.steps { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.step {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px;
+  padding-block: 26px; border-bottom: 1px solid var(--rule);
+}
+.num {
+  font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.body { display: grid; gap: 12px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.pill {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted);
+  white-space: nowrap;
+}
+.pill.now { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pill.done { color: var(--muted); }
+.node.done { opacity: .6; }
+.why { margin: 0; max-width: 65ch; }
+.meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.meta h3 {
+  margin: 0 0 6px; font-family: var(--font-mono); font-weight: 500; font-size: 11.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.meta ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.meta li::marker { color: var(--muted); }
+.src { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.full { grid-column: 1 / -1; }
+.meta li.q { color: var(--muted); }
+.meta ul + h3 { margin-top: 14px; }
+@media (max-width: 680px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .meta { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Rules */
+.rules { display: grid; gap: 14px; }
+.rules ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; max-width: 70ch; }
+.rules li::marker { color: var(--accent); }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">everycent · roadmap phase 6 · plan as of 2 Oct 2026</div>
+    <h1>Build sequence for the budget screen</h1>
+    <p class="lede">Phase 5 built the register; Phase 6 turns it into a budget. Its fifteen README items are split into <strong>six stages</strong>, built in dependency order, after <strong>closing out Phase 5</strong>. Each stage gets its own branch, and puts its YNAB questions in <code>docs/verify.md</code> before building them.</p>
+  </header>
+
+  <section class="flow" aria-label="Dependency order">
+    <div class="lane">
+      <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Before Phase 6</span><span class="s">YNAB parity for the register</span></a>
+      <a class="node now" href="#s6a"><span class="n">6a · next</span><span class="t">Month view</span><span class="s">Assigned, activity, available</span></a>
+      <a class="node" href="#s6b"><span class="n">6b</span><span class="t">Assign</span><span class="s">Ready to Assign, future months</span></a>
+      <a class="node" href="#s6c"><span class="n">6c</span><span class="t">Overspending</span><span class="s">Move and cover money</span></a>
+      <a class="node" href="#s6d"><span class="n">6d</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
+      <a class="node" href="#s6e"><span class="n">6e</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
+      <a class="node" href="#s6f"><span class="n">6f</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
+    </div>
+    <div class="side"><b>Outside Phase 6:</b> credit card payment categories (Phase 7), targets and anything "underfunded" (Phase 8), multi-currency (Phase 11).</div>
+    <div class="then">Main is at <span class="mono">8fbf053</span> (5e); <span class="mono">phase-5f-bulk</span> is at <span class="mono">17eaa3f</span> (5f plus the YNAB-parity rework), not merged yet. To pick up: <span class="mono">Merge phase-5f-bulk into main, then start Phase 6a. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
+  </section>
+
+  <section class="steps" aria-label="Stages">
+    <article class="step" id="s00">
+      <div class="num">00</div>
+      <div class="body">
+        <div class="head"><h2>Before Phase 6</h2><span class="pill done">Done</span></div>
+        <p class="why">Every <code>docs/verify.md</code> entry was checked hands-on in YNAB's web app (a test account in Chrome), and the register was rebuilt to match it one to one. Committed on <code>phase-5f-bulk</code> (<span class="mono">17eaa3f</span>); merging into main is the first step of 6a. None of it blocked Phase 6: the open questions were all register behaviour, not budget math.</p>
+        <div class="meta">
+          <div>
+            <h3>Built</h3>
+            <ul><li>YNAB's search: one box, comma-separated terms that all match (<code>Payee:</code>, <code>Category:</code>, <code>Is:</code>, <code>Flag:</code>, <code>Outflow: &gt;=25</code>, dates), its suggestions, and split lines matched one by one <span class="src">P5</span></li><li>View menu: date presets, reconciled and running balance hidden by default, flags; kept per register <span class="src">P5</span></li><li>Balance stays when sorted, with YNAB's help popover; a day's largest outflow first <span class="src">P5</span></li><li>Bulk: un-split dialog, skip what doesn't apply, Clear vs Mark as Cleared, Memo, Move to Account, Delete <span class="src">P5</span></li></ul>
+          </div>
+          <div>
+            <h3>Still open</h3>
+            <ul><li>Small details in <code>docs/verify.md</code>, each built with a stated placeholder</li><li>Undo for bulk delete (YNAB doesn't confirm; it relies on Undo), in 6f</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6a">
+      <div class="num">6a</div>
+      <div class="body">
+        <div class="head"><h2>Month view</h2><span class="pill now">Next</span></div>
+        <p class="why">The budget page shows every category with what was assigned, spent and is available this month, grouped like the category list. Everything else in Phase 6 reads these numbers.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Month view: Assigned, Activity, Available per category, group subtotals <span class="src">P6</span></li><li>Available rolls over month to month <span class="src">P6</span></li><li>Month navigation, including future months <span class="src">P6</span></li><li>Collapse and expand groups <span class="src">P6</span></li><li>Activity reads split lines (<code>sub_transaction</code>), not the split's own null category <span class="src">deferred</span></li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>Phase 4 categories, Phase 5 register</li><li><code>phase-5f-bulk</code> merged</li></ul>
+            <h3>To check in YNAB</h3>
+            <ul><li class="q">Do hidden categories count in group totals?</li><li class="q">Is future-dated spending in a month's Activity before its date?</li><li class="q">How far back and forward can you navigate?</li></ul>
+            <h3>Not here</h3>
+            <ul><li>Credit card payment categories (Phase 7)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6b">
+      <div class="num">6b</div>
+      <div class="body">
+        <div class="head"><h2>Assigning and Ready to Assign</h2><span class="pill">Planned</span></div>
+        <p class="why">Give every dollar a job: assign money to categories and see what's left in Ready to Assign, which is a hard-coded zero today.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Ready to Assign calculation (inflows − assigned, across months) <span class="src">P6</span></li><li>Assign money to categories, with math in the field (<code>evaluateAmount</code>) <span class="src">P6</span></li><li>Over-assigned warning when Ready to Assign goes negative <span class="src">P6</span></li><li>Budgeting in future months, "assigned in future" indicator <span class="src">P6</span></li><li>Income for future months <span class="src">P6</span></li><li>The setup flow's third step, "Fund categories" <span class="src">deferred</span></li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>6a</li></ul>
+            <h3>To check in YNAB</h3>
+            <ul><li class="q">How money assigned in future months counts in Ready to Assign</li><li class="q">Does future-dated income count before its date?</li><li class="q">Where "income for future months" lives today, and what it does</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6c">
+      <div class="num">6c</div>
+      <div class="body">
+        <div class="head"><h2>Overspending and moving money</h2><span class="pill">Planned</span></div>
+        <p class="why">When a category goes negative, show it, and make fixing it one step.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Cash overspending highlighted red <span class="src">P6</span></li><li>Move money between categories, and back to Ready to Assign <span class="src">P6</span></li><li>Cover overspending flow <span class="src">P6</span></li><li>Deleting a category also moves its assigned and available money <span class="src">deferred</span></li><li>Check the close-account Manual Balance Adjustment against the real math <span class="src">deferred</span></li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>6b</li></ul>
+            <h3>To check in YNAB</h3>
+            <ul><li class="q">What happens to cash overspending at month end: does it come out of next month's Ready to Assign?</li><li class="q">Does moving money leave a record you can see later?</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6d">
+      <div class="num">6d</div>
+      <div class="body">
+        <div class="head"><h2>Category inspector and drill-down</h2><span class="pill">Planned</span></div>
+        <p class="why">Click a category to see where its number comes from, and the transactions behind it.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Inspector: cash left over, assigned, activity, available; the category note <span class="src">P6</span></li><li>Activity drill-down: the register searched for that category and month (<code>Category: …</code> plus the date range), as YNAB's search does <span class="src">P6</span></li><li>Budget filters: overspent, money available <span class="src">P6</span></li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>6a (6c for overspent)</li></ul>
+            <h3>Not here</h3>
+            <ul><li>The target part of the inspector, and the underfunded and snoozed filters (Phase 8)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6e">
+      <div class="num">6e</div>
+      <div class="body">
+        <div class="head"><h2>Auto-assign</h2><span class="pill">Planned</span></div>
+        <p class="why">One click to fill categories from history instead of typing every amount.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Assigned last month, spent last month, average assigned, average spent <span class="src">P6</span></li><li>Reset available, reset assigned <span class="src">P6</span></li><li>For one category or all of them</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>6b</li></ul>
+            <h3>To check in YNAB</h3>
+            <ul><li class="q">How many months the averages cover, and whether empty months count</li><li class="q">The current names and set of options</li></ul>
+            <h3>Not here</h3>
+            <ul><li>"Underfunded" needs targets (Phase 8)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s6f">
+      <div class="num">6f</div>
+      <div class="body">
+        <div class="head"><h2>Undo and redo</h2><span class="pill">Planned</span></div>
+        <p class="why">Take back a budget or transaction edit, including one a partner made on the same budget.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Undo / redo for assigning, moving money and transaction edits <span class="src">P6</span></li><li>Kept on the server, so it survives a reload and works for both partners</li><li>Undo for deletes too: YNAB deletes (single and bulk) without asking and offers Undo, which we can't yet</li></ul>
+          </div>
+          <div>
+            <h3>Depends on</h3>
+            <ul><li>6b and 6c</li></ul>
+            <h3>To check in YNAB</h3>
+            <ul><li class="q">Per person or per budget, and how far back</li><li class="q">What YNAB's undo covers today, and whether it lasts past a refresh</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="rules">
+    <h2>Ground rules</h2>
+    <ul>
+      <li><strong>Match YNAB one to one; check, don't assume.</strong> When unsure how YNAB behaves, try it in YNAB's web app with the Chrome tool (a test account is signed in). Anything the app can't settle is skipped and listed in <code>docs/verify.md</code>.</li>
+      <li><strong>Money is never a float.</strong> Assigned amounts are <code>bigint</code> minor units with a currency, like every other amount.</li>
+      <li><strong>The server does the math.</strong> Activity, available and Ready to Assign are computed by the API, as the register's balances are.</li>
+      <li><strong>One branch per stage.</strong> Each is agreed in chat, built, checked in the browser in both themes, and <code>pnpm check</code> passes before it's merged.</li>
+    </ul>
+  </section>
+
+  <footer>Follows the Phase 5 register roadmap (in git history). References (P5, P6, deferred) point to the Roadmap section of <code>README.md</code> and to <code>docs/deferred.md</code>.</footer>
+</div>
+
+</body></html>
