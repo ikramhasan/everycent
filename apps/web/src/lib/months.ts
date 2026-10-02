@@ -29,6 +29,11 @@ export function monthLabel(month: BudgetMonth) {
   return format(parse(month, "yyyy-MM", new Date()), "MMM yyyy");
 }
 
+/** "November", as YNAB names a month in lists. */
+export function monthName(month: BudgetMonth) {
+  return format(parse(month, "yyyy-MM", new Date()), "MMMM");
+}
+
 export const toMoney = (amount: string, currency: CurrencyCode): Money =>
   money(BigInt(amount), currency);
 

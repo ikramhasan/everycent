@@ -13,6 +13,9 @@ type Month = {
   currency: string;
   firstMonth: string;
   lastMonth: string;
+  readyToAssign: string;
+  assignedInFuture: string;
+  futureMonths: { month: string; assigned: string }[];
   categories: (Totals & { categoryId: string })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
@@ -86,9 +89,16 @@ async function setup() {
     const byGroup = (id: string) => body.groups.find((g) => g.groupId === id);
     return { ...body, byCategory, byGroup };
   };
+  const put = (categoryId: string, m: string, assigned: string, today = TODAY) =>
+    send("PUT", `${base}/months/${m}/categories/${categoryId}`, cookie, { assigned, today });
+  const { readyToAssignCategoryId } = await json<{ readyToAssignCategoryId: string }>(
+    await send("GET", `${base}/categories`, cookie),
+  );
   return {
     cookie,
     base,
+    put,
+    readyToAssignCategoryId,
     account,
     savings,
     bills,
@@ -220,5 +230,91 @@ describe("budget months", () => {
     const res = await send("GET", `${base}/months/2026-10`, other.cookie);
     expect(res.status).toBe(404);
     expect((await json<ErrorBody>(res)).error.code).toBe("NOT_FOUND");
+  });
+
+  describe("assigning and Ready to Assign", () => {
+    // The budget starts with $1,000.00 of income (Checking's starting balance, August 20).
+    it("starts with the budget's income ready to assign", async () => {
+      const { month } = await setup();
+      expect(await month("2026-10")).toMatchObject({
+        readyToAssign: "100000",
+        assignedInFuture: "0",
+        futureMonths: [],
+      });
+    });
+
+    it("assigns money, replacing the category's amount", async () => {
+      const { put, month, rent, bills } = await setup();
+      const res = await put(rent.id, "2026-10", "25000");
+      expect(res.status).toBe(200);
+      const body = await json<Month>(res);
+      expect(body.readyToAssign).toBe("75000");
+      expect(body.categories.find((c) => c.categoryId === rent.id)).toMatchObject(
+        t("25000", "0", "25000"),
+      );
+      await put(rent.id, "2026-10", "10000");
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("10000", "0", "10000"));
+      expect(oct.byGroup(bills.id)).toMatchObject(t("10000", "0", "10000"));
+      expect(oct.readyToAssign).toBe("90000");
+      // What's left rolls into November; Ready to Assign stays.
+      const nov = await month("2026-11");
+      expect(nov.byCategory(rent.id)).toMatchObject(t("0", "0", "10000"));
+      expect(nov.readyToAssign).toBe("90000");
+    });
+
+    it("takes last month's overspending out of this month", async () => {
+      const { spend, month } = await setup();
+      await spend({ date: "2026-09-10", amount: "-2500" });
+      expect((await month("2026-09")).readyToAssign).toBe("100000");
+      expect((await month("2026-10")).readyToAssign).toBe("97500");
+    });
+
+    it("counts money assigned in later months, without pushing a month below zero", async () => {
+      const { put, month, rent, phone } = await setup();
+      await put(rent.id, "2026-10", "5000");
+      await put(phone.id, "2026-11", "2000");
+      expect(await month("2026-10")).toMatchObject({
+        readyToAssign: "93000",
+        assignedInFuture: "2000",
+        futureMonths: [{ month: "2026-11", assigned: "2000" }],
+      });
+      expect((await month("2026-11")).readyToAssign).toBe("93000");
+
+      await put(phone.id, "2026-11", "120000");
+      expect((await month("2026-10")).readyToAssign).toBe("0");
+      // November assigned more than there is.
+      expect((await month("2026-11")).readyToAssign).toBe("-25000");
+    });
+
+    it("leaves income dated after today out", async () => {
+      const { spend, month, readyToAssignCategoryId } = await setup();
+      await spend({ date: "2026-10-20", amount: "50000", categoryId: readyToAssignCategoryId });
+      expect((await month("2026-10")).readyToAssign).toBe("100000");
+      expect((await month("2026-10", "2026-10-20")).readyToAssign).toBe("150000");
+    });
+
+    it("keeps a month open after its money is taken back out", async () => {
+      const { put, month, rent } = await setup();
+      expect((await put(rent.id, "2026-11", "100")).status).toBe(200);
+      expect((await month("2026-10")).lastMonth).toBe("2026-12");
+      await put(rent.id, "2026-11", "0");
+      expect((await month("2026-10")).lastMonth).toBe("2026-12");
+    });
+
+    it("refuses months the budget doesn't show, internal categories and outsiders", async () => {
+      const { put, rent, readyToAssignCategoryId, base } = await setup();
+      const late = await put(rent.id, "2026-12", "100");
+      expect(late.status).toBe(400);
+      expect((await json<ErrorBody>(late)).error.code).toBe("MONTH_OUT_OF_RANGE");
+      expect((await put(rent.id, "2026-06", "100")).status).toBe(400);
+      expect((await put(readyToAssignCategoryId, "2026-10", "100")).status).toBe(404);
+      expect((await put(rent.id, "2026-10", "1.5")).status).toBe(400);
+      const other = await signUp(app);
+      const res = await send("PUT", `${base}/months/2026-10/categories/${rent.id}`, other.cookie, {
+        assigned: "100",
+      });
+      expect(res.status).toBe(404);
+    });
   });
 });

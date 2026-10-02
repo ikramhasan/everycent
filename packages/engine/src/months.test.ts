@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, budgetMonthRange, categoryMonth, monthBounds, monthOf } from "./months";
+import {
+  addMonths,
+  budgetMonthRange,
+  categoryMonth,
+  categoryOverspending,
+  monthBounds,
+  monthOf,
+  readyToAssign,
+} from "./months";
 
 describe("month helpers", () => {
   it("moves across years", () => {
@@ -104,5 +112,63 @@ describe("categoryMonth", () => {
 
   it("ignores later months", () => {
     expect(categoryMonth([m("2026-11", 5000n, 0n)], "2026-10").available).toBe(0n);
+  });
+});
+
+describe("readyToAssign", () => {
+  const a = (month: string, amount: bigint) => ({ month, amount });
+
+  // The YNAB test budget: $12,100 of income in October, $3 overspent in August, $32 in October.
+  const income = [a("2026-10", 1210000n)];
+  const overspent = [a("2026-08", -300n), a("2026-10", -3200n)];
+
+  it("subtracts assigned money and earlier months' overspending", () => {
+    const assigned = [a("2026-10", 5000n)];
+    expect(readyToAssign({ month: "2026-10", income, assigned, overspent })).toEqual({
+      readyToAssign: 1204700n,
+      assignedInFuture: 0n,
+    });
+    // November also loses October's overspending.
+    expect(readyToAssign({ month: "2026-11", income, assigned, overspent }).readyToAssign).toBe(
+      1201500n,
+    );
+  });
+
+  it("takes money assigned in later months from what's left", () => {
+    const assigned = [a("2026-10", 5000n), a("2026-11", 2000n)];
+    expect(readyToAssign({ month: "2026-10", income, assigned, overspent })).toEqual({
+      readyToAssign: 1202700n,
+      assignedInFuture: 2000n,
+    });
+    expect(readyToAssign({ month: "2026-11", income, assigned, overspent }).readyToAssign).toBe(
+      1199500n,
+    );
+  });
+
+  it("never lets later months push a month below zero", () => {
+    const assigned = [a("2026-10", 5000n), a("2026-11", 1300000n)];
+    expect(readyToAssign({ month: "2026-10", income, assigned, overspent }).readyToAssign).toBe(0n);
+    expect(readyToAssign({ month: "2026-11", income, assigned, overspent }).readyToAssign).toBe(
+      -98500n,
+    );
+    // September has no income: only August's overspending counts.
+    expect(readyToAssign({ month: "2026-09", income, assigned, overspent })).toEqual({
+      readyToAssign: -300n,
+      assignedInFuture: 1305000n,
+    });
+  });
+});
+
+describe("categoryOverspending", () => {
+  it("lists the months a category ended below zero", () => {
+    const history = [
+      { month: "2026-08", assigned: 0n, activity: -300n },
+      { month: "2026-09", assigned: 1000n, activity: -200n },
+      { month: "2026-10", assigned: 0n, activity: -1000n },
+    ];
+    expect(categoryOverspending(history)).toEqual([
+      { month: "2026-08", amount: -300n },
+      { month: "2026-10", amount: -200n },
+    ]);
   });
 });

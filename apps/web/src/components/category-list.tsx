@@ -37,6 +37,7 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
+import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { NamePopover } from "./name-popover";
 
 export interface CategoryListActions {
@@ -72,6 +73,8 @@ export interface CategoryFigures {
   month: BudgetMonthData;
   /** Formats an amount in minor units (an integer string) in the month's currency. */
   format: (minorUnits: string) => string;
+  /** Makes the Assigned column editable. */
+  assign?: AssignActions;
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
@@ -301,6 +304,7 @@ export function CategoryList({
                         actions={actions}
                         totals={categoryFigures.get(categoryId)}
                         format={figures?.format}
+                        assign={figures?.assign}
                         onDelete={() => requestDelete("category", category.id, category.name)}
                       />
                     );
@@ -507,6 +511,7 @@ function CategoryRow({
   actions,
   totals,
   format,
+  assign,
   onDelete,
 }: {
   category: Category;
@@ -515,6 +520,7 @@ function CategoryRow({
   actions: CategoryListActions;
   totals: MonthTotals | undefined;
   format: CategoryFigures["format"] | undefined;
+  assign: AssignActions | undefined;
   onDelete: () => void;
 }) {
   const isPayment = Boolean(category.linkedAccountId);
@@ -580,7 +586,17 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
+          {assign ? (
+            <AssignedCell
+              categoryId={category.id}
+              categoryName={category.name}
+              amount={totals.assigned}
+              format={format}
+              actions={assign}
+            />
+          ) : (
+            <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
+          )}
           <span className={cn(FIGURE, "text-sm")}>{format(totals.activity)}</span>
           <span className={FIGURE}>
             <AvailablePill amount={totals.available} format={format} />

@@ -90,22 +90,15 @@ transactions (YNAB makes them scheduled transactions); hidden categories count i
 Categories" row at the bottom, not in their group's totals; an "Uncategorized Transactions" row
 shows only in months with uncategorized transactions; a negative Available starts the next month at
 zero; months run from the one before the oldest transaction to the one after the current month (or
-after the latest month with money assigned, which stays open even after an undo); group collapse
-survives a reload and applies to every month.
+after the latest month with money assigned, which stays open even after an undo; a new empty plan
+runs from the month before the current one); group collapse survives a reload and applies to every
+month.
 
 ### Where collapsed groups are kept
 
 - **Question:** YNAB keeps a collapsed group collapsed after a reload. Is that saved to the budget
   or account (the same on another device or for a partner) or only in this browser?
 - **Built so far (before this rule):** this browser (`localStorage`, per budget).
-
-### The first month of a budget without transactions
-
-- **Found:** the oldest month is the one before the oldest transaction (adding an August
-  transaction to an October budget opened July).
-- **Question:** what is the oldest month of a budget with no transactions at all: the month before
-  the one it was created in?
-- **Built so far (before this rule):** the month before the current one.
 
 ### Which month the budget screen opens on
 
@@ -114,3 +107,43 @@ survives a reload and applies to every month.
 - **Question:** does it also reopen the last month after a reload, or on another device?
 - **Skipped:** the budget screen always opens on the current month; `?month=` holds the month
   while browsing.
+
+## Assigning and Ready to Assign (phase 6b)
+
+Checked in YNAB's web app on 2026-10-02 and built as found (numbers from the test plan):
+
+- Ready to Assign = income to Ready to Assign up to the month − money assigned up to the month −
+  cash overspending of earlier months (Uncategorized included). October: $12,100 − $3 (August's
+  overspending) = $12,097; assigning $50 → $12,047; November: $12,047 − $32 = $12,015.
+- Money assigned in later months comes off the month's Ready to Assign ($20 in November took
+  October to $12,027), but never pushes it below zero: $13,000 in November left October at $0.00
+  "All Money Assigned" and November at −$985.00 "You assigned more than you have". September,
+  with no income, stayed at −$3.00 whatever later months held.
+- Assigning replaces the amount; the field takes math. YNAB has no separate "income for next
+  month" any more: the category list offers only "Inflow: Ready to Assign".
+
+### The wording of a negative Ready to Assign
+
+- **Found:** November (after the current month) said "You assigned more than you have" with a
+  "Fix This" button; September (before it, negative from August's overspending, with or without
+  money assigned in it) said "Overdraft? We can help with that!" with "Next Steps" (a help page).
+- **Question:** what decides the wording: past month vs current/future, or where the shortfall
+  comes from? What does the current month say when it's negative?
+- **Built so far (before this rule):** months before the current one say "Overdraft?", the rest
+  "You assigned more than you have". The buttons aren't built (Fix This moves money: phase 6c).
+
+### Where "Assigned in Future Months" shows
+
+- **Found:** the panel (total, then each later month; the next month at $0.00 when nothing is
+  assigned) showed in October, the current month. It wasn't in September's or November's sidebar.
+- **Question:** is it only ever shown in the current month, or in any month with money assigned
+  after it?
+- **Built so far (before this rule):** the current month only.
+
+### The setup flow's "Fund categories" step
+
+- **Found:** "Create New Plan" in an existing YNAB account opens the plan straight away, with no
+  onboarding; the guided setup only runs for a new account, so it couldn't be checked.
+- **Question:** what does YNAB's onboarding ask in its funding step (assign to each chosen
+  category, a suggested split, or just a pointer to the budget screen)?
+- **Skipped:** the setup flow still ends after "Add accounts".

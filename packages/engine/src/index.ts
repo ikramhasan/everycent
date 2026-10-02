@@ -62,10 +62,14 @@ export {
   budgetMonthRange,
   type CategoryMonth,
   categoryMonth,
+  categoryOverspending,
   isBudgetMonth,
+  type MonthAmount,
   type MonthFigures,
   monthBounds,
   monthOf,
+  type ReadyToAssign,
+  readyToAssign,
   zBudgetMonth,
 } from "./months";
 export {

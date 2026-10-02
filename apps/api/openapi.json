@@ -2541,6 +2541,39 @@
             "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
             "description": "The newest month the budget shows"
           },
+          "readyToAssign": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Money without a job in this month; negative when more was assigned than there is"
+          },
+          "assignedInFuture": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Money assigned in the months after this one"
+          },
+          "futureMonths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                  "description": "A month, YYYY-MM"
+                },
+                "assigned": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                }
+              },
+              "required": [
+                "month",
+                "assigned"
+              ]
+            },
+            "description": "The later months with money assigned, in order"
+          },
           "categories": {
             "type": "array",
             "items": {
@@ -2594,6 +2627,9 @@
           "currency",
           "firstMonth",
           "lastMonth",
+          "readyToAssign",
+          "assignedInFuture",
+          "futureMonths",
           "categories",
           "groups",
           "hidden",
@@ -2659,6 +2695,24 @@
               "groupId"
             ]
           }
+        ]
+      },
+      "AssignCategory": {
+        "type": "object",
+        "properties": {
+          "assigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The new Assigned amount; negative takes money out"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "assigned"
         ]
       }
     },
@@ -5480,6 +5534,112 @@
           },
           "404": {
             "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}/categories/{categoryId}": {
+      "put": {
+        "operationId": "assignCategory",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set the money assigned to a category in a month",
+        "description": "Replaces the category's Assigned amount for the month. The month must be one the budget shows; assigning in the newest month opens the one after it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignCategory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The month's numbers after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMonth"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid amount, or MONTH_OUT_OF_RANGE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't assign money",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or category, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

@@ -102,3 +102,57 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
 function byMonth(a: MonthFigures, b: MonthFigures) {
   return a.month < b.month ? -1 : a.month > b.month ? 1 : 0;
 }
+
+export interface MonthAmount {
+  month: BudgetMonth;
+  amount: bigint;
+}
+
+/**
+ * What a category overspent in each month: its negative Available at the end of the month (YNAB's
+ * cash overspending). Only months with activity or assignments can end negative, because what a
+ * category carries in is never negative.
+ */
+export function categoryOverspending(history: readonly MonthFigures[]): MonthAmount[] {
+  const months = [...new Set(history.map((h) => h.month))].sort();
+  return months.flatMap((month) => {
+    const { available } = categoryMonth(history, month);
+    return available < 0n ? [{ month, amount: available }] : [];
+  });
+}
+
+const total = (amounts: readonly MonthAmount[], keep: (month: BudgetMonth) => boolean) =>
+  amounts.reduce((sum, a) => (keep(a.month) ? sum + a.amount : sum), 0n);
+
+export interface ReadyToAssign {
+  /** Ready to Assign shown in `month`; negative when more was assigned than there is. */
+  readyToAssign: bigint;
+  /** Money assigned in the months after `month`. */
+  assignedInFuture: bigint;
+}
+
+/**
+ * Ready to Assign for `month`, as YNAB computes it (checked in its web app on 2026-10-02):
+ * income categorized to Ready to Assign up to the month, less every month's assigned money up to
+ * it, less cash overspending of the months before it. Money assigned in later months takes from
+ * what's left, but never pushes the month below zero.
+ */
+export function readyToAssign(input: {
+  month: BudgetMonth;
+  /** Inflows to Ready to Assign, by month. */
+  income: readonly MonthAmount[];
+  /** Assigned money of all categories, by month, later months included. */
+  assigned: readonly MonthAmount[];
+  /** Overspending (negative amounts) of all categories, by month. */
+  overspent: readonly MonthAmount[];
+}): ReadyToAssign {
+  const { month } = input;
+  const base =
+    total(input.income, (m) => m <= month) -
+    total(input.assigned, (m) => m <= month) +
+    total(input.overspent, (m) => m < month);
+  const assignedInFuture = total(input.assigned, (m) => m > month);
+  const room = base > 0n ? base : 0n;
+  const taken = assignedInFuture < room ? assignedInFuture : room;
+  return { readyToAssign: base - taken, assignedInFuture };
+}

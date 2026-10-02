@@ -1,4 +1,4 @@
-import { sql } from "@everycent/db";
+import { newId, sql } from "@everycent/db";
 import {
   category,
   categoryAssignment,
@@ -7,21 +7,27 @@ import {
   transaction,
 } from "@everycent/db/schema";
 import {
+  type BudgetMonth,
   budgetMonthRange,
   type CategoryMonth,
+  type CurrencyCode,
   categoryMonth,
+  categoryOverspending,
+  type MonthAmount,
   type MonthFigures,
   monthBounds,
   monthOf,
+  readyToAssign,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq, isNotNull, lte, max, min } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import type { getBudgetMonth } from "./routes";
+import type { assignCategory, getBudgetMonth } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -29,7 +35,10 @@ const monthKey = (date: AnyPgColumn) => sql<string>`to_char(${date}, 'YYYY-MM')`
 // Postgres returns numeric sums as strings; BigInt parses them exactly.
 const total = (amount: AnyPgColumn) => sql<string>`sum(${amount})`;
 
-/** Each category's assigned amounts and activity per month, up to `month`. */
+/**
+ * Each category's activity per month up to `cutoff`, and its assigned amounts in every month (money
+ * assigned in later months counts toward Ready to Assign).
+ */
 async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
   const rows = await db
     .select({
@@ -70,7 +79,7 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
       amount: categoryAssignment.amount,
     })
     .from(categoryAssignment)
-    .where(and(eq(categoryAssignment.budgetId, budgetId), lte(categoryAssignment.month, cutoff)));
+    .where(eq(categoryAssignment.budgetId, budgetId));
 
   const history = new Map<string, MonthFigures[]>();
   const push = (categoryId: string | null, entry: MonthFigures) => {
@@ -104,12 +113,14 @@ const totalsJson = (n: CategoryMonth) => ({
   available: n.available.toString(),
 });
 
-export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = async (c) => {
-  const { budgetId, month } = c.req.valid("param");
-  const { today = serverToday() } = c.req.valid("query");
-  const { db } = c.var.deps;
-  const { budget } = await loadBudgetAccess(c, budgetId);
-
+/** The budget screen's numbers for `month`, as of the user's `today`. */
+export async function budgetMonthJson(
+  db: Db,
+  budget: { id: string; currency: CurrencyCode },
+  month: BudgetMonth,
+  today: string,
+) {
+  const budgetId = budget.id;
   const { end } = monthBounds(month);
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
@@ -145,15 +156,25 @@ export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = a
   const groups = new Map<string, CategoryMonth>();
   let hidden = ZERO;
   let uncategorized: CategoryMonth | null = null;
+  const income: MonthAmount[] = [];
+  const assigned: MonthAmount[] = [];
+  const overspent: MonthAmount[] = [];
   for (const cat of categories) {
     const entries = history.get(cat.id) ?? [];
+    if (cat.internalKind === "ready_to_assign") {
+      income.push(...entries.map((e) => ({ month: e.month, amount: e.activity })));
+      continue;
+    }
+    // Every category's overspending comes out of the next month's Ready to Assign, hidden and
+    // Uncategorized included (phase 7 will treat credit card spending differently).
+    overspent.push(...categoryOverspending(entries));
+    assigned.push(...entries.map((e) => ({ month: e.month, amount: e.assigned })));
     const figures = categoryMonth(entries, month);
     if (cat.internalKind === "uncategorized") {
       // YNAB lists it only in months with uncategorized transactions.
       if (entries.some((e) => e.month === month)) uncategorized = figures;
       continue;
     }
-    if (cat.internalKind) continue;
     listed.push({ categoryId: cat.id, figures });
     if (cat.hidden || cat.groupHidden) {
       hidden = addTo(hidden, figures);
@@ -166,20 +187,75 @@ export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = a
     .from(categoryGroup)
     .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)));
 
-  return c.json(
-    {
-      month,
-      currency: budget.currency,
-      firstMonth: range.first,
-      lastMonth: range.last,
-      categories: listed.map((l) => ({ categoryId: l.categoryId, ...totalsJson(l.figures) })),
-      groups: groupRows.map((g) => ({ groupId: g.id, ...totalsJson(groups.get(g.id) ?? ZERO) })),
-      hidden: totalsJson(hidden),
-      uncategorized: uncategorized && {
-        activity: uncategorized.activity.toString(),
-        available: uncategorized.available.toString(),
-      },
+  const rta = readyToAssign({ month, income, assigned, overspent });
+  const future = new Map<BudgetMonth, bigint>();
+  for (const a of assigned) {
+    if (a.month > month) future.set(a.month, (future.get(a.month) ?? 0n) + a.amount);
+  }
+
+  return {
+    month,
+    currency: budget.currency,
+    firstMonth: range.first,
+    lastMonth: range.last,
+    readyToAssign: rta.readyToAssign.toString(),
+    assignedInFuture: rta.assignedInFuture.toString(),
+    futureMonths: [...future]
+      .filter(([, amount]) => amount !== 0n)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
+    categories: listed.map((l) => ({ categoryId: l.categoryId, ...totalsJson(l.figures) })),
+    groups: groupRows.map((g) => ({ groupId: g.id, ...totalsJson(groups.get(g.id) ?? ZERO) })),
+    hidden: totalsJson(hidden),
+    uncategorized: uncategorized && {
+      activity: uncategorized.activity.toString(),
+      available: uncategorized.available.toString(),
     },
-    200,
-  );
+  };
+}
+
+export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { today = serverToday() } = c.req.valid("query");
+  const { budget } = await loadBudgetAccess(c, budgetId);
+  return c.json(await budgetMonthJson(c.var.deps.db, budget, month, today), 200);
+};
+
+export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = async (c) => {
+  const { budgetId, month, categoryId } = c.req.valid("param");
+  const { assigned, today = serverToday() } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
+
+  const [target] = await db
+    .select({ id: category.id, internalKind: category.internalKind })
+    .from(category)
+    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
+  if (!target || target.internalKind) throw new AppError(404, "NOT_FOUND", "Category not found");
+
+  const { firstMonth, lastMonth } = await budgetMonthJson(db, budget, monthOf(today), today);
+  if (month < firstMonth || month > lastMonth) {
+    throw new AppError(
+      400,
+      "MONTH_OUT_OF_RANGE",
+      `Money can be assigned from ${firstMonth} to ${lastMonth}`,
+    );
+  }
+
+  // The row stays at zero too: YNAB keeps a month open once money was assigned in it.
+  await db
+    .insert(categoryAssignment)
+    .values({
+      id: newId(),
+      budgetId,
+      categoryId,
+      month: `${month}-01`,
+      amount: BigInt(assigned),
+      currency: budget.currency,
+    })
+    .onConflictDoUpdate({
+      target: [categoryAssignment.categoryId, categoryAssignment.month],
+      set: { amount: BigInt(assigned), updatedAt: new Date() },
+    });
+  return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };

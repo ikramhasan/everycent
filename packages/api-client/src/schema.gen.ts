@@ -449,6 +449,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/categories/{categoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the money assigned to a category in a month
+         * @description Replaces the category's Assigned amount for the month. The month must be one the budget shows; assigning in the newest month opens the one after it.
+         */
+        put: operations["assignCategory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -950,6 +970,17 @@ export interface components {
             firstMonth: string;
             /** @description The newest month the budget shows */
             lastMonth: string;
+            /** @description Money without a job in this month; negative when more was assigned than there is */
+            readyToAssign: string;
+            /** @description Money assigned in the months after this one */
+            assignedInFuture: string;
+            /** @description The later months with money assigned, in order */
+            futureMonths: {
+                /** @description A month, YYYY-MM */
+                month: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                assigned: string;
+            }[];
             /** @description Every category of the category list, hidden ones included */
             categories: components["schemas"]["MonthCategory"][];
             /** @description Each group's totals over its categories that aren't hidden */
@@ -976,6 +1007,15 @@ export interface components {
         };
         MonthGroup: components["schemas"]["MonthTotals"] & {
             groupId: string;
+        };
+        AssignCategory: {
+            /** @description The new Assigned amount; negative takes money out */
+            assigned: string;
+            /**
+             * Format: date
+             * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
+             */
+            today?: string;
         };
     };
     responses: never;
@@ -2915,6 +2955,71 @@ export interface operations {
                 };
             };
             /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    assignCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCategory"];
+            };
+        };
+        responses: {
+            /** @description The month's numbers after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMonth"];
+                };
+            };
+            /** @description Invalid amount, or MONTH_OUT_OF_RANGE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't assign money */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or category, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -12,7 +12,7 @@ export const budgetAc = createAccessControl({
   category: ["create", "update", "delete"],
   account: ["create", "update", "delete"],
   transaction: ["create", "update", "delete"],
-  budget: ["fresh_start"],
+  budget: ["fresh_start", "assign"],
 } as const);
 
 export const budgetRoles = {
@@ -23,13 +23,14 @@ export const budgetRoles = {
     category: ["create", "update", "delete"],
     account: ["create", "update", "delete"],
     transaction: ["create", "update", "delete"],
-    budget: ["fresh_start"],
+    budget: ["fresh_start", "assign"],
   }),
   editor: budgetAc.newRole({
     organization: ["update"],
     category: ["create", "update", "delete"],
     account: ["create", "update", "delete"],
     transaction: ["create", "update", "delete"],
+    budget: ["assign"],
   }),
 } satisfies Record<BudgetRole, unknown>;
 

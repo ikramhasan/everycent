@@ -13,9 +13,15 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Budget math (phases 6–7)
 
-- Phase 6a stores assigned amounts (`category_assignment`) and computes Assigned, Activity and
-  Available per month on the server (`GET /v1/budgets/{id}/months/{month}`), but nothing writes
-  assignments until 6b.
+- All overspending counts as cash overspending (it comes out of the next month's Ready to Assign).
+  Phase 7 must treat spending on a credit card as credit overspending (new debt, yellow).
+- The negative Ready to Assign banner has no "Fix This" (un-assign money from a category) or
+  "Next Steps" button, and the current month doesn't warn when a later month is negative (YNAB:
+  "Ready to Assign in November is −$985.00" with Cover Overspending / Go to November). Phase 6c
+  (moving money and covering overspending).
+- The Ready to Assign banner has no "Assign" menu (auto-assign, phase 6e). The assigned field has
+  no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
 - YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
   transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
   so there's no pill yet.
@@ -28,8 +34,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   they come with assigning (6b) and moving money (6c).
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
-  the internal "Inflow: Ready to Assign" category. Ready to Assign on the budget page is still a
-  hard-coded zero until phase 6 computes it.
+  the internal "Inflow: Ready to Assign" category.
 - Credit-card starting debt has **no category**. Phase 7 must treat it as existing debt to be paid
   from the card's payment category (YNAB: "assign money to cover the starting balance directly to
   the Credit Card Payment category").
