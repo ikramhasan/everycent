@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 6 · updated 2 Oct 2026 (6a–6c built)</div>
+    <div class="eyebrow">everycent · roadmap phase 6 · updated 3 Oct 2026 (6a–6d built)</div>
     <h1>Build sequence for the budget screen</h1>
     <p class="lede">Phase 5 built the register; Phase 6 turns it into a budget. Its fifteen README items are split into <strong>six stages</strong>, built in dependency order, after <strong>closing out Phase 5</strong>. Each stage gets its own branch, stacked on the one before; all of Phase 6 is merged into main at once when it's done. YNAB behaviour that can't be checked goes to <code>docs/verify.md</code>.</p>
   </header>
@@ -160,12 +160,12 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s6a"><span class="n">6a · done</span><span class="t">Month view</span><span class="s">Assigned, activity, available</span></a>
       <a class="node done" href="#s6b"><span class="n">6b · done</span><span class="t">Assign</span><span class="s">Ready to Assign, future months</span></a>
       <a class="node done" href="#s6c"><span class="n">6c · done</span><span class="t">Overspending</span><span class="s">Move and cover money</span></a>
-      <a class="node now" href="#s6d"><span class="n">6d · next</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
-      <a class="node" href="#s6e"><span class="n">6e</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
+      <a class="node done" href="#s6d"><span class="n">6d · done</span><span class="t">Inspector</span><span class="s">Breakdown, drill-down</span></a>
+      <a class="node now" href="#s6e"><span class="n">6e · next</span><span class="t">Auto-assign</span><span class="s">Fill from history</span></a>
       <a class="node" href="#s6f"><span class="n">6f</span><span class="t">Undo / redo</span><span class="s">Budget and transactions</span></a>
     </div>
     <div class="side"><b>Outside Phase 6:</b> credit card payment categories (Phase 7), targets and anything "underfunded" (Phase 8), multi-currency (Phase 11).</div>
-    <div class="then">6a–6c are built on stacked branches (<span class="mono">phase-6a-month-view</span> → <span class="mono">phase-6b-assign</span> → <span class="mono">phase-6c-move-money</span>, last commit <span class="mono">2082975</span>), not yet merged: Phase 6 goes into main in one merge. To pick up: <span class="mono">Start Phase 6d on a branch from phase-6c-move-money. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
+    <div class="then">6a–6d are built on stacked branches (<span class="mono">phase-6a-month-view</span> → <span class="mono">phase-6b-assign</span> → <span class="mono">phase-6c-move-money</span> → <span class="mono">phase-6d-inspector</span>), not yet merged: Phase 6 goes into main in one merge. To pick up: <span class="mono">Start Phase 6e on a branch from phase-6d-inspector. Read docs/deferred.md and docs/verify.md first; check anything unclear in the YNAB app with the Chrome tool.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -252,16 +252,20 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s6d">
       <div class="num">6d</div>
       <div class="body">
-        <div class="head"><h2>Category inspector and drill-down</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Category inspector and drill-down</h2><span class="pill done">Done</span></div>
         <p class="why">Click a category to see where its number comes from, and the transactions behind it.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Inspector: cash left over, assigned, activity, available; the category note <span class="src">P6</span></li><li>Activity drill-down: the register searched for that category and month (<code>Category: …</code> plus the date range), as YNAB's search does <span class="src">P6</span></li><li>Budget filters: overspent, money available <span class="src">P6</span></li></ul>
+            <ul><li>Inspector: cash left over, assigned, activity, available; the category note <span class="src">P6</span></li><li>Activity drill-down: the month's transactions for a category, group or Uncategorized; one opens its register <span class="src">P6</span></li><li>Budget filters: overspent, money available <span class="src">P6</span></li></ul>
           </div>
           <div>
             <h3>Depends on</h3>
             <ul><li>6a (6c for overspent)</li></ul>
+            <h3>Found in YNAB</h3>
+            <ul><li>Clicking a name selects that category alone (row checkboxes, "Check all"); the sidebar shows its breakdown, the overspent message and an inline note. Several selected, or none, show the month's summary</li><li>Activity opens a popover (Account, Date, Payee, Memo, Amount), not the register; a row opens its register on that transaction</li><li>Views leave hidden categories out, keep across months and reloads, and say so when empty ("That's a win!")</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Where the view is kept; group totals in a view; a tracking account's starting balance in a group's popover</li></ul>
             <h3>Not here</h3>
             <ul><li>The target part of the inspector, and the underfunded and snoozed filters (Phase 8)</li></ul>
           </div>

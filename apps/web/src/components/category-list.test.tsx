@@ -317,4 +317,68 @@ describe("CategoryList", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(actions.deleteCategory).toHaveBeenCalledWith("c2", undefined);
   });
+
+  describe("selecting and views", () => {
+    function renderSelectable(shown?: ReadonlySet<string>) {
+      const selection = {
+        selected: new Set<string>(),
+        toggle: vi.fn(),
+        selectOnly: vi.fn(),
+        setAll: vi.fn(),
+      };
+      const onViewAll = vi.fn();
+      const actions = makeActions();
+      const { rerender } = render(
+        <CategoryList
+          data={data}
+          actions={actions}
+          figures={{
+            month,
+            format: (a) => `A${a}`,
+            selection,
+            shown,
+            emptyView: { message: "Nothing here.", onViewAll },
+          }}
+        />,
+      );
+      return { selection, onViewAll, rerender, actions };
+    }
+
+    it("selects a category from its name or checkbox, and all of them", async () => {
+      const user = userEvent.setup();
+      const { selection } = renderSelectable();
+      await user.click(screen.getByRole("button", { name: "Rent" }));
+      expect(selection.selectOnly).toHaveBeenCalledWith("c1");
+      // Selecting comes first: the name editor stays closed.
+      expect(screen.queryByLabelText("Category name")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("checkbox", { name: "Select Electric" }));
+      expect(selection.toggle).toHaveBeenCalledWith("c2");
+      await user.click(screen.getByRole("checkbox", { name: "Check all" }));
+      expect(selection.setAll).toHaveBeenCalledWith(["uncategorized", "c1", "c2"]);
+      await user.click(screen.getByRole("checkbox", { name: "Select Bills" }));
+      expect(selection.setAll).toHaveBeenLastCalledWith(["c1", "c2"]);
+    });
+
+    it("shows only the categories a view keeps, without the hidden row", () => {
+      renderSelectable(new Set(["c2"]));
+      expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Electric" })).toBeInTheDocument();
+      expect(screen.queryByText("Uncategorized Transactions")).not.toBeInTheDocument();
+      expect(screen.queryByText("Hidden Categories")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Some categories are hidden by your current view."),
+      ).toBeInTheDocument();
+      // A view can't be reordered.
+      expect(screen.queryByRole("button", { name: "Reorder Electric" })).not.toBeInTheDocument();
+    });
+
+    it("says so when a view keeps nothing", async () => {
+      const user = userEvent.setup();
+      const { onViewAll } = renderSelectable(new Set());
+      expect(screen.getByText("Nothing here.")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Bills" })).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "View All" }));
+      expect(onViewAll).toHaveBeenCalled();
+    });
+  });
 });

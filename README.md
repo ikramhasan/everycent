@@ -157,10 +157,11 @@ and fresh start (after phase 5 core).
       next-month income; money is assigned in future months instead
 - [ ] Auto-assign / quick budget: underfunded, assigned last month, spent last month,
       average assigned, average spent, reset available, reset assigned
-- [ ] Category inspector: balance breakdown (cash left over, assigned, activity), target, notes
-- [ ] Category activity drill-down (transactions for category + month)
+- [x] Category inspector: balance breakdown (cash left over, assigned, activity), notes (the
+      target part comes with phase 8)
+- [x] Category activity drill-down (transactions for category + month)
 - [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
-      (collapse done in 6a)
+      (collapse, overspent and money available done; underfunded and snoozed need targets)
 - [ ] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt

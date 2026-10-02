@@ -489,6 +489,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The transactions behind a category's, a group's or Uncategorized's Activity
+         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.
+         */
+        get: operations["listMonthActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/moves": {
         parameters: {
             query?: never;
@@ -1064,6 +1084,24 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+        };
+        MonthActivity: {
+            transactions: components["schemas"]["ActivityTransaction"][];
+        };
+        ActivityTransaction: {
+            /** @description The transaction's id, or the split line's */
+            id: string;
+            /** @description The transaction (the split, for a split line) */
+            transactionId: string;
+            accountId: string;
+            accountName: string;
+            /** Format: date */
+            date: string;
+            payeeName: string | null;
+            categoryId: string | null;
+            memo: string;
+            /** @description Negative is an outflow */
+            amount: string;
         };
         MoneyMoveList: {
             moves: components["schemas"]["MoneyMove"][];
@@ -3155,6 +3193,63 @@ export interface operations {
                 };
             };
             /** @description No such budget or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMonthActivity: {
+        parameters: {
+            query?: {
+                categoryId?: string;
+                groupId?: string;
+                uncategorized?: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's transactions for it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthActivity"];
+                };
+            };
+            /** @description Invalid month, or not exactly one of categoryId, groupId, uncategorized */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, category or group, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -33,8 +33,10 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.
-- The budget screen has no row checkboxes (YNAB selects categories to assign or move in bulk);
-  they come with assigning (6b) and moving money (6c).
+- The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
+  on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
+  Overfunded and Snoozed views wait for targets (phase 8); Credit Spending is always zero until
+  phase 7.
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category.

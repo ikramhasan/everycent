@@ -418,4 +418,73 @@ describe("budget months", () => {
       expect(oct.readyToAssign).toBe("94900");
     });
   });
+
+  describe("activity drill-down", () => {
+    type Row = { id: string; transactionId: string; payeeName: string | null; amount: string };
+    const activity = async (base: string, cookie: string, m: string, query: string) => {
+      const res = await send("GET", `${base}/months/${m}/activity?today=${TODAY}&${query}`, cookie);
+      return {
+        status: res.status,
+        rows: res.ok ? (await json<{ transactions: Row[] }>(res)).transactions : [],
+      };
+    };
+
+    it("lists a category's transactions in the month, split lines one by one", async () => {
+      const { cookie, base, spend, rent, phone } = await setup();
+      await spend({
+        date: "2026-10-01",
+        amount: "-2500",
+        categoryId: rent.id,
+        payeeName: "Landlord",
+      });
+      await spend({
+        date: "2026-10-02",
+        amount: "-3000",
+        payeeName: "Shop",
+        subtransactions: [
+          { amount: "-1000", categoryId: rent.id },
+          { amount: "-2000", categoryId: phone.id },
+        ],
+      });
+      // Other months and future-dated transactions aren't this month's activity.
+      await spend({ date: "2026-09-30", amount: "-700", categoryId: rent.id });
+      await spend({ date: "2026-10-20", amount: "-900", categoryId: rent.id });
+
+      const { status, rows } = await activity(base, cookie, "2026-10", `categoryId=${rent.id}`);
+      expect(status).toBe(200);
+      expect(rows.map((r) => [r.payeeName, r.amount])).toEqual([
+        ["Shop", "-1000"],
+        ["Landlord", "-2500"],
+      ]);
+      // A split line points at its split.
+      expect(rows[0]?.transactionId).not.toBe(rows[0]?.id);
+    });
+
+    it("lists a group's visible categories and Uncategorized", async () => {
+      const { cookie, base, spend, rent, phone, bills } = await setup();
+      await spend({ date: "2026-10-01", amount: "-100", categoryId: rent.id });
+      await spend({ date: "2026-10-01", amount: "-200", categoryId: phone.id });
+      await spend({ date: "2026-10-01", amount: "-300" });
+      await send("PATCH", `${base}/categories/${phone.id}`, cookie, { hidden: true });
+
+      const group = await activity(base, cookie, "2026-10", `groupId=${bills.id}`);
+      expect(group.rows.map((r) => r.amount)).toEqual(["-100"]);
+      const none = await activity(base, cookie, "2026-10", "uncategorized=true");
+      expect(none.rows.map((r) => r.amount)).toEqual(["-300"]);
+    });
+
+    it("needs exactly one target and a member", async () => {
+      const { cookie, base, rent, bills } = await setup();
+      expect((await activity(base, cookie, "2026-10", "")).status).toBe(400);
+      expect(
+        (await activity(base, cookie, "2026-10", `categoryId=${rent.id}&groupId=${bills.id}`))
+          .status,
+      ).toBe(400);
+      expect((await activity(base, cookie, "2026-10", "categoryId=nope")).status).toBe(404);
+      const other = await signUp(app);
+      expect((await activity(base, other.cookie, "2026-10", `categoryId=${rent.id}`)).status).toBe(
+        404,
+      );
+    });
+  });
 });

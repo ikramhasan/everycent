@@ -8,14 +8,24 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
+import { BudgetFilterBar } from "@/components/budget-filter-bar";
+import { CategoryInspector, MonthSummary } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
-import { FixThisButton } from "@/components/move-money";
+import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
+import {
+  breakdown,
+  filteredIds,
+  overspentCount,
+  summarize,
+  UNCATEGORIZED,
+  useBudgetFilter,
+} from "@/lib/budget-view";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
@@ -53,6 +63,8 @@ function BudgetPage() {
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
+  const { filter, setFilter } = useBudgetFilter(budget.id);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const queryClient = useQueryClient();
   const assignMutation = $api.useMutation(
     "put",
@@ -73,11 +85,37 @@ function BudgetPage() {
     }
   }, [range?.first, range?.last, month, today, navigate, figures.isPlaceholderData]);
 
+  // Categories on the budget screen (not hidden), with their names and notes.
+  const listed = useMemo(() => {
+    const map = new Map<string, { name: string; note: string }>();
+    for (const g of categories.data?.groups ?? []) {
+      if (g.hidden) continue;
+      for (const c of g.categories) if (!c.hidden) map.set(c.id, { name: c.name, note: c.note });
+    }
+    return map;
+  }, [categories.data]);
+  const visible = useMemo(() => new Set(listed.keys()), [listed]);
+  const shown = useMemo(
+    () =>
+      figures.data && filter !== "all" ? filteredIds(filter, figures.data, visible) : undefined,
+    [figures.data, filter, visible],
+  );
+  // A category that leaves the view (or the list) leaves the selection too.
+  const selection = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        [...selected].filter(
+          (id) => (id === UNCATEGORIZED || visible.has(id)) && (!shown || shown.has(id)),
+        ),
+      ),
+    [selected, visible, shown],
+  );
+
   const listFigures = useMemo<CategoryFigures | undefined>(() => {
     const data = figures.data;
     if (!data) return undefined;
     const settings = { ...budget, currency: data.currency };
-    const shown = data.month;
+    const onScreen = data.month;
     const parse = (text: string) => parseMoneyInput(text, settings);
     const toInput = (amount: string) => toMoneyInput(amount, settings);
 
@@ -85,7 +123,7 @@ function BudgetPage() {
     async function save(work: () => Promise<BudgetMonthData>, failure: string) {
       try {
         const updated = await work();
-        queryClient.setQueryData(monthQueryOptions(budget.id, shown).queryKey, updated);
+        queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
       } catch (error) {
         toast.error(apiErrorMessage(error, failure));
       } finally {
@@ -98,6 +136,25 @@ function BudgetPage() {
     return {
       month: data,
       format: (amount) => formatAmount(toMoney(amount, data.currency)),
+      activity: { budgetId: budget.id, formatDate },
+      shown,
+      emptyView: {
+        message:
+          filter === "overspent"
+            ? "That's a win! You've knocked out all overspent categories."
+            : "You don't currently have categories with money available.",
+        onViewAll: () => setFilter("all"),
+      },
+      selection: {
+        selected: selection,
+        toggle: (id) => {
+          const next = new Set(selection);
+          if (!next.delete(id)) next.add(id);
+          setSelected(next);
+        },
+        selectOnly: (id) => setSelected(new Set([id])),
+        setAll: (ids) => setSelected(new Set(ids)),
+      },
       assign: {
         parse,
         toInput,
@@ -133,7 +190,18 @@ function BudgetPage() {
       },
     };
     // mutateAsync is stable; the mutation objects themselves change every render.
-  }, [figures.data, categories.data, formatAmount, budget, queryClient]);
+  }, [
+    figures.data,
+    categories.data,
+    formatAmount,
+    formatDate,
+    budget,
+    queryClient,
+    shown,
+    filter,
+    setFilter,
+    selection,
+  ]);
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
@@ -194,28 +262,127 @@ function BudgetPage() {
         ) : categories.isError ? (
           <p className="text-muted-foreground">Couldn't load categories.</p>
         ) : (
-          <CategoryList
-            data={categories.data}
-            actions={actions}
-            figures={listFigures}
-            collapsed={collapsed}
-            onCollapsedChange={setCollapsed}
-            toolbar={
-              listFigures && (
-                <RecentMoves
-                  budgetId={budget.id}
-                  categories={categories.data}
-                  format={listFigures.format}
-                  formatDate={formatDate}
-                />
-              )
-            }
-          />
+          <div className="grid gap-3">
+            {listFigures && (
+              <BudgetFilterBar
+                filter={filter}
+                overspent={overspentCount(listFigures.month, visible)}
+                onChange={setFilter}
+              />
+            )}
+            <CategoryList
+              data={categories.data}
+              actions={actions}
+              figures={listFigures}
+              collapsed={collapsed}
+              onCollapsedChange={setCollapsed}
+              toolbar={
+                listFigures && (
+                  <RecentMoves
+                    budgetId={budget.id}
+                    categories={categories.data}
+                    format={listFigures.format}
+                    formatDate={formatDate}
+                  />
+                )
+              }
+            />
+          </div>
         )}
-        {listFigures && month === today && (
-          <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
+        {listFigures && (
+          <aside className="grid gap-4" aria-label="Inspector">
+            <Inspector
+              figures={listFigures}
+              selection={selection}
+              shown={shown}
+              listed={listed}
+              onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
+            />
+            {month === today && (
+              <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
+            )}
+          </aside>
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * YNAB's inspector: one selected category's breakdown and note, or the month's summary over the
+ * selection (two or more) or over the rows in view (nothing selected).
+ */
+function Inspector({
+  figures,
+  selection,
+  shown,
+  listed,
+  onNoteChange,
+}: {
+  figures: CategoryFigures;
+  selection: ReadonlySet<string>;
+  shown: ReadonlySet<string> | undefined;
+  listed: ReadonlyMap<string, { name: string; note: string }>;
+  onNoteChange: (categoryId: string, note: string) => Promise<void>;
+}) {
+  const { month, format } = figures;
+  const only = selection.size === 1 ? [...selection][0] : undefined;
+  if (only === UNCATEGORIZED && month.uncategorized) {
+    return (
+      <CategoryInspector
+        name="Uncategorized Transactions"
+        uncategorized
+        totals={breakdown({ assigned: "0", ...month.uncategorized })}
+        format={format}
+        available={<AvailablePill amount={month.uncategorized.available} format={format} />}
+        note=""
+        onNoteChange={async () => {}}
+      />
+    );
+  }
+  const category = only ? listed.get(only) : undefined;
+  const totals = only ? month.categories.find((c) => c.categoryId === only) : undefined;
+  if (only && category && totals) {
+    return (
+      <CategoryInspector
+        name={category.name}
+        totals={breakdown(totals)}
+        format={format}
+        available={
+          figures.move ? (
+            <AvailableButton
+              categoryId={only}
+              categoryName={category.name}
+              amount={totals.available}
+              format={format}
+              actions={figures.move}
+            />
+          ) : (
+            <AvailablePill amount={totals.available} format={format} />
+          )
+        }
+        note={category.note}
+        onNoteChange={(note) => onNoteChange(only, note)}
+      />
+    );
+  }
+  if (selection.size > 1) {
+    const names = [...selection].map((id) =>
+      id === UNCATEGORIZED ? "Uncategorized Transactions" : (listed.get(id)?.name ?? ""),
+    );
+    return (
+      <MonthSummary
+        month={month.month}
+        totals={summarize(month, selection)}
+        format={format}
+        selectedNames={names}
+      />
+    );
+  }
+  // Under All, YNAB's summary covers every category, hidden ones included.
+  const ids = shown ?? [
+    ...month.categories.map((c) => c.categoryId),
+    ...(month.uncategorized ? [UNCATEGORIZED] : []),
+  ];
+  return <MonthSummary month={month.month} totals={summarize(month, ids)} format={format} />;
 }

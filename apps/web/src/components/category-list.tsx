@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
+import { Checkbox } from "@everycent/ui/components/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
@@ -26,6 +27,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
 import {
   type Category,
   type CategoryGroup,
@@ -38,6 +40,7 @@ import {
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
+import { ActivityButton, type ActivityTarget } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 
@@ -78,6 +81,26 @@ export interface CategoryFigures {
   assign?: AssignActions;
   /** Makes Available open YNAB's move and cover popovers. */
   move?: MoveActions;
+  /** Makes Activity open the transactions behind it. */
+  activity?: { budgetId: string; formatDate: (isoDate: string) => string };
+  /** Row checkboxes; clicking a name selects only that category. */
+  selection?: SelectionActions;
+  /**
+   * Ids a view (Overspent, Money Available) keeps, `UNCATEGORIZED` included; undefined shows
+   * everything. A view leaves hidden categories and empty groups out and can't be reordered.
+   */
+  shown?: ReadonlySet<string>;
+  /** What to say when a view keeps nothing, with a way back to All. */
+  emptyView?: { message: string; onViewAll: () => void };
+}
+
+export interface SelectionActions {
+  selected: ReadonlySet<string>;
+  toggle: (id: string) => void;
+  /** Selects `id` alone. */
+  selectOnly: (id: string) => void;
+  /** Selects these, or clears the selection with an empty list. */
+  setAll: (ids: string[]) => void;
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
@@ -90,6 +113,12 @@ const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
 /** Lets a name button shrink and truncate (shadcn's Button doesn't shrink by default). */
 const NAME_BUTTON = "min-w-0 shrink justify-start";
+const SELECTED_ROW = "bg-primary/5";
+/**
+ * Every row starts with the same three slots, each the width of an icon button, so the controls
+ * and names line up: collapse (groups), checkbox, drag handle. Rows without one get a spacer.
+ */
+const SLOT = "flex size-6 shrink-0 items-center justify-center";
 
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
@@ -142,6 +171,34 @@ export function CategoryList({
   );
   const allCollapsed =
     layout.groupOrder.length > 0 && layout.groupOrder.every((id) => collapsed.has(id));
+  const selection = figures?.selection;
+  const shown = figures?.shown;
+  // A view keeps the groups with a category in it, and only those categories.
+  const groupOrder = shown
+    ? layout.groupOrder.filter((g) => (layout.items[g] ?? []).some((c) => shown.has(c)))
+    : layout.groupOrder;
+  const itemsOf = (groupId: string) =>
+    (layout.items[groupId] ?? []).filter((c) => !shown || shown.has(c));
+  const showUncategorized =
+    Boolean(figures?.month.uncategorized) && (!shown || shown.has(UNCATEGORIZED_ID));
+  // "Check all" checks what's on screen.
+  const selectable = [
+    ...(showUncategorized ? [UNCATEGORIZED_ID] : []),
+    ...groupOrder.flatMap((g) => itemsOf(g)),
+  ];
+  const allChecked = selectable.length > 0 && selectable.every((id) => selection?.selected.has(id));
+
+  function toggleGroupSelection(groupId: string) {
+    if (!selection) return;
+    const ids = itemsOf(groupId);
+    const all = ids.length > 0 && ids.every((id) => selection.selected.has(id));
+    const next = new Set(selection.selected);
+    for (const id of ids) {
+      if (all) next.delete(id);
+      else next.add(id);
+    }
+    selection.setAll([...next]);
+  }
 
   function toggleGroup(groupId: string) {
     const next = new Set(collapsed);
@@ -218,7 +275,17 @@ export function CategoryList({
               >
                 {allCollapsed ? <ChevronRight /> : <ChevronDown />}
               </Button>
-              <span className="truncate px-1">Category</span>
+              {selection && (
+                <span className={SLOT}>
+                  <Checkbox
+                    aria-label={allChecked ? "Uncheck all" : "Check all"}
+                    checked={allChecked}
+                    onCheckedChange={() => selection.setAll(allChecked ? [] : selectable)}
+                  />
+                </span>
+              )}
+              <Spacer />
+              <span className="truncate px-2">Category</span>
             </div>
             {figures && (
               <>
@@ -228,15 +295,47 @@ export function CategoryList({
               </>
             )}
           </div>
-          {figures?.month.uncategorized && (
-            <div className={cn(ROW, "border-b text-sm")}>
+          {figures?.month.uncategorized && showUncategorized && (
+            <div
+              className={cn(
+                ROW,
+                "border-b text-sm",
+                selection?.selected.has(UNCATEGORIZED_ID) && SELECTED_ROW,
+              )}
+            >
               <div className={NAME_CELL}>
-                <span className="size-6 shrink-0" />
-                <span className="truncate px-2">Uncategorized Transactions</span>
+                <Spacer />
+                {selection && (
+                  <RowCheckbox
+                    id={UNCATEGORIZED_ID}
+                    name="Uncategorized Transactions"
+                    selection={selection}
+                  />
+                )}
+                <Spacer />
+                {selection ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className={cn(NAME_BUTTON, "font-normal text-sm")}
+                    onClick={() => selection.selectOnly(UNCATEGORIZED_ID)}
+                  >
+                    <span className="truncate">Uncategorized Transactions</span>
+                  </Button>
+                ) : (
+                  <span className="truncate px-2">Uncategorized Transactions</span>
+                )}
               </div>
               {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
               <span className={FIGURE}>–</span>
-              <span className={FIGURE}>{figures.format(figures.month.uncategorized.activity)}</span>
+              <span className={cn(FIGURE, "text-sm")}>
+                <Activity
+                  figures={figures}
+                  target={{ uncategorized: true }}
+                  name="Uncategorized Transactions"
+                  amount={figures.month.uncategorized.activity}
+                />
+              </span>
               <span className={FIGURE}>
                 <AvailablePill
                   amount={figures.month.uncategorized.available}
@@ -284,7 +383,7 @@ export function CategoryList({
               }
             }}
           >
-            {layout.groupOrder.map((groupId, groupIndex) => {
+            {groupOrder.map((groupId, groupIndex) => {
               const group = groupsById.get(groupId);
               if (!group) return null;
               return (
@@ -294,12 +393,19 @@ export function CategoryList({
                   index={groupIndex}
                   actions={actions}
                   totals={groupFigures.get(groupId)}
-                  format={figures?.format}
+                  figures={figures}
+                  reorderable={!shown}
+                  onToggleSelection={selection && (() => toggleGroupSelection(groupId))}
+                  checked={
+                    selection &&
+                    itemsOf(groupId).length > 0 &&
+                    itemsOf(groupId).every((id) => selection.selected.has(id))
+                  }
                   collapsed={collapsed.has(groupId)}
                   onToggle={() => toggleGroup(groupId)}
                   onDelete={() => requestDelete("group", group.id, group.name)}
                 >
-                  {(layout.items[groupId] ?? []).map((categoryId, index) => {
+                  {itemsOf(groupId).map((categoryId, index) => {
                     const category = categoriesById.get(categoryId);
                     if (!category) return null;
                     return (
@@ -310,9 +416,8 @@ export function CategoryList({
                         groupId={groupId}
                         actions={actions}
                         totals={categoryFigures.get(categoryId)}
-                        format={figures?.format}
-                        assign={figures?.assign}
-                        move={figures?.move}
+                        figures={figures}
+                        reorderable={!shown}
                         onDelete={() => requestDelete("category", category.id, category.name)}
                       />
                     );
@@ -321,6 +426,29 @@ export function CategoryList({
               );
             })}
           </DragDropProvider>
+          {shown && selectable.length === 0 && figures?.emptyView && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyDescription>{figures.emptyView.message}</EmptyDescription>
+              </EmptyHeader>
+              <Button variant="link" size="sm" onClick={figures.emptyView.onViewAll}>
+                View All
+              </Button>
+            </Empty>
+          )}
+          {shown && selectable.length > 0 && figures?.emptyView && (
+            <p className="flex items-center justify-center gap-1 border-t px-2 py-3 text-muted-foreground text-sm">
+              Some categories are hidden by your current view.
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0"
+                onClick={figures.emptyView.onViewAll}
+              >
+                View All
+              </Button>
+            </p>
+          )}
           {layout.groupOrder.length === 0 && (
             <Empty>
               <EmptyHeader>
@@ -329,12 +457,15 @@ export function CategoryList({
               </EmptyHeader>
             </Empty>
           )}
-          <HiddenRow
-            hidden={hidden}
-            actions={actions}
-            totals={figures?.month.hidden}
-            format={figures?.format}
-          />
+          {!shown && (
+            <HiddenRow
+              hidden={hidden}
+              actions={actions}
+              totals={figures?.month.hidden}
+              format={figures?.format}
+              withCheckboxes={Boolean(selection)}
+            />
+          )}
         </div>
       </div>
 
@@ -393,7 +524,10 @@ function GroupSection({
   index,
   actions,
   totals,
-  format,
+  figures,
+  reorderable,
+  checked,
+  onToggleSelection,
   collapsed,
   onToggle,
   onDelete,
@@ -403,19 +537,23 @@ function GroupSection({
   index: number;
   actions: CategoryListActions;
   totals: MonthTotals | undefined;
-  format: CategoryFigures["format"] | undefined;
+  figures: CategoryFigures | undefined;
+  reorderable: boolean;
+  checked: boolean | undefined;
+  onToggleSelection: (() => void) | undefined;
   collapsed: boolean;
   onToggle: () => void;
   onDelete: () => void;
   children: ReactNode;
 }) {
   const managed = group.kind === "credit_card_payments";
+  const format = figures?.format;
   const { ref, handleRef, isDragSource } = useSortable({
     id: group.id,
     index,
     type: "group",
     // Credit Card Payments is pinned and only takes payment categories.
-    disabled: managed,
+    disabled: managed || !reorderable,
     accept: managed ? ["payment"] : ["group", "category"],
     // Let categories win collisions so they can be dropped between rows of this group.
     collisionPriority: CollisionPriority.Low,
@@ -438,8 +576,17 @@ function GroupSection({
           >
             {collapsed ? <ChevronRight /> : <ChevronDown />}
           </Button>
-          {managed ? (
-            <span className="w-5" />
+          {onToggleSelection && (
+            <span className={SLOT}>
+              <Checkbox
+                aria-label={`Select ${group.name}`}
+                checked={checked ?? false}
+                onCheckedChange={onToggleSelection}
+              />
+            </span>
+          )}
+          {managed || !reorderable ? (
+            <Spacer />
           ) : (
             <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
           )}
@@ -505,7 +652,22 @@ function GroupSection({
             </>
           )}
         </div>
-        {totals && format && <TotalCells totals={totals} format={format} />}
+        {totals && format && (
+          <TotalCells
+            totals={totals}
+            format={format}
+            activity={
+              figures && (
+                <Activity
+                  figures={figures}
+                  target={{ groupId: group.id }}
+                  name={group.name}
+                  amount={totals.activity}
+                />
+              )
+            }
+          />
+        )}
       </div>
       {!collapsed && <div className="min-h-2">{children}</div>}
     </section>
@@ -518,9 +680,8 @@ function CategoryRow({
   groupId,
   actions,
   totals,
-  format,
-  assign,
-  move,
+  figures,
+  reorderable,
   onDelete,
 }: {
   category: Category;
@@ -528,11 +689,11 @@ function CategoryRow({
   groupId: string;
   actions: CategoryListActions;
   totals: MonthTotals | undefined;
-  format: CategoryFigures["format"] | undefined;
-  assign: AssignActions | undefined;
-  move: MoveActions | undefined;
+  figures: CategoryFigures | undefined;
+  reorderable: boolean;
   onDelete: () => void;
 }) {
+  const { format, assign, move, selection } = figures ?? {};
   const isPayment = Boolean(category.linkedAccountId);
   const { ref, handleRef, isDragSource } = useSortable({
     id: category.id,
@@ -540,13 +701,30 @@ function CategoryRow({
     group: groupId,
     type: categoryType(category),
     accept: [categoryType(category)],
+    disabled: !reorderable,
   });
+  const selected = selection?.selected.has(category.id) ?? false;
+  // YNAB: clicking a name selects that category alone; clicking it again opens its editor.
+  const onlySelected = selected && selection?.selected.size === 1;
 
   return (
-    <div ref={ref} className={cn(ROW, "border-t first:border-t-0", isDragSource && "opacity-60")}>
+    <div
+      ref={ref}
+      className={cn(
+        ROW,
+        "border-t first:border-t-0",
+        isDragSource && "opacity-60",
+        selected && SELECTED_ROW,
+      )}
+    >
       <div className={NAME_CELL}>
-        <span className="size-6 shrink-0" />
-        <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+        <Spacer />
+        {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
+        {reorderable ? (
+          <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+        ) : (
+          <Spacer />
+        )}
         <NamePopover
           title="Category name"
           withNote
@@ -585,7 +763,17 @@ function CategoryRow({
             </>
           )}
           trigger={
-            <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-normal text-sm")}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className={cn(NAME_BUTTON, "font-normal text-sm")}
+              onClick={(e) => {
+                if (!selection || onlySelected) return;
+                // Selecting comes first; Radix skips opening the editor on a prevented click.
+                e.preventDefault();
+                selection.selectOnly(category.id);
+              }}
+            >
               <span className="truncate">{category.name}</span>
             </Button>
           }
@@ -610,7 +798,16 @@ function CategoryRow({
           ) : (
             <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
           )}
-          <span className={cn(FIGURE, "text-sm")}>{format(totals.activity)}</span>
+          <span className={cn(FIGURE, "text-sm")}>
+            {figures && (
+              <Activity
+                figures={figures}
+                target={{ categoryId: category.id }}
+                name={category.name}
+                amount={totals.activity}
+              />
+            )}
+          </span>
           <span className={FIGURE}>
             {move ? (
               <AvailableButton
@@ -654,17 +851,73 @@ function OverspentNote({
 function TotalCells({
   totals,
   format,
+  activity,
 }: {
   totals: MonthTotals;
   format: CategoryFigures["format"];
+  /** Activity as a drill-down button instead of a plain number. */
+  activity?: ReactNode;
 }) {
   return (
     <>
       <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.assigned)}</span>
-      <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.activity)}</span>
+      <span className={cn(FIGURE, "font-medium text-sm")}>
+        {activity ?? format(totals.activity)}
+      </span>
       <span className={cn(FIGURE, "pr-2 font-medium text-sm")}>{format(totals.available)}</span>
     </>
   );
+}
+
+/** Activity: a drill-down button when the list has a budget to load it from, else the number. */
+function Activity({
+  figures,
+  target,
+  name,
+  amount,
+}: {
+  figures: CategoryFigures;
+  target: ActivityTarget;
+  name: string;
+  amount: string;
+}) {
+  if (!figures.activity) return <>{figures.format(amount)}</>;
+  return (
+    <ActivityButton
+      budgetId={figures.activity.budgetId}
+      month={figures.month.month}
+      target={target}
+      name={name}
+      amount={amount}
+      format={figures.format}
+      formatDate={figures.activity.formatDate}
+    />
+  );
+}
+
+function RowCheckbox({
+  id,
+  name,
+  selection,
+}: {
+  id: string;
+  name: string;
+  selection: SelectionActions;
+}) {
+  return (
+    <span className={SLOT}>
+      <Checkbox
+        aria-label={`Select ${name}`}
+        checked={selection.selected.has(id)}
+        onCheckedChange={() => selection.toggle(id)}
+      />
+    </span>
+  );
+}
+
+/** An empty slot, so a row without a control still lines up with the rows that have one. */
+function Spacer() {
+  return <span className={SLOT} aria-hidden />;
 }
 
 function DragHandle({ ref, label }: { ref: (el: Element | null) => void; label: string }) {
@@ -690,11 +943,14 @@ function HiddenRow({
   actions,
   totals,
   format,
+  withCheckboxes,
 }: {
   hidden: ReturnType<typeof hiddenItems>;
   actions: CategoryListActions;
   totals: MonthTotals | undefined;
   format: CategoryFigures["format"] | undefined;
+  /** Leaves room for the checkbox column so the name lines up. */
+  withCheckboxes: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (hidden.groups.length + hidden.categories.length === 0) return null;
@@ -715,6 +971,9 @@ function HiddenRow({
   return (
     <div className={cn(ROW, "border-t bg-muted/60")}>
       <div className={NAME_CELL}>
+        <Spacer />
+        {withCheckboxes && <Spacer />}
+        <Spacer />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-semibold text-sm")}>

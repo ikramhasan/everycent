@@ -2741,6 +2741,74 @@
           "amount"
         ]
       },
+      "MonthActivity": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityTransaction"
+            }
+          }
+        },
+        "required": [
+          "transactions"
+        ]
+      },
+      "ActivityTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The transaction's id, or the split line's"
+          },
+          "transactionId": {
+            "type": "string",
+            "description": "The transaction (the split, for a split line)"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow"
+          }
+        },
+        "required": [
+          "id",
+          "transactionId",
+          "accountId",
+          "accountName",
+          "date",
+          "payeeName",
+          "categoryId",
+          "memo",
+          "amount"
+        ]
+      },
       "MoneyMoveList": {
         "type": "object",
         "properties": {
@@ -5840,6 +5908,119 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}/activity": {
+      "get": {
+        "operationId": "listMonthActivity",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The transactions behind a category's, a group's or Uncategorized's Activity",
+        "description": "Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "categoryId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "groupId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "uncategorized",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's transactions for it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid month, or not exactly one of categoryId, groupId, uncategorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, category or group, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

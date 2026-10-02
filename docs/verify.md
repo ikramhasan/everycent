@@ -195,3 +195,44 @@ Checked in YNAB's web app on 2026-10-02 and built as found:
   next to the label; later it didn't.
 - **Question:** when does Fix This offer another month, and which months?
 - **Built so far (before this rule):** money is un-assigned in the month on screen.
+
+## Category inspector, activity and views (phase 6d)
+
+Checked in YNAB's web app on 2026-10-03 and built as found:
+
+- Clicking a category's name selects it alone (it has a checkbox; "Check all" and a group's
+  checkbox select many); clicking it again opens the editor. The sidebar then shows its name,
+  "Available Balance" (the pill), Cash Left Over From Last Month, Assigned This Month, Cash
+  Spending, Credit Spending, "You've overspent this category by $25.00. Cover this overspending or
+  you can't trust your plan balances!" and Notes ("Enter a note...", saved on blur). Uncategorized
+  shows dashes, its own message, and no note.
+- Two or more selected: "N Categories Selected", their names, and the month's summary over them
+  (Left Over from Last Month, Assigned in October, Activity, Available). Nothing selected: the
+  summary over the rows in view.
+- Activity opens a popover ("Activity", the name; Account, Date, Payee, Memo, Amount) for a
+  category, a group or Uncategorized; zero Activity is disabled. A row opens its account's
+  register on that transaction.
+- Views: All, "3 Overspent" (left out when nothing is overspent, "0 Overspent" while it's on),
+  Money Available. They leave hidden categories out, add "Some categories are hidden by your
+  current view. View All", and when empty say "That's a win! You've knocked out all overspent
+  categories." / "You don't currently have categories with money available." The view stays
+  across months and reloads.
+
+### Where the budget view is kept
+
+- **Question:** the view survives a reload. Is it saved to the account or only in this browser?
+- **Built so far (before this rule):** this browser (`localStorage`, per budget), like collapsed
+  groups.
+
+### Group totals in a view
+
+- **Question:** under Overspent, does a group's row total the whole group or only the categories
+  in view? (The test plan's groups had one category each in view, so the numbers matched.)
+- **Built so far (before this rule):** the whole group's totals.
+
+### A tracking account's starting balance in a group's Activity
+
+- **Found:** Bills' Activity was −$25.00, but its popover also listed "House, Starting Balance,
+  +$500.00" (a tracking account, "Category not needed"), which the total doesn't count.
+- **Question:** is that a YNAB bug, or does the group popover list something we don't model?
+- **Built so far (before this rule):** the popover lists exactly what the Activity adds up.

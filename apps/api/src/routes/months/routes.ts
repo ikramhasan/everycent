@@ -161,6 +161,56 @@ export const moveMoney = createRoute({
   },
 });
 
+const ActivityRowSchema = z
+  .object({
+    id: z.string().describe("The transaction's id, or the split line's"),
+    transactionId: z.string().describe("The transaction (the split, for a split line)"),
+    accountId: z.string(),
+    accountName: z.string(),
+    date: z.iso.date(),
+    payeeName: z.string().nullable(),
+    categoryId: z.string().nullable(),
+    memo: z.string(),
+    amount: zMinorUnits.describe("Negative is an outflow"),
+  })
+  .openapi("ActivityTransaction");
+
+export const listMonthActivity = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/months/{month}/activity",
+  operationId: "listMonthActivity",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "The transactions behind a category's, a group's or Uncategorized's Activity",
+  description:
+    "Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its " +
+    "totals) or `uncategorized=true`. Lists the transactions dated in the month up to the " +
+    "user's today, a split's lines one by one, newest first.",
+  request: {
+    params: BudgetParams,
+    query: z.object({
+      categoryId: z.string().optional(),
+      groupId: z.string().optional(),
+      uncategorized: z.stringbool().optional(),
+      today: Today.optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The month's transactions for it",
+      content: {
+        "application/json": {
+          schema: z.object({ transactions: z.array(ActivityRowSchema) }).openapi("MonthActivity"),
+        },
+      },
+    },
+    400: jsonError("Invalid month, or not exactly one of categoryId, groupId, uncategorized"),
+    401: jsonError("Not signed in"),
+    404: jsonError("No such budget, category or group, or the caller isn't a member"),
+  },
+});
+
 const MoneyMoveSchema = z
   .object({
     id: z.string(),
