@@ -551,6 +551,20 @@ describe("budget months", () => {
       expect(oct.byCategory(phone.id)).toMatchObject(t("0", "0", "0"));
     });
 
+    it("covers overspending when resetting Available", async () => {
+      const { cookie, base, spend, month, rent } = await setup();
+      await spend({ date: "2026-10-01", amount: "-2500", categoryId: rent.id });
+      const res = await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+        option: "resetAvailable",
+        categoryIds: [rent.id],
+        today: TODAY,
+      });
+      expect(res.status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("2500", "-2500", "0"));
+      expect(oct.readyToAssign).toBe("97500");
+    });
+
     it("refuses unknown categories and months out of range", async () => {
       const { cookie, base } = await setup();
       const res = await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {

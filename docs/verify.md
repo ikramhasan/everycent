@@ -251,6 +251,11 @@ as found:
   Amounts"); with categories selected it applies at once.
 - Averages cover up to the last 12 months before the month, from the first with money assigned or
   spent ($30.00 assigned in September after $3.00 spent in August: $15.00 / $1.50).
+- Reset Available works both ways: an overspent category is covered from Ready to Assign (Utilities,
+  −$25.00 available, went to $25.00 assigned and $0.00 available).
+- With nothing selected the options cover the rows in view (a view keeps them to its categories);
+  a view with none says "This view has no categories. View All Categories". Labels go singular when
+  one category is covered. Uncategorized has no Auto-Assign.
 
 ### Rounding of averages
 

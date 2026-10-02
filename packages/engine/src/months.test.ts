@@ -210,10 +210,10 @@ describe("autoAssignAmounts", () => {
     });
   });
 
-  it("resets Available to zero, leaving overspent categories alone", () => {
+  it("resets Available to zero, covering overspending too", () => {
     const history = [m("2026-09", 2000n, 0n), m("2026-10", 500n, -100n)];
     // Available is 2,400 with 500 assigned this month: Assigned goes to -1,900.
     expect(autoAssignAmounts(history, "2026-10").resetAvailable).toBe(-1900n);
-    expect(autoAssignAmounts([m("2026-10", 500n, -900n)], "2026-10").resetAvailable).toBe(500n);
+    expect(autoAssignAmounts([m("2026-10", 500n, -900n)], "2026-10").resetAvailable).toBe(900n);
   });
 });

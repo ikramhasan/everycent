@@ -66,4 +66,36 @@ describe("AutoAssignPanel", () => {
     expect(onApply).toHaveBeenCalledWith("resetAssigned");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
+
+  it("says so when the view has no categories", async () => {
+    const user = userEvent.setup();
+    const onViewAll = vi.fn();
+    render(
+      <AutoAssignPanel
+        categories={[]}
+        names={names}
+        selection={false}
+        format={format}
+        onApply={vi.fn()}
+        onViewAll={onViewAll}
+      />,
+    );
+    expect(screen.getByText("This view has no categories.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Average Spent/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View All Categories" }));
+    expect(onViewAll).toHaveBeenCalled();
+  });
+
+  it("uses singular labels when one category is in view", () => {
+    render(
+      <AutoAssignPanel
+        categories={categories.slice(0, 1)}
+        names={names}
+        selection={false}
+        format={format}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /^Reset Assigned Amount A/ })).toBeInTheDocument();
+  });
 });

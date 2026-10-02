@@ -79,17 +79,21 @@ export function AutoAssignPanel({
   selection,
   format,
   onApply,
+  onViewAll,
 }: {
-  /** The categories it covers: the selection, or every visible category. */
+  /** The categories it covers: the selection, or the rows in view. */
   categories: readonly MonthCategory[];
   names: ReadonlyMap<string, { name: string; group: string }>;
   /** Whether categories are selected (no preview then). */
   selection: boolean;
   format: Format;
   onApply: (option: AutoAssignOption) => Promise<void>;
+  /** A view that keeps nothing: YNAB says so instead of listing the options. */
+  onViewAll?: () => void;
 }) {
   const [preview, setPreview] = useState<AutoAssignOption | null>(null);
-  const one = selection && categories.length === 1;
+  // YNAB's labels go singular whenever one category is covered (selected or the only one in view).
+  const one = categories.length === 1;
   const changes = preview ? autoAssignChanges(preview, categories, names) : [];
   const byGroup = new Map<string, AutoAssignChange[]>();
   for (const c of changes) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
@@ -97,24 +101,35 @@ export function AutoAssignPanel({
   return (
     <section aria-label="Auto-Assign" className="grid gap-2 rounded-lg border p-4">
       <h2 className="font-semibold text-sm">Auto-Assign</h2>
-      <div className="grid gap-1">
-        {AUTO_ASSIGN_OPTIONS.map((option) => {
-          const amount = format(buttonAmount(option, categories).toString());
-          return (
-            <Button
-              key={option}
-              variant="secondary"
-              size="sm"
-              aria-label={`${label(option, one)} ${amount}`}
-              className="justify-between font-normal"
-              onClick={() => (selection ? void onApply(option) : setPreview(option))}
-            >
-              <span>{label(option, one)}</span>
-              <span className="tabular-nums">{amount}</span>
+      {categories.length === 0 ? (
+        <div className="grid justify-items-start gap-1 text-muted-foreground text-sm">
+          <p>This view has no categories.</p>
+          {onViewAll && (
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={onViewAll}>
+              View All Categories
             </Button>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-1">
+          {AUTO_ASSIGN_OPTIONS.map((option) => {
+            const amount = format(buttonAmount(option, categories).toString());
+            return (
+              <Button
+                key={option}
+                variant="secondary"
+                size="sm"
+                aria-label={`${label(option, one)} ${amount}`}
+                className="justify-between font-normal"
+                onClick={() => (selection ? void onApply(option) : setPreview(option))}
+              >
+                <span>{label(option, one)}</span>
+                <span className="tabular-nums">{amount}</span>
+              </Button>
+            );
+          })}
+        </div>
+      )}
 
       <AlertDialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
         <AlertDialogContent>

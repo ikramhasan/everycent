@@ -180,8 +180,9 @@ const AVERAGE_MONTHS = 12;
  * - Average Assigned / Average Spent: the average over up to the last 12 months before `month`,
  *   from the first of them in which the category had money assigned or spent (YNAB showed $15 for
  *   $30 assigned in September and spending in August).
- * - Reset Available: takes the Available back to zero (less Assigned); an overspent category
- *   keeps its amount.
+ * - Reset Available: Assigned changes so Available ends at zero, both ways: money goes back to
+ *   Ready to Assign, and an overspent category is covered from it (YNAB: Utilities, $25.00
+ *   overspent, went to $25.00 assigned).
  * - Reset Assigned: zero.
  * Averages are rounded half-even to the minor unit.
  */
@@ -224,8 +225,7 @@ export function autoAssignAmounts(
     spentLastMonth: spent(byMonth.get(last)?.activity ?? 0n),
     averageAssigned,
     averageSpent,
-    resetAvailable:
-      current.available > 0n ? current.assigned - current.available : current.assigned,
+    resetAvailable: current.assigned - current.available,
     resetAssigned: 0n,
   };
 }

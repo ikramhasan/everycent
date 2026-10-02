@@ -305,38 +305,49 @@ function BudgetPage() {
               listed={listed}
               onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
             />
-            <AutoAssignPanel
-              // The selected categories, or every visible one (YNAB leaves hidden ones out).
-              categories={listFigures.month.categories.filter((c) =>
-                selection.size > 0 ? selection.has(c.categoryId) : visible.has(c.categoryId),
-              )}
-              names={listed}
-              selection={selection.size > 0}
-              format={listFigures.format}
-              onApply={async (option) => {
-                const categoryIds = [...selection].filter((id) => id !== UNCATEGORIZED);
-                // Only Uncategorized selected: nothing to assign to.
-                if (selection.size > 0 && categoryIds.length === 0) return;
-                try {
-                  const updated = await autoAssignMutation.mutateAsync({
-                    params: { path: { budgetId: budget.id, month } },
-                    body: {
-                      option,
-                      ...(categoryIds.length ? { categoryIds } : {}),
-                      today: todayIso(),
-                    },
-                  });
-                  queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
-                } catch (error) {
-                  toast.error(apiErrorMessage(error, "Couldn't assign the money."));
-                } finally {
-                  void invalidateMonths(queryClient);
-                  void queryClient.invalidateQueries({
-                    queryKey: movesQueryOptions(budget.id).queryKey,
-                  });
-                }
-              }}
-            />
+            {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
+            {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && (
+              <AutoAssignPanel
+                // The selected categories, or the rows in view (hidden categories never are).
+                categories={listFigures.month.categories.filter((c) =>
+                  selection.size > 0
+                    ? selection.has(c.categoryId)
+                    : (shown ?? visible).has(c.categoryId),
+                )}
+                onViewAll={() => setFilter("all")}
+                names={listed}
+                selection={selection.size > 0}
+                format={listFigures.format}
+                onApply={async (option) => {
+                  // Selected, or the rows in view; the server takes no list as every visible one.
+                  const categoryIds =
+                    selection.size > 0
+                      ? [...selection].filter((id) => id !== UNCATEGORIZED)
+                      : shown
+                        ? [...shown].filter((id) => id !== UNCATEGORIZED)
+                        : [];
+                  if ((selection.size > 0 || shown) && categoryIds.length === 0) return;
+                  try {
+                    const updated = await autoAssignMutation.mutateAsync({
+                      params: { path: { budgetId: budget.id, month } },
+                      body: {
+                        option,
+                        ...(categoryIds.length ? { categoryIds } : {}),
+                        today: todayIso(),
+                      },
+                    });
+                    queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
+                  } catch (error) {
+                    toast.error(apiErrorMessage(error, "Couldn't assign the money."));
+                  } finally {
+                    void invalidateMonths(queryClient);
+                    void queryClient.invalidateQueries({
+                      queryKey: movesQueryOptions(budget.id).queryKey,
+                    });
+                  }
+                }}
+              />
+            )}
             {month === today && (
               <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
             )}
