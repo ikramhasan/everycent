@@ -2359,6 +2359,307 @@
         "required": [
           "name"
         ]
+      },
+      "BudgetMonth": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "A month, YYYY-MM"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "ISO 4217 currency code"
+          },
+          "firstMonth": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "The oldest month the budget shows"
+          },
+          "lastMonth": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "The newest month the budget shows"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonthCategory"
+            },
+            "description": "Every category of the category list, hidden ones included"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonthGroup"
+            },
+            "description": "Each group's totals over its categories that aren't hidden"
+          },
+          "hidden": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MonthTotals"
+              },
+              {
+                "description": "Totals of hidden categories and of every category in hidden groups"
+              }
+            ]
+          },
+          "uncategorized": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "activity": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "available": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              }
+            },
+            "required": [
+              "activity",
+              "available"
+            ],
+            "description": "Spending without a category; null in months without any"
+          }
+        },
+        "required": [
+          "month",
+          "currency",
+          "firstMonth",
+          "lastMonth",
+          "categories",
+          "groups",
+          "hidden",
+          "uncategorized"
+        ]
+      },
+      "MonthCategory": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MonthTotals"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "categoryId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "categoryId"
+            ]
+          }
+        ]
+      },
+      "MonthTotals": {
+        "type": "object",
+        "properties": {
+          "assigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "activity": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "available": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "assigned",
+          "activity",
+          "available"
+        ]
+      },
+      "MonthGroup": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MonthTotals"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "groupId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "groupId"
+            ]
+          }
+        ]
       }
     },
     "parameters": {}
@@ -5080,6 +5381,95 @@
           },
           "403": {
             "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}": {
+      "get": {
+        "operationId": "getBudgetMonth",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Assigned, activity and available for each category in a month",
+        "description": "Activity counts transactions (split lines one by one) dated in the month, up to the user's today. Available rolls over from month to month; a negative balance doesn't, the category starts the next month at zero.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's numbers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMonth"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid month or date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
             "content": {
               "application/json": {
                 "schema": {

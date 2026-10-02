@@ -144,21 +144,23 @@ and fresh start (after phase 5 core).
 
 ### 6. Budget screen (the core loop)
 
-- [ ] Month view: Assigned, Activity, Available per category, group subtotals
+- [x] Month view: Assigned, Activity, Available per category, group subtotals
 - [ ] Ready to Assign calculation (inflows − assigned, across months)
 - [ ] Assign money to categories; math in the amount field (`+`, `-`, `*`, `/`)
-- [ ] Available rolls over month to month
+- [x] Available rolls over month to month
 - [ ] Cash overspending (reduces next month's Ready to Assign) — highlighted red
 - [ ] Move money between categories (and back to Ready to Assign)
 - [ ] Cover overspending flow
 - [ ] Over-assigned warning (Ready to Assign negative)
-- [ ] Month navigation, budgeting in future months, "assigned in future" indicator
+- [ ] Month navigation, budgeting in future months, "assigned in future" indicator (navigation
+      done in 6a)
 - [ ] Income for future months (assign next month's income)
 - [ ] Auto-assign / quick budget: underfunded, assigned last month, spent last month,
       average assigned, average spent, reset available, reset assigned
 - [ ] Category inspector: balance breakdown (cash left over, assigned, activity), target, notes
 - [ ] Category activity drill-down (transactions for category + month)
 - [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
+      (collapse done in 6a)
 - [ ] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt

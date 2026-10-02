@@ -14,6 +14,7 @@ import {
   insertTransaction,
   internalCategoryId,
   internalPayeeId,
+  serverToday,
   transferPayeeId,
   transferPayeeName,
   ZERO_BALANCES,
@@ -52,11 +53,6 @@ function toAccountJson(a: AccountRow, balances: AccountBalances, paymentCategory
       working: balances.working.toString(),
     },
   };
-}
-
-/** The server's calendar date, for responses that weren't given the user's today. */
-export function serverToday() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 async function listAccountJson(db: Db, budgetId: string, today: string) {

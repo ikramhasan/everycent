@@ -57,6 +57,7 @@ import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
+import { invalidateMonths } from "@/lib/months";
 import {
   nextSort,
   type RegisterSearch,
@@ -348,6 +349,7 @@ export function Register({
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
+      invalidateMonths(queryClient),
       // The selection's count and total.
       queryClient.invalidateQueries({
         queryKey: ["post", "/v1/budgets/{budgetId}/transactions/selection"],

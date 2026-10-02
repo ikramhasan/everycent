@@ -56,6 +56,19 @@ export {
   zero,
 } from "./money";
 export {
+  addMonths,
+  BUDGET_MONTH_PATTERN,
+  type BudgetMonth,
+  budgetMonthRange,
+  type CategoryMonth,
+  categoryMonth,
+  isBudgetMonth,
+  type MonthFigures,
+  monthBounds,
+  monthOf,
+  zBudgetMonth,
+} from "./months";
+export {
   type FormatMoneyOptions,
   formatMoney,
   parseMoney,

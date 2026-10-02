@@ -5,6 +5,7 @@ import { $api } from "./api";
 import { apiErrorMessage } from "./budgets";
 import { categoriesQueryOptions } from "./categories";
 import { todayIso } from "./dates";
+import { invalidateMonths } from "./months";
 
 /**
  * Creates an account dated the user's today and refreshes what it touches (the account list and,
@@ -22,6 +23,7 @@ export function useCreateAccount(budgetId: string) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
         queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),
+        invalidateMonths(queryClient),
       ]);
       return { id: created.id };
     } catch (error) {

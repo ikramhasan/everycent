@@ -429,6 +429,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assigned, activity and available for each category in a month
+         * @description Activity counts transactions (split lines one by one) dated in the month, up to the user's today. Available rolls over from month to month; a negative balance doesn't, the category starts the next month at zero.
+         */
+        get: operations["getBudgetMonth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -917,6 +937,45 @@ export interface components {
         };
         RenameFlag: {
             name: string;
+        };
+        BudgetMonth: {
+            /** @description A month, YYYY-MM */
+            month: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description The oldest month the budget shows */
+            firstMonth: string;
+            /** @description The newest month the budget shows */
+            lastMonth: string;
+            /** @description Every category of the category list, hidden ones included */
+            categories: components["schemas"]["MonthCategory"][];
+            /** @description Each group's totals over its categories that aren't hidden */
+            groups: components["schemas"]["MonthGroup"][];
+            hidden: components["schemas"]["MonthTotals"] & unknown;
+            /** @description Spending without a category; null in months without any */
+            uncategorized: {
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                activity: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                available: string;
+            } | null;
+        };
+        MonthCategory: components["schemas"]["MonthTotals"] & {
+            categoryId: string;
+        };
+        MonthTotals: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            assigned: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            activity: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            available: string;
+        };
+        MonthGroup: components["schemas"]["MonthTotals"] & {
+            groupId: string;
         };
     };
     responses: never;
@@ -2794,6 +2853,60 @@ export interface operations {
             };
             /** @description The caller's role can't change transactions */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getBudgetMonth: {
+        parameters: {
+            query?: {
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's numbers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMonth"];
+                };
+            };
+            /** @description Invalid month or date */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

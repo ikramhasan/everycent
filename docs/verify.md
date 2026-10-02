@@ -82,3 +82,35 @@ so it has one. Change it if YNAB differs.
   "Mark as Uncleared" into More.
 - **Question:** with only cleared rows selected, does "Clear" mark them uncleared?
 - **Built so far (before this rule):** yes, it toggles them to uncleared.
+
+## Budget screen (phase 6a)
+
+Checked in YNAB's web app on 2026-10-02 and built as found: Activity leaves out future-dated
+transactions (YNAB makes them scheduled transactions); hidden categories count in a "Hidden
+Categories" row at the bottom, not in their group's totals; an "Uncategorized Transactions" row
+shows only in months with uncategorized transactions; a negative Available starts the next month at
+zero; months run from the one before the oldest transaction to the one after the current month (or
+after the latest month with money assigned, which stays open even after an undo); group collapse
+survives a reload and applies to every month.
+
+### Where collapsed groups are kept
+
+- **Question:** YNAB keeps a collapsed group collapsed after a reload. Is that saved to the budget
+  or account (the same on another device or for a partner) or only in this browser?
+- **Built so far (before this rule):** this browser (`localStorage`, per budget).
+
+### The first month of a budget without transactions
+
+- **Found:** the oldest month is the one before the oldest transaction (adding an August
+  transaction to an October budget opened July).
+- **Question:** what is the oldest month of a budget with no transactions at all: the month before
+  the one it was created in?
+- **Built so far (before this rule):** the month before the current one.
+
+### Which month the budget screen opens on
+
+- **Found:** going from an account back to Plan opened the month last viewed (November), not the
+  current month; YNAB's URL holds the month (`/budget/202611`).
+- **Question:** does it also reopen the last month after a reload, or on another device?
+- **Skipped:** the budget screen always opens on the current month; `?month=` holds the month
+  while browsing.

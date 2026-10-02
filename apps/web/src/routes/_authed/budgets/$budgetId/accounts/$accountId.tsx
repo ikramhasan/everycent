@@ -29,6 +29,7 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { invalidateMonths } from "@/lib/months";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
@@ -75,6 +76,7 @@ function AccountPage() {
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
+      invalidateMonths(queryClient),
     ]);
   }
 

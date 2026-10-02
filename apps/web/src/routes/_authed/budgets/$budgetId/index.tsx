@@ -1,33 +1,76 @@
-import { zero } from "@everycent/engine";
+import { type BudgetMonth, isBudgetMonth, zero } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@everycent/ui/components/card";
 import { Skeleton } from "@everycent/ui/components/skeleton";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
-import { CategoryList } from "@/components/category-list";
+import { type CategoryFigures, CategoryList } from "@/components/category-list";
+import { MonthNav } from "@/components/month-nav";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { useBudget } from "@/lib/budget-context";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { currentMonth, monthQueryOptions, toMoney, useCollapsedGroups } from "@/lib/months";
 import { useCategoryActions } from "@/lib/use-category-actions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
+  // The month on screen, YYYY-MM; the current month when absent.
+  validateSearch: z.object({
+    month: z.string().refine(isBudgetMonth).optional().catch(undefined),
+  }),
   component: BudgetPage,
 });
 
 function BudgetPage() {
   const { budget, formatAmount, formatDate } = useBudget();
+  const navigate = Route.useNavigate();
+  const today = currentMonth();
+  const month: BudgetMonth = Route.useSearch().month ?? today;
   const categories = useQuery(categoriesQueryOptions(budget.id));
+  const figures = useQuery({
+    ...monthQueryOptions(budget.id, month),
+    placeholderData: keepPreviousData,
+  });
   const actions = useCategoryActions(budget.id);
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const [addingAccount, setAddingAccount] = useState(false);
+  const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
+
+  const goTo = (m: BudgetMonth) =>
+    navigate({ search: { month: m === today ? undefined : m }, replace: false });
+
+  // A month out of the budget's range (a stale link) shows the nearest one instead.
+  const range = figures.data && { first: figures.data.firstMonth, last: figures.data.lastMonth };
+  useEffect(() => {
+    if (!range || figures.isPlaceholderData) return;
+    const nearest = month < range.first ? range.first : month > range.last ? range.last : month;
+    if (nearest !== month) {
+      void navigate({ search: { month: nearest === today ? undefined : nearest }, replace: true });
+    }
+  }, [range?.first, range?.last, month, today, navigate, figures.isPlaceholderData]);
+
+  const listFigures = useMemo<CategoryFigures | undefined>(() => {
+    const data = figures.data;
+    if (!data) return undefined;
+    return { month: data, format: (amount) => formatAmount(toMoney(amount, data.currency)) };
+  }, [figures.data, formatAmount]);
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="truncate font-semibold text-2xl tracking-tight">{budget.name}</h1>
+    <div className="mx-auto grid max-w-5xl gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="grid gap-1">
+          <h1 className="truncate font-semibold text-muted-foreground text-sm">{budget.name}</h1>
+          <MonthNav
+            month={month}
+            current={today}
+            first={range?.first ?? month}
+            last={range?.last ?? month}
+            onChange={goTo}
+          />
+        </div>
         <Card className="min-w-48 py-3">
           <CardHeader className="px-4">
             <CardDescription>Ready to Assign</CardDescription>
@@ -62,7 +105,13 @@ function BudgetPage() {
       ) : categories.isError ? (
         <p className="text-muted-foreground">Couldn't load categories.</p>
       ) : (
-        <CategoryList data={categories.data} actions={actions} />
+        <CategoryList
+          data={categories.data}
+          actions={actions}
+          figures={listFigures}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
+        />
       )}
     </div>
   );

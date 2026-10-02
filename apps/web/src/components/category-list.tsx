@@ -13,24 +13,18 @@ import {
   AlertDialogTitle,
 } from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@everycent/ui/components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@everycent/ui/components/item";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { ChevronRight, EyeOff, GripVertical, Plus, StickyNote } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Category,
@@ -42,6 +36,7 @@ import {
   type VisibleLayout,
   visibleLayout,
 } from "@/lib/categories";
+import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { NamePopover } from "./name-popover";
 
 export interface CategoryListActions {
@@ -72,16 +67,43 @@ type PendingDelete = {
   hasTransactions: boolean;
 } | null;
 
+/** A month's numbers for the list, with the budget's amount formatting. */
+export interface CategoryFigures {
+  month: BudgetMonthData;
+  /** Formats an amount in minor units (an integer string) in the month's currency. */
+  format: (minorUnits: string) => string;
+}
+
+const NO_GROUPS: ReadonlySet<string> = new Set();
+/**
+ * Every row shares one grid so the figures line up whatever a name's length. Like YNAB, a list
+ * narrower than the columns scrolls sideways instead of squeezing them (mobile gets its own pass).
+ */
+const ROW = "grid grid-cols-[minmax(10rem,1fr)_7rem_7rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
+const NAME_CELL = "flex min-w-0 items-center gap-1";
+const FIGURE = "min-w-0 truncate text-right tabular-nums";
+/** Lets a name button shrink and truncate (shadcn's Button doesn't shrink by default). */
+const NAME_BUTTON = "min-w-0 shrink justify-start";
+
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
 
-/** The category side of YNAB's budget screen: groups, categories, drag to reorder, hidden section. */
+/**
+ * YNAB's budget screen: groups and categories with the month's Assigned, Activity and Available,
+ * drag to reorder, collapsible groups and the Hidden Categories row.
+ */
 export function CategoryList({
   data,
   actions,
+  figures,
+  collapsed = NO_GROUPS,
+  onCollapsedChange,
 }: {
   data: CategoryListData;
   actions: CategoryListActions;
+  figures?: CategoryFigures;
+  collapsed?: ReadonlySet<string>;
+  onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
 }) {
   const serverLayout = useMemo(() => visibleLayout(data), [data]);
   const [layout, setLayout] = useState<VisibleLayout>(serverLayout);
@@ -101,6 +123,22 @@ export function CategoryList({
     [data],
   );
   const hidden = useMemo(() => hiddenItems(data), [data]);
+  const categoryFigures = useMemo(
+    () => new Map(figures?.month.categories.map((c) => [c.categoryId, c])),
+    [figures],
+  );
+  const groupFigures = useMemo(
+    () => new Map(figures?.month.groups.map((g) => [g.groupId, g])),
+    [figures],
+  );
+  const allCollapsed =
+    layout.groupOrder.length > 0 && layout.groupOrder.every((id) => collapsed.has(id));
+
+  function toggleGroup(groupId: string) {
+    const next = new Set(collapsed);
+    if (!next.delete(groupId)) next.add(groupId);
+    onCollapsedChange?.(next);
+  }
 
   function requestDelete(kind: "group" | "category", id: string, name: string) {
     const deleted =
@@ -151,86 +189,142 @@ export function CategoryList({
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
-        <DragDropProvider
-          onDragStart={() => {
-            dragging.current = true;
-            beforeDrag.current = layout;
-          }}
-          onDragOver={(event) => {
-            const type = event.operation.source?.type;
-            if (type !== "category" && type !== "payment") return;
-            setLayout((l) => ({ ...l, items: move(l.items, event) }));
-          }}
-          onDragEnd={(event) => {
-            dragging.current = false;
-            const source = event.operation.source;
-            if (event.canceled || !source) {
-              setLayout(beforeDrag.current);
-              return;
-            }
-            const id = String(source.id);
-            if (source.type === "group") {
-              const groupOrder = move(layout.groupOrder, event);
-              setLayout((l) => ({ ...l, groupOrder }));
-              // Credit Card Payments stays pinned first; order the other groups around it.
-              const movable = (order: string[]) => order.filter((g) => !groupsById.get(g)?.kind);
-              const before = nextId(movable(groupOrder), id);
-              if (before !== nextId(movable(beforeDrag.current.groupOrder), id)) {
-                void actions.moveGroup(id, before);
-              }
-              return;
-            }
-            const now = locateCategory(layout.items, id);
-            const was = locateCategory(beforeDrag.current.items, id);
-            if (
-              now &&
-              (now.groupId !== was?.groupId || now.beforeCategoryId !== was?.beforeCategoryId)
-            ) {
-              void actions.moveCategory(id, now.groupId, now.beforeCategoryId);
-            }
-          }}
-        >
-          {layout.groupOrder.map((groupId, groupIndex) => {
-            const group = groupsById.get(groupId);
-            if (!group) return null;
-            return (
-              <GroupSection
-                key={groupId}
-                group={group}
-                index={groupIndex}
-                actions={actions}
-                onDelete={() => requestDelete("group", group.id, group.name)}
+      <div className="overflow-x-auto rounded-lg border">
+        <div className="min-w-fit">
+          <div
+            className={cn(
+              ROW,
+              "border-b font-medium text-muted-foreground text-xs uppercase tracking-wide",
+            )}
+          >
+            <div className={NAME_CELL}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={allCollapsed ? "Expand all groups" : "Collapse all groups"}
+                onClick={() =>
+                  onCollapsedChange?.(allCollapsed ? new Set() : new Set(layout.groupOrder))
+                }
               >
-                {(layout.items[groupId] ?? []).map((categoryId, index) => {
-                  const category = categoriesById.get(categoryId);
-                  if (!category) return null;
-                  return (
-                    <CategoryRow
-                      key={categoryId}
-                      category={category}
-                      index={index}
-                      groupId={groupId}
-                      actions={actions}
-                      onDelete={() => requestDelete("category", category.id, category.name)}
-                    />
-                  );
-                })}
-              </GroupSection>
-            );
-          })}
-        </DragDropProvider>
-        {layout.groupOrder.length === 0 && (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No categories yet</EmptyTitle>
-              <EmptyDescription>Add a category group to get started.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
+                {allCollapsed ? <ChevronRight /> : <ChevronDown />}
+              </Button>
+              <span className="truncate px-1">Category</span>
+            </div>
+            {figures && (
+              <>
+                <span className={FIGURE}>Assigned</span>
+                <span className={FIGURE}>Activity</span>
+                <span className={FIGURE}>Available</span>
+              </>
+            )}
+          </div>
+          {figures?.month.uncategorized && (
+            <div className={cn(ROW, "border-b text-sm")}>
+              <div className={NAME_CELL}>
+                <span className="size-6 shrink-0" />
+                <span className="truncate px-2">Uncategorized Transactions</span>
+              </div>
+              {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
+              <span className={FIGURE}>–</span>
+              <span className={FIGURE}>{figures.format(figures.month.uncategorized.activity)}</span>
+              <span className={FIGURE}>
+                <AvailablePill
+                  amount={figures.month.uncategorized.available}
+                  format={figures.format}
+                />
+              </span>
+            </div>
+          )}
+          <DragDropProvider
+            onDragStart={() => {
+              dragging.current = true;
+              beforeDrag.current = layout;
+            }}
+            onDragOver={(event) => {
+              const type = event.operation.source?.type;
+              if (type !== "category" && type !== "payment") return;
+              setLayout((l) => ({ ...l, items: move(l.items, event) }));
+            }}
+            onDragEnd={(event) => {
+              dragging.current = false;
+              const source = event.operation.source;
+              if (event.canceled || !source) {
+                setLayout(beforeDrag.current);
+                return;
+              }
+              const id = String(source.id);
+              if (source.type === "group") {
+                const groupOrder = move(layout.groupOrder, event);
+                setLayout((l) => ({ ...l, groupOrder }));
+                // Credit Card Payments stays pinned first; order the other groups around it.
+                const movable = (order: string[]) => order.filter((g) => !groupsById.get(g)?.kind);
+                const before = nextId(movable(groupOrder), id);
+                if (before !== nextId(movable(beforeDrag.current.groupOrder), id)) {
+                  void actions.moveGroup(id, before);
+                }
+                return;
+              }
+              const now = locateCategory(layout.items, id);
+              const was = locateCategory(beforeDrag.current.items, id);
+              if (
+                now &&
+                (now.groupId !== was?.groupId || now.beforeCategoryId !== was?.beforeCategoryId)
+              ) {
+                void actions.moveCategory(id, now.groupId, now.beforeCategoryId);
+              }
+            }}
+          >
+            {layout.groupOrder.map((groupId, groupIndex) => {
+              const group = groupsById.get(groupId);
+              if (!group) return null;
+              return (
+                <GroupSection
+                  key={groupId}
+                  group={group}
+                  index={groupIndex}
+                  actions={actions}
+                  totals={groupFigures.get(groupId)}
+                  format={figures?.format}
+                  collapsed={collapsed.has(groupId)}
+                  onToggle={() => toggleGroup(groupId)}
+                  onDelete={() => requestDelete("group", group.id, group.name)}
+                >
+                  {(layout.items[groupId] ?? []).map((categoryId, index) => {
+                    const category = categoriesById.get(categoryId);
+                    if (!category) return null;
+                    return (
+                      <CategoryRow
+                        key={categoryId}
+                        category={category}
+                        index={index}
+                        groupId={groupId}
+                        actions={actions}
+                        totals={categoryFigures.get(categoryId)}
+                        format={figures?.format}
+                        onDelete={() => requestDelete("category", category.id, category.name)}
+                      />
+                    );
+                  })}
+                </GroupSection>
+              );
+            })}
+          </DragDropProvider>
+          {layout.groupOrder.length === 0 && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No categories yet</EmptyTitle>
+                <EmptyDescription>Add a category group to get started.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          <HiddenRow
+            hidden={hidden}
+            actions={actions}
+            totals={figures?.month.hidden}
+            format={figures?.format}
+          />
+        </div>
       </div>
-
-      <HiddenSection hidden={hidden} actions={actions} />
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
         <AlertDialogContent>
@@ -286,12 +380,20 @@ function GroupSection({
   group,
   index,
   actions,
+  totals,
+  format,
+  collapsed,
+  onToggle,
   onDelete,
   children,
 }: {
   group: CategoryGroup;
   index: number;
   actions: CategoryListActions;
+  totals: MonthTotals | undefined;
+  format: CategoryFigures["format"] | undefined;
+  collapsed: boolean;
+  onToggle: () => void;
   onDelete: () => void;
   children: ReactNode;
 }) {
@@ -313,71 +415,87 @@ function GroupSection({
       aria-label={group.name}
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
-      <div className="group/header flex items-center gap-1 bg-muted/60 px-2 py-1.5">
-        {managed ? (
-          <span className="w-5" />
-        ) : (
-          <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
-        )}
-        {managed ? (
-          <span className="truncate px-1 font-semibold text-sm">{group.name}</span>
-        ) : (
-          <>
-            <NamePopover
-              title="Category group name"
-              initial={{ name: group.name, note: "" }}
-              onSubmit={({ name }) => actions.updateGroup(group.id, { name })}
-              actions={(close) => (
-                <>
+      <div className={cn(ROW, "group/header bg-muted/60")}>
+        <div className={NAME_CELL}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
+            aria-expanded={!collapsed}
+            onClick={onToggle}
+          >
+            {collapsed ? <ChevronRight /> : <ChevronDown />}
+          </Button>
+          {managed ? (
+            <span className="w-5" />
+          ) : (
+            <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
+          )}
+          {managed ? (
+            <span className="truncate px-1 font-semibold text-sm">{group.name}</span>
+          ) : (
+            <>
+              <NamePopover
+                title="Category group name"
+                initial={{ name: group.name, note: "" }}
+                onSubmit={({ name }) => actions.updateGroup(group.id, { name })}
+                actions={(close) => (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        close();
+                        await actions.updateGroup(group.id, { hidden: true });
+                      }}
+                    >
+                      Hide
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => {
+                        close();
+                        onDelete();
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </>
+                )}
+                trigger={
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      close();
-                      await actions.updateGroup(group.id, { hidden: true });
-                    }}
+                    variant="ghost"
+                    size="xs"
+                    className={cn(NAME_BUTTON, "font-semibold text-sm")}
                   >
-                    Hide
+                    <span className="truncate">{group.name}</span>
                   </Button>
+                }
+              />
+              <NamePopover
+                title={`New category in ${group.name}`}
+                submitLabel="Add"
+                onSubmit={({ name }) => actions.createCategory(group.id, name)}
+                trigger={
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => {
-                      close();
-                      onDelete();
-                    }}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Add a category to ${group.name}`}
                   >
-                    Delete
+                    <Plus />
                   </Button>
-                </>
-              )}
-              trigger={
-                <Button variant="ghost" size="xs" className="truncate font-semibold text-sm">
-                  {group.name}
-                </Button>
-              }
-            />
-            <NamePopover
-              title={`New category in ${group.name}`}
-              submitLabel="Add"
-              onSubmit={({ name }) => actions.createCategory(group.id, name)}
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Add a category to ${group.name}`}
-                >
-                  <Plus />
-                </Button>
-              }
-            />
-          </>
-        )}
+                }
+              />
+            </>
+          )}
+        </div>
+        {totals && format && <TotalCells totals={totals} format={format} />}
       </div>
-      <div className="min-h-2">{children}</div>
+      {!collapsed && <div className="min-h-2">{children}</div>}
     </section>
   );
 }
@@ -387,12 +505,16 @@ function CategoryRow({
   index,
   groupId,
   actions,
+  totals,
+  format,
   onDelete,
 }: {
   category: Category;
   index: number;
   groupId: string;
   actions: CategoryListActions;
+  totals: MonthTotals | undefined;
+  format: CategoryFigures["format"] | undefined;
   onDelete: () => void;
 }) {
   const isPayment = Boolean(category.linkedAccountId);
@@ -405,61 +527,101 @@ function CategoryRow({
   });
 
   return (
-    <div
-      ref={ref}
-      className={cn(
-        "flex items-center gap-1 border-t px-2 py-1.5 first:border-t-0",
-        isDragSource && "opacity-60",
-      )}
-    >
-      <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
-      <NamePopover
-        title="Category name"
-        withNote
-        nameLockedReason={
-          isPayment ? "Named after its credit account. Rename the account instead." : undefined
-        }
-        initial={{ name: category.name, note: category.note }}
-        onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
-        actions={(close) => (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                close();
-                await actions.updateCategory(category.id, { hidden: true });
-              }}
-            >
-              Hide
-            </Button>
-            {!isPayment && (
+    <div ref={ref} className={cn(ROW, "border-t first:border-t-0", isDragSource && "opacity-60")}>
+      <div className={NAME_CELL}>
+        <span className="size-6 shrink-0" />
+        <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+        <NamePopover
+          title="Category name"
+          withNote
+          nameLockedReason={
+            isPayment ? "Named after its credit account. Rename the account instead." : undefined
+          }
+          initial={{ name: category.name, note: category.note }}
+          onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
+          actions={(close) => (
+            <>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="text-destructive"
-                onClick={() => {
+                onClick={async () => {
                   close();
-                  onDelete();
+                  await actions.updateCategory(category.id, { hidden: true });
                 }}
               >
-                Delete
+                Hide
               </Button>
-            )}
-          </>
+              {!isPayment && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() => {
+                    close();
+                    onDelete();
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </>
+          )}
+          trigger={
+            <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-normal text-sm")}>
+              <span className="truncate">{category.name}</span>
+            </Button>
+          }
+        />
+        {category.note && (
+          <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
         )}
-        trigger={
-          <Button variant="ghost" size="xs" className="truncate font-normal text-sm">
-            {category.name}
-          </Button>
-        }
-      />
-      {category.note && (
-        <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
+      </div>
+      {totals && format && (
+        <>
+          <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
+          <span className={cn(FIGURE, "text-sm")}>{format(totals.activity)}</span>
+          <span className={FIGURE}>
+            <AvailablePill amount={totals.available} format={format} />
+          </span>
+        </>
       )}
     </div>
+  );
+}
+
+/** Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. */
+function AvailablePill({ amount, format }: { amount: string; format: CategoryFigures["format"] }) {
+  const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
+  return (
+    <span
+      className={cn(
+        "inline-block max-w-full truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
+        sign > 0 && "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
+        sign < 0 && "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
+        sign === 0 && "bg-muted text-muted-foreground",
+      )}
+    >
+      {format(amount)}
+    </span>
+  );
+}
+
+/** A group's or the hidden row's totals: plain numbers, lined up with the pills above them. */
+function TotalCells({
+  totals,
+  format,
+}: {
+  totals: MonthTotals;
+  format: CategoryFigures["format"];
+}) {
+  return (
+    <>
+      <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.assigned)}</span>
+      <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.activity)}</span>
+      <span className={cn(FIGURE, "pr-2 font-medium text-sm")}>{format(totals.available)}</span>
+    </>
   );
 }
 
@@ -477,65 +639,98 @@ function DragHandle({ ref, label }: { ref: (el: Element | null) => void; label: 
   );
 }
 
-function HiddenSection({
+/**
+ * YNAB's "Hidden Categories" row at the bottom of the list, with the hidden categories' totals.
+ * Clicking it lists them to unhide one, or all of them.
+ */
+function HiddenRow({
   hidden,
   actions,
+  totals,
+  format,
 }: {
   hidden: ReturnType<typeof hiddenItems>;
   actions: CategoryListActions;
+  totals: MonthTotals | undefined;
+  format: CategoryFigures["format"] | undefined;
 }) {
-  const count = hidden.groups.length + hidden.categories.length;
-  if (count === 0) return null;
+  const [open, setOpen] = useState(false);
+  if (hidden.groups.length + hidden.categories.length === 0) return null;
+
+  // Hidden categories under their (visible) group's name, as YNAB lists them.
+  const byGroup = new Map<string, typeof hidden.categories>();
+  for (const c of hidden.categories)
+    byGroup.set(c.groupName, [...(byGroup.get(c.groupName) ?? []), c]);
+
+  async function showAll() {
+    setOpen(false);
+    await Promise.all([
+      ...hidden.groups.map((g) => actions.updateGroup(g.id, { hidden: false })),
+      ...hidden.categories.map((c) => actions.updateCategory(c.id, { hidden: false })),
+    ]);
+  }
 
   return (
-    <Collapsible className="group/hidden rounded-lg border">
-      <CollapsibleTrigger asChild>
-        <Button
-          variant="ghost"
-          className="w-full justify-start rounded-lg font-medium text-muted-foreground"
-        >
-          <ChevronRight className="transition-transform group-data-[state=open]/hidden:rotate-90" />
-          <EyeOff /> Hidden Categories ({count})
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ItemGroup className="border-t">
-          {hidden.groups.map((g) => (
-            <Item key={g.id} size="xs">
-              <ItemContent>
-                <ItemTitle className="font-semibold">{g.name}</ItemTitle>
-                <ItemDescription>group · {g.categories.length} categories</ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => actions.updateGroup(g.id, { hidden: false })}
-                >
-                  Show
-                </Button>
-              </ItemActions>
-            </Item>
-          ))}
-          {hidden.categories.map((c) => (
-            <Item key={c.id} size="xs">
-              <ItemContent>
-                <ItemTitle>{c.name}</ItemTitle>
-                <ItemDescription>in {c.groupName}</ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => actions.updateCategory(c.id, { hidden: false })}
-                >
-                  Show
-                </Button>
-              </ItemActions>
-            </Item>
-          ))}
-        </ItemGroup>
-      </CollapsibleContent>
-    </Collapsible>
+    <div className={cn(ROW, "border-t bg-muted/60")}>
+      <div className={NAME_CELL}>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-semibold text-sm")}>
+              <span className="truncate">Hidden Categories</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72">
+            <PopoverHeader>
+              <PopoverTitle>Click to unhide a category</PopoverTitle>
+            </PopoverHeader>
+            <div className="grid max-h-72 gap-2 overflow-y-auto">
+              {hidden.groups.map((g) => (
+                <div key={g.id} className="grid">
+                  <Button
+                    variant="link"
+                    size="xs"
+                    className="justify-start px-0 font-semibold"
+                    onClick={() => {
+                      setOpen(false);
+                      void actions.updateGroup(g.id, { hidden: false });
+                    }}
+                  >
+                    {g.name}
+                  </Button>
+                  {g.categories.map((c) => (
+                    <span key={c.id} className="pl-3 text-muted-foreground text-xs">
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+              ))}
+              {[...byGroup].map(([groupName, categories]) => (
+                <div key={groupName} className="grid">
+                  <span className="font-semibold text-xs">{groupName}:</span>
+                  {categories.map((c) => (
+                    <Button
+                      key={c.id}
+                      variant="link"
+                      size="xs"
+                      className="justify-start pl-3"
+                      onClick={() => {
+                        setOpen(false);
+                        void actions.updateCategory(c.id, { hidden: false });
+                      }}
+                    >
+                      {c.name}
+                    </Button>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <Button size="sm" onClick={showAll}>
+              Show all hidden categories
+            </Button>
+          </PopoverContent>
+        </Popover>
+      </div>
+      {totals && format && <TotalCells totals={totals} format={format} />}
+    </div>
   );
 }

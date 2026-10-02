@@ -5,6 +5,7 @@ import type { CategoryListActions } from "@/components/category-list";
 import { $api } from "./api";
 import { apiErrorMessage } from "./budgets";
 import { type CategoryList, categoriesQueryOptions } from "./categories";
+import { invalidateMonths } from "./months";
 
 /** API-backed actions for <CategoryList>. Failures show a toast and resync with the server. */
 export function useCategoryActions(budgetId: string): CategoryListActions {
@@ -40,6 +41,8 @@ export function useCategoryActions(budgetId: string): CategoryListActions {
     async function run(work: () => Promise<unknown>, failure: string) {
       try {
         const result = await work();
+        // Hiding, deleting (history moves) and moving between groups change the month's totals.
+        void invalidateMonths(queryClient);
         // Move endpoints answer with the whole list; everything else just refetches it.
         if (result && typeof result === "object" && "groups" in result) {
           queryClient.setQueryData(queryKey, result as CategoryList);

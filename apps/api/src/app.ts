@@ -11,6 +11,7 @@ import { categoriesRouter } from "./routes/categories";
 import { flagsRouter } from "./routes/flags";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
+import { monthsRouter } from "./routes/months";
 import { transactionsRouter } from "./routes/transactions";
 import type { AppDeps } from "./types";
 
@@ -41,6 +42,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", accountsRouter);
   app.route("/v1", transactionsRouter);
   app.route("/v1", flagsRouter);
+  app.route("/v1", monthsRouter);
 
   registerDocs(app);
   return app;

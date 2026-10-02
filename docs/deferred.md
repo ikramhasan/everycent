@@ -13,6 +13,20 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Budget math (phases 6–7)
 
+- Phase 6a stores assigned amounts (`category_assignment`) and computes Assigned, Activity and
+  Available per month on the server (`GET /v1/budgets/{id}/months/{month}`), but nothing writes
+  assignments until 6b.
+- YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
+  transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
+  so there's no pill yet.
+- YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
+  yet.
+- The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
+  list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
+  phone layout.
+- The budget screen has no row checkboxes (YNAB selects categories to assign or move in bulk);
+  they come with assigning (6b) and moving money (6c).
+
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category. Ready to Assign on the budget page is still a
   hard-coded zero until phase 6 computes it.
@@ -87,8 +101,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   split. The register hides those cells and the delete action.
 - A split with a reconciled transfer side can't drop or re-point that line (409
   `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
-- Category activity for split lines (phase 6) must read `sub_transaction`, not the split's own
-  null category.
 
 ## Bulk edit (phase 5f follow-ups)
 
