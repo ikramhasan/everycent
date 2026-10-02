@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import {
   breakdown,
   filteredIds,
@@ -14,6 +15,7 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   assigned,
   activity,
   available,
+  autoAssign: NO_AUTO_ASSIGN,
 });
 
 const month: BudgetMonthData = {

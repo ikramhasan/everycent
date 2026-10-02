@@ -2646,13 +2646,61 @@
             "properties": {
               "categoryId": {
                 "type": "string"
+              },
+              "autoAssign": {
+                "$ref": "#/components/schemas/AutoAssignAmounts"
               }
             },
             "required": [
-              "categoryId"
+              "categoryId",
+              "autoAssign"
             ]
           }
         ]
+      },
+      "AutoAssignAmounts": {
+        "type": "object",
+        "properties": {
+          "assignedLastMonth": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "spentLastMonth": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "averageAssigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "averageSpent": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "resetAvailable": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "resetAssigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "assignedLastMonth",
+          "spentLastMonth",
+          "averageAssigned",
+          "averageSpent",
+          "resetAvailable",
+          "resetAssigned"
+        ],
+        "description": "What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero"
       },
       "MonthTotals": {
         "type": "object",
@@ -2739,6 +2787,37 @@
           "fromCategoryId",
           "toCategoryId",
           "amount"
+        ]
+      },
+      "AutoAssign": {
+        "type": "object",
+        "properties": {
+          "option": {
+            "type": "string",
+            "enum": [
+              "assignedLastMonth",
+              "spentLastMonth",
+              "averageAssigned",
+              "averageSpent",
+              "resetAvailable",
+              "resetAssigned"
+            ]
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "option"
         ]
       },
       "MonthActivity": {
@@ -5878,6 +5957,104 @@
           },
           "400": {
             "description": "Invalid amount or categories, or MONTH_OUT_OF_RANGE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't assign money",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}/auto-assign": {
+      "post": {
+        "operationId": "autoAssign",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set categories' Assigned from one of YNAB's Auto-Assign options",
+        "description": "Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoAssign"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The month's numbers after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMonth"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or MONTH_OUT_OF_RANGE",
             "content": {
               "application/json": {
                 "schema": {

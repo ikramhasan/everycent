@@ -155,8 +155,8 @@ and fresh start (after phase 5 core).
 - [x] Month navigation, budgeting in future months, "assigned in future" indicator
 - [x] Income for future months (assign next month's income): today's YNAB has no separate
       next-month income; money is assigned in future months instead
-- [ ] Auto-assign / quick budget: underfunded, assigned last month, spent last month,
-      average assigned, average spent, reset available, reset assigned
+- [x] Auto-assign / quick budget: assigned last month, spent last month, average assigned,
+      average spent, reset available, reset assigned (underfunded needs targets, phase 8)
 - [x] Category inspector: balance breakdown (cash left over, assigned, activity), notes (the
       target part comes with phase 8)
 - [x] Category activity drill-down (transactions for category + month)

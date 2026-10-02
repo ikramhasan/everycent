@@ -9,6 +9,8 @@ import {
   user,
 } from "@everycent/db/schema";
 import {
+  type AutoAssignOption,
+  autoAssignAmounts,
   type BudgetMonth,
   budgetMonthRange,
   type CategoryMonth,
@@ -22,7 +24,7 @@ import {
   readyToAssign,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, isNotNull, lte, max, min } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lte, max, min } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -30,7 +32,7 @@ import { AppError } from "../../lib/errors";
 import { type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import type { assignCategory, getBudgetMonth, listMoves, moveMoney } from "./routes";
+import type { assignCategory, autoAssign, getBudgetMonth, listMoves, moveMoney } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -183,7 +185,11 @@ export async function budgetMonthJson(
     .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
     .where(eq(category.budgetId, budgetId));
 
-  const listed: { categoryId: string; figures: CategoryMonth }[] = [];
+  const listed: {
+    categoryId: string;
+    figures: CategoryMonth;
+    auto: Record<AutoAssignOption, bigint>;
+  }[] = [];
   const groups = new Map<string, CategoryMonth>();
   let hidden = ZERO;
   let uncategorized: CategoryMonth | null = null;
@@ -206,7 +212,7 @@ export async function budgetMonthJson(
       if (entries.some((e) => e.month === month)) uncategorized = figures;
       continue;
     }
-    listed.push({ categoryId: cat.id, figures });
+    listed.push({ categoryId: cat.id, figures, auto: autoAssignAmounts(entries, month) });
     if (cat.hidden || cat.groupHidden) {
       hidden = addTo(hidden, figures);
     } else {
@@ -235,7 +241,13 @@ export async function budgetMonthJson(
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
-    categories: listed.map((l) => ({ categoryId: l.categoryId, ...totalsJson(l.figures) })),
+    categories: listed.map((l) => ({
+      categoryId: l.categoryId,
+      ...totalsJson(l.figures),
+      autoAssign: Object.fromEntries(
+        Object.entries(l.auto).map(([option, amount]) => [option, amount.toString()]),
+      ) as Record<AutoAssignOption, string>,
+    })),
     groups: groupRows.map((g) => ({ groupId: g.id, ...totalsJson(groups.get(g.id) ?? ZERO) })),
     hidden: totalsJson(hidden),
     uncategorized: uncategorized && {
@@ -304,6 +316,52 @@ export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) =
       month,
       amount: value,
     });
+  });
+  return c.json(await budgetMonthJson(db, budget, month, today), 200);
+};
+
+export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { option, categoryIds, today = serverToday() } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
+  await assertMonthInRange(db, budgetId, month, today);
+
+  // The listed categories asked for, or every one that isn't hidden.
+  const rows = await db
+    .select({ id: category.id, hidden: category.hidden, groupHidden: categoryGroup.hidden })
+    .from(category)
+    .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
+    .where(
+      and(
+        eq(category.budgetId, budgetId),
+        isNull(category.internalKind),
+        categoryIds ? inArray(category.id, categoryIds) : undefined,
+      ),
+    );
+  if (categoryIds && rows.length !== new Set(categoryIds).size) {
+    throw new AppError(404, "NOT_FOUND", "Category not found");
+  }
+  const targets = categoryIds ? rows : rows.filter((r) => !r.hidden && !r.groupHidden);
+
+  const { end } = monthBounds(month);
+  const history = await categoryHistory(db, budgetId, end < today ? end : today);
+  await db.transaction(async (tx) => {
+    const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    for (const { id } of targets) {
+      const entries = history.get(id) ?? [];
+      const target = autoAssignAmounts(entries, month)[option];
+      const delta = target - (await assignedAmount(tx, id, month));
+      if (delta === 0n) continue;
+      await adjustAssigned(tx, budget, id, month, delta);
+      await logMove(tx, budget, {
+        userId: c.var.user.id,
+        fromCategoryId: delta > 0n ? readyToAssignId : id,
+        toCategoryId: delta > 0n ? id : readyToAssignId,
+        month,
+        amount: delta > 0n ? delta : -delta,
+      });
+    }
   });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };

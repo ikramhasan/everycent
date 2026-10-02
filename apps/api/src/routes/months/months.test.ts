@@ -487,4 +487,82 @@ describe("budget months", () => {
       );
     });
   });
+
+  describe("auto-assign", () => {
+    it("lists each option's amount and applies one to every visible category", async () => {
+      const { cookie, base, put, spend, month, rent, phone, groceries } = await setup();
+      await put(rent.id, "2026-09", "3000");
+      await spend({ date: "2026-08-25", amount: "-300", categoryId: phone.id });
+      await spend({ date: "2026-09-10", amount: "-1200", categoryId: phone.id });
+      await send("PATCH", `${base}/categories/${groceries.id}`, cookie, { hidden: true });
+      await put(groceries.id, "2026-09", "500");
+
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject({
+        autoAssign: {
+          assignedLastMonth: "3000",
+          spentLastMonth: "0",
+          averageAssigned: "3000",
+          averageSpent: "0",
+          resetAvailable: "-3000",
+          resetAssigned: "0",
+        },
+      });
+      // August and September: $15.00 spent over two months.
+      expect(oct.byCategory(phone.id)).toMatchObject({
+        autoAssign: { spentLastMonth: "1200", averageSpent: "750" },
+      });
+
+      const res = await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+        option: "assignedLastMonth",
+        today: TODAY,
+      });
+      expect(res.status).toBe(200);
+      const after = await month("2026-10");
+      expect(after.byCategory(rent.id)).toMatchObject(t("3000", "0", "6000"));
+      // Hidden categories are left out.
+      expect(after.byCategory(groceries.id)).toMatchObject({ assigned: "0" });
+      const moves = await json<{ moves: { kind: string; amount: string }[] }>(
+        await send("GET", `${base}/moves`, cookie),
+      );
+      expect(moves.moves[0]).toMatchObject({ kind: "assigned", amount: "3000" });
+    });
+
+    it("applies to the categories asked for, and resets", async () => {
+      const { cookie, base, put, month, rent, phone } = await setup();
+      await put(rent.id, "2026-09", "3000");
+      await put(phone.id, "2026-10", "200");
+      const auto = (option: string, categoryIds?: string[]) =>
+        send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+          option,
+          categoryIds,
+          today: TODAY,
+        });
+
+      expect((await auto("resetAvailable", [rent.id])).status).toBe(200);
+      let oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("-3000", "0", "0"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("200", "0", "200"));
+      expect(oct.readyToAssign).toBe("99800");
+
+      expect((await auto("resetAssigned")).status).toBe(200);
+      oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("0", "0", "3000"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("0", "0", "0"));
+    });
+
+    it("refuses unknown categories and months out of range", async () => {
+      const { cookie, base } = await setup();
+      const res = await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+        option: "resetAssigned",
+        categoryIds: ["nope"],
+      });
+      expect(res.status).toBe(404);
+      const far = await send("POST", `${base}/months/2027-06/auto-assign`, cookie, {
+        option: "resetAssigned",
+        today: TODAY,
+      });
+      expect(far.status).toBe(400);
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { divideRounded } from "./rounding";
 
 /** A budget month, "YYYY-MM". */
 export type BudgetMonth = string;
@@ -155,4 +156,76 @@ export function readyToAssign(input: {
   const room = base > 0n ? base : 0n;
   const taken = assignedInFuture < room ? assignedInFuture : room;
   return { readyToAssign: base - taken, assignedInFuture };
+}
+
+/** YNAB's Auto-Assign options (Underfunded and Reduce Overfunding need targets, phase 8). */
+export const AUTO_ASSIGN_OPTIONS = [
+  "assignedLastMonth",
+  "spentLastMonth",
+  "averageAssigned",
+  "averageSpent",
+  "resetAvailable",
+  "resetAssigned",
+] as const;
+export type AutoAssignOption = (typeof AUTO_ASSIGN_OPTIONS)[number];
+
+/** How many months YNAB's averages look back (its help center: "up to the last 12 months"). */
+const AVERAGE_MONTHS = 12;
+
+/**
+ * What each Auto-Assign option would set a category's Assigned to in `month`, from its history
+ * (support.ynab.com "Auto-Assign", checked in YNAB's web app on 2026-10-03):
+ * - Assigned Last Month: last month's Assigned.
+ * - Spent Last Month: last month's spending (outflows less refunds, never below zero).
+ * - Average Assigned / Average Spent: the average over up to the last 12 months before `month`,
+ *   from the first of them in which the category had money assigned or spent (YNAB showed $15 for
+ *   $30 assigned in September and spending in August).
+ * - Reset Available: takes the Available back to zero (less Assigned); an overspent category
+ *   keeps its amount.
+ * - Reset Assigned: zero.
+ * Averages are rounded half-even to the minor unit.
+ */
+export function autoAssignAmounts(
+  history: readonly MonthFigures[],
+  month: BudgetMonth,
+): Record<AutoAssignOption, bigint> {
+  const last = addMonths(month, -1);
+  const byMonth = new Map<BudgetMonth, { assigned: bigint; activity: bigint }>();
+  for (const h of history) {
+    const m = byMonth.get(h.month) ?? { assigned: 0n, activity: 0n };
+    byMonth.set(h.month, { assigned: m.assigned + h.assigned, activity: m.activity + h.activity });
+  }
+  const spent = (activity: bigint) => (activity < 0n ? -activity : 0n);
+
+  const windowStart = addMonths(month, -AVERAGE_MONTHS);
+  const active = [...byMonth]
+    .filter(([m, v]) => m >= windowStart && m < month && (v.assigned !== 0n || v.activity !== 0n))
+    .map(([m]) => m)
+    .sort();
+  let averageAssigned = 0n;
+  let averageSpent = 0n;
+  const first = active[0];
+  if (first) {
+    let count = 0n;
+    let assigned = 0n;
+    let activity = 0n;
+    for (let m = first; m < month; m = addMonths(m, 1)) {
+      count += 1n;
+      assigned += byMonth.get(m)?.assigned ?? 0n;
+      activity += byMonth.get(m)?.activity ?? 0n;
+    }
+    averageAssigned = divideRounded(assigned, count, "half-even");
+    averageSpent = divideRounded(spent(activity), count, "half-even");
+  }
+
+  const current = categoryMonth(history, month);
+  return {
+    assignedLastMonth: byMonth.get(last)?.assigned ?? 0n,
+    spentLastMonth: spent(byMonth.get(last)?.activity ?? 0n),
+    averageAssigned,
+    averageSpent,
+    resetAvailable:
+      current.available > 0n ? current.assigned - current.available : current.assigned,
+    resetAssigned: 0n,
+  };
 }

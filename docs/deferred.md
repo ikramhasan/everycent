@@ -22,8 +22,9 @@ before starting a roadmap phase** and remove an entry once it's done.
   overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
   the bars belong with targets (phase 8), which they mostly show.
 - Moves can't be undone yet (phase 6f).
-- The Ready to Assign banner has no "Assign" menu (auto-assign, phase 6e). The assigned field has
-  no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
+  (docs/verify.md). Underfunded and Reduce Overfunding wait for targets (phase 8). The assigned
+  field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
 - YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
   transaction is coming. We keep future-dated transactions as plain transactions until phase 10,

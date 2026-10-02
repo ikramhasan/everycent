@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { CategoryList as CategoryListData } from "@/lib/categories";
 import type { BudgetMonthData } from "@/lib/months";
+import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import { CategoryList, type CategoryListActions } from "./category-list";
 
 const data: CategoryListData = {
@@ -123,6 +124,7 @@ const totals = (assigned: string, activity: string, available: string) => ({
   assigned,
   activity,
   available,
+  autoAssign: NO_AUTO_ASSIGN,
 });
 
 const month: BudgetMonthData = {
@@ -134,9 +136,9 @@ const month: BudgetMonthData = {
   assignedInFuture: "0",
   futureMonths: [],
   categories: [
-    { categoryId: "c1", ...totals("100", "-30", "70") },
-    { categoryId: "c2", ...totals("0", "-5", "-5") },
-    { categoryId: "c3", ...totals("0", "-2", "-2") },
+    { categoryId: "c1", ...totals("100", "-30", "70"), autoAssign: NO_AUTO_ASSIGN },
+    { categoryId: "c2", ...totals("0", "-5", "-5"), autoAssign: NO_AUTO_ASSIGN },
+    { categoryId: "c3", ...totals("0", "-2", "-2"), autoAssign: NO_AUTO_ASSIGN },
   ],
   groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],
   hidden: totals("0", "-2", "-2"),

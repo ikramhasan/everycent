@@ -489,6 +489,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/auto-assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set categories' Assigned from one of YNAB's Auto-Assign options
+         * @description Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves.
+         */
+        post: operations["autoAssign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/months/{month}/activity": {
         parameters: {
             query?: never;
@@ -1053,6 +1073,22 @@ export interface components {
         };
         MonthCategory: components["schemas"]["MonthTotals"] & {
             categoryId: string;
+            autoAssign: components["schemas"]["AutoAssignAmounts"];
+        };
+        /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
+        AutoAssignAmounts: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            assignedLastMonth: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            spentLastMonth: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            averageAssigned: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            averageSpent: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            resetAvailable: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            resetAssigned: string;
         };
         MonthTotals: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -1079,6 +1115,16 @@ export interface components {
             toCategoryId: string;
             /** @description Positive */
             amount: string;
+            /**
+             * Format: date
+             * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        AutoAssign: {
+            /** @enum {string} */
+            option: "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "resetAvailable" | "resetAssigned";
+            categoryIds?: string[];
             /**
              * Format: date
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
@@ -3166,6 +3212,70 @@ export interface operations {
                 };
             };
             /** @description Invalid amount or categories, or MONTH_OUT_OF_RANGE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't assign money */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    autoAssign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoAssign"];
+            };
+        };
+        responses: {
+            /** @description The month's numbers after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMonth"];
+                };
+            };
+            /** @description Invalid input, or MONTH_OUT_OF_RANGE */
             400: {
                 headers: {
                     [name: string]: unknown;

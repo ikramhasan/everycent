@@ -1,4 +1,9 @@
-import { BUDGET_MONTH_PATTERN, zCurrencyCode, zMinorUnits } from "@everycent/engine";
+import {
+  AUTO_ASSIGN_OPTIONS,
+  BUDGET_MONTH_PATTERN,
+  zCurrencyCode,
+  zMinorUnits,
+} from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -12,7 +17,24 @@ const Totals = z
   .object({ assigned: zMinorUnits, activity: zMinorUnits, available: zMinorUnits })
   .openapi("MonthTotals");
 
-const MonthCategorySchema = Totals.extend({ categoryId: z.string() }).openapi("MonthCategory");
+const AutoAssignSchema = z
+  .object(
+    Object.fromEntries(AUTO_ASSIGN_OPTIONS.map((o) => [o, zMinorUnits])) as Record<
+      (typeof AUTO_ASSIGN_OPTIONS)[number],
+      typeof zMinorUnits
+    >,
+  )
+  .describe(
+    "What each Auto-Assign option would set the category's Assigned to this month: last month's " +
+      "assigned or spending, the average over up to the last 12 months (from the first with money " +
+      "assigned or spent), Available reset to zero, or zero",
+  )
+  .openapi("AutoAssignAmounts");
+
+const MonthCategorySchema = Totals.extend({
+  categoryId: z.string(),
+  autoAssign: AutoAssignSchema,
+}).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");
 
 const BudgetParams = z.object({
@@ -208,6 +230,47 @@ export const listMonthActivity = createRoute({
     400: jsonError("Invalid month, or not exactly one of categoryId, groupId, uncategorized"),
     401: jsonError("Not signed in"),
     404: jsonError("No such budget, category or group, or the caller isn't a member"),
+  },
+});
+
+export const autoAssign = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/months/{month}/auto-assign",
+  operationId: "autoAssign",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Set categories' Assigned from one of YNAB's Auto-Assign options",
+  description:
+    "Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without " +
+    "`categoryIds` it covers every category that isn't hidden. Each change is a move in Recent " +
+    "Moves.",
+  request: {
+    params: BudgetParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              option: z.enum(AUTO_ASSIGN_OPTIONS),
+              categoryIds: z.array(z.string()).min(1).optional(),
+              today: Today.optional(),
+            })
+            .openapi("AutoAssign"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The month's numbers after the change",
+      content: { "application/json": { schema: MonthSchema } },
+    },
+    400: jsonError("Invalid input, or MONTH_OUT_OF_RANGE"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't assign money"),
+    404: jsonError("No such budget or category, or the caller isn't a member"),
   },
 });
 

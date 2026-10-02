@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
+import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
 import { CategoryInspector, MonthSummary } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
@@ -71,6 +72,10 @@ function BudgetPage() {
     "/v1/budgets/{budgetId}/months/{month}/categories/{categoryId}",
   );
   const moveMutation = $api.useMutation("post", "/v1/budgets/{budgetId}/months/{month}/moves");
+  const autoAssignMutation = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/months/{month}/auto-assign",
+  );
 
   const goTo = (m: BudgetMonth) =>
     navigate({ search: { month: m === today ? undefined : m }, replace: false });
@@ -87,10 +92,12 @@ function BudgetPage() {
 
   // Categories on the budget screen (not hidden), with their names and notes.
   const listed = useMemo(() => {
-    const map = new Map<string, { name: string; note: string }>();
+    const map = new Map<string, { name: string; note: string; group: string }>();
     for (const g of categories.data?.groups ?? []) {
       if (g.hidden) continue;
-      for (const c of g.categories) if (!c.hidden) map.set(c.id, { name: c.name, note: c.note });
+      for (const c of g.categories) {
+        if (!c.hidden) map.set(c.id, { name: c.name, note: c.note, group: g.name });
+      }
     }
     return map;
   }, [categories.data]);
@@ -298,6 +305,38 @@ function BudgetPage() {
               listed={listed}
               onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
             />
+            <AutoAssignPanel
+              // The selected categories, or every visible one (YNAB leaves hidden ones out).
+              categories={listFigures.month.categories.filter((c) =>
+                selection.size > 0 ? selection.has(c.categoryId) : visible.has(c.categoryId),
+              )}
+              names={listed}
+              selection={selection.size > 0}
+              format={listFigures.format}
+              onApply={async (option) => {
+                const categoryIds = [...selection].filter((id) => id !== UNCATEGORIZED);
+                // Only Uncategorized selected: nothing to assign to.
+                if (selection.size > 0 && categoryIds.length === 0) return;
+                try {
+                  const updated = await autoAssignMutation.mutateAsync({
+                    params: { path: { budgetId: budget.id, month } },
+                    body: {
+                      option,
+                      ...(categoryIds.length ? { categoryIds } : {}),
+                      today: todayIso(),
+                    },
+                  });
+                  queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
+                } catch (error) {
+                  toast.error(apiErrorMessage(error, "Couldn't assign the money."));
+                } finally {
+                  void invalidateMonths(queryClient);
+                  void queryClient.invalidateQueries({
+                    queryKey: movesQueryOptions(budget.id).queryKey,
+                  });
+                }
+              }}
+            />
             {month === today && (
               <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
             )}
@@ -322,7 +361,7 @@ function Inspector({
   figures: CategoryFigures;
   selection: ReadonlySet<string>;
   shown: ReadonlySet<string> | undefined;
-  listed: ReadonlyMap<string, { name: string; note: string }>;
+  listed: ReadonlyMap<string, { name: string; note: string; group: string }>;
   onNoteChange: (categoryId: string, note: string) => Promise<void>;
 }) {
   const { month, format } = figures;

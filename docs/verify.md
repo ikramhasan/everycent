@@ -236,3 +236,36 @@ Checked in YNAB's web app on 2026-10-03 and built as found:
   +$500.00" (a tracking account, "Category not needed"), which the total doesn't count.
 - **Question:** is that a YNAB bug, or does the group popover list something we don't model?
 - **Built so far (before this rule):** the popover lists exactly what the Activity adds up.
+
+## Auto-Assign (phase 6e)
+
+Checked against support.ynab.com ("Auto-Assign") and in YNAB's web app on 2026-10-03, and built
+as found:
+
+- The inspector's Auto-Assign lists Assigned Last Month, Spent Last Month, Average Assigned,
+  Average Spent, Reset Available Amount(s), Reset Assigned Amount(s), each with an amount; singular
+  labels when one category is selected. Underfunded and Reduce Overfunding need targets (phase 8).
+- An option replaces Assigned (Groceries $50.00 → $30.00 with $30.00 assigned last month). With
+  nothing selected it covers every visible category after "Auto-Assign Preview: …" ("This will
+  update the assigned amount for 1 category.", the changes by group, "Update Assigned
+  Amounts"); with categories selected it applies at once.
+- Averages cover up to the last 12 months before the month, from the first with money assigned or
+  spent ($30.00 assigned in September after $3.00 spent in August: $15.00 / $1.50).
+
+### Rounding of averages
+
+- **Question:** how does YNAB round an average that doesn't come out to the cent ($1.00 over 3
+  months)?
+- **Built so far (before this rule):** half-even to the minor unit.
+
+### The banner's Assign menu
+
+- **Found (help center):** the Ready to Assign banner's "Assign" button opens a pop-up with the
+  same options under an "Auto" tab.
+- **Skipped:** not built; the inspector has every option. Its other tabs weren't checked.
+
+### Reset Assigned on the whole plan
+
+- **Found (help center):** with nothing selected, "there's a prompt to confirm that decision".
+- **Built so far (before this rule):** the same preview every option gets, which needs a click on
+  "Update Assigned Amounts".

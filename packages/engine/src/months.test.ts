@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addMonths,
+  autoAssignAmounts,
   budgetMonthRange,
   categoryMonth,
   categoryOverspending,
@@ -170,5 +171,49 @@ describe("categoryOverspending", () => {
       { month: "2026-08", amount: -300n },
       { month: "2026-10", amount: -200n },
     ]);
+  });
+});
+
+describe("autoAssignAmounts", () => {
+  const m = (month: string, assigned: bigint, activity: bigint) => ({ month, assigned, activity });
+
+  it("uses last month's assigned and spending", () => {
+    const history = [m("2026-09", 3000n, -1200n), m("2026-10", 1000n, 0n)];
+    expect(autoAssignAmounts(history, "2026-10")).toMatchObject({
+      assignedLastMonth: 3000n,
+      spentLastMonth: 1200n,
+      resetAssigned: 0n,
+    });
+    // A refund isn't negative spending.
+    expect(autoAssignAmounts([m("2026-09", 0n, 500n)], "2026-10").spentLastMonth).toBe(0n);
+  });
+
+  it("averages from the first month with money assigned or spent", () => {
+    // YNAB: $30.00 assigned in September after $3.00 spent in August averages $15.00 / $1.50.
+    const history = [m("2026-08", 0n, -300n), m("2026-09", 3000n, 0n), m("2026-10", 1000n, 0n)];
+    expect(autoAssignAmounts(history, "2026-10")).toMatchObject({
+      averageAssigned: 1500n,
+      averageSpent: 150n,
+    });
+    expect(autoAssignAmounts([], "2026-10")).toMatchObject({
+      averageAssigned: 0n,
+      averageSpent: 0n,
+    });
+  });
+
+  it("looks back at most 12 months and rounds half-even", () => {
+    const history = [m("2025-01", 99900n, 0n), m("2025-10", 100n, 0n), m("2025-11", 0n, -1n)];
+    // October 2025 to September 2026: 12 months, 100 / 12 rounds to 8.
+    expect(autoAssignAmounts(history, "2026-10")).toMatchObject({
+      averageAssigned: 8n,
+      averageSpent: 0n,
+    });
+  });
+
+  it("resets Available to zero, leaving overspent categories alone", () => {
+    const history = [m("2026-09", 2000n, 0n), m("2026-10", 500n, -100n)];
+    // Available is 2,400 with 500 assigned this month: Assigned goes to -1,900.
+    expect(autoAssignAmounts(history, "2026-10").resetAvailable).toBe(-1900n);
+    expect(autoAssignAmounts([m("2026-10", 500n, -900n)], "2026-10").resetAvailable).toBe(500n);
   });
 });
