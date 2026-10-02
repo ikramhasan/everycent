@@ -317,4 +317,105 @@ describe("budget months", () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe("moving money", () => {
+    type Move = {
+      kind: string;
+      fromCategoryId: string | null;
+      toCategoryId: string | null;
+      month: string;
+      amount: string;
+      userName: string | null;
+    };
+
+    async function moveSetup() {
+      const ctx = await setup();
+      const move = (fromCategoryId: string, toCategoryId: string, amount: string, m = "2026-10") =>
+        send("POST", `${ctx.base}/months/${m}/moves`, ctx.cookie, {
+          fromCategoryId,
+          toCategoryId,
+          amount,
+          today: TODAY,
+        });
+      const moves = async () =>
+        (await json<{ moves: Move[] }>(await send("GET", `${ctx.base}/moves`, ctx.cookie))).moves;
+      return { ...ctx, move, moves };
+    }
+
+    it("moves assigned money between categories", async () => {
+      const { put, move, month, rent, phone } = await moveSetup();
+      await put(rent.id, "2026-10", "5000");
+      const res = await move(rent.id, phone.id, "1000");
+      expect(res.status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("4000", "0", "4000"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("1000", "0", "1000"));
+      expect(oct.readyToAssign).toBe("95000");
+    });
+
+    it("covers overspending, and moves money back to Ready to Assign", async () => {
+      const { put, move, month, spend, rent, phone, readyToAssignCategoryId } = await moveSetup();
+      await put(rent.id, "2026-10", "5000");
+      await spend({ date: "2026-10-01", amount: "-1500", categoryId: phone.id });
+      await move(rent.id, phone.id, "1500");
+      expect((await month("2026-10")).byCategory(phone.id)).toMatchObject(t("1500", "-1500", "0"));
+      await move(rent.id, readyToAssignCategoryId, "2000");
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("1500", "0", "1500"));
+      expect(oct.readyToAssign).toBe("97000");
+      // And from Ready to Assign, as assigning does.
+      await move(readyToAssignCategoryId, rent.id, "500");
+      expect((await month("2026-10")).byCategory(rent.id)).toMatchObject(t("2000", "0", "2000"));
+    });
+
+    it("lists every change to assigned money, newest first", async () => {
+      const { put, move, moves, rent, phone, readyToAssignCategoryId } = await moveSetup();
+      await put(rent.id, "2026-10", "5000");
+      await put(rent.id, "2026-10", "5000"); // unchanged: not a move
+      await move(rent.id, phone.id, "1000");
+      await move(phone.id, readyToAssignCategoryId, "400");
+      await put(rent.id, "2026-10", "3000");
+      expect(await moves()).toMatchObject([
+        { kind: "removed", fromCategoryId: rent.id, toCategoryId: null, amount: "1000" },
+        { kind: "removed", fromCategoryId: phone.id, toCategoryId: null, amount: "400" },
+        { kind: "moved", fromCategoryId: rent.id, toCategoryId: phone.id, amount: "1000" },
+        {
+          kind: "assigned",
+          fromCategoryId: null,
+          toCategoryId: rent.id,
+          month: "2026-10",
+          amount: "5000",
+          userName: "Test User",
+        },
+      ]);
+    });
+
+    it("refuses bad moves", async () => {
+      const { move, rent, phone, readyToAssignCategoryId } = await moveSetup();
+      expect((await move(rent.id, rent.id, "100")).status).toBe(400);
+      expect((await move(rent.id, phone.id, "0")).status).toBe(400);
+      expect((await move(rent.id, phone.id, "-5")).status).toBe(400);
+      expect((await move(rent.id, phone.id, "100", "2027-05")).status).toBe(400);
+      expect((await move(rent.id, "nope", "100")).status).toBe(404);
+      // Ready to Assign to Ready to Assign isn't a move either.
+      expect((await move(readyToAssignCategoryId, readyToAssignCategoryId, "1")).status).toBe(400);
+    });
+
+    it("takes a deleted category's assigned money along with its transactions", async () => {
+      const { cookie, base, put, spend, month, rent, phone } = await moveSetup();
+      await put(rent.id, "2026-09", "3000");
+      await put(rent.id, "2026-10", "2000");
+      await put(phone.id, "2026-10", "100");
+      await spend({ date: "2026-10-01", amount: "-500", categoryId: rent.id });
+      const res = await send(
+        "DELETE",
+        `${base}/categories/${rent.id}?reassignToCategoryId=${phone.id}`,
+        cookie,
+      );
+      expect(res.status).toBe(204);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(phone.id)).toMatchObject(t("2100", "-500", "4600"));
+      expect(oct.readyToAssign).toBe("94900");
+    });
+  });
 });

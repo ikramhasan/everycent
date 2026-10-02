@@ -117,3 +117,88 @@ export const assignCategory = createRoute({
     404: jsonError("No such budget or category, or the caller isn't a member"),
   },
 });
+
+export const moveMoney = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/months/{month}/moves",
+  operationId: "moveMoney",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Move assigned money between categories, or to and from Ready to Assign",
+  description:
+    "Takes `amount` off the first category's Assigned and adds it to the second's in `month`. " +
+    "Ready to Assign's internal category stands for Ready to Assign itself (its id is " +
+    "`readyToAssignCategoryId` in the category list). Covering overspending and un-assigning " +
+    "money are moves too.",
+  request: {
+    params: BudgetParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              fromCategoryId: z.string(),
+              toCategoryId: z.string(),
+              amount: zMinorUnits.describe("Positive"),
+              today: Today.optional(),
+            })
+            .openapi("MoveMoney"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The month's numbers after the move",
+      content: { "application/json": { schema: MonthSchema } },
+    },
+    400: jsonError("Invalid amount or categories, or MONTH_OUT_OF_RANGE"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't assign money"),
+    404: jsonError("No such budget or category, or the caller isn't a member"),
+  },
+});
+
+const MoneyMoveSchema = z
+  .object({
+    id: z.string(),
+    kind: z
+      .enum(["assigned", "moved", "removed"])
+      .describe("assigned: from Ready to Assign; removed: back to it; moved: between categories"),
+    fromCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
+    toCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
+    month: zBudgetMonth,
+    amount: zMinorUnits.describe("Positive"),
+    movedAt: z.iso.datetime(),
+    userName: z.string().nullable().describe("Who moved it; null if they left the budget"),
+  })
+  .openapi("MoneyMove");
+
+export const listMoves = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/moves",
+  operationId: "listMoves",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Recent changes to assigned money, newest first",
+  request: {
+    params: z.object({
+      budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The latest moves",
+      content: {
+        "application/json": {
+          schema: z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList"),
+        },
+      },
+    },
+    401: jsonError("Not signed in"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});

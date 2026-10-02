@@ -38,6 +38,7 @@ import {
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
+import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 
 export interface CategoryListActions {
@@ -75,6 +76,8 @@ export interface CategoryFigures {
   format: (minorUnits: string) => string;
   /** Makes the Assigned column editable. */
   assign?: AssignActions;
+  /** Makes Available open YNAB's move and cover popovers. */
+  move?: MoveActions;
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
@@ -101,12 +104,15 @@ export function CategoryList({
   figures,
   collapsed = NO_GROUPS,
   onCollapsedChange,
+  toolbar,
 }: {
   data: CategoryListData;
   actions: CategoryListActions;
   figures?: CategoryFigures;
   collapsed?: ReadonlySet<string>;
   onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
+  /** More buttons next to "Category Group" (e.g. Recent Moves). */
+  toolbar?: ReactNode;
 }) {
   const serverLayout = useMemo(() => visibleLayout(data), [data]);
   const [layout, setLayout] = useState<VisibleLayout>(serverLayout);
@@ -179,7 +185,7 @@ export function CategoryList({
 
   return (
     <div className="grid gap-4">
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <NamePopover
           title="New category group"
           submitLabel="Add"
@@ -190,6 +196,7 @@ export function CategoryList({
             </Button>
           }
         />
+        {toolbar}
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -305,6 +312,7 @@ export function CategoryList({
                         totals={categoryFigures.get(categoryId)}
                         format={figures?.format}
                         assign={figures?.assign}
+                        move={figures?.move}
                         onDelete={() => requestDelete("category", category.id, category.name)}
                       />
                     );
@@ -512,6 +520,7 @@ function CategoryRow({
   totals,
   format,
   assign,
+  move,
   onDelete,
 }: {
   category: Category;
@@ -521,6 +530,7 @@ function CategoryRow({
   totals: MonthTotals | undefined;
   format: CategoryFigures["format"] | undefined;
   assign: AssignActions | undefined;
+  move: MoveActions | undefined;
   onDelete: () => void;
 }) {
   const isPayment = Boolean(category.linkedAccountId);
@@ -583,6 +593,9 @@ function CategoryRow({
         {category.note && (
           <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
         )}
+        {totals && format && totals.available.startsWith("-") && (
+          <OverspentNote totals={totals} format={format} />
+        )}
       </div>
       {totals && format && (
         <>
@@ -599,7 +612,17 @@ function CategoryRow({
           )}
           <span className={cn(FIGURE, "text-sm")}>{format(totals.activity)}</span>
           <span className={FIGURE}>
-            <AvailablePill amount={totals.available} format={format} />
+            {move ? (
+              <AvailableButton
+                categoryId={category.id}
+                categoryName={category.name}
+                amount={totals.available}
+                format={format}
+                actions={move}
+              />
+            ) : (
+              <AvailablePill amount={totals.available} format={format} />
+            )}
           </span>
         </>
       )}
@@ -607,19 +630,22 @@ function CategoryRow({
   );
 }
 
-/** Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. */
-function AvailablePill({ amount, format }: { amount: string; format: CategoryFigures["format"] }) {
-  const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
+/**
+ * YNAB's note on an overspent category: what was spent of what it had (carried in plus assigned),
+ * e.g. "Overspent. $25.00 of $10.00".
+ */
+function OverspentNote({
+  totals,
+  format,
+}: {
+  totals: MonthTotals;
+  format: CategoryFigures["format"];
+}) {
+  const spent = -BigInt(totals.activity);
+  const had = BigInt(totals.available) - BigInt(totals.activity);
   return (
-    <span
-      className={cn(
-        "inline-block max-w-full truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
-        sign > 0 && "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
-        sign < 0 && "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
-        sign === 0 && "bg-muted text-muted-foreground",
-      )}
-    >
-      {format(amount)}
+    <span className="min-w-0 flex-1 basis-0 truncate pl-2 text-right text-destructive text-xs">
+      Overspent. {format(spent.toString())} of {format(had.toString())}
     </span>
   );
 }

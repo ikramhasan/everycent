@@ -1,10 +1,12 @@
-import { newId, sql } from "@everycent/db";
+import { sql } from "@everycent/db";
 import {
   category,
   categoryAssignment,
   categoryGroup,
+  moneyMove,
   subTransaction,
   transaction,
+  user,
 } from "@everycent/db/schema";
 import {
   type BudgetMonth,
@@ -20,14 +22,15 @@ import {
   readyToAssign,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, eq, isNotNull, lte, max, min } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lte, max, min } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { type Db, serverToday } from "../../lib/ledger";
+import { type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import type { assignCategory, getBudgetMonth } from "./routes";
+import type { assignCategory, getBudgetMonth, listMoves, moveMoney } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -113,6 +116,46 @@ const totalsJson = (n: CategoryMonth) => ({
   available: n.available.toString(),
 });
 
+/** The months the budget shows, as of the user's `today`. */
+async function monthRange(db: Db, budgetId: string, today: string) {
+  const [earliest] = await db
+    .select({ date: min(transaction.date) })
+    .from(transaction)
+    .where(eq(transaction.budgetId, budgetId));
+  const [latest] = await db
+    .select({ month: max(categoryAssignment.month) })
+    .from(categoryAssignment)
+    .where(eq(categoryAssignment.budgetId, budgetId));
+  return budgetMonthRange({
+    current: monthOf(today),
+    earliestTransaction: earliest?.date ? monthOf(earliest.date) : null,
+    latestAssigned: latest?.month ? monthOf(latest.month) : null,
+  });
+}
+
+/** Refuses months the budget doesn't show. */
+async function assertMonthInRange(db: Db, budgetId: string, month: BudgetMonth, today: string) {
+  const { first, last } = await monthRange(db, budgetId, today);
+  if (month < first || month > last) {
+    throw new AppError(400, "MONTH_OUT_OF_RANGE", `Money can be assigned from ${first} to ${last}`);
+  }
+}
+
+/**
+ * A category money can be assigned to or moved from: a listed category, or Ready to Assign's
+ * internal one (the other end of assigning and removing money).
+ */
+async function moneyCategory(db: Db, budgetId: string, categoryId: string) {
+  const [row] = await db
+    .select({ id: category.id, internalKind: category.internalKind })
+    .from(category)
+    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
+  if (!row || row.internalKind === "uncategorized") {
+    throw new AppError(404, "NOT_FOUND", "Category not found");
+  }
+  return { id: row.id, readyToAssign: row.internalKind === "ready_to_assign" };
+}
+
 /** The budget screen's numbers for `month`, as of the user's `today`. */
 export async function budgetMonthJson(
   db: Db,
@@ -126,19 +169,7 @@ export async function budgetMonthJson(
   const cutoff = end < today ? end : today;
   const history = await categoryHistory(db, budgetId, cutoff);
 
-  const [earliest] = await db
-    .select({ date: min(transaction.date) })
-    .from(transaction)
-    .where(eq(transaction.budgetId, budgetId));
-  const [latest] = await db
-    .select({ month: max(categoryAssignment.month) })
-    .from(categoryAssignment)
-    .where(eq(categoryAssignment.budgetId, budgetId));
-  const range = budgetMonthRange({
-    current: monthOf(today),
-    earliestTransaction: earliest?.date ? monthOf(earliest.date) : null,
-    latestAssigned: latest?.month ? monthOf(latest.month) : null,
-  });
+  const range = await monthRange(db, budgetId, today);
 
   const categories = await db
     .select({
@@ -227,35 +258,97 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
-  const [target] = await db
-    .select({ id: category.id, internalKind: category.internalKind })
-    .from(category)
-    .where(and(eq(category.id, categoryId), eq(category.budgetId, budgetId)));
-  if (!target || target.internalKind) throw new AppError(404, "NOT_FOUND", "Category not found");
+  const target = await moneyCategory(db, budgetId, categoryId);
+  if (target.readyToAssign) throw new AppError(404, "NOT_FOUND", "Category not found");
+  await assertMonthInRange(db, budgetId, month, today);
 
-  const { firstMonth, lastMonth } = await budgetMonthJson(db, budget, monthOf(today), today);
-  if (month < firstMonth || month > lastMonth) {
-    throw new AppError(
-      400,
-      "MONTH_OUT_OF_RANGE",
-      `Money can be assigned from ${firstMonth} to ${lastMonth}`,
-    );
-  }
-
-  // The row stays at zero too: YNAB keeps a month open once money was assigned in it.
-  await db
-    .insert(categoryAssignment)
-    .values({
-      id: newId(),
-      budgetId,
-      categoryId,
-      month: `${month}-01`,
-      amount: BigInt(assigned),
-      currency: budget.currency,
-    })
-    .onConflictDoUpdate({
-      target: [categoryAssignment.categoryId, categoryAssignment.month],
-      set: { amount: BigInt(assigned), updatedAt: new Date() },
+  await db.transaction(async (tx) => {
+    const delta = BigInt(assigned) - (await assignedAmount(tx, categoryId, month));
+    await adjustAssigned(tx, budget, categoryId, month, delta);
+    if (delta === 0n) return;
+    const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    await logMove(tx, budget, {
+      userId: c.var.user.id,
+      fromCategoryId: delta > 0n ? readyToAssignId : categoryId,
+      toCategoryId: delta > 0n ? categoryId : readyToAssignId,
+      month,
+      amount: delta > 0n ? delta : -delta,
     });
+  });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };
+
+export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { fromCategoryId, toCategoryId, amount, today = serverToday() } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
+
+  const from = await moneyCategory(db, budgetId, fromCategoryId);
+  const to = await moneyCategory(db, budgetId, toCategoryId);
+  if (from.id === to.id) {
+    throw new AppError(400, "BAD_REQUEST", "Money has to move to another category");
+  }
+  const value = BigInt(amount);
+  if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Move a positive amount");
+  await assertMonthInRange(db, budgetId, month, today);
+
+  // Moving money changes what each side has assigned; Ready to Assign follows from that.
+  await db.transaction(async (tx) => {
+    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, month, -value);
+    if (!to.readyToAssign) await adjustAssigned(tx, budget, to.id, month, value);
+    await logMove(tx, budget, {
+      userId: c.var.user.id,
+      fromCategoryId: from.id,
+      toCategoryId: to.id,
+      month,
+      amount: value,
+    });
+  });
+  return c.json(await budgetMonthJson(db, budget, month, today), 200);
+};
+
+export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const readyToAssignId = await internalCategoryId(db, budgetId, "ready_to_assign");
+  const rows = await db
+    .select({
+      id: moneyMove.id,
+      fromCategoryId: moneyMove.fromCategoryId,
+      toCategoryId: moneyMove.toCategoryId,
+      month: moneyMove.month,
+      amount: moneyMove.amount,
+      createdAt: moneyMove.createdAt,
+      userName: user.name,
+    })
+    .from(moneyMove)
+    .leftJoin(user, eq(user.id, moneyMove.userId))
+    .where(eq(moneyMove.budgetId, budgetId))
+    .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id))
+    .limit(RECENT_MOVES);
+  return c.json(
+    {
+      moves: rows.map((m) => ({
+        id: m.id,
+        kind:
+          m.fromCategoryId === readyToAssignId
+            ? ("assigned" as const)
+            : m.toCategoryId === readyToAssignId
+              ? ("removed" as const)
+              : ("moved" as const),
+        fromCategoryId: m.fromCategoryId === readyToAssignId ? null : m.fromCategoryId,
+        toCategoryId: m.toCategoryId === readyToAssignId ? null : m.toCategoryId,
+        month: monthOf(m.month),
+        amount: m.amount.toString(),
+        movedAt: m.createdAt.toISOString(),
+        userName: m.userName,
+      })),
+    },
+    200,
+  );
+};
+
+/** How many moves "Recent Moves" lists (YNAB's limit is open in docs/verify.md). */
+const RECENT_MOVES = 100;

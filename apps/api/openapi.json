@@ -2714,6 +2714,108 @@
         "required": [
           "assigned"
         ]
+      },
+      "MoveMoney": {
+        "type": "object",
+        "properties": {
+          "fromCategoryId": {
+            "type": "string"
+          },
+          "toCategoryId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Positive"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "fromCategoryId",
+          "toCategoryId",
+          "amount"
+        ]
+      },
+      "MoneyMoveList": {
+        "type": "object",
+        "properties": {
+          "moves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyMove"
+            }
+          }
+        },
+        "required": [
+          "moves"
+        ]
+      },
+      "MoneyMove": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "assigned",
+              "moved",
+              "removed"
+            ],
+            "description": "assigned: from Ready to Assign; removed: back to it; moved: between categories"
+          },
+          "fromCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null for Ready to Assign"
+          },
+          "toCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null for Ready to Assign"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "A month, YYYY-MM"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Positive"
+          },
+          "movedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who moved it; null if they left the budget"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "fromCategoryId",
+          "toCategoryId",
+          "month",
+          "amount",
+          "movedAt",
+          "userName"
+        ]
       }
     },
     "parameters": {}
@@ -5640,6 +5742,160 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}/moves": {
+      "post": {
+        "operationId": "moveMoney",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Move assigned money between categories, or to and from Ready to Assign",
+        "description": "Takes `amount` off the first category's Assigned and adds it to the second's in `month`. Ready to Assign's internal category stands for Ready to Assign itself (its id is `readyToAssignCategoryId` in the category list). Covering overspending and un-assigning money are moves too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveMoney"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The month's numbers after the move",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMonth"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid amount or categories, or MONTH_OUT_OF_RANGE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't assign money",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/moves": {
+      "get": {
+        "operationId": "listMoves",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Recent changes to assigned money, newest first",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest moves",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMoveList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

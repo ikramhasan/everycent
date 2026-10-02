@@ -147,3 +147,51 @@ Checked in YNAB's web app on 2026-10-02 and built as found (numbers from the tes
 - **Question:** what does YNAB's onboarding ask in its funding step (assign to each chosen
   category, a suggested split, or just a pointer to the budget screen)?
 - **Skipped:** the setup flow still ends after "Add accounts".
+
+## Overspending and moving money (phase 6c)
+
+Checked in YNAB's web app on 2026-10-02 and built as found:
+
+- Clicking a category's Available opens "Move [amount] To [category]" (the amount starts at all
+  that's available; Ready to Assign and every category are offered, with what each has). Moving
+  money changes both categories' Assigned (Rent $50 → $40, Utilities $0 → $10); moving to Ready
+  to Assign lowers the category's Assigned and raises Ready to Assign.
+- An overspent category's Available opens "Cover overspending from [category]", offering Ready to
+  Assign and the categories with money. It moves as much as the source has, up to the
+  overspending ($3 from Rent left Groceries at −$2). Uncategorized's Available opens nothing.
+- An overspent category says "Overspent. $spent of $had" ("Overspent. $25.00 of $10.00").
+- "Fix This" on a negative Ready to Assign: "Un-assign money from [category]", offering
+  categories with money; it takes back the shortfall, or as much as the category has.
+- "Recent Moves" lists every change to assigned money by day: "Assigned $50.00 to Rent" (from
+  Ready to Assign), "Removed $22.00 from Rent" (back to it), "Moved $3.00 from Rent to Groceries"
+  (covers too), each with the month; filters All / Moved / Assigned. Undone changes drop out.
+- Cash overspending comes out of the next month's Ready to Assign (see phase 6b).
+
+### Moving more than a category has
+
+- **Question:** can the Move field take more than the category has available (leaving it
+  negative), or is it capped or refused?
+- **Built so far (before this rule):** any positive amount moves; the category can go negative.
+
+### Deleting a category that has assigned money but no transactions
+
+- **Found (help center):** deleting a category reassigns its transactions, assigned amounts and
+  available money to the category you pick.
+- **Question:** is the reassign question also asked when the category has money but no
+  transactions? If not, where does the money go?
+- **Built so far (before this rule):** only categories with transactions ask; the money of one
+  without transactions returns to Ready to Assign.
+
+### How far back Recent Moves goes, and whose moves it shows
+
+- **Question:** how many moves (or days) does Recent Moves keep, and on a shared budget does it
+  show who made each move?
+- **Built so far (before this rule):** the latest 100 moves; the API returns who moved it, the
+  list doesn't show it.
+
+### The month in "Fix This"
+
+- **Found:** the first time it opened, "Un-assign money from" had a month picker ("Nov 2026")
+  next to the label; later it didn't.
+- **Question:** when does Fix This offer another month, and which months?
+- **Built so far (before this rule):** money is un-assigned in the month on screen.

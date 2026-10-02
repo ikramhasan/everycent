@@ -148,9 +148,9 @@ and fresh start (after phase 5 core).
 - [x] Ready to Assign calculation (inflows − assigned, across months)
 - [x] Assign money to categories; math in the amount field (`+`, `-`, `*`, `/`)
 - [x] Available rolls over month to month
-- [ ] Cash overspending (reduces next month's Ready to Assign) — highlighted red
-- [ ] Move money between categories (and back to Ready to Assign)
-- [ ] Cover overspending flow
+- [x] Cash overspending (reduces next month's Ready to Assign) — highlighted red
+- [x] Move money between categories (and back to Ready to Assign), with Recent Moves
+- [x] Cover overspending flow
 - [x] Over-assigned warning (Ready to Assign negative)
 - [x] Month navigation, budgeting in future months, "assigned in future" indicator
 - [x] Income for future months (assign next month's income): today's YNAB has no separate

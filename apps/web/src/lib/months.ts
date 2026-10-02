@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { format, parse } from "date-fns";
 import { useCallback, useState } from "react";
 import { $api } from "./api";
+import type { CategoryList } from "./categories";
 import { todayIso } from "./dates";
 
 export type BudgetMonthData = components["schemas"]["BudgetMonth"];
@@ -68,3 +69,42 @@ export function useCollapsedGroups(budgetId: string) {
   );
   return { collapsed, setCollapsed: update };
 }
+
+export interface MoneyOption {
+  id: string;
+  name: string;
+  group: string;
+  /** What's available in it this month (Ready to Assign's own amount for Ready to Assign). */
+  available: string;
+}
+
+/**
+ * Where money can move to or from, as YNAB lists it: Ready to Assign first, then the visible
+ * categories by group, each with what's available this month.
+ */
+export function moneyOptions(list: CategoryList, month: BudgetMonthData): MoneyOption[] {
+  const available = new Map(month.categories.map((c) => [c.categoryId, c.available]));
+  return [
+    {
+      id: list.readyToAssignCategoryId,
+      name: "Ready to Assign",
+      group: "Inflow",
+      available: month.readyToAssign,
+    },
+    ...list.groups
+      .filter((g) => !g.hidden)
+      .flatMap((g) =>
+        g.categories
+          .filter((c) => !c.hidden)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            group: g.name,
+            available: available.get(c.id) ?? "0",
+          })),
+      ),
+  ];
+}
+
+/** The smaller of two amounts in minor units. */
+export const minAmount = (a: bigint, b: bigint) => (a < b ? a : b);

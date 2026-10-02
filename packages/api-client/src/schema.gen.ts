@@ -469,6 +469,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move assigned money between categories, or to and from Ready to Assign
+         * @description Takes `amount` off the first category's Assigned and adds it to the second's in `month`. Ready to Assign's internal category stands for Ready to Assign itself (its id is `readyToAssignCategoryId` in the category list). Covering overspending and un-assigning money are moves too.
+         */
+        post: operations["moveMoney"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent changes to assigned money, newest first */
+        get: operations["listMoves"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1016,6 +1053,40 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+        };
+        MoveMoney: {
+            fromCategoryId: string;
+            toCategoryId: string;
+            /** @description Positive */
+            amount: string;
+            /**
+             * Format: date
+             * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        MoneyMoveList: {
+            moves: components["schemas"]["MoneyMove"][];
+        };
+        MoneyMove: {
+            id: string;
+            /**
+             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories
+             * @enum {string}
+             */
+            kind: "assigned" | "moved" | "removed";
+            /** @description Null for Ready to Assign */
+            fromCategoryId: string | null;
+            /** @description Null for Ready to Assign */
+            toCategoryId: string | null;
+            /** @description A month, YYYY-MM */
+            month: string;
+            /** @description Positive */
+            amount: string;
+            /** Format: date-time */
+            movedAt: string;
+            /** @description Who moved it; null if they left the budget */
+            userName: string | null;
         };
     };
     responses: never;
@@ -3020,6 +3091,110 @@ export interface operations {
                 };
             };
             /** @description No such budget or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    moveMoney: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveMoney"];
+            };
+        };
+        responses: {
+            /** @description The month's numbers after the move */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMonth"];
+                };
+            };
+            /** @description Invalid amount or categories, or MONTH_OUT_OF_RANGE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't assign money */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMoves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The latest moves */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyMoveList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

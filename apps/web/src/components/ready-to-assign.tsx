@@ -1,6 +1,7 @@
 import { addMonths, type BudgetMonth } from "@everycent/engine";
 import { cn } from "@everycent/ui/lib/utils";
 import { CircleCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { type BudgetMonthData, monthName } from "@/lib/months";
 
 /**
@@ -12,11 +13,14 @@ export function ReadyToAssignBanner({
   current,
   amount,
   format,
+  action,
 }: {
   month: BudgetMonth;
   current: BudgetMonth;
   amount: string;
   format: (minorUnits: string) => string;
+  /** A button for the negative state (YNAB's "Fix This"). */
+  action?: ReactNode;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   // YNAB's wording for a negative month differs between a past month and the current one; which
@@ -39,6 +43,7 @@ export function ReadyToAssignBanner({
         </span>
       </span>
       {sign === 0 && <CircleCheck className="size-6" aria-hidden />}
+      {sign < 0 && action}
     </output>
   );
 }

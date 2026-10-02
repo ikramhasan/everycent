@@ -71,6 +71,13 @@
       "when": 1790949377601,
       "tag": "0009_category_assignment",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790953310938,
+      "tag": "0010_money_move",
+      "breakpoints": true
     }
   ]
 }

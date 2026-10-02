@@ -15,10 +15,13 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 - All overspending counts as cash overspending (it comes out of the next month's Ready to Assign).
   Phase 7 must treat spending on a credit card as credit overspending (new debt, yellow).
-- The negative Ready to Assign banner has no "Fix This" (un-assign money from a category) or
-  "Next Steps" button, and the current month doesn't warn when a later month is negative (YNAB:
-  "Ready to Assign in November is −$985.00" with Cover Overspending / Go to November). Phase 6c
-  (moving money and covering overspending).
+- Past months' negative banner ("Overdraft?") has no "Next Steps" link (a YNAB help page).
+- The current month doesn't warn when a later month is negative (YNAB's future-months panel:
+  "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
+- YNAB draws a progress bar under every category (green as money is spent, red stripes when
+  overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
+  the bars belong with targets (phase 8), which they mostly show.
+- Moves can't be undone yet (phase 6f).
 - The Ready to Assign banner has no "Assign" menu (auto-assign, phase 6e). The assigned field has
   no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
@@ -38,11 +41,13 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Credit-card starting debt has **no category**. Phase 7 must treat it as existing debt to be paid
   from the card's payment category (YNAB: "assign money to cover the starting balance directly to
   the Credit Card Payment category").
-- Deleting a category reassigns its **transactions** only. Phase 6 must also move assigned amounts
-  (YNAB reassigns transactions, assigned amounts and available money).
+- Deleting a category moves its transactions and assigned money to the category picked (YNAB
+  reassigns transactions, assigned amounts and available money). Moving to Ready to Assign or
+  Uncategorized returns the money to Ready to Assign.
 - Closing an account with a non-zero balance creates a "Manual Balance Adjustment" transaction;
-  for on-budget accounts it's categorized to Ready to Assign (as YNAB does). Verify this against
-  the phase 6/7 math once it exists, especially for credit cards.
+  for on-budget accounts it's categorized to Ready to Assign (as YNAB does). With the phase 6 math
+  that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
+  its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
 
 ## Onboarding and fresh start
 
