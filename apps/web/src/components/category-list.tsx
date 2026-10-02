@@ -799,14 +799,18 @@ function CategoryRow({
             <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
           )}
           <span className={cn(FIGURE, "text-sm")}>
-            {figures && (
-              <Activity
-                figures={figures}
-                target={{ categoryId: category.id }}
-                name={category.name}
-                amount={totals.activity}
-              />
-            )}
+            {/* A payment category's activity is moved money, not its own transactions; YNAB's card
+                activity window comes with payments (phase 7d, docs/deferred.md). */}
+            {isPayment && format
+              ? format(totals.activity)
+              : figures && (
+                  <Activity
+                    figures={figures}
+                    target={{ categoryId: category.id }}
+                    name={category.name}
+                    amount={totals.activity}
+                  />
+                )}
           </span>
           <span className={FIGURE}>
             {move ? (

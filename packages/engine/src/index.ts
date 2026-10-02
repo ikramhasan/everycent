@@ -13,6 +13,7 @@ export {
 } from "./accounts";
 export { allocate } from "./allocate";
 export { evaluateAmount } from "./amount-expression";
+export { type CardActivity, fundedCardSpending } from "./credit";
 export {
   assertCurrencyCode,
   CURRENCY_CODES,

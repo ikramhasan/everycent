@@ -42,9 +42,17 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
   on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
   Overfunded and Snoozed views wait for targets (phase 8).
-- Cash Spending and Credit Spending are split by account family (phase 7a), but nothing acts on
-  the split yet: credit spending still counts as cash overspending, and no money moves to payment
-  categories (7b–7c). Uncategorized's "will be deducted" note still quotes its whole Available;
+- Funded card spending moves into each card's payment category (phase 7b), computed from history
+  on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
+  (docs/verify.md). Not yet: credit overspending (the unfunded part still counts as cash
+  overspending, 7c), payments out of the payment category (7d), positive card balances acting as
+  cash (7e), and uncategorized card spending or card inflows to Ready to Assign moving payment
+  money (7c–7d).
+- A payment category's Activity is plain text, not a drill-down: YNAB's card activity window
+  (Spending, Returns, Funded Spending, Payments & Returns) comes with payments in 7d. Its
+  inspector still shows the spending breakdown; YNAB's Payment/Underfunded/Current Balance panel
+  needs 7c. Auto-Assign on payment categories (YNAB: Underfunded, Paid Last Month, Average Paid)
+  is still the spending set. Uncategorized's "will be deducted" note still quotes its whole Available;
   YNAB quotes only the cash part (docs/verify.md).
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
   listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded

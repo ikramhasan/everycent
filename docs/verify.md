@@ -331,6 +331,13 @@ categories T1–T6). Confirmed:
 - **Question:** how does YNAB split a category's money between cards when it can't fund them all
   (transaction date, account creation, transaction id …)? This is also 7c's "which payment method
   is funded first" gate.
+- **Built so far (before this rule):** the newest card (latest-created account) is funded first,
+  which fits all three cases seen (`fundedCardSpending` in `packages/engine/src/credit.ts`).
+- **How to settle it:** two new cards (Card A then Card B, each starting at $100 owed), $5
+  assigned to a new category, then Card A −$4 dated 10/02 and Card B −$3 dated 10/01, entered in
+  that order; reload twice and read both payment categories' Available. Repeat with the purchases
+  swapped between the cards. A 4/1 split means a whole purchase was funded first; anything like
+  2.86/2.14 means a proportional split.
 
 ### Returns on one card, spending on another, in the same category
 
@@ -341,5 +348,10 @@ categories T1–T6). Confirmed:
   $22.00 of categorized Amex returns.
 - **Question:** does a return on one card fund spending on another card in the same category,
   and how much leaves the returning card's payment category?
-- **Skipped:** 7b is not built until both questions above are settled (they decide what every
-  multi-card month computes).
+- **Built so far (before this rule):** card returns go back into the category's money and can fund
+  another card's spending there; each returning card's payment category gives up its whole return.
+  This matched the categories' Available in every case (T2 $2.00, T3/T4 $0.00) but not every
+  payment category's number, which YNAB itself changed between reloads.
+- **How to settle it:** with the two new cards above (balances below zero throughout), a category
+  with $0 assigned: Card A +$5 dated 10/01, Card B −$3 dated 10/02; reload twice and read both
+  payment categories and the category. Then the same with the dates swapped.

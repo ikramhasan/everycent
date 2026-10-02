@@ -64,6 +64,7 @@ describe("categoryMonth", () => {
       activity: 0n,
       cashActivity: 0n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 0n,
     });
   });
@@ -76,6 +77,7 @@ describe("categoryMonth", () => {
       activity: 0n,
       cashActivity: 0n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 7500n,
     });
     expect(categoryMonth(history, "2026-10")).toEqual({
@@ -84,6 +86,7 @@ describe("categoryMonth", () => {
       activity: -1000n,
       cashActivity: -1000n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 7000n,
     });
     expect(categoryMonth(history, "2026-12").available).toBe(7000n);
@@ -98,6 +101,7 @@ describe("categoryMonth", () => {
       activity: 0n,
       cashActivity: 0n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 0n,
     });
     const later = [...history, m("2026-12", 1000n, -200n)];
@@ -107,6 +111,7 @@ describe("categoryMonth", () => {
       activity: -200n,
       cashActivity: -200n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 800n,
     });
   });
@@ -119,6 +124,7 @@ describe("categoryMonth", () => {
       activity: -400n,
       cashActivity: -400n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: 800n,
     });
   });

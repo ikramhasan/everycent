@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a built)</div>
+    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a built, 7b built with provisional multi-card rules)</div>
     <h1>Build sequence for credit cards and debt</h1>
     <p class="lede">Phase 6 made the plan usable; Phase 7 makes debt accounts tell the truth. Its eight README items are split into <strong>seven stages</strong>: five build credit-card budgeting on the existing register and payment categories, then two add loan activity and payoff planning. Build top to bottom. YNAB behaviour that support material and the real app cannot settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -158,14 +158,14 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <div class="lane">
       <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Accounts, transfers, budget math</span></a>
       <a class="node done" href="#s7a"><span class="n">7a · done</span><span class="t">Credit math</span><span class="s">Cash vs credit activity</span></a>
-      <a class="node now" href="#s7b"><span class="n">7b · next</span><span class="t">Funded spending</span><span class="s">Money reserved to pay</span></a>
-      <a class="node" href="#s7c"><span class="n">7c</span><span class="t">Debt</span><span class="s">Overspending and old balances</span></a>
+      <a class="node done" href="#s7b"><span class="n">7b · done</span><span class="t">Funded spending</span><span class="s">Money reserved to pay</span></a>
+      <a class="node now" href="#s7c"><span class="n">7c · next</span><span class="t">Debt</span><span class="s">Overspending and old balances</span></a>
       <a class="node" href="#s7d"><span class="n">7d</span><span class="t">Payments</span><span class="s">Transfers, returns, refunds</span></a>
       <a class="node" href="#s7e"><span class="n">7e</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
       <a class="node" href="#s7f"><span class="n">7f–7g</span><span class="t">Loans</span><span class="s">Activity, interest, planner</span></a>
     </div>
     <div class="side"><b>Outside Phase 7:</b> debt-payment targets and target-driven Underfunded (Phase 8), reconciliation (Phase 9), scheduled payments (Phase 10), foreign-currency debt (Phase 11).</div>
-    <div class="then">7a is built on <span class="mono">main</span> (after <span class="mono">acd3f9b</span>). To pick up: <span class="mono">Start 7b from main. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
+    <div class="then">7a and 7b are on stacked branches <span class="mono">phase-7a-credit-activity</span> → <span class="mono">phase-7b-funded-spending</span>, not merged. To pick up: <span class="mono">Start 7c on a branch from phase-7b-funded-spending. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -212,7 +212,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7b">
       <div class="num">7b</div>
       <div class="body">
-        <div class="head"><h2>Funded card spending and payment categories</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Funded card spending and payment categories</h2><span class="pill done">Done</span></div>
         <p class="why">A funded card purchase spends a category's cash while reserving the same amount for the card payment. This is the core credit-card loop and must be derived from history, not maintained by fragile side-effect rows.</p>
         <div class="meta">
           <div>
@@ -223,7 +223,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
             <h3>Depends on</h3>
             <ul><li>7a credit activity classification</li></ul>
             <h3>Confirmed behavior</h3>
-            <ul><li>YNAB moves money only for the funded part of a categorized purchase</li><li>The spending category falls and the card's payment category rises by the same funded amount</li><li>A genuinely positive card balance behaves as cash; automatic movement resumes only after the balance becomes negative</li></ul>
+            <ul><li>YNAB moves money only for the funded part of a categorized purchase; cash is funded first, whatever the entry order; a card's spending and returns in a category net out</li><li><em>Provisional</em> (in <code>docs/verify.md</code>): newest card funded first when money runs short; a return on one card can fund another card's spending</li><li>The spending category falls and the card's payment category rises by the same funded amount</li><li>A genuinely positive card balance behaves as cash; automatic movement resumes only after the balance becomes negative</li></ul>
             <h3>Design constraint</h3>
             <ul><li>Compute from immutable transaction/assignment history where possible; if persisted derived rows are required, update them atomically with the source edit and prove replay safety</li></ul>
           </div>
@@ -234,7 +234,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7c">
       <div class="num">7c</div>
       <div class="body">
-        <div class="head"><h2>Credit overspending and existing debt</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Credit overspending and existing debt</h2><span class="pill now">Next</span></div>
         <p class="why">Not every card purchase has cash behind it. The unfunded part becomes debt instead of reducing next month's Ready to Assign, while debt that existed before everycent is funded directly in the payment category.</p>
         <div class="meta">
           <div>

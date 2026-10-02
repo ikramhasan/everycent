@@ -60,6 +60,11 @@ export interface MonthFigures {
   activity: bigint;
   /** The part of `activity` on credit accounts (the rest was paid with cash). Defaults to zero. */
   creditActivity?: bigint;
+  /**
+   * Payment categories: the part of `activity` that is money moved in for funded card spending
+   * (negative for returns). Defaults to zero.
+   */
+  fundedSpending?: bigint;
 }
 
 export interface CategoryMonth {
@@ -71,6 +76,8 @@ export interface CategoryMonth {
   cashActivity: bigint;
   /** The month's activity in credit accounts (YNAB's Credit Spending). */
   creditActivity: bigint;
+  /** Payment categories: money moved in this month for funded card spending (YNAB's Funded Spending). */
+  fundedSpending: bigint;
   available: bigint;
 }
 
@@ -91,6 +98,7 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
   let assigned = 0n;
   let activity = 0n;
   let creditActivity = 0n;
+  let fundedSpending = 0n;
   let previous: BudgetMonth | null = null;
   for (const entry of sorted) {
     if (entry.month !== previous) {
@@ -99,11 +107,13 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       assigned = 0n;
       activity = 0n;
       creditActivity = 0n;
+      fundedSpending = 0n;
       previous = entry.month;
     }
     assigned += entry.assigned;
     activity += entry.activity;
     creditActivity += entry.creditActivity ?? 0n;
+    fundedSpending += entry.fundedSpending ?? 0n;
     available += entry.assigned + entry.activity;
   }
   if (previous !== month) {
@@ -115,6 +125,7 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       activity: 0n,
       cashActivity: 0n,
       creditActivity: 0n,
+      fundedSpending: 0n,
       available: carried,
     };
   }
@@ -122,8 +133,9 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
     carried,
     assigned,
     activity,
-    cashActivity: activity - creditActivity,
+    cashActivity: activity - creditActivity - fundedSpending,
     creditActivity,
+    fundedSpending,
     available,
   };
 }
