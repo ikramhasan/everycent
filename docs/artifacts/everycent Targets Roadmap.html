@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a–8b built; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a–8b merged to main; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -165,7 +165,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a and 8b are stacked on <span class="mono">phase-8a-monthly-targets</span> → <span class="mono">phase-8b-cadences</span>, not merged. To pick up: <span class="mono">Start 8c on a branch from phase-8b-cadences. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8c's gate in YNAB. The API's write limit is easy to hit (200 requests an hour): read whole months, and test in the web app when it's used up.</span></div>
+    <div class="then">8a and 8b are merged to <span class="mono">main</span> (09dab2a), with the updatedAt clock fix. To pick up: <span class="mono">Start 8c on a branch from main. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8c's gate in YNAB. The API's write limit is easy to hit (200 requests an hour): read whole months, and test in the web app when it's used up.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
