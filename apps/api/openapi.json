@@ -744,30 +744,58 @@
           "cadence": {
             "type": "string",
             "enum": [
-              "monthly"
+              "weekly",
+              "monthly",
+              "yearly",
+              "custom"
             ]
           },
           "behavior": {
             "type": "string",
             "enum": [
               "set_aside",
-              "refill"
+              "refill",
+              "balance"
             ],
-            "description": "set_aside: the full amount every month (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to')"
+            "description": "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only)"
           },
           "amount": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Asked for each month"
+            "description": "Per week (weekly), per month (monthly) or per period (yearly, custom)"
           },
           "dueDay": {
             "type": [
               "integer",
               "null"
             ],
-            "minimum": 1,
-            "maximum": 31,
-            "description": "Day of the month it's due; null is the last day. Only changes the wording"
+            "description": "Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Yearly and custom: the first due date; a balance target's month (day 1), null for eventually"
+          },
+          "repeatEvery": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Custom: repeats every N months or years; null for one-time"
+          },
+          "repeatUnit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "month",
+              "year",
+              null
+            ]
           },
           "startMonth": {
             "type": "string",
@@ -780,6 +808,9 @@
           "behavior",
           "amount",
           "dueDay",
+          "dueDate",
+          "repeatEvery",
+          "repeatUnit",
           "startMonth"
         ]
       },
@@ -881,47 +912,195 @@
         ]
       },
       "SetCategoryTarget": {
-        "type": "object",
-        "properties": {
-          "cadence": {
-            "type": "string",
-            "enum": [
-              "monthly"
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "weekly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6,
+                    "description": "The weekday it's due, 0 = Sunday"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDay"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "monthly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDay": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 31,
+                    "description": "Day of the month it's due; null is the last day. Only changes the wording"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDay"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "yearly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "When the yearly amount is due; repeats every year"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDate"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "custom"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill",
+                      "balance"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date",
+                    "description": "Required unless behavior is balance (null: eventually; only its month counts)"
+                  },
+                  "repeat": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "every": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 11
+                      },
+                      "unit": {
+                        "type": "string",
+                        "enum": [
+                          "month",
+                          "year"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "every",
+                      "unit"
+                    ],
+                    "description": "Every 1–11 months or 1–2 years; null for one-time. Balance targets can't repeat"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDate",
+                  "repeat"
+                ]
+              }
             ]
           },
-          "behavior": {
-            "type": "string",
-            "enum": [
-              "set_aside",
-              "refill"
+          {
+            "type": "object",
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                "description": "The month the target is set from"
+              }
+            },
+            "required": [
+              "month"
             ]
-          },
-          "amount": {
-            "type": "string",
-            "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
-          },
-          "dueDay": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1,
-            "maximum": 31,
-            "description": "Day of the month it's due; null is the last day. Only changes the wording"
-          },
-          "month": {
-            "type": "string",
-            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
-            "description": "The month the target is set from"
           }
-        },
-        "required": [
-          "cadence",
-          "behavior",
-          "amount",
-          "dueDay",
-          "month"
         ]
       },
       "AccountList": {
@@ -2862,25 +3041,34 @@
           "needed": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "What the target asks for this month"
+            "description": "What the target needs: this month's amount (weekly, monthly) or the total by its due date (yearly, custom), or the balance to reach"
           },
           "funded": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "What counts toward it: this month's Assigned (set aside), plus what was carried in (refill, in the user's month and earlier); can be negative"
+            "description": "What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative"
           },
           "underfunded": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "What's still to assign; 0 when the target is met"
+            "description": "What's still to assign this month to stay on track; 0 when this month's share is in"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Yearly and custom: the due date of the period this month is in"
           }
         },
         "required": [
           "needed",
           "funded",
-          "underfunded"
+          "underfunded",
+          "dueDate"
         ],
-        "description": "The category's target this month; null without one or before it starts"
+        "description": "The category's target this month; null without one, before it starts or after a one-time target's due month"
       },
       "AutoAssignAmounts": {
         "type": "object",

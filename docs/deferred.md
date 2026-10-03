@@ -79,9 +79,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Targets (phase 8)
 
-- 8a built monthly targets (Set aside another / Refill up to, due day), the inspector's Target
-  section and editor, the row note and the yellow/green Available with its pie or check. Weekly,
-  yearly and custom cadences are 8b: the editor shows their tabs disabled.
+- 8a–8b built every target YNAB's form offers: weekly, monthly, yearly and custom (set aside,
+  fill up to, have a balance of; one-time or repeating), the inspector's Target section and editor,
+  the row note and the yellow/green Available with its pie or check.
 - Not yet: the row's progress bars and "Spent $x of $y" notes (8d), Snooze (8d; YNAB shows
   "Snooze target for this month" under Edit Target), Underfunded and Reduce Overfunding in
   Auto-Assign and the month summary's "October's Targets" / "Cost to Be Me" (8c), payment-category

@@ -108,7 +108,7 @@ describe("targets", () => {
   const need = (underfunded: string, funded = "4000") => ({
     available: "4000",
     cashOverspent: "0",
-    target: { needed: "10000", funded, underfunded },
+    target: { needed: "10000", funded, underfunded, dueDate: null },
   });
   it("is yellow while a target is underfunded, unless cash overspending makes it red", () => {
     expect(isCaution(need("6000"), "2026-10", "2026-10")).toBe(true);

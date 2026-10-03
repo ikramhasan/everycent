@@ -718,16 +718,25 @@ export interface components {
         };
         CategoryTarget: {
             /** @enum {string} */
-            cadence: "monthly";
+            cadence: "weekly" | "monthly" | "yearly" | "custom";
             /**
-             * @description set_aside: the full amount every month (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to')
+             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only)
              * @enum {string}
              */
-            behavior: "set_aside" | "refill";
-            /** @description Asked for each month */
+            behavior: "set_aside" | "refill" | "balance";
+            /** @description Per week (weekly), per month (monthly) or per period (yearly, custom) */
             amount: string;
-            /** @description Day of the month it's due; null is the last day. Only changes the wording */
+            /** @description Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday */
             dueDay: number | null;
+            /**
+             * Format: date
+             * @description Yearly and custom: the first due date; a balance target's month (day 1), null for eventually
+             */
+            dueDate: string | null;
+            /** @description Custom: repeats every N months or years; null for one-time */
+            repeatEvery: number | null;
+            /** @enum {string|null} */
+            repeatUnit: "month" | "year" | null;
             /** @description The first month the target applies to */
             startMonth: string;
         } | null;
@@ -757,7 +766,16 @@ export interface components {
             /** @description Place it right before this category in that group; null moves it to the end */
             beforeCategoryId: string | null;
         };
-        SetCategoryTarget: {
+        SetCategoryTarget: ({
+            /** @enum {string} */
+            cadence: "weekly";
+            /** @enum {string} */
+            behavior: "set_aside" | "refill";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /** @description The weekday it's due, 0 = Sunday */
+            dueDay: number;
+        } | {
             /** @enum {string} */
             cadence: "monthly";
             /** @enum {string} */
@@ -766,6 +784,37 @@ export interface components {
             amount: string;
             /** @description Day of the month it's due; null is the last day. Only changes the wording */
             dueDay: number | null;
+        } | {
+            /** @enum {string} */
+            cadence: "yearly";
+            /** @enum {string} */
+            behavior: "set_aside" | "refill";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /**
+             * Format: date
+             * @description When the yearly amount is due; repeats every year
+             */
+            dueDate: string;
+        } | {
+            /** @enum {string} */
+            cadence: "custom";
+            /** @enum {string} */
+            behavior: "set_aside" | "refill" | "balance";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /**
+             * Format: date
+             * @description Required unless behavior is balance (null: eventually; only its month counts)
+             */
+            dueDate: string | null;
+            /** @description Every 1–11 months or 1–2 years; null for one-time. Balance targets can't repeat */
+            repeat: {
+                every: number;
+                /** @enum {string} */
+                unit: "month" | "year";
+            } | null;
+        }) & {
             /** @description The month the target is set from */
             month: string;
         };
@@ -1155,14 +1204,19 @@ export interface components {
             /** @description This month's payments to the card, negative */
             paymentsMade: string;
         } | null;
-        /** @description The category's target this month; null without one or before it starts */
+        /** @description The category's target this month; null without one, before it starts or after a one-time target's due month */
         TargetNeed: {
-            /** @description What the target asks for this month */
+            /** @description What the target needs: this month's amount (weekly, monthly) or the total by its due date (yearly, custom), or the balance to reach */
             needed: string;
-            /** @description What counts toward it: this month's Assigned (set aside), plus what was carried in (refill, in the user's month and earlier); can be negative */
+            /** @description What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative */
             funded: string;
-            /** @description What's still to assign; 0 when the target is met */
+            /** @description What's still to assign this month to stay on track; 0 when this month's share is in */
             underfunded: string;
+            /**
+             * Format: date
+             * @description Yearly and custom: the due date of the period this month is in
+             */
+            dueDate: string | null;
         } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
         AutoAssignAmounts: {

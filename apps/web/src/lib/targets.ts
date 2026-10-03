@@ -10,7 +10,37 @@ import { invalidateMonths } from "./months";
 
 export type CategoryTarget = NonNullable<components["schemas"]["CategoryTarget"]>;
 export type TargetNeed = NonNullable<components["schemas"]["TargetNeed"]>;
-export type TargetInput = Pick<CategoryTarget, "behavior" | "amount" | "dueDay">;
+type SetTargetBody = components["schemas"]["SetCategoryTarget"];
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+/** A target as the editor saves it, one shape per cadence. */
+export type TargetInput = DistributiveOmit<SetTargetBody, "month">;
+type Format = (minorUnits: string) => string;
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+export const WEEKDAY_OPTIONS = WEEKDAYS.map((label, value) => ({ value, label }));
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+export const MONTH_OPTIONS = MONTHS.map((label, i) => ({ value: i + 1, label }));
 
 /** 1 → "1st", 22 → "22nd", 13 → "13th". */
 export function ordinal(n: number) {
@@ -37,34 +67,147 @@ export const DUE_DAY_OPTIONS: { value: string; label: string }[] = [
   })),
 ];
 
-/** YNAB's inspector heading: "Set Aside Another $100.00 Each Month". */
-export function targetHeading(target: Pick<CategoryTarget, "behavior">, amount: string) {
-  return target.behavior === "set_aside"
-    ? `Set Aside Another ${amount} Each Month`
-    : `Refill Up to ${amount} Each Month`;
-}
+const monthLabel = (iso: string) => MONTHS[Number(iso.slice(5, 7)) - 1] ?? "";
+/** YNAB's "Dec 30 2026". */
+export const shortDate = (iso: string) =>
+  `${monthLabel(iso).slice(0, 3)} ${Number(iso.slice(8))} ${iso.slice(0, 4)}`;
+/** YNAB's "Dec 2026" for a balance target's month. */
+const shortMonth = (iso: string) => `${monthLabel(iso).slice(0, 3)} ${iso.slice(0, 4)}`;
 
-/** YNAB's line under it: "By the End of the Month" or "By the 15th of the Month". */
-export function targetDueLine(dueDay: number | null) {
-  return dueDay === null ? "By the End of the Month" : `By the ${ordinal(dueDay)} of the Month`;
+/** Whether a target spreads a total over months up to a due date (yearly, custom, dated balance). */
+export const isDated = (target: Pick<CategoryTarget, "cadence">) =>
+  target.cadence === "yearly" || target.cadence === "custom";
+
+/** "Each Month", "Every 2 Months", "Each Year", "Every 2 Years", or "" for a one-time target. */
+function repeatPhrase(target: Pick<CategoryTarget, "repeatEvery" | "repeatUnit">) {
+  if (!target.repeatEvery || !target.repeatUnit) return "";
+  const unit = target.repeatUnit === "year" ? "Year" : "Month";
+  return target.repeatEvery === 1 ? ` Each ${unit}` : ` Every ${target.repeatEvery} ${unit}s`;
 }
 
 /**
- * The note under a category's name (YNAB, docs/verify.md "Monthly targets"): "Funded" when met,
- * otherwise "$60.00 more needed by the 31st". A refill target with nothing counted yet says
- * "$100.00 needed"; set aside always says "more".
+ * YNAB's inspector heading (docs/verify.md "Monthly targets", "Weekly, yearly and custom targets"):
+ * "Set Aside Another $100.00 Each Month", "Refill Up to $10.00 Each Week", "Set Aside Another
+ * $300.00 Every 2 Months", "Have a Balance of $300.00".
+ */
+export function targetHeading(target: CategoryTarget, amount: string) {
+  if (target.behavior === "balance") return `Have a Balance of ${amount}`;
+  const suffix =
+    target.cadence === "weekly"
+      ? " Each Week"
+      : target.cadence === "monthly"
+        ? " Each Month"
+        : target.cadence === "yearly"
+          ? " Each Year"
+          : repeatPhrase(target);
+  if (target.behavior === "set_aside") return `Set Aside Another ${amount}${suffix}`;
+  // A custom target's "Fill up to" heading wasn't seen in YNAB (docs/verify.md).
+  return target.cadence === "custom"
+    ? `Fill Up to ${amount}${suffix}`
+    : `Refill Up to ${amount}${suffix}`;
+}
+
+/**
+ * YNAB's line under the heading: "By the End of the Month", "By the 15th of the Month", "By
+ * Saturday", "By Dec 30 2026" (the current period's due date), "By Dec 2026", "Eventually".
+ */
+export function targetDueLine(target: CategoryTarget, need: Pick<TargetNeed, "dueDate"> | null) {
+  if (target.cadence === "weekly") return `By ${WEEKDAYS[target.dueDay ?? 0]}`;
+  if (target.cadence === "monthly") {
+    return target.dueDay === null
+      ? "By the End of the Month"
+      : `By the ${ordinal(target.dueDay)} of the Month`;
+  }
+  if (target.behavior === "balance") {
+    return target.dueDate ? `By ${shortMonth(target.dueDate)}` : "Eventually";
+  }
+  const due = need?.dueDate ?? target.dueDate;
+  return due ? `By ${shortDate(due)}` : "";
+}
+
+/** Where a target stands this month: met, on track (this month's share is in), or underfunded. */
+export function targetStatus(need: TargetNeed) {
+  if (BigInt(need.funded) >= BigInt(need.needed)) return "met" as const;
+  return need.underfunded === "0" ? ("onTrack" as const) : ("underfunded" as const);
+}
+
+/**
+ * The note under a category's name (YNAB, docs/verify.md): "Funded" when met; "On Track" when this
+ * month's share of a dated target is in; otherwise "$60.00 more needed by the 31st", "… this month"
+ * (weekly, and dated targets before their due month), "… by December 30th" (a dated target's due
+ * month), "$300.00 needed eventually" (a balance target without a date). Set aside always says
+ * "more"; other targets only once something counts toward them.
  */
 export function targetRowNote(
-  target: Pick<CategoryTarget, "behavior" | "dueDay">,
+  target: CategoryTarget,
   need: TargetNeed,
   month: BudgetMonth,
-  format: (minorUnits: string) => string,
+  format: Format,
 ) {
-  if (need.underfunded === "0") return { met: true, text: "Funded" };
+  const status = targetStatus(need);
+  if (status === "met") return { met: true, text: "Funded" };
   const more = target.behavior === "set_aside" || BigInt(need.funded) > 0n ? " more" : "";
+  if (status === "onTrack") {
+    if (target.behavior === "balance" && !target.dueDate) {
+      const toGo = BigInt(need.needed) - BigInt(need.funded);
+      return { met: false, text: `${format(toGo.toString())}${more} needed eventually` };
+    }
+    return { met: false, text: "On Track" };
+  }
+  const when =
+    target.cadence === "monthly"
+      ? `by the ${ordinal(dueDayIn(target.dueDay, month))}`
+      : need.dueDate && need.dueDate.slice(0, 7) === month && target.behavior !== "balance"
+        ? `by ${monthLabel(need.dueDate)} ${ordinal(Number(need.dueDate.slice(8)))}`
+        : "this month";
+  return { met: false, text: `${format(need.underfunded)}${more} needed ${when}` };
+}
+
+/**
+ * The inspector's lines (YNAB): what's needed, what counts, and To Go (what's left of the total).
+ */
+export function targetLines(target: CategoryTarget, need: TargetNeed, format: Format) {
+  const due = need.dueDate ? shortDate(need.dueDate) : null;
+  const setAside = target.behavior === "set_aside";
+  const [neededLabel, fundedLabel] =
+    target.behavior === "balance"
+      ? [
+          target.dueDate ? `Balance Needed by ${shortMonth(target.dueDate)}` : "Balance Needed",
+          "Current Balance",
+        ]
+      : !isDated(target)
+        ? setAside
+          ? ["Amount to Assign This Month", "Assigned So Far"]
+          : ["Needed This Month", "Funded"]
+        : setAside
+          ? [`Total to Assign by ${due}`, "Assigned So Far"]
+          : [`Needed by ${due}`, "Funded"];
+  const toGo = BigInt(need.needed) - BigInt(need.funded);
+  return [
+    { label: neededLabel, value: format(need.needed) },
+    { label: fundedLabel, value: format(need.funded) },
+    { label: "To Go", value: format((toGo > 0n ? toGo : 0n).toString()) },
+  ];
+}
+
+/**
+ * The inspector's message: "You've met your target!", "You're on track to meet your target!",
+ * "Assign $333.34 this month to stay on track" (dated), "Assign $60.00 more to meet your target",
+ * or nothing (a balance target without a date). `prompt` is the amount the Assign button adds.
+ */
+export function targetMessage(target: CategoryTarget, need: TargetNeed, format: Format) {
+  const status = targetStatus(need);
+  if (status === "met") return { text: "You've met your target!" };
+  if (status === "onTrack") {
+    return target.behavior === "balance" && !target.dueDate
+      ? null
+      : { text: "You're on track to meet your target!" };
+  }
+  const amount = format(need.underfunded);
+  if (isDated(target)) return { prompt: amount, suffix: " this month to stay on track" };
   return {
-    met: false,
-    text: `${format(need.underfunded)}${more} needed by the ${ordinal(dueDayIn(target.dueDay, month))}`,
+    prompt: `${amount}${BigInt(need.funded) > 0n ? " more" : ""}`,
+    suffix: " to meet your target",
   };
 }
 
@@ -98,7 +241,7 @@ export function useTargetActions(budgetId: string) {
           () =>
             put.mutateAsync({
               params: { path: { budgetId, categoryId } },
-              body: { cadence: "monthly", month, ...input },
+              body: { ...input, month } as SetTargetBody,
             }),
           "Couldn't save the target.",
         ),

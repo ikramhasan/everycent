@@ -570,3 +570,60 @@ November, T8 B's due day is the 15th). Built as found:
 - **Built so far (before this rule):** (1) the month's last day; (2) the plain colour rules (grey at
   $0.00) with the check; (3) refused, the amount must be positive; (4) target edits aren't in
   everycent's undo history.
+
+## Weekly, yearly and custom targets (phase 8b)
+
+Checked in YNAB's web app on 2026-10-03 (the API's write limit was used up). Test targets: T8 A
+(weekly $10 Saturday, then custom $300 every 2 months, then "Have a balance of $300", then a
+one-time custom $300 due Nov 30, which it is now), T8 F (yearly set aside $1,000 by Dec 30, $333.34
+assigned in October), T8 G (yearly refill $1,000 by Nov 1, $70 carried in), T4 (form only, not
+saved). Built as found:
+
+- **The form.** Weekly: "I need", "Every" (Sunday … Saturday, today's weekday by default), "Next
+  month I want to" (Set aside another $X/week, Refill up to $X/week). Yearly: "I need", "By" (a
+  date; the first of next month by default), "Next year I want to" (Set aside another / Refill up
+  to). Custom: "Amount", "I want to" (Set aside $X: "Add $X to this category, regardless of its
+  current balance"; Fill up to $X: "Use what is already in this category and fill it up to $X";
+  Have a balance of $X: "Use for: long-term savings. Reach this amount by a specific time and
+  refrain from spending until you reach it."), "Due on" (a date), "Repeat" toggle with "Every [1–11]
+  Month" or "Every [1–2] Year". "Have a balance of" has no Repeat; it has a "Due by date" toggle
+  with a month and a year (this year to 49 years on) instead of a date. The API's legacy types map
+  here: Target Balance is "Have a balance of" without a date, Target Balance by Date with one.
+- **Weekly** asks the amount once for each time the weekday falls in the month: $10 on Saturdays
+  asked $50.00 in October (5) and $40.00 in November (4). Heading "Set Aside Another $10.00 Each
+  Week", "By Saturday"; the inspector reads like a monthly target ("Amount to Assign This Month").
+  Row: "$50.00 more needed this month".
+- **Dated targets (yearly, custom)** spread what's still missing over the months left up to the
+  due month, rounding up: $1,000 by Dec 30 asked $333.34 in October (÷ 3); with October left empty
+  November asked $500.00 (÷ 2) and December $1,000.00; with $333.34 assigned in October, November
+  asked $333.33 and December $666.66. Set aside counts the money assigned in the period ("Assigned
+  So Far"); refill counts what the category holds ("Funded": $70 carried → ($1,000 − $70) ÷ 2 =
+  $465.00). A repeating target starts a new period the month after its due month (custom $300 every
+  2 months due Nov 1 asked $150 in October and $150 again in December; the yearly refill due Nov 1
+  asked $83.34 = $1,000 ÷ 12 in December, carried money not counted in a future month).
+- Inspector for a dated target: "Set Aside Another $1,000.00 Each Year" / "Refill Up to $1,000.00
+  Each Year" / "Set Aside Another $300.00 Every 2 Months" / one-time "Set Aside Another $300.00";
+  then "By Dec 30 2026". While behind: "Assign $333.34 this month to stay on track" with Assign.
+  When this month's share is in but the total isn't: "You're on track to meet your target!", row
+  note "On Track", green pill with a part-filled pie; the ring shows the share of the total (33%).
+  Lines: "Total to Assign by Dec 30 2026 / Assigned So Far / To Go" (set aside) or "Needed by Nov 1
+  2026 / Funded / To Go" (refill), To Go being what's left of the total. Row: "$333.34 more needed
+  this month", in the due month "$666.66 more needed by December 30th".
+- **Have a balance of** without a date never asks for money this month: "Have a Balance of $300.00
+  / Eventually", ring, no Assign box, "Balance Needed / Current Balance / To Go", row "$300.00
+  needed eventually", grey pill with an empty pie, and it left Underfunded alone (it fell by the $150
+  the earlier version of T8 A asked). With a date (Dec 2026): "By Dec 2026", "Assign $100.00 this
+  month to stay on track", "Balance Needed by Dec 2026 / Current Balance / To Go", row "$100.00
+  needed this month".
+
+### Details of 8b not seen in YNAB
+
+- **Question:** (1) Does spending during the month change what a refill or balance target with a
+  date asks (its Funded/Current Balance)? (2) For set aside, does money assigned before the
+  target's start month count toward the first period? (3) The inspector heading of a custom "Fill
+  up to" target. (4) The weekly refill's numbers (only the form was seen). (5) Earliest due date the
+  picker allows.
+- **Built so far (before this rule):** (1) the month's share is worked out from what was carried
+  in (spending this month doesn't change it), Funded and Current Balance show carried + assigned;
+  (2) no, the period starts no earlier than the start month; (3) "Fill Up to $X …"; (4) as a
+  monthly refill with the weekly amount; (5) any date.

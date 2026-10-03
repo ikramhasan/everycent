@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a built; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a–8b built; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -158,14 +158,14 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <div class="lane">
       <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Plan math, cards, Auto-Assign</span></a>
       <a class="node done" href="#s8a"><span class="n">8a · done</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
-      <a class="node now" href="#s8b"><span class="n">8b · next</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
-      <a class="node" href="#s8c"><span class="n">8c</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
+      <a class="node done" href="#s8b"><span class="n">8b · done</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
+      <a class="node now" href="#s8c"><span class="n">8c · next</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
       <a class="node" href="#s8d"><span class="n">8d</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
       <a class="node" href="#s8e"><span class="n">8e</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
       <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a is on <span class="mono">phase-8a-monthly-targets</span> (from main, after the Phase 7 merge). To pick up: <span class="mono">Start 8b on a branch from phase-8a-monthly-targets. Read docs/deferred.md ("Targets") and docs/verify.md ("Monthly targets"); settle 8b's gate through the YNAB API — POST /categories takes goal_target with goal_frequency weekly/yearly — and the app. The API allows 200 requests an hour: read whole months, not one category at a time.</span></div>
+    <div class="then">8a and 8b are stacked on <span class="mono">phase-8a-monthly-targets</span> → <span class="mono">phase-8b-cadences</span>, not merged. To pick up: <span class="mono">Start 8c on a branch from phase-8b-cadences. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8c's gate in YNAB. The API's write limit is easy to hit (200 requests an hour): read whole months, and test in the web app when it's used up.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -214,7 +214,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8b">
       <div class="num">8b</div>
       <div class="body">
-        <div class="head"><h2>Weekly, yearly and custom targets</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Weekly, yearly and custom targets</h2><span class="pill done">Done</span></div>
         <p class="why">The remaining cadences differ only in how a period is defined and how its amount is spread over months. Keep the period math in the engine so 8a's need calculation stays one function.</p>
         <div class="meta">
           <div>
@@ -226,8 +226,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>Weekly totals depend on how many times the chosen day falls in the month (5 occurrences ask for 5 weeks)</li><li>Yearly and repeating custom targets track money assigned across the whole period, not what's in the category now</li><li>A new period starts the month after the due month, even if the due date is earlier in that month</li><li>“Have a balance of…” isn't meant to be spent from before the due date and can't repeat</li><li>A one-time custom target stops asking after its due month</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Rounding when an amount doesn't divide evenly over the months left (which month gets the remainder)</li><li>Whether the legacy types (Target Balance, Target Balance by Date, Monthly Savings Builder — API <code>TB</code>/<code>TBD</code>/<code>MF</code>) can still be created; the README's “savings balance” and “monthly savings builder” map to them or to custom targets</li><li>Mid-period creation: how much a yearly target asks for when created with 3 months left</li></ul>
+            <h3>Found in YNAB (app, 3 Oct)</h3>
+            <ul><li>Dated targets spread what's still missing over the months left, rounding up: $1,000 by Dec 30 asked $333.34, then $333.33, then the rest</li><li>Created with 3 months left, a yearly target asks a third, not a twelfth</li><li>Set aside counts the period's Assigned; refill counts what the category holds; a new period starts the month after the due month</li><li>“Have a balance of” is the old Target Balance (by Date): without a date it never asks this month; the form has no Monthly Savings Builder</li><li>“On Track” when this month's share is in: green pill with a part-filled pie</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Spending during the month vs a dated refill/balance; Assigned before the start month; the custom “Fill up to” heading; weekly refill numbers <span class="src">verify.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -235,7 +237,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8c">
       <div class="num">8c</div>
       <div class="body">
-        <div class="head"><h2>Underfunded across the plan</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Underfunded across the plan</h2><span class="pill now">Next</span></div>
         <p class="why">With needs computed per category, the plan can total them: Auto-Assign gets its two missing options and the budget screen gets its missing views.</p>
         <div class="meta">
           <div>

@@ -182,16 +182,16 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 
 ### 8. Targets (goals)
 
-- [ ] Needed for spending — weekly (by day), monthly (by date), yearly, custom
-      (every N months/years), by a specific date; refill vs set aside another (monthly done in
-      8a: model, API, inspector and editor; the other cadences are 8b)
-- [ ] Savings balance (target balance, optionally by date)
-- [ ] Monthly savings builder
+- [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
+      (every N months/years), by a specific date; refill vs set aside another
+- [x] Savings balance (YNAB's custom "Have a balance of", optionally by a month)
+- [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
+      another" covers it
 - [ ] Debt payment targets (for loans / credit cards; include interest)
 - [ ] Target progress bars and status (funded, underfunded, overspent, on track)
 - [ ] Underfunded total + "Assign underfunded" button
 - [ ] Snooze a target for a month
-- [ ] Repeat on/off, target history across months
+- [ ] Repeat on/off (done in 8b), target history across months (8f)
 - [ ] Targets overview (total needed this month vs next month)
 
 ### 9. Reconciliation

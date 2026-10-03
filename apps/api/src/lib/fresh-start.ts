@@ -157,6 +157,9 @@ export async function copyIntoFreshStart(
         amount: target.amount,
         currency: target.currency,
         dueDay: target.dueDay,
+        dueDate: target.dueDate,
+        repeatEvery: target.repeatEvery,
+        repeatUnit: target.repeatUnit,
         startMonth: `${monthOf(date)}-01`,
       });
     }

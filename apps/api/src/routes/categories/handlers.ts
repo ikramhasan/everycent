@@ -229,20 +229,33 @@ export const moveCategoryHandler: RouteHandler<typeof moveCategory, Env> = async
 
 export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, Env> = async (c) => {
   const { budgetId, categoryId } = c.req.valid("param");
-  const { cadence, behavior, amount, dueDay, month } = c.req.valid("json");
+  const body = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
   // Credit card payment targets are their own kinds (phase 8e).
   if (row.linkedAccountId) throw managedError("Payment categories can't have targets yet");
-  const start = `${month}-01`;
+  const start = `${body.month}-01`;
   const existing = await findTarget(db, categoryId);
+  const repeat = body.cadence === "custom" ? body.repeat : null;
+  const dueDate =
+    body.cadence === "yearly"
+      ? body.dueDate
+      : body.cadence === "custom" && body.dueDate
+        ? // A balance target is due by a month (YNAB: "By Dec 2026").
+          body.behavior === "balance"
+          ? `${body.dueDate.slice(0, 7)}-01`
+          : body.dueDate
+        : null;
   const values = {
-    cadence,
-    behavior,
-    amount: BigInt(amount),
+    cadence: body.cadence,
+    behavior: body.behavior,
+    amount: BigInt(body.amount),
     currency: budget.currency,
-    dueDay,
+    dueDay: body.cadence === "weekly" || body.cadence === "monthly" ? body.dueDay : null,
+    dueDate,
+    repeatEvery: repeat?.every ?? null,
+    repeatUnit: repeat?.unit ?? null,
     // YNAB (docs/verify.md): saving from a month before the start moves the start back to it.
     startMonth: existing && existing.startMonth < start ? existing.startMonth : start,
   };

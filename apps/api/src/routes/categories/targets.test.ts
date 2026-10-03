@@ -10,11 +10,14 @@ type Target = {
   behavior: string;
   amount: string;
   dueDay: number | null;
+  dueDate: string | null;
+  repeatEvery: number | null;
+  repeatUnit: string | null;
   startMonth: string;
 };
 type Category = { id: string; name: string; target: Target | null };
 type Group = { id: string; kind: string | null; categories: Category[] };
-type Need = { needed: string; funded: string; underfunded: string } | null;
+type Need = { needed: string; funded: string; underfunded: string; dueDate: string | null } | null;
 type Month = { categories: { categoryId: string; available: string; target: Need }[] };
 type ErrorBody = { error: { code: string } };
 
@@ -90,6 +93,9 @@ describe("category targets", () => {
       behavior: "set_aside",
       amount: "10000",
       dueDay: 15,
+      dueDate: null,
+      repeatEvery: null,
+      repeatUnit: null,
       startMonth: "2026-10",
     });
     expect((await findCategory(rent.id))?.target?.amount).toBe("10000");
@@ -126,6 +132,7 @@ describe("category targets", () => {
       needed: "10000",
       funded: "4000",
       underfunded: "6000",
+      dueDate: null,
     });
     await assign(rent.id, "2026-10", "10000");
     await spend(rent.id, "2026-10-01", "-3000");
@@ -145,6 +152,7 @@ describe("category targets", () => {
       needed: "10000",
       funded: "7000",
       underfunded: "3000",
+      dueDate: null,
     });
     await assign(rent.id, "2026-10", "-2000");
     expect((await need(rent.id, "2026-10"))?.underfunded).toBe("5000");
@@ -176,6 +184,85 @@ describe("category targets", () => {
     expect((await json<ErrorBody>(res)).error.code).toBe("MANAGED_CATEGORY");
     expect((await setTarget(rent.id, { amount: "0" })).status).toBe(400);
     expect((await setTarget(rent.id, { dueDay: 32 })).status).toBe(400);
+  });
+
+  it("asks a weekly amount per occurrence of its weekday (YNAB: $10 on Saturdays)", async () => {
+    const { rent, setTarget, need } = await setup();
+    const res = await setTarget(rent.id, { cadence: "weekly", amount: "1000", dueDay: 6 });
+    expect(res.status).toBe(200);
+    expect((await need(rent.id, "2026-10"))?.needed).toBe("5000");
+    expect((await need(rent.id, "2026-11"))?.needed).toBe("4000");
+  });
+
+  it("spreads a yearly target over the months left (YNAB T8 F)", async () => {
+    const { rent, setTarget, assign, need, findCategory } = await setup();
+    await setTarget(rent.id, {
+      cadence: "yearly",
+      amount: "100000",
+      dueDate: "2026-12-30",
+      dueDay: undefined,
+    });
+    expect((await findCategory(rent.id))?.target).toMatchObject({
+      cadence: "yearly",
+      dueDate: "2026-12-30",
+      dueDay: null,
+    });
+    expect(await need(rent.id, "2026-10")).toEqual({
+      needed: "100000",
+      funded: "0",
+      underfunded: "33334",
+      dueDate: "2026-12-30",
+    });
+    await assign(rent.id, "2026-10", "33334");
+    expect((await need(rent.id, "2026-11"))?.underfunded).toBe("33333");
+  });
+
+  it("repeats custom targets and keeps balance targets to a month", async () => {
+    const { rent, phone, setTarget, need, findCategory } = await setup();
+    await setTarget(rent.id, {
+      cadence: "custom",
+      amount: "30000",
+      dueDate: "2026-11-01",
+      repeat: { every: 2, unit: "month" },
+      dueDay: undefined,
+    });
+    expect((await need(rent.id, "2026-12"))?.dueDate).toBe("2027-01-01");
+    await setTarget(phone.id, {
+      cadence: "custom",
+      behavior: "balance",
+      amount: "30000",
+      dueDate: "2026-12-15",
+      repeat: null,
+      dueDay: undefined,
+    });
+    expect((await findCategory(phone.id))?.target?.dueDate).toBe("2026-12-01");
+    expect((await need(phone.id, "2026-10"))?.underfunded).toBe("10000");
+  });
+
+  it("refuses cadence fields that don't fit", async () => {
+    const { rent, setTarget } = await setup();
+    const custom = { cadence: "custom", dueDay: undefined, dueDate: "2026-12-01", repeat: null };
+    expect((await setTarget(rent.id, { cadence: "weekly", dueDay: 7 })).status).toBe(400);
+    expect((await setTarget(rent.id, { cadence: "yearly", dueDay: undefined })).status).toBe(400);
+    expect((await setTarget(rent.id, { cadence: "monthly", behavior: "balance" })).status).toBe(
+      400,
+    );
+    expect((await setTarget(rent.id, { ...custom, dueDate: null })).status).toBe(400);
+    expect(
+      (
+        await setTarget(rent.id, {
+          ...custom,
+          behavior: "balance",
+          repeat: { every: 1, unit: "month" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await setTarget(rent.id, { ...custom, repeat: { every: 3, unit: "year" } })).status,
+    ).toBe(400);
+    expect(
+      (await setTarget(rent.id, { ...custom, behavior: "balance", dueDate: null })).status,
+    ).toBe(200);
   });
 
   it("is only for members", async () => {

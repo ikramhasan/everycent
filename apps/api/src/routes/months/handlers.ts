@@ -530,6 +530,7 @@ export async function budgetMonthJson(
         needed: l.need.needed.toString(),
         funded: l.need.funded.toString(),
         underfunded: l.need.underfunded.toString(),
+        dueDate: l.need.dueDate,
       },
       autoAssign: Object.fromEntries(
         Object.entries(l.auto).map(([option, amount]) => [option, amount.toString()]),

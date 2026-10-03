@@ -1,6 +1,7 @@
 import { CATEGORY_GROUP_KINDS } from "@everycent/db/schema";
 import {
   BUDGET_MONTH_PATTERN,
+  TARGET_REPEAT_UNITS,
   zMinorUnits,
   zTargetBehavior,
   zTargetCadence,
@@ -23,19 +24,96 @@ const DueDay = z
   .max(31)
   .nullable()
   .describe("Day of the month it's due; null is the last day. Only changes the wording");
+const Weekday = z.number().int().min(0).max(6).describe("The weekday it's due, 0 = Sunday");
+const RepeatUnit = z.enum(TARGET_REPEAT_UNITS);
 
 const TargetSchema = z
   .object({
     cadence: zTargetCadence,
     behavior: zTargetBehavior.describe(
-      "set_aside: the full amount every month (YNAB's 'Set aside another'); refill: only what " +
-        "brings the category back up to the amount ('Refill up to')",
+      "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what " +
+        "brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: " +
+        "reach the amount, by a month or eventually ('Have a balance of', custom only)",
     ),
-    amount: zMinorUnits.describe("Asked for each month"),
-    dueDay: DueDay,
+    amount: zMinorUnits.describe(
+      "Per week (weekly), per month (monthly) or per period (yearly, custom)",
+    ),
+    dueDay: z
+      .number()
+      .int()
+      .nullable()
+      .describe("Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"),
+    dueDate: z.iso
+      .date()
+      .nullable()
+      .describe(
+        "Yearly and custom: the first due date; a balance target's month (day 1), null for eventually",
+      ),
+    repeatEvery: z
+      .number()
+      .int()
+      .nullable()
+      .describe("Custom: repeats every N months or years; null for one-time"),
+    repeatUnit: RepeatUnit.nullable(),
     startMonth: zMonth.describe("The first month the target applies to"),
   })
   .openapi("CategoryTarget");
+
+const Amount = zMinorUnits.refine((v) => BigInt(v) > 0n, "The amount must be positive");
+const SetAsideOrRefill = z.enum(["set_aside", "refill"]);
+const SetTargetSchema = z
+  .discriminatedUnion("cadence", [
+    z.object({
+      cadence: z.literal("weekly"),
+      behavior: SetAsideOrRefill,
+      amount: Amount,
+      dueDay: Weekday,
+    }),
+    z.object({
+      cadence: z.literal("monthly"),
+      behavior: SetAsideOrRefill,
+      amount: Amount,
+      dueDay: DueDay,
+    }),
+    z.object({
+      cadence: z.literal("yearly"),
+      behavior: SetAsideOrRefill,
+      amount: Amount,
+      dueDate: z.iso.date().describe("When the yearly amount is due; repeats every year"),
+    }),
+    z.object({
+      cadence: z.literal("custom"),
+      behavior: zTargetBehavior,
+      amount: Amount,
+      dueDate: z.iso
+        .date()
+        .nullable()
+        .describe("Required unless behavior is balance (null: eventually; only its month counts)"),
+      repeat: z
+        .object({
+          every: z.number().int().min(1).max(11),
+          unit: RepeatUnit,
+        })
+        .nullable()
+        .describe(
+          "Every 1–11 months or 1–2 years; null for one-time. Balance targets can't repeat",
+        ),
+    }),
+  ])
+  .and(z.object({ month: zMonth.describe("The month the target is set from") }))
+  .superRefine((v, ctx) => {
+    if (v.cadence !== "custom") return;
+    if (v.behavior !== "balance" && v.dueDate === null) {
+      ctx.addIssue({ code: "custom", path: ["dueDate"], message: "Choose when it's due" });
+    }
+    if (v.behavior === "balance" && v.repeat) {
+      ctx.addIssue({ code: "custom", path: ["repeat"], message: "A balance target can't repeat" });
+    }
+    if (v.repeat?.unit === "year" && v.repeat.every > 2) {
+      ctx.addIssue({ code: "custom", path: ["repeat", "every"], message: "Every 1 or 2 years" });
+    }
+  })
+  .openapi("SetCategoryTarget");
 
 export const CategorySchema = z
   .object({
@@ -352,17 +430,7 @@ export const setCategoryTarget = createRoute({
     "start moves the start back. Payment categories can't have targets yet.",
   request: {
     params: CategoryParams,
-    body: json(
-      z
-        .object({
-          cadence: zTargetCadence,
-          behavior: zTargetBehavior,
-          amount: zMinorUnits.refine((v) => BigInt(v) > 0n, "The amount must be positive"),
-          dueDay: DueDay,
-          month: zMonth.describe("The month the target is set from"),
-        })
-        .openapi("SetCategoryTarget"),
-    ),
+    body: json(SetTargetSchema),
   },
   responses: {
     200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },

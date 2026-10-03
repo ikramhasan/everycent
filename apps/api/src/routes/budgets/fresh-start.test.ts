@@ -28,7 +28,7 @@ type Category = {
   note: string;
   hidden: boolean;
   linkedAccountId: string | null;
-  target: { behavior: string; amount: string; dueDay: number | null; startMonth: string } | null;
+  target: Record<string, unknown> | null;
 };
 type Group = { name: string; kind: string | null; hidden: boolean; categories: Category[] };
 type Txn = { amount: string; payeeName: string | null; categoryName: string | null; date: string };
@@ -202,6 +202,9 @@ describe("fresh start", () => {
       behavior: "refill",
       amount: "12000",
       dueDay: 5,
+      dueDate: null,
+      repeatEvery: null,
+      repeatUnit: null,
       startMonth: "2026-10",
     });
   });

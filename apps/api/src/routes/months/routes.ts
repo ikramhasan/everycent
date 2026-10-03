@@ -79,15 +79,28 @@ const PaymentSchema = z
 
 const TargetNeedSchema = z
   .object({
-    needed: zMinorUnits.describe("What the target asks for this month"),
-    funded: zMinorUnits.describe(
-      "What counts toward it: this month's Assigned (set aside), plus what was carried in " +
-        "(refill, in the user's month and earlier); can be negative",
+    needed: zMinorUnits.describe(
+      "What the target needs: this month's amount (weekly, monthly) or the total by its due date " +
+        "(yearly, custom), or the balance to reach",
     ),
-    underfunded: zMinorUnits.describe("What's still to assign; 0 when the target is met"),
+    funded: zMinorUnits.describe(
+      "What counts toward it: Assigned (set aside: this month's, or the period's for dated " +
+        "targets), or what was carried in plus this month's Assigned (refill, balance; carried " +
+        "money counts from the user's month on); can be negative",
+    ),
+    underfunded: zMinorUnits.describe(
+      "What's still to assign this month to stay on track; 0 when this month's share is in",
+    ),
+    dueDate: z.iso
+      .date()
+      .nullable()
+      .describe("Yearly and custom: the due date of the period this month is in"),
   })
   .nullable()
-  .describe("The category's target this month; null without one or before it starts")
+  .describe(
+    "The category's target this month; null without one, before it starts or after a " +
+      "one-time target's due month",
+  )
   .openapi("TargetNeed");
 
 const MonthCategorySchema = Totals.extend({

@@ -360,7 +360,7 @@ function BudgetPage() {
           </div>
         )}
         {listFigures && (
-          <aside className="grid gap-4" aria-label="Inspector">
+          <aside className="grid grid-cols-[minmax(0,1fr)] gap-4" aria-label="Inspector">
             <Inspector
               figures={listFigures}
               selection={selection}
@@ -514,6 +514,7 @@ function Inspector({
   onNoteChange: (categoryId: string, note: string) => Promise<void>;
   targetActions: ReturnType<typeof useTargetActions>;
 }) {
+  const { budget } = useBudget();
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
   if (only === UNCATEGORIZED && month.uncategorized) {
@@ -583,6 +584,7 @@ function Inspector({
               format={format}
               parse={assign.parse}
               toInput={assign.toInput}
+              dateFormat={budget.dateFormat}
               onSave={(input) => targetActions.save(only, month.month, input)}
               onDelete={() => targetActions.remove(only)}
               onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}

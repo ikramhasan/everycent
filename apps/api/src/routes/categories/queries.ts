@@ -23,6 +23,9 @@ export function toTargetJson(t: TargetRow) {
     behavior: t.behavior,
     amount: t.amount.toString(),
     dueDay: t.dueDay,
+    dueDate: t.dueDate,
+    repeatEvery: t.repeatEvery,
+    repeatUnit: t.repeatUnit,
     startMonth: monthOf(t.startMonth),
   };
 }

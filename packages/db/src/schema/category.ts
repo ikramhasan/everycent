@@ -1,4 +1,9 @@
-import { type CurrencyCode, TARGET_BEHAVIORS, TARGET_CADENCES } from "@everycent/engine";
+import {
+  type CurrencyCode,
+  TARGET_BEHAVIORS,
+  TARGET_CADENCES,
+  TARGET_REPEAT_UNITS,
+} from "@everycent/engine";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -160,11 +165,16 @@ export const categoryTarget = pgTable(
       .references(() => category.id, { onDelete: "cascade" }),
     cadence: text({ enum: TARGET_CADENCES }).notNull(),
     behavior: text({ enum: TARGET_BEHAVIORS }).notNull(),
-    /** Minor units asked for each period. */
+    /** Minor units: per week (weekly), per month (monthly) or per period (yearly, custom). */
     amount: bigint({ mode: "bigint" }).notNull(),
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
-    /** Day of the month it's due (1–31); null is the last day. */
+    /** Monthly: day of the month (1–31), null for the last day. Weekly: weekday, 0 = Sunday. */
     dueDay: integer(),
+    /** Yearly and custom: the (first) due date; a balance target's month, or null for eventually. */
+    dueDate: date({ mode: "string" }),
+    /** Custom: repeats every N months (1–11) or years (1–2); null for a one-time target. */
+    repeatEvery: integer(),
+    repeatUnit: text({ enum: TARGET_REPEAT_UNITS }),
     /** First day of the first month the target applies to, YYYY-MM-01. */
     startMonth: date({ mode: "string" }).notNull(),
     ...timestamps,

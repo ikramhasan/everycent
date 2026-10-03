@@ -70,16 +70,13 @@ export type TargetMark = { met: true } | { met: false; percent: number };
 /** The mark a category's target puts on its Available pill, if it has one this month. */
 export function targetMark(target: TargetNeed | null | undefined): TargetMark | undefined {
   if (!target) return undefined;
-  return target.underfunded === "0"
+  const needed = BigInt(target.needed);
+  const funded = BigInt(target.funded);
+  // Met shows a check; underfunded and "on track" show a pie filled to the share of the total.
+  return funded >= needed
     ? { met: true }
-    : { met: false, percent: targetPercent(fromNeed(target)) };
+    : { met: false, percent: targetPercent({ needed, funded }) };
 }
-
-const fromNeed = (n: TargetNeed) => ({
-  needed: BigInt(n.needed),
-  funded: BigInt(n.funded),
-  underfunded: BigInt(n.underfunded),
-});
 
 export interface Breakdown {
   /** Left over from last month (what the categories carried in). */
