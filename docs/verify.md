@@ -513,3 +513,60 @@ lines of credit LOC A/B, categories Q2–Q6, R3, L1–L3). Not built yet; 7e bui
   payment goes to Ready to Assign; categorized spending dated after the payment is cash; spending
   that crosses zero splits into cash and credit; closing creates an adjustment to Ready to
   Assign and leaves the payment category visible.
+
+## Monthly targets (phase 8a)
+
+Checked in YNAB on 2026-10-03 through the API (`goal_*` fields; categories "T8 A"–"T8 N" in the
+Test group, each a $100.00 monthly target, Brac transactions with memos `x-spend`, `x-refund`,
+`x-open`) and in the web app (inspector, row notes, the target form; R4 got a $10.00 target from
+November, T8 B's due day is the 15th). Built as found:
+
+- **Set aside another…** counts only this month's Assigned: Assigned So Far is Assigned, whatever
+  was carried in, spent or refunded (T8 E: $70.00 carried, $0.00 assigned → "Assign $100.00 to
+  meet your target"; T8 C: $100.00 assigned, $30.00 spent → met; T8 D: $40.00 assigned, $20.00
+  refund → $60.00 to go; T8 L: $150.00 assigned → met, "Assigned So Far $150.00").
+- **Refill up to…** counts what was carried in plus this month's Assigned ("Funded"); the month's
+  spending and refunds don't change it, moving money out does (T8 G: $70.00 carried → $30.00 to
+  go; T8 H: same with $20.00 spent → still $30.00; T8 J: $40.00 assigned + $20.00 refund → $60.00
+  to go; T8 M: $70.00 carried, −$20.00 assigned → $50.00 to go; T8 K: $70.00 assigned and $20.00
+  spent in September → $50.00 to go in October).
+- In a **future month** a Refill target ignores money carried in (T8 G in November: "Funded
+  $0.00", "$100.00 needed by the 30th"); the API's `goal_under_funded` still counts it (its docs
+  say the apps ignore it). Set aside asks for the full amount there too.
+- To go = what's asked − what counts, never below zero. Met: "You've met your target!" and no
+  percentage. Otherwise a percentage ring (funded ÷ asked) and "Assign $60.00 more to meet your
+  target" ("Assign $100.00 to meet your target" with nothing counted yet) with an Assign button.
+  Set aside lists "Amount to Assign This Month / Assigned So Far / To Go"; Refill "Needed This
+  Month / Funded / To Go". Heading: "Set Aside Another $100.00 Each Month" or "Refill Up to $100.00
+  Each Month", then "By the End of the Month" or "By the 15th of the Month".
+- Row note: "Funded" when met ("Funded. Spent $30.00 of $100.00" with spending); otherwise
+  "$60.00 more needed by the 31st" — Refill with nothing counted says "$100.00 needed by the 31st",
+  Set aside always says "more". The due day only changes this wording; the numbers don't move.
+- Available pill: yellow with a pie icon filled to the percentage while underfunded, green with a
+  check when met (cash overspending stays red).
+- The target applies from its creation month (API `goal_creation_month`). Before it the category
+  shows no target ("How much do you need for T8 G? … Create Target"), with plain green/grey
+  Available. A target is created in the month being viewed (R4 from November didn't show in
+  October). Saving it from an earlier month moves its start back to that month; saving from a later
+  month leaves the start alone. Editing changes every month from the start on.
+- The form: Weekly / Monthly / Yearly / Custom; "I need" (calculator field); "By" (Last Day of
+  Month, 31st … 1st); "Next month I want to" (Set aside another $X — "Use for: bills,
+  subscriptions, saving over time", "Most people choose this" and the default; Refill up to $X —
+  "Use for: gasoline, fun money, dining out"); Delete, Cancel, Save Target.
+
+### Percentage rounding
+
+- **Question:** whether the ring rounds or truncates (e.g. $99.99 of $100.00: 99% or 100%).
+  Assigning $99.99 to T8 A didn't stick in the web app and the API was rate-limited.
+- **Built so far (before this rule):** rounded down, so the ring never reads 100% before the target
+  is met.
+
+### Small target details not seen in YNAB yet
+
+- **Question:** (1) a due day past the month's end (the 31st in November): does the note say "by
+  the 30th"? (2) The Available pill of a met target whose Available is $0.00 (all spent): grey,
+  green, with or without the check? (3) A $0.00 target: can it be saved? (4) Do target edits show
+  in YNAB's Undo?
+- **Built so far (before this rule):** (1) the month's last day; (2) the plain colour rules (grey at
+  $0.00) with the check; (3) refused, the amount must be positive; (4) target edits aren't in
+  everycent's undo history.

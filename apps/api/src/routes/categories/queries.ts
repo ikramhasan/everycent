@@ -3,6 +3,7 @@ import {
   category,
   categoryAssignment,
   categoryGroup,
+  categoryTarget,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
@@ -14,8 +15,23 @@ import { type Db, internalCategoryId } from "../../lib/ledger";
 
 export type CategoryRow = typeof category.$inferSelect;
 export type CategoryGroupRow = typeof categoryGroup.$inferSelect;
+export type TargetRow = typeof categoryTarget.$inferSelect;
 
-export function toCategoryJson(c: CategoryRow, hasTransactions = false) {
+export function toTargetJson(t: TargetRow) {
+  return {
+    cadence: t.cadence,
+    behavior: t.behavior,
+    amount: t.amount.toString(),
+    dueDay: t.dueDay,
+    startMonth: monthOf(t.startMonth),
+  };
+}
+
+export function toCategoryJson(
+  c: CategoryRow,
+  hasTransactions = false,
+  target: TargetRow | null = null,
+) {
   return {
     id: c.id,
     groupId: c.groupId,
@@ -24,6 +40,7 @@ export function toCategoryJson(c: CategoryRow, hasTransactions = false) {
     hidden: c.hidden,
     linkedAccountId: c.linkedAccountId,
     hasTransactions,
+    target: target && toTargetJson(target),
   };
 }
 
@@ -31,13 +48,14 @@ export function toGroupJson(
   g: CategoryGroupRow,
   categories: CategoryRow[],
   used: ReadonlySet<string> = new Set(),
+  targets: ReadonlyMap<string, TargetRow> = new Map(),
 ) {
   return {
     id: g.id,
     name: g.name,
     hidden: g.hidden,
     kind: g.kind,
-    categories: categories.map((c) => toCategoryJson(c, used.has(c.id))),
+    categories: categories.map((c) => toCategoryJson(c, used.has(c.id), targets.get(c.id))),
   };
 }
 
@@ -68,6 +86,11 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
     .where(eq(transaction.budgetId, budgetId));
   const used = new Set([...usedRows, ...usedLines].flatMap((u) => (u.id ? [u.id] : [])));
+  const targetRows = await db
+    .select()
+    .from(categoryTarget)
+    .where(eq(categoryTarget.budgetId, budgetId));
+  const targets = new Map(targetRows.map((t) => [t.categoryId, t]));
   return {
     readyToAssignCategoryId: await internalCategoryId(db, budgetId, "ready_to_assign"),
     groups: groups.map((g) =>
@@ -75,6 +98,7 @@ export async function listCategoryTree(db: Db, budgetId: string) {
         g,
         categories.filter((c) => c.groupId === g.id),
         used,
+        targets,
       ),
     ),
   };
@@ -145,6 +169,15 @@ export async function insertCategory(db: Db, budgetId: string, groupId: string, 
 }
 
 /** Refuses edits YNAB doesn't allow on the Credit Card Payments group and payment categories. */
+/** A category's target, if it has one. */
+export async function findTarget(db: Db, categoryId: string) {
+  const [row] = await db
+    .select()
+    .from(categoryTarget)
+    .where(eq(categoryTarget.categoryId, categoryId));
+  return row ?? null;
+}
+
 export function managedError(message: string) {
   return new AppError(409, "MANAGED_CATEGORY", message);
 }

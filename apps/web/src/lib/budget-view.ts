@@ -1,5 +1,7 @@
+import { targetPercent } from "@everycent/engine";
 import { useCallback, useState } from "react";
 import type { BudgetMonthData, MonthTotals } from "./months";
+import type { TargetNeed } from "./targets";
 
 /**
  * YNAB's views above the budget list. Underfunded, Overfunded and Snoozed need targets (phase 8).
@@ -48,13 +50,36 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
 export function isCaution(
   totals: Pick<MonthTotals, "available" | "cashOverspent"> & {
     payment?: { underfunded: string } | null;
+    target?: { underfunded: string } | null;
   },
   month: string,
   current: string,
 ) {
   if (totals.payment) return totals.payment.underfunded !== "0" && month >= current;
-  return totals.available.startsWith("-") && totals.cashOverspent === "0";
+  if (totals.available.startsWith("-")) return totals.cashOverspent === "0";
+  // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a).
+  return Boolean(totals.target && totals.target.underfunded !== "0");
 }
+
+/**
+ * What a category's target shows on its Available pill: a pie filled to the funded percentage while
+ * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets").
+ */
+export type TargetMark = { met: true } | { met: false; percent: number };
+
+/** The mark a category's target puts on its Available pill, if it has one this month. */
+export function targetMark(target: TargetNeed | null | undefined): TargetMark | undefined {
+  if (!target) return undefined;
+  return target.underfunded === "0"
+    ? { met: true }
+    : { met: false, percent: targetPercent(fromNeed(target)) };
+}
+
+const fromNeed = (n: TargetNeed) => ({
+  needed: BigInt(n.needed),
+  funded: BigInt(n.funded),
+  underfunded: BigInt(n.underfunded),
+});
 
 export interface Breakdown {
   /** Left over from last month (what the categories carried in). */

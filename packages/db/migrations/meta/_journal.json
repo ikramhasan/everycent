@@ -78,6 +78,13 @@
       "when": 1790953310938,
       "tag": "0010_money_move",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791023021115,
+      "tag": "0011_category_target",
+      "breakpoints": true
     }
   ]
 }

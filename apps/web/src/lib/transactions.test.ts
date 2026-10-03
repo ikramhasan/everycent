@@ -112,6 +112,7 @@ describe("register drafts", () => {
               hidden: false,
               linkedAccountId: "a2",
               hasTransactions: false,
+              target: null,
             },
           ],
         },
@@ -129,6 +130,7 @@ describe("register drafts", () => {
               hidden: false,
               linkedAccountId: null,
               hasTransactions: false,
+              target: null,
             },
             {
               id: "old",
@@ -138,6 +140,7 @@ describe("register drafts", () => {
               hidden: true,
               linkedAccountId: null,
               hasTransactions: false,
+              target: null,
             },
           ],
         },

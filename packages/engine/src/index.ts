@@ -97,4 +97,16 @@ export {
 } from "./register-search";
 export { divideRounded, type RoundingMode } from "./rounding";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
+export {
+  type CategoryTarget,
+  TARGET_BEHAVIORS,
+  TARGET_CADENCES,
+  type TargetBehavior,
+  type TargetCadence,
+  type TargetNeed,
+  targetNeed,
+  targetPercent,
+  zTargetBehavior,
+  zTargetCadence,
+} from "./targets";
 export { fromWire, type MoneyWire, toWire, zCurrencyCode, zMinorUnits, zMoney } from "./wire";

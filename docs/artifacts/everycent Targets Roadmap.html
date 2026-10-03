@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (planned; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a built; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -157,15 +157,15 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
   <section class="flow" aria-label="Dependency order">
     <div class="lane">
       <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Plan math, cards, Auto-Assign</span></a>
-      <a class="node now" href="#s8a"><span class="n">8a · next</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
-      <a class="node" href="#s8b"><span class="n">8b</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
+      <a class="node done" href="#s8a"><span class="n">8a · done</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
+      <a class="node now" href="#s8b"><span class="n">8b · next</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
       <a class="node" href="#s8c"><span class="n">8c</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
       <a class="node" href="#s8d"><span class="n">8d</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
       <a class="node" href="#s8e"><span class="n">8e</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
       <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">Phase 7 is on stacked branches ending at <span class="mono">phase-7d-payments</span>, not merged; 7e–7g are deferred. To pick up: <span class="mono">Start 8a on a branch from phase-7d-payments (or main once the stack is merged). Read docs/deferred.md and docs/verify.md; settle the stage's verification gate through the YNAB API (CLAUDE.md) and the app before implementing.</span></div>
+    <div class="then">8a is on <span class="mono">phase-8a-monthly-targets</span> (from main, after the Phase 7 merge). To pick up: <span class="mono">Start 8b on a branch from phase-8a-monthly-targets. Read docs/deferred.md ("Targets") and docs/verify.md ("Monthly targets"); settle 8b's gate through the YNAB API — POST /categories takes goal_target with goal_frequency weekly/yearly — and the app. The API allows 200 requests an hour: read whole months, not one category at a time.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -181,7 +181,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           </div>
           <div>
             <h3>Waiting for Phase 8</h3>
-            <ul><li>Inspector Target section; Underfunded and Reduce Overfunding Auto-Assign; Underfunded, Overfunded and Snoozed views <span class="src">deferred.md</span></li><li>Progress bars and “Fully Spent” under each category <span class="src">deferred.md</span></li><li>Fresh start must copy targets <span class="src">deferred.md</span></li><li>“Create a Debt Payoff Target” on payment categories</li></ul>
+            <ul><li>Underfunded and Reduce Overfunding Auto-Assign; Underfunded, Overfunded and Snoozed views <span class="src">deferred.md</span></li><li>Progress bars and “Fully Spent” under each category <span class="src">deferred.md</span></li><li>“Create a Debt Payoff Target” on payment categories</li></ul>
             <h3>Not here</h3>
             <ul><li>Loan debt-payment targets need loan activity (7f, deferred)</li><li>The calendar pill for scheduled transactions (Phase 10)</li></ul>
           </div>
@@ -191,20 +191,22 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8a">
       <div class="num">8a</div>
       <div class="body">
-        <div class="head"><h2>Target model and monthly targets</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Target model and monthly targets</h2><span class="pill done">Done</span></div>
         <p class="why">One target per category, stored and edited through the API, with the simplest cadence first. The engine answers one question for any category and month: how much more does the target ask for? Every later stage reuses that answer.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Schema: a target row per category (cadence, amount, behavior, due day/date, repeat, snooze); <code>bigint</code> amounts with currency</li><li>API: create, edit and delete a category's target; month responses add needed, underfunded and status per category</li><li>Monthly targets with “Set aside another…” and “Refill up to…” behaviors</li><li>Engine: <code>targetNeed(history, target, month)</code> — needed this month, funded so far, underfunded — pure and table-tested</li><li>Inspector Target section: create/edit/delete, amount needed, progress; yellow Available with the pie icon while underfunded, green check when met</li><li>Fresh start copies targets</li></ul>
+            <ul><li>Schema: <code>category_target</code>, one row per category (cadence, behavior, amount + currency, due day, start month); repeat and snooze columns come with 8b/8d</li><li>API: <code>PUT</code>/<code>DELETE /categories/{id}/target</code>; categories carry their target; month responses add <code>target: {needed, funded, underfunded}</code> per category</li><li>Monthly targets with “Set aside another…” and “Refill up to…” behaviors</li><li>Engine: <code>targetNeed(history, target, month, currentMonth)</code> — needed, funded, underfunded — table-tested against the YNAB cases</li><li>Inspector Target section and editor (I need with math, By, Next month I want to; Assign button); row note “$60.00 more needed by the 15th” / “Funded”; yellow Available with a pie while underfunded, a check when met</li><li>Fresh start copies targets, starting in the fresh start's month</li></ul>
             <h3>Depends on</h3>
             <ul><li>Phase 6 month history; Phase 7 payment categories (targets there come in 8e)</li></ul>
           </div>
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>“Set aside another…” asks for the full amount every period, even if last month's money rolled over; money builds up</li><li>“Refill up to…” asks only to replace what left the category, up to the target</li><li>Refunds don't count toward this period's target; they count from the next period</li><li>Looking at a future month, a “Refill up to…” target asks for the full amount: leftover money only counts once the month begins</li><li>Editing a target changes it in every month, past and future; one target per category at a time</li><li>Underfunded is yellow with a pie icon; met shows a green check; zero and not underfunded is grey</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Exactly what “funded” counts for each behavior: assigned this month, or Available, or Available minus refunds — reproduce with the API (<code>goal_under_funded</code>, <code>goal_overall_funded</code>) and a fresh category per case</li><li>How spending and moves out of the category in the same month change what's asked</li><li>Whether a target created mid-history applies to earlier months (API <code>goal_creation_month</code>)</li></ul>
+            <h3>Found in YNAB (API + app, 3 Oct)</h3>
+            <ul><li>Set aside counts only this month's Assigned: carried money, spending and refunds don't</li><li>Refill counts carried-in + Assigned; same-month spending and refunds don't, moving money out does</li><li>In a future month Refill ignores carried money (the API still counts it; the app doesn't)</li><li>A target applies from its start month, which is the month it was created from; saving from an earlier month moves the start back</li><li>The due day only changes the wording</li></ul>
+            <h3>Still open</h3>
+            <ul class="q"><li class="q">Percentage rounding; a due day past the month's end; a met target at $0.00 Available; $0 targets; undo for target edits <span class="src">verify.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -212,7 +214,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8b">
       <div class="num">8b</div>
       <div class="body">
-        <div class="head"><h2>Weekly, yearly and custom targets</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Weekly, yearly and custom targets</h2><span class="pill now">Next</span></div>
         <p class="why">The remaining cadences differ only in how a period is defined and how its amount is spread over months. Keep the period math in the engine so 8a's need calculation stays one function.</p>
         <div class="meta">
           <div>

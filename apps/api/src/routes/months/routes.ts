@@ -77,9 +77,23 @@ const PaymentSchema = z
   .describe("Set on a credit account's payment category")
   .openapi("PaymentDetails");
 
+const TargetNeedSchema = z
+  .object({
+    needed: zMinorUnits.describe("What the target asks for this month"),
+    funded: zMinorUnits.describe(
+      "What counts toward it: this month's Assigned (set aside), plus what was carried in " +
+        "(refill, in the user's month and earlier); can be negative",
+    ),
+    underfunded: zMinorUnits.describe("What's still to assign; 0 when the target is met"),
+  })
+  .nullable()
+  .describe("The category's target this month; null without one or before it starts")
+  .openapi("TargetNeed");
+
 const MonthCategorySchema = Totals.extend({
   categoryId: z.string(),
   payment: PaymentSchema,
+  target: TargetNeedSchema,
   autoAssign: AutoAssignSchema,
 }).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");

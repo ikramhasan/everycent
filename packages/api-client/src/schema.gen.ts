@@ -200,6 +200,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or replace a category's target
+         * @description A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Payment categories can't have targets yet.
+         */
+        put: operations["setCategoryTarget"];
+        post?: never;
+        /** Remove a category's target */
+        delete: operations["deleteCategoryTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts": {
         parameters: {
             query?: never;
@@ -693,7 +714,23 @@ export interface components {
             linkedAccountId: string | null;
             /** @description Deleting it requires reassignToCategoryId */
             hasTransactions: boolean;
+            target: components["schemas"]["CategoryTarget"];
         };
+        CategoryTarget: {
+            /** @enum {string} */
+            cadence: "monthly";
+            /**
+             * @description set_aside: the full amount every month (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to')
+             * @enum {string}
+             */
+            behavior: "set_aside" | "refill";
+            /** @description Asked for each month */
+            amount: string;
+            /** @description Day of the month it's due; null is the last day. Only changes the wording */
+            dueDay: number | null;
+            /** @description The first month the target applies to */
+            startMonth: string;
+        } | null;
         CreateCategoryGroup: {
             name: string;
         };
@@ -719,6 +756,18 @@ export interface components {
             groupId: string;
             /** @description Place it right before this category in that group; null moves it to the end */
             beforeCategoryId: string | null;
+        };
+        SetCategoryTarget: {
+            /** @enum {string} */
+            cadence: "monthly";
+            /** @enum {string} */
+            behavior: "set_aside" | "refill";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /** @description Day of the month it's due; null is the last day. Only changes the wording */
+            dueDay: number | null;
+            /** @description The month the target is set from */
+            month: string;
         };
         AccountList: {
             /** @description In sidebar order, closed ones included */
@@ -1084,6 +1133,7 @@ export interface components {
         MonthCategory: components["schemas"]["MonthTotals"] & {
             categoryId: string;
             payment: components["schemas"]["PaymentDetails"];
+            target: components["schemas"]["TargetNeed"];
             autoAssign: components["schemas"]["AutoAssignAmounts"];
         };
         /** @description Set on a credit account's payment category */
@@ -1104,6 +1154,15 @@ export interface components {
             fundedSpending: string;
             /** @description This month's payments to the card, negative */
             paymentsMade: string;
+        } | null;
+        /** @description The category's target this month; null without one or before it starts */
+        TargetNeed: {
+            /** @description What the target asks for this month */
+            needed: string;
+            /** @description What counts toward it: this month's Assigned (set aside), plus what was carried in (refill, in the user's month and earlier); can be negative */
+            funded: string;
+            /** @description What's still to assign; 0 when the target is met */
+            underfunded: string;
         } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
         AutoAssignAmounts: {
@@ -2167,6 +2226,128 @@ export interface operations {
             };
             /** @description MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCategoryTarget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: payment categories can't have targets yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

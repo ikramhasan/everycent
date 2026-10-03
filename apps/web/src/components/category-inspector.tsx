@@ -94,7 +94,7 @@ export function MonthSummary({
 
 /**
  * The inspector for one category: where its Available comes from (activity split into what was
- * paid with cash and with credit accounts), and its note.
+ * paid with cash and with credit accounts), its target, and its note.
  */
 export function CategoryInspector({
   name,
@@ -104,6 +104,7 @@ export function CategoryInspector({
   note,
   onNoteChange,
   uncategorized = false,
+  target,
 }: {
   name: string;
   totals: Breakdown;
@@ -113,6 +114,8 @@ export function CategoryInspector({
   note: string;
   onNoteChange: (note: string) => Promise<void>;
   uncategorized?: boolean;
+  /** The Target section. */
+  target?: ReactNode;
 }) {
   const overspent = totals.available < 0n;
   const shortfall = format((-totals.available).toString());
@@ -145,6 +148,7 @@ export function CategoryInspector({
           {...{ shortfall, cashShortfall }}
         />
       )}
+      {target}
       {!uncategorized && <NoteField key={name} note={note} onChange={onNoteChange} />}
     </Panel>
   );

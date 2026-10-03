@@ -23,6 +23,7 @@ const data: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          target: null,
         },
         {
           id: "c2",
@@ -32,6 +33,7 @@ const data: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          target: null,
         },
         {
           id: "c3",
@@ -41,6 +43,7 @@ const data: CategoryListData = {
           hidden: true,
           linkedAccountId: null,
           hasTransactions: false,
+          target: null,
         },
       ],
     },
@@ -65,6 +68,7 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: "acct",
           hasTransactions: false,
+          target: null,
         },
       ],
     },
@@ -82,6 +86,7 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: true,
+          target: null,
         },
         {
           id: "c2",
@@ -91,6 +96,7 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          target: null,
         },
       ],
     },
@@ -129,6 +135,7 @@ const totals = (assigned: string, activity: string, available: string) => ({
   cashOverspent: available.startsWith("-") ? available : "0",
   creditOverspent: "0",
   payment: null,
+  target: null,
   autoAssign: NO_AUTO_ASSIGN,
 });
 

@@ -1,4 +1,5 @@
-import { category, categoryGroup } from "@everycent/db/schema";
+import { newId } from "@everycent/db";
+import { category, categoryGroup, categoryTarget } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -8,6 +9,7 @@ import type { AppEnv } from "../../types";
 import {
   findCategory,
   findGroup,
+  findTarget,
   hasHistory,
   insertCategory,
   insertGroup,
@@ -22,9 +24,11 @@ import type {
   createCategoryGroup,
   deleteCategory,
   deleteCategoryGroup,
+  deleteCategoryTarget,
   listCategories,
   moveCategory,
   moveCategoryGroup,
+  setCategoryTarget,
   updateCategory,
   updateCategoryGroup,
 } from "./routes";
@@ -163,7 +167,10 @@ export const updateCategoryHandler: RouteHandler<typeof updateCategory, Env> = a
       .returning();
     if (updated) row = updated;
   }
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
+  return c.json(
+    toCategoryJson(row, await hasHistory(db, [row.id]), await findTarget(db, row.id)),
+    200,
+  );
 };
 
 export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = async (c) => {
@@ -218,4 +225,47 @@ export const moveCategoryHandler: RouteHandler<typeof moveCategory, Env> = async
     }
   });
   return c.json(await listCategoryTree(db, budgetId), 200);
+};
+
+export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, Env> = async (c) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { cadence, behavior, amount, dueDay, month } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  // Credit card payment targets are their own kinds (phase 8e).
+  if (row.linkedAccountId) throw managedError("Payment categories can't have targets yet");
+  const start = `${month}-01`;
+  const existing = await findTarget(db, categoryId);
+  const values = {
+    cadence,
+    behavior,
+    amount: BigInt(amount),
+    currency: budget.currency,
+    dueDay,
+    // YNAB (docs/verify.md): saving from a month before the start moves the start back to it.
+    startMonth: existing && existing.startMonth < start ? existing.startMonth : start,
+  };
+  const [target] = existing
+    ? await db
+        .update(categoryTarget)
+        .set(values)
+        .where(eq(categoryTarget.id, existing.id))
+        .returning()
+    : await db
+        .insert(categoryTarget)
+        .values({ id: newId(), budgetId, categoryId, ...values })
+        .returning();
+  return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
+};
+
+export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarget, Env> = async (
+  c,
+) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
+  return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
 };

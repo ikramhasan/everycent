@@ -27,7 +27,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { isCaution, UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
+import { isCaution, targetMark, UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
 import {
   type Category,
   type CategoryGroup,
@@ -39,6 +39,7 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
+import { targetRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
@@ -785,8 +786,17 @@ function CategoryRow({
         {category.note && (
           <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
         )}
-        {totals && format && totals.available.startsWith("-") && (
+        {totals && format && figures && totals.available.startsWith("-") ? (
           <OverspentNote totals={totals} format={format} />
+        ) : (
+          totals?.target &&
+          category.target &&
+          format &&
+          figures && (
+            <TargetNote
+              {...targetRowNote(category.target, totals.target, figures.month.month, format)}
+            />
+          )
         )}
       </div>
       {totals && format && (
@@ -822,14 +832,34 @@ function CategoryRow({
                 format={format}
                 actions={move}
                 caution={caution}
+                target={targetMark(totals.target)}
               />
             ) : (
-              <AvailablePill amount={totals.available} format={format} caution={caution} />
+              <AvailablePill
+                amount={totals.available}
+                format={format}
+                caution={caution}
+                target={targetMark(totals.target)}
+              />
             )}
           </span>
         </>
       )}
     </div>
+  );
+}
+
+/** What a category's target still asks for this month, under its name (YNAB's row note). */
+function TargetNote({ text, met }: { text: string; met: boolean }) {
+  return (
+    <span
+      className={cn(
+        "min-w-0 flex-1 basis-0 truncate pl-2 text-right text-xs",
+        met ? "font-medium text-foreground" : "text-muted-foreground",
+      )}
+    >
+      {text}
+    </span>
   );
 }
 

@@ -1,10 +1,41 @@
 import { CATEGORY_GROUP_KINDS } from "@everycent/db/schema";
+import {
+  BUDGET_MONTH_PATTERN,
+  zMinorUnits,
+  zTargetBehavior,
+  zTargetCadence,
+} from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
 const Note = z.string().max(10_000);
+
+const zMonth = z
+  .string()
+  .regex(BUDGET_MONTH_PATTERN, "Expected a month as YYYY-MM")
+  .describe("A month, YYYY-MM");
+const DueDay = z
+  .number()
+  .int()
+  .min(1)
+  .max(31)
+  .nullable()
+  .describe("Day of the month it's due; null is the last day. Only changes the wording");
+
+const TargetSchema = z
+  .object({
+    cadence: zTargetCadence,
+    behavior: zTargetBehavior.describe(
+      "set_aside: the full amount every month (YNAB's 'Set aside another'); refill: only what " +
+        "brings the category back up to the amount ('Refill up to')",
+    ),
+    amount: zMinorUnits.describe("Asked for each month"),
+    dueDay: DueDay,
+    startMonth: zMonth.describe("The first month the target applies to"),
+  })
+  .openapi("CategoryTarget");
 
 export const CategorySchema = z
   .object({
@@ -18,6 +49,7 @@ export const CategorySchema = z
       .nullable()
       .describe("Set on a credit account's payment category, which is named after the account"),
     hasTransactions: z.boolean().describe("Deleting it requires reassignToCategoryId"),
+    target: TargetSchema.nullable(),
   })
   .openapi("Category");
 
@@ -303,5 +335,58 @@ export const moveCategory = createRoute({
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
     409: managed,
+  },
+});
+
+export const setCategoryTarget = createRoute({
+  method: "put",
+  path: "/budgets/{budgetId}/categories/{categoryId}/target",
+  operationId: "setCategoryTarget",
+  tags: ["Categories"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Create or replace a category's target",
+  description:
+    "A category has one target at a time; saving changes it in every month from its start. A new " +
+    "target starts in `month` (the month it's set from); saving from an earlier month than its " +
+    "start moves the start back. Payment categories can't have targets yet.",
+  request: {
+    params: CategoryParams,
+    body: json(
+      z
+        .object({
+          cadence: zTargetCadence,
+          behavior: zTargetBehavior,
+          amount: zMinorUnits.refine((v) => BigInt(v) > 0n, "The amount must be positive"),
+          dueDay: DueDay,
+          month: zMonth.describe("The month the target is set from"),
+        })
+        .openapi("SetCategoryTarget"),
+    ),
+  },
+  responses: {
+    200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't edit categories"),
+    404: notFound,
+    409: jsonError("MANAGED_CATEGORY: payment categories can't have targets yet"),
+  },
+});
+
+export const deleteCategoryTarget = createRoute({
+  method: "delete",
+  path: "/budgets/{budgetId}/categories/{categoryId}/target",
+  operationId: "deleteCategoryTarget",
+  tags: ["Categories"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Remove a category's target",
+  request: { params: CategoryParams },
+  responses: {
+    200: { description: "Removed", content: { "application/json": { schema: CategorySchema } } },
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't edit categories"),
+    404: notFound,
   },
 });

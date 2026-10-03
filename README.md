@@ -183,7 +183,8 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 ### 8. Targets (goals)
 
 - [ ] Needed for spending — weekly (by day), monthly (by date), yearly, custom
-      (every N months/years), by a specific date; refill vs set aside another
+      (every N months/years), by a specific date; refill vs set aside another (monthly done in
+      8a: model, API, inspector and editor; the other cadences are 8b)
 - [ ] Savings balance (target balance, optionally by date)
 - [ ] Monthly savings builder
 - [ ] Debt payment targets (for loans / credit cards; include interest)
