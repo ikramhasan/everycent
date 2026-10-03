@@ -1,0 +1,332 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>everycent Targets Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger-style sequence, as on the Phase 7 build sequence. A dependency strip on top, then one entry per stage, read top to bottom. */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --ink: #16211e;
+  --muted: #5b6b66;
+  --rule: #d9e1de;
+  --accent: #0f6b58;
+  --accent-soft: #e2f0ec;
+  --side: #7a5a12;
+  --side-soft: #f6eedb;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+    --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101614; --surface: #171f1c; --ink: #e4ece9; --muted: #93a39e; --rule: #2a3531;
+  --accent: #5cc9ae; --accent-soft: #173a31; --side: #e0b75a; --side-soft: #3a2f16;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 16px;
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 880px; margin-inline: auto; display: grid; gap: 40px; }
+
+header { display: grid; gap: 10px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05; letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+}
+.lede { margin: 0; max-width: 65ch; color: var(--muted); font-size: 16px; }
+.lede strong { color: var(--ink); font-weight: 600; }
+
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: -0.01em; margin: 0; text-wrap: balance;
+}
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+
+/* Dependency strip */
+.flow { display: grid; gap: 14px; }
+.lane {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;
+  position: relative;
+}
+.node {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px 12px 14px; display: grid; gap: 4px; min-width: 0; position: relative;
+}
+.node .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+.node .t { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.node .s { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+a.node { color: inherit; text-decoration: none; }
+a.node:hover { border-color: var(--accent); }
+a.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step { scroll-margin-top: 16px; }
+.node.now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.node:not(:last-child)::after {
+  content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%);
+  color: var(--muted); font-size: 14px; background: var(--bg); line-height: 1; padding: 2px 0;
+  z-index: 1;
+}
+.side {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+  background: var(--side-soft); border: 1px dashed var(--side); border-radius: 6px;
+  padding: 10px 12px; font-size: 13.5px;
+}
+.side b { color: var(--side); font-weight: 600; }
+.then { font-size: 13.5px; color: var(--muted); }
+.then .mono { color: var(--ink); }
+
+@media (max-width: 860px) {
+  .lane { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .node:not(:last-child)::after {
+    content: "↓"; right: 50%; top: auto; bottom: -9px; transform: translate(50%, 50%);
+    padding: 0 4px;
+  }
+}
+
+/* Entries */
+.steps { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.step {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px;
+  padding-block: 26px; border-bottom: 1px solid var(--rule);
+}
+.num {
+  font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.body { display: grid; gap: 12px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.pill {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted);
+  white-space: nowrap;
+}
+.pill.now { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pill.done { color: var(--muted); }
+.node.done { opacity: .6; }
+.why { margin: 0; max-width: 65ch; }
+.meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.meta h3 {
+  margin: 0 0 6px; font-family: var(--font-mono); font-weight: 500; font-size: 11.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.meta ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.meta li::marker { color: var(--muted); }
+.src { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.full { grid-column: 1 / -1; }
+.meta li.q { color: var(--muted); }
+.meta ul + h3 { margin-top: 14px; }
+@media (max-width: 680px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .meta { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Rules */
+.rules { display: grid; gap: 14px; }
+.rules ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; max-width: 70ch; }
+.rules li::marker { color: var(--accent); }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (planned; 7e–7g deferred)</div>
+    <h1>Build sequence for targets</h1>
+    <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
+  </header>
+
+  <section class="flow" aria-label="Dependency order">
+    <div class="lane">
+      <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Plan math, cards, Auto-Assign</span></a>
+      <a class="node now" href="#s8a"><span class="n">8a · next</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
+      <a class="node" href="#s8b"><span class="n">8b</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
+      <a class="node" href="#s8c"><span class="n">8c</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
+      <a class="node" href="#s8d"><span class="n">8d</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
+      <a class="node" href="#s8e"><span class="n">8e</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
+      <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
+    </div>
+    <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
+    <div class="then">Phase 7 is on stacked branches ending at <span class="mono">phase-7d-payments</span>, not merged; 7e–7g are deferred. To pick up: <span class="mono">Start 8a on a branch from phase-7d-payments (or main once the stack is merged). Read docs/deferred.md and docs/verify.md; settle the stage's verification gate through the YNAB API (CLAUDE.md) and the app before implementing.</span></div>
+  </section>
+
+  <section class="steps" aria-label="Stages">
+    <article class="step" id="s00">
+      <div class="num">00</div>
+      <div class="body">
+        <div class="head"><h2>Foundation already in place</h2><span class="pill done">Done</span></div>
+        <p class="why">Phase 8 adds targets on top of the Phase 6 plan and the Phase 7 card math. Targets only <em>ask</em> for money: they never move money or change Available, Activity or Ready to Assign.</p>
+        <div class="meta">
+          <div>
+            <h3>Built</h3>
+            <ul><li>Exact month history per category: carried, assigned, activity, available <span class="src">P6</span></li><li>Auto-Assign (assigned/spent last month, averages, resets), Recent Moves, undo/redo <span class="src">P6</span></li><li>Category inspector with notes; Overspent and Money Available views <span class="src">P6</span></li><li>Payment categories with Funded Spending, Payments Made and Total Underfunded vs the card balance <span class="src">P7</span></li></ul>
+          </div>
+          <div>
+            <h3>Waiting for Phase 8</h3>
+            <ul><li>Inspector Target section; Underfunded and Reduce Overfunding Auto-Assign; Underfunded, Overfunded and Snoozed views <span class="src">deferred.md</span></li><li>Progress bars and “Fully Spent” under each category <span class="src">deferred.md</span></li><li>Fresh start must copy targets <span class="src">deferred.md</span></li><li>“Create a Debt Payoff Target” on payment categories</li></ul>
+            <h3>Not here</h3>
+            <ul><li>Loan debt-payment targets need loan activity (7f, deferred)</li><li>The calendar pill for scheduled transactions (Phase 10)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8a">
+      <div class="num">8a</div>
+      <div class="body">
+        <div class="head"><h2>Target model and monthly targets</h2><span class="pill now">Next</span></div>
+        <p class="why">One target per category, stored and edited through the API, with the simplest cadence first. The engine answers one question for any category and month: how much more does the target ask for? Every later stage reuses that answer.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Schema: a target row per category (cadence, amount, behavior, due day/date, repeat, snooze); <code>bigint</code> amounts with currency</li><li>API: create, edit and delete a category's target; month responses add needed, underfunded and status per category</li><li>Monthly targets with “Set aside another…” and “Refill up to…” behaviors</li><li>Engine: <code>targetNeed(history, target, month)</code> — needed this month, funded so far, underfunded — pure and table-tested</li><li>Inspector Target section: create/edit/delete, amount needed, progress; yellow Available with the pie icon while underfunded, green check when met</li><li>Fresh start copies targets</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>Phase 6 month history; Phase 7 payment categories (targets there come in 8e)</li></ul>
+          </div>
+          <div>
+            <h3>Confirmed (help center)</h3>
+            <ul><li>“Set aside another…” asks for the full amount every period, even if last month's money rolled over; money builds up</li><li>“Refill up to…” asks only to replace what left the category, up to the target</li><li>Refunds don't count toward this period's target; they count from the next period</li><li>Looking at a future month, a “Refill up to…” target asks for the full amount: leftover money only counts once the month begins</li><li>Editing a target changes it in every month, past and future; one target per category at a time</li><li>Underfunded is yellow with a pie icon; met shows a green check; zero and not underfunded is grey</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li>Exactly what “funded” counts for each behavior: assigned this month, or Available, or Available minus refunds — reproduce with the API (<code>goal_under_funded</code>, <code>goal_overall_funded</code>) and a fresh category per case</li><li>How spending and moves out of the category in the same month change what's asked</li><li>Whether a target created mid-history applies to earlier months (API <code>goal_creation_month</code>)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8b">
+      <div class="num">8b</div>
+      <div class="body">
+        <div class="head"><h2>Weekly, yearly and custom targets</h2><span class="pill">Planned</span></div>
+        <p class="why">The remaining cadences differ only in how a period is defined and how its amount is spread over months. Keep the period math in the engine so 8a's need calculation stays one function.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Weekly: amount per week on a chosen weekday; the month asks for as many weeks as that weekday occurs</li><li>Yearly: amount by a “By” month, spread over the months left in the period; repeats annually</li><li>Custom: amount by a “Due on” date; repeat off (one-time), monthly or yearly every N; “Set aside…”, “Refill up to…” and “Have a balance of…”</li><li>Target editor form for every cadence and behavior; inspector copy for each</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>8a target model and need calculation</li></ul>
+          </div>
+          <div>
+            <h3>Confirmed (help center)</h3>
+            <ul><li>Weekly totals depend on how many times the chosen day falls in the month (5 occurrences ask for 5 weeks)</li><li>Yearly and repeating custom targets track money assigned across the whole period, not what's in the category now</li><li>A new period starts the month after the due month, even if the due date is earlier in that month</li><li>“Have a balance of…” isn't meant to be spent from before the due date and can't repeat</li><li>A one-time custom target stops asking after its due month</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li>Rounding when an amount doesn't divide evenly over the months left (which month gets the remainder)</li><li>Whether the legacy types (Target Balance, Target Balance by Date, Monthly Savings Builder — API <code>TB</code>/<code>TBD</code>/<code>MF</code>) can still be created; the README's “savings balance” and “monthly savings builder” map to them or to custom targets</li><li>Mid-period creation: how much a yearly target asks for when created with 3 months left</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8c">
+      <div class="num">8c</div>
+      <div class="body">
+        <div class="head"><h2>Underfunded across the plan</h2><span class="pill">Planned</span></div>
+        <p class="why">With needs computed per category, the plan can total them: Auto-Assign gets its two missing options and the budget screen gets its missing views.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Auto-Assign “Underfunded”: assign exactly what targets ask for (selected, view or whole plan, with the existing preview)</li><li>Auto-Assign “Reduce Overfunding”: send money above the target back to Ready to Assign</li><li>Underfunded and Overfunded views, with their empty states</li><li>Month summary: this month's targets total (YNAB's “October's Targets”)</li><li>Undo/redo and Recent Moves for both options, as for the other Auto-Assign options</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>8a–8b target need for every cadence</li></ul>
+          </div>
+          <div>
+            <h3>Confirmed</h3>
+            <ul><li>The inspector's Auto-Assign lists Underfunded and Reduce Overfunding with an amount each (seen in YNAB, 6e)</li><li>Snoozed targets don't count toward Underfunded (help center)</li><li>Views bar has Underfunded, Overfunded and Snoozed next to the built ones (seen in YNAB, 6d)</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li>What counts as overfunded per cadence and behavior, and what Reduce Overfunding leaves</li><li>Whether Underfunded includes payment-category targets and credit overspending</li><li>The Ready to Assign banner's “Assign” pop-up (still unchecked from 6e)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8d">
+      <div class="num">8d</div>
+      <div class="body">
+        <div class="head"><h2>Snooze and progress bars</h2><span class="pill">Planned</span></div>
+        <p class="why">The visible layer: let the user mute a target for a month, and draw each category's progress the way YNAB does so the plan reads at a glance.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Snooze for the current month only; Zz icon; Snoozed view; snoozed targets excluded from Underfunded</li><li>Progress bars under each category, with the Progress Bars On/Off toggle</li><li>Bar sections: month vs target period, rollover section for “Set aside another…”, one section per week for weekly targets, extra section when more was assigned or spent</li><li>Bar colors: green funded/snoozed/no target with money, yellow assigned but not met, grey empty, red overspent; light = spent, dark = still available</li><li>“Fully Spent” and “Spent $x of $y” notes (from Phase 6)</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>8a–8c</li></ul>
+          </div>
+          <div>
+            <h3>Confirmed (help center)</h3>
+            <ul><li>Snooze lasts for the month it's set in and only the current month can be snoozed; the next month asks again</li><li>A snoozed category shows green (money) or grey (zero) instead of yellow</li><li>Credit card payment targets can't be snoozed</li><li>Rollover money is always spent first; “Refill up to…” rollover isn't progress in a future month</li><li>Progress bar on/off resets when local storage is cleared (so it's a browser setting)</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li>Exact bar geometry for mixed spent/available/overspent, in both themes, against YNAB screenshots</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8e">
+      <div class="num">8e</div>
+      <div class="body">
+        <div class="head"><h2>Credit card payment targets</h2><span class="pill">Planned</span></div>
+        <p class="why">Payment categories get their own two target types. They reuse 8a's model but measure progress differently: a fixed monthly payment, or the card's balance paid off by a date.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>“Pay Specific Amount Monthly”: asks for a fixed amount each month, whatever was paid or spent</li><li>“Pay Off Balance by Date”: monthly amount = what's owed beyond Available, spread to the date; re-computed every month</li><li>Payment-category inspector: target type, progress against the whole balance, “Create a Debt Payoff Target”</li><li>Payment targets in Underfunded; never snoozable</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>8a–8c; Phase 7 payment math (7a–7d)</li></ul>
+          </div>
+          <div>
+            <h3>Confirmed (help center)</h3>
+            <ul><li>Two types only for payment categories; specific-amount progress is for this month only</li><li>Pay-off-by-date progress is Available against the whole balance; uncovered credit overspending raises next month's ask</li><li>Funded card spending moving into the payment category doesn't change what the target asks</li></ul>
+            <h3>Verification gate</h3>
+            <ul><li>Rounding and the month the date falls in for pay-off-by-date</li><li>Positive card balances (7e is deferred): skip target behavior for them until 7e</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+    <article class="step" id="s8f">
+      <div class="num">8f</div>
+      <div class="body">
+        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill">Planned</span></div>
+        <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f.</p>
+        <div class="meta">
+          <div>
+            <h3>Includes</h3>
+            <ul><li>Targets overview: total needed this month vs next month, and per group</li><li>Target history: past months show what that month's target asked for</li><li>Browser parity pass of every target type in both themes; deferred.md and verify.md updated</li><li><code>pnpm check</code>; OpenAPI/client and migrations generated and committed</li></ul>
+            <h3>Depends on</h3>
+            <ul><li>8a–8e</li></ul>
+          </div>
+          <div>
+            <h3>Verification gate</h3>
+            <ul><li>Where YNAB shows the overview today (month summary, “Cost to Be Me” in Edit Plan) and what it totals</li><li>How a past month shows a target that was edited later (help center: edits apply to every month)</li></ul>
+            <h3>Not here</h3>
+            <ul><li>Loan “Monthly Debt Payment” targets: need 7f's loan activity and amortization</li><li>Scheduled-transaction funding and the calendar pill (Phase 10)</li><li>Daily or biweekly cadences (YNAB has none)</li></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="rules">
+    <h2>Ground rules</h2>
+    <ul>
+      <li><strong>Match YNAB one to one; check, don't assume.</strong> The YNAB API reports what targets ask for (<code>goal_under_funded</code>, <code>goal_overall_left</code>, <code>goal_months_to_budget</code>) per month, so most gates can be settled with a fresh category per case. Wait before reading after a write and confirm deltas both ways (CLAUDE.md).</li>
+      <li><strong>Targets never move money.</strong> They add fields to month responses; Available, Activity and Ready to Assign stay exactly as Phases 6–7 compute them.</li>
+      <li><strong>Money stays exact.</strong> Target amounts are <code>bigint</code> minor units with a currency; spreading an amount over months or weeks uses the engine's allocation and rounding, never floats.</li>
+      <li><strong>The server owns target math.</strong> The client renders needed, underfunded and progress from the API; the engine function is pure and table-tested.</li>
+      <li><strong>Build one vertical stage at a time.</strong> Engine rule → PostgreSQL integration test → API schema → generated client → UI → browser parity check. Run <code>pnpm check</code> before marking a stage done.</li>
+    </ul>
+  </section>
+
+  <footer>References: Phase 8 in <code>README.md</code>; <code>docs/deferred.md</code> (Phase 6 items waiting for targets, deferred 7e–7g); YNAB Help Center “Getting Started with Targets”, “How to Use Targets”, “Snooze a Target”, “Progress Bars”, “Colors and Icons in Your Plan” and “Targets for Categories Paired with Accounts”; YNAB API category goal fields; the signed-in YNAB web test plan.</footer>
+</div>
+</body></html>

@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a–7d built; 7b multi-card rules provisional)</div>
+    <div class="eyebrow">everycent · roadmap phase 7 · updated 3 Oct 2026 (7a–7d built; 7e–7g deferred until after Phase 8)</div>
     <h1>Build sequence for credit cards and debt</h1>
     <p class="lede">Phase 6 made the plan usable; Phase 7 makes debt accounts tell the truth. Its eight README items are split into <strong>seven stages</strong>: five build credit-card budgeting on the existing register and payment categories, then two add loan activity and payoff planning. Build top to bottom. YNAB behaviour that support material and the real app cannot settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -161,11 +161,11 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s7b"><span class="n">7b · done</span><span class="t">Funded spending</span><span class="s">Money reserved to pay</span></a>
       <a class="node done" href="#s7c"><span class="n">7c · done</span><span class="t">Debt</span><span class="s">Overspending and old balances</span></a>
       <a class="node done" href="#s7d"><span class="n">7d · done</span><span class="t">Payments</span><span class="s">Transfers, returns, refunds</span></a>
-      <a class="node now" href="#s7e"><span class="n">7e · next</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
-      <a class="node" href="#s7f"><span class="n">7f–7g</span><span class="t">Loans</span><span class="s">Activity, interest, planner</span></a>
+      <a class="node" href="#s7e"><span class="n">7e · deferred</span><span class="t">Edge cases</span><span class="s">Positive, closed, changed type</span></a>
+      <a class="node" href="#s7f"><span class="n">7f–7g · deferred</span><span class="t">Loans</span><span class="s">Activity, interest, planner</span></a>
     </div>
     <div class="side"><b>Outside Phase 7:</b> debt-payment targets and target-driven Underfunded (Phase 8), reconciliation (Phase 9), scheduled payments (Phase 10), foreign-currency debt (Phase 11).</div>
-    <div class="then">7a–7c are on stacked branches <span class="mono">phase-7a-credit-activity</span> → <span class="mono">phase-7b-funded-spending</span> → <span class="mono">phase-7c-credit-overspending</span> → <span class="mono">phase-7d-payments</span>, not merged. To pick up: <span class="mono">Start 7e on a branch from phase-7d-payments. Read docs/deferred.md and docs/verify.md; reproduce the stage's cases in YNAB before implementing any rule not already confirmed below.</span></div>
+    <div class="then">7a–7c are on stacked branches <span class="mono">phase-7a-credit-activity</span> → <span class="mono">phase-7b-funded-spending</span> → <span class="mono">phase-7c-credit-overspending</span> → <span class="mono">phase-7d-payments</span>, not merged. 7e–7g are deferred (3 Oct 2026); Phase 8 comes next. To pick 7e up later: <span class="mono">Read docs/deferred.md ("Credit lifecycle and loans") and docs/verify.md ("Credit lifecycle (phase 7e)"); re-check the open positive-balance cases in a clean YNAB test plan before implementing.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -278,7 +278,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7e">
       <div class="num">7e</div>
       <div class="body">
-        <div class="head"><h2>Credit lifecycle and parity pass</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Credit lifecycle and parity pass</h2><span class="pill">Deferred</span></div>
         <p class="why">Card math must remain correct when the account crosses zero, is closed, or changes family. Finish the credit track by removing Phase 7 deferrals and checking the whole UI in the real app.</p>
         <div class="meta">
           <div>
@@ -300,7 +300,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7f">
       <div class="num">7f</div>
       <div class="body">
-        <div class="head"><h2>Loan activity and amortization</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Loan activity and amortization</h2><span class="pill">Deferred</span></div>
         <p class="why">Loan accounts need a purpose-built activity model: a payment is principal, interest and optional escrow/fees, with the loan balance changing only by principal and capitalized activity.</p>
         <div class="meta">
           <div>
@@ -322,7 +322,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7g">
       <div class="num">7g</div>
       <div class="body">
-        <div class="head"><h2>Loan planner and finish Phase 7</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Loan planner and finish Phase 7</h2><span class="pill">Deferred</span></div>
         <p class="why">Once recorded loan activity is trustworthy, project the payoff: show what the current payment costs in time and interest, then let the user compare extra-payment scenarios without mutating the ledger.</p>
         <div class="meta">
           <div>

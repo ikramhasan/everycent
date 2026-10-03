@@ -450,3 +450,66 @@ Rewards and Statement Credits", "Paid in Full Credit Cards") and in YNAB's web a
   budget side, phase 5 rules) and paying a card that's already positive (7e).
 - **Skipped:** a transfer into a card from a tracking account moves no payment money here; a
   positive card balance is phase 7e.
+
+## Credit lifecycle (phase 7e)
+
+Checked against support.ynab.com ("Credit Cards with a Positive Balance", "How to Close or Delete
+Bank Accounts", "Correcting Balances in Closed Accounts", "Changing an Account Type", "Line of
+Credit Accounts") and in YNAB on 2026-10-03, through the web app and the API (test cards P–Y,
+lines of credit LOC A/B, categories Q2–Q6, R3, L1–L3). Not built yet; 7e builds it:
+
+- A card above zero counts as cash. The part above zero is in Ready to Assign ("Inflow from Debt
+  Account" in its breakdown): a $10 overpayment of a $0 card raised it by $10 and left the payment
+  category at −$10, red (cash overspending, deducted next month).
+- What decides it is the card's balance on each transaction's date. Spending while positive moves
+  nothing to the payment category, and unfunded spending is cash overspending (red): Q2 −$4 on
+  Card Q at +$10. Spending that crosses zero splits: Q3 ($10 assigned) −$10 on Card Q at +$6 was
+  Cash Spending −$6 and Credit Spending −$4, with Funded Spending $4. Spending dated before the
+  overpayment stays credit (Q4/Card R, Q5/Card S, R3/Card U: yellow, nothing deducted).
+- A refund to a $0 card goes to its category and leaves the payment category alone (Q6/Card T).
+- A statement credit counts toward Ready to Assign only for the part above zero: $8 on Card V at
+  −$5 raised it by $3.
+- Closing makes a Manual Balance Adjustment categorized to Inflow: Ready to Assign, and the
+  payment category stays visible (the help center says to hide it yourself). Card P at +$10: the
+  dialog says the money "will be removed from your plan", and Ready to Assign fell by $10. Card Y
+  owing $21 with $7 set aside: the dialog only says an adjustment of $21.00 will be created; Ready
+  to Assign didn't change and the payment category kept its $7.
+- Account types can't be changed (the Edit Account dialog has no type field); YNAB says to
+  create a new account and move the transactions.
+- A line of credit behaves as a credit card: its own payment category, funded spending moves
+  (L1 $5 assigned, −$8 on LOC A: $5 moved, −$3 credit overspending not deducted next month),
+  payments come out of it, and a positive balance is cash (LOC B +$10: Ready to Assign +$10; L2's
+  −$4 on it was cash overspending, deducted next month).
+- Card transactions categorized to Inflow: Ready to Assign (statement credits, outflows,
+  starting balances and the closing adjustment) change Ready to Assign only by how much they move
+  the card's balance above zero: $8 in on Card V at −$5 → +$3; $5 out on Card V at +$3 → −$3;
+  $2 out on Card W at −$5 → nothing. Closing follows the same rule (Card P +$10 → −$10, Card Y
+  owing $21 → nothing), so it needs no rule of its own.
+- A paid-off card's payment category says "Your Card T is paid off! Being debt free is a
+  wonderful thing." (Card T, +$5.)
+- In the API a credit starting balance and the closing adjustment both report category
+  "Inflow: Ready to Assign"; the register shows "Category not needed" for the starting balance.
+
+### Unreliable API readings, and the cases they leave open
+
+- **Found:** reading `GET /months` right after a write can return stale numbers. Creating
+  "t-uncat" (−$2 uncategorized on Card T at +$5) and "r-uncat" (−$1 on Card R at +$4) showed no
+  change in November's Ready to Assign. Deleting and re-adding the same transactions, with a few
+  seconds' wait, moved November by $2 and $1 each time. So readings taken straight after a write
+  (the bullets above marked "API": statement credit out on Cards V/W, lines of credit, Card X,
+  Card Y's close) need re-checking with a wait. The web-app readings (Cards P, Q, R, S, T, U, V)
+  stand.
+- **Still open (each needs a fresh, uncluttered test plan):**
+  - Uncategorized spending on a positive card: cash (deducted next month, as the re-add showed)
+    or credit?
+  - Spending on the same day as the payment that made the card positive: L5 −$4 on Card Z2 (paid
+    $10 that day) took $4 off October's Ready to Assign. Q2 on Card Q (paid two days before) took
+    nothing off October and $4 off November. Why the difference: same day, or something else?
+  - Spending that crosses zero after uncategorized spending: z1-l4 (Card Z1 at +$1, −$3 in L4)
+    was deducted $1, as expected, but removing z1-uncat (−$4) moved November by only $1, not $4.
+  - A cash advance from a positive card: Card Z3 at +$6 moving $8 to Wallet raised Ready to
+    Assign by $2.
+- **Skipped until then:** anything beyond the web-app findings: a positive balance from a
+  payment goes to Ready to Assign; categorized spending dated after the payment is cash; spending
+  that crosses zero splits into cash and credit; closing creates an adjustment to Ready to
+  Assign and leaves the payment category visible.
