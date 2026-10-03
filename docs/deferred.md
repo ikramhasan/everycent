@@ -40,8 +40,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
-  on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
-  Overfunded and Snoozed views wait for targets (phase 8).
+  on a selection are auto-assign's (6e). The Underfunded, Overfunded and Snoozed views wait for
+  phase 8c–8d.
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
@@ -77,6 +77,18 @@ before starting a roadmap phase** and remove an entry once it's done.
   that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
   its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
 
+## Targets (phase 8)
+
+- 8a–8b built every target YNAB's form offers: weekly, monthly, yearly and custom (set aside,
+  fill up to, have a balance of; one-time or repeating), the inspector's Target section and editor,
+  the row note and the yellow/green Available with its pie or check.
+- Not yet: the row's progress bars and "Spent $x of $y" notes (8d), Snooze (8d; YNAB shows
+  "Snooze target for this month" under Edit Target), Underfunded and Reduce Overfunding in
+  Auto-Assign and the month summary's "October's Targets" / "Cost to Be Me" (8c), payment-category
+  targets (8e, the API refuses them with 409 `MANAGED_CATEGORY`).
+- Target edits aren't in the undo history (docs/verify.md).
+- A category's history is reassigned on delete, but its target is deleted with it.
+
 ## Credit lifecycle and loans (phase 7e–7g, deferred)
 
 Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g wait until after phase 8; the roadmap
@@ -105,9 +117,9 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
 
 - The setup flow (`/budgets/$id/setup`) covers YNAB's "Personalize plan" and "Add accounts". Its
   third step, "Fund categories" (assign money), needs the phase 6 budget screen.
-- Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories, payees and
-  accounts. When these exist, it must copy them too: targets (phase 8), scheduled transactions
-  (phase 10), payee rules (phase 12).
+- Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories (with their
+  targets, which start in the fresh start's month), payees and accounts. When these exist, it must
+  copy them too: scheduled transactions (phase 10), payee rules (phase 12).
 - By decision, a fresh start drops all transactions, uncleared ones included; each account starts
   from its working balance on the fresh-start date as a single cleared Starting Balance. That
   balance leaves out future-dated transactions, so they're lost; phase 10 should carry them over

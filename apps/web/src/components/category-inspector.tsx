@@ -29,7 +29,10 @@ function Line({
 
 function Panel({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <section aria-label={label} className="grid gap-3 rounded-lg border p-4">
+    <section
+      aria-label={label}
+      className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border p-4"
+    >
       {children}
     </section>
   );
@@ -94,7 +97,7 @@ export function MonthSummary({
 
 /**
  * The inspector for one category: where its Available comes from (activity split into what was
- * paid with cash and with credit accounts), and its note.
+ * paid with cash and with credit accounts), its target, and its note.
  */
 export function CategoryInspector({
   name,
@@ -104,6 +107,7 @@ export function CategoryInspector({
   note,
   onNoteChange,
   uncategorized = false,
+  target,
 }: {
   name: string;
   totals: Breakdown;
@@ -113,6 +117,8 @@ export function CategoryInspector({
   note: string;
   onNoteChange: (note: string) => Promise<void>;
   uncategorized?: boolean;
+  /** The Target section. */
+  target?: ReactNode;
 }) {
   const overspent = totals.available < 0n;
   const shortfall = format((-totals.available).toString());
@@ -145,6 +151,7 @@ export function CategoryInspector({
           {...{ shortfall, cashShortfall }}
         />
       )}
+      {target}
       {!uncategorized && <NoteField key={name} note={note} onChange={onNoteChange} />}
     </Panel>
   );

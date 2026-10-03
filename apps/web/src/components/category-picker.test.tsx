@@ -12,6 +12,7 @@ const cat = (id: string, groupId: string, name: string) => ({
   hidden: false,
   linkedAccountId: null,
   hasTransactions: false,
+  target: null,
 });
 
 const data: CategoryList = {

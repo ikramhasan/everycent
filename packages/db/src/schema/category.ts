@@ -1,4 +1,9 @@
-import type { CurrencyCode } from "@everycent/engine";
+import {
+  type CurrencyCode,
+  TARGET_BEHAVIORS,
+  TARGET_CADENCES,
+  TARGET_REPEAT_UNITS,
+} from "@everycent/engine";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -141,4 +146,38 @@ export const moneyMove = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("money_move_budget_created_idx").on(t.budgetId, t.createdAt)],
+);
+
+/**
+ * A category's target (YNAB's goal): one per category at a time. Editing it changes every month
+ * from `startMonth` on; targets only compute what's asked for and never move money.
+ */
+export const categoryTarget = pgTable(
+  "category_target",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    categoryId: text()
+      .notNull()
+      .unique()
+      .references(() => category.id, { onDelete: "cascade" }),
+    cadence: text({ enum: TARGET_CADENCES }).notNull(),
+    behavior: text({ enum: TARGET_BEHAVIORS }).notNull(),
+    /** Minor units: per week (weekly), per month (monthly) or per period (yearly, custom). */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    /** Monthly: day of the month (1–31), null for the last day. Weekly: weekday, 0 = Sunday. */
+    dueDay: integer(),
+    /** Yearly and custom: the (first) due date; a balance target's month, or null for eventually. */
+    dueDate: date({ mode: "string" }),
+    /** Custom: repeats every N months (1–11) or years (1–2); null for a one-time target. */
+    repeatEvery: integer(),
+    repeatUnit: text({ enum: TARGET_REPEAT_UNITS }),
+    /** First day of the first month the target applies to, YYYY-MM-01. */
+    startMonth: date({ mode: "string" }).notNull(),
+    ...timestamps,
+  },
+  (t) => [index("category_target_budget_id_idx").on(t.budgetId)],
 );

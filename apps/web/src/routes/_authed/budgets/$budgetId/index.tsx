@@ -16,6 +16,7 @@ import { MonthNav } from "@/components/month-nav";
 import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
+import { TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -26,6 +27,7 @@ import {
   isCaution,
   overspentCount,
   summarize,
+  targetMark,
   UNCATEGORIZED,
   useBudgetFilter,
 } from "@/lib/budget-view";
@@ -42,6 +44,7 @@ import {
   toMoney,
   useCollapsedGroups,
 } from "@/lib/months";
+import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
 
@@ -64,6 +67,7 @@ function BudgetPage() {
     placeholderData: keepPreviousData,
   });
   const actions = useCategoryActions(budget.id);
+  const targetActions = useTargetActions(budget.id);
   const history = useUndo();
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const [addingAccount, setAddingAccount] = useState(false);
@@ -96,11 +100,13 @@ function BudgetPage() {
 
   // Categories on the budget screen (not hidden), with their names and notes.
   const listed = useMemo(() => {
-    const map = new Map<string, { name: string; note: string; group: string }>();
+    const map = new Map<string, ListedCategory>();
     for (const g of categories.data?.groups ?? []) {
       if (g.hidden) continue;
       for (const c of g.categories) {
-        if (!c.hidden) map.set(c.id, { name: c.name, note: c.note, group: g.name });
+        if (!c.hidden) {
+          map.set(c.id, { name: c.name, note: c.note, group: g.name, target: c.target });
+        }
       }
     }
     return map;
@@ -354,13 +360,14 @@ function BudgetPage() {
           </div>
         )}
         {listFigures && (
-          <aside className="grid gap-4" aria-label="Inspector">
+          <aside className="grid grid-cols-[minmax(0,1fr)] gap-4" aria-label="Inspector">
             <Inspector
               figures={listFigures}
               selection={selection}
               shown={shown}
               listed={listed}
               onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
+              targetActions={targetActions}
             />
             {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
             {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && (
@@ -481,8 +488,15 @@ const paymentFigures = (p: NonNullable<BudgetMonthData["categories"][number]["pa
     bigint
   >;
 
+interface ListedCategory {
+  name: string;
+  note: string;
+  group: string;
+  target: CategoryTarget | null;
+}
+
 /**
- * YNAB's inspector: one selected category's breakdown and note, or the month's summary over the
+ * YNAB's inspector: one selected category's breakdown, target and note, or the month's summary over the
  * selection (two or more) or over the rows in view (nothing selected).
  */
 function Inspector({
@@ -491,14 +505,17 @@ function Inspector({
   shown,
   listed,
   onNoteChange,
+  targetActions,
 }: {
   figures: CategoryFigures;
   selection: ReadonlySet<string>;
   shown: ReadonlySet<string> | undefined;
-  listed: ReadonlyMap<string, { name: string; note: string; group: string }>;
+  listed: ReadonlyMap<string, ListedCategory>;
   onNoteChange: (categoryId: string, note: string) => Promise<void>;
+  targetActions: ReturnType<typeof useTargetActions>;
 }) {
-  const { month, format } = figures;
+  const { budget } = useBudget();
+  const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
   if (only === UNCATEGORIZED && month.uncategorized) {
     return (
@@ -525,9 +542,15 @@ function Inspector({
         format={format}
         actions={figures.move}
         caution={caution}
+        target={targetMark(totals.target)}
       />
     ) : (
-      <AvailablePill amount={totals.available} format={format} caution={caution} />
+      <AvailablePill
+        amount={totals.available}
+        format={format}
+        caution={caution}
+        target={targetMark(totals.target)}
+      />
     );
     if (totals.payment) {
       return (
@@ -551,6 +574,23 @@ function Inspector({
         available={available}
         note={category.note}
         onNoteChange={(note) => onNoteChange(only, note)}
+        target={
+          assign && (
+            <TargetSection
+              key={only}
+              name={category.name}
+              target={category.target}
+              need={totals.target}
+              format={format}
+              parse={assign.parse}
+              toInput={assign.toInput}
+              dateFormat={budget.dateFormat}
+              onSave={(input) => targetActions.save(only, month.month, input)}
+              onDelete={() => targetActions.remove(only)}
+              onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}
+            />
+          )
+        }
       />
     );
   }

@@ -5,10 +5,11 @@ import {
   budgetMember,
   category,
   categoryGroup,
+  categoryTarget,
   flagName,
   payee,
 } from "@everycent/db/schema";
-import { formatDate } from "@everycent/engine";
+import { formatDate, monthOf } from "@everycent/engine";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { accountBalances, insertStartingBalance, type Tx, transferPayeeId } from "./ledger";
 
@@ -16,12 +17,11 @@ type BudgetRow = typeof budget.$inferSelect;
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes), payees, flag names, and accounts (with their
- * transfer payees), each starting from its working balance on `date`. No transactions come along.
- * Then archives the old budget.
+ * category groups and categories (order, hidden flags, notes, targets), payees, flag names, and
+ * accounts (with their transfer payees), each starting from its working balance on `date`. No
+ * transactions come along. Then archives the old budget.
  *
- * Targets and scheduled transactions will have to be copied too once they exist
- * (docs/deferred.md).
+ * Scheduled transactions will have to be copied too once they exist (docs/deferred.md).
  */
 export async function copyIntoFreshStart(
   tx: Tx,
@@ -125,11 +125,18 @@ export async function copyIntoFreshStart(
     .select()
     .from(category)
     .where(and(eq(category.budgetId, old.id), isNull(category.internalKind)));
+  const targets = new Map(
+    (await tx.select().from(categoryTarget).where(eq(categoryTarget.budgetId, old.id))).map((t) => [
+      t.categoryId,
+      t,
+    ]),
+  );
   for (const c of categories) {
     const groupId = groupIds.get(c.groupId);
     if (!groupId) continue;
+    const id = newId();
     await tx.insert(category).values({
-      id: newId(),
+      id,
       budgetId: newBudgetId,
       groupId,
       name: c.name,
@@ -138,6 +145,24 @@ export async function copyIntoFreshStart(
       hidden: c.hidden,
       linkedAccountId: c.linkedAccountId ? (accountIds.get(c.linkedAccountId) ?? null) : null,
     });
+    const target = targets.get(c.id);
+    if (target) {
+      // The new budget starts on `date`, so its targets start in that month.
+      await tx.insert(categoryTarget).values({
+        id: newId(),
+        budgetId: newBudgetId,
+        categoryId: id,
+        cadence: target.cadence,
+        behavior: target.behavior,
+        amount: target.amount,
+        currency: target.currency,
+        dueDay: target.dueDay,
+        dueDate: target.dueDate,
+        repeatEvery: target.repeatEvery,
+        repeatUnit: target.repeatUnit,
+        startMonth: `${monthOf(date)}-01`,
+      });
+    }
   }
 
   await tx

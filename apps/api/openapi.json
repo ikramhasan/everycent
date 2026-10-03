@@ -719,6 +719,9 @@
           "hasTransactions": {
             "type": "boolean",
             "description": "Deleting it requires reassignToCategoryId"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CategoryTarget"
           }
         },
         "required": [
@@ -728,7 +731,87 @@
           "note",
           "hidden",
           "linkedAccountId",
-          "hasTransactions"
+          "hasTransactions",
+          "target"
+        ]
+      },
+      "CategoryTarget": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "yearly",
+              "custom"
+            ]
+          },
+          "behavior": {
+            "type": "string",
+            "enum": [
+              "set_aside",
+              "refill",
+              "balance"
+            ],
+            "description": "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only)"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Per week (weekly), per month (monthly) or per period (yearly, custom)"
+          },
+          "dueDay": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Yearly and custom: the first due date; a balance target's month (day 1), null for eventually"
+          },
+          "repeatEvery": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Custom: repeats every N months or years; null for one-time"
+          },
+          "repeatUnit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "month",
+              "year",
+              null
+            ]
+          },
+          "startMonth": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "The first month the target applies to"
+          }
+        },
+        "required": [
+          "cadence",
+          "behavior",
+          "amount",
+          "dueDay",
+          "dueDate",
+          "repeatEvery",
+          "repeatUnit",
+          "startMonth"
         ]
       },
       "CreateCategoryGroup": {
@@ -826,6 +909,198 @@
         "required": [
           "groupId",
           "beforeCategoryId"
+        ]
+      },
+      "SetCategoryTarget": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "weekly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6,
+                    "description": "The weekday it's due, 0 = Sunday"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDay"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "monthly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDay": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 31,
+                    "description": "Day of the month it's due; null is the last day. Only changes the wording"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDay"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "yearly"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "When the yearly amount is due; repeats every year"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDate"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "custom"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "set_aside",
+                      "refill",
+                      "balance"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date",
+                    "description": "Required unless behavior is balance (null: eventually; only its month counts)"
+                  },
+                  "repeat": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "every": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 11
+                      },
+                      "unit": {
+                        "type": "string",
+                        "enum": [
+                          "month",
+                          "year"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "every",
+                      "unit"
+                    ],
+                    "description": "Every 1–11 months or 1–2 years; null for one-time. Balance targets can't repeat"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "behavior",
+                  "amount",
+                  "dueDate",
+                  "repeat"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                "description": "The month the target is set from"
+              }
+            },
+            "required": [
+              "month"
+            ]
+          }
         ]
       },
       "AccountList": {
@@ -2682,6 +2957,9 @@
               "payment": {
                 "$ref": "#/components/schemas/PaymentDetails"
               },
+              "target": {
+                "$ref": "#/components/schemas/TargetNeed"
+              },
               "autoAssign": {
                 "$ref": "#/components/schemas/AutoAssignAmounts"
               }
@@ -2689,6 +2967,7 @@
             "required": [
               "categoryId",
               "payment",
+              "target",
               "autoAssign"
             ]
           }
@@ -2752,6 +3031,44 @@
           "paymentsMade"
         ],
         "description": "Set on a credit account's payment category"
+      },
+      "TargetNeed": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "needed": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "What the target needs: this month's amount (weekly, monthly) or the total by its due date (yearly, custom), or the balance to reach"
+          },
+          "funded": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative"
+          },
+          "underfunded": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "What's still to assign this month to stay on track; 0 when this month's share is in"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Yearly and custom: the due date of the period this month is in"
+          }
+        },
+        "required": [
+          "needed",
+          "funded",
+          "underfunded",
+          "dueDate"
+        ],
+        "description": "The category's target this month; null without one, before it starts or after a one-time target's due month"
       },
       "AutoAssignAmounts": {
         "type": "object",
@@ -4379,6 +4696,183 @@
           },
           "409": {
             "description": "MANAGED_CATEGORY: not allowed on Credit Card Payments; CATEGORY_HAS_HISTORY: pass reassignToCategoryId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target": {
+      "put": {
+        "operationId": "setCategoryTarget",
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Create or replace a category's target",
+        "description": "A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Payment categories can't have targets yet.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCategoryTarget"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't edit categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, group or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MANAGED_CATEGORY: payment categories can't have targets yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCategoryTarget",
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Remove a category's target",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't edit categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, group or category, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

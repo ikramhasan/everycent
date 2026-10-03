@@ -3,7 +3,9 @@ import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
+import { CircleCheck } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import type { TargetMark } from "@/lib/budget-view";
 import { type MoneyOption, minAmount } from "@/lib/months";
 import { CategoryField } from "./register-fields";
 
@@ -22,24 +24,29 @@ type Format = (minorUnits: string) => string;
 
 /**
  * Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. Yellow
- * ("cautious") is credit overspending, and a payment category that doesn't cover what the card owes.
+ * ("cautious") is credit overspending, an underfunded target, and a payment category that doesn't
+ * cover what the card owes.
  */
 export function AvailablePill({
   amount,
   format,
   className,
   caution = false,
+  target,
 }: {
   amount: string;
   format: Format;
   className?: string;
   caution?: boolean;
+  target?: TargetMark;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
+  // An overspent category shows only its overspending.
+  const mark = sign >= 0 ? target : undefined;
   return (
     <span
       className={cn(
-        "inline-block max-w-full truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
+        "inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
         caution
           ? "bg-yellow-100 text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100"
           : [
@@ -50,8 +57,37 @@ export function AvailablePill({
         className,
       )}
     >
-      {format(amount)}
+      {mark &&
+        (mark.met ? (
+          <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
+        ) : (
+          <TargetPie percent={mark.percent} />
+        ))}
+      <span className="truncate">{format(amount)}</span>
     </span>
+  );
+}
+
+/** A small ring filled clockwise from the top to `percent` (YNAB's underfunded icon). */
+export function TargetPie({ percent, className }: { percent: number; className?: string }) {
+  const angle = (Math.min(Math.max(percent, 0), 99.9) / 100) * 2 * Math.PI;
+  const x = 8 + 6 * Math.sin(angle);
+  const y = 8 - 6 * Math.cos(angle);
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cn("size-3.5 shrink-0", className)}
+      role="img"
+      aria-label={`Target ${percent}% funded`}
+    >
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      {percent > 0 && (
+        <path
+          d={`M8 8 L8 2 A6 6 0 ${angle > Math.PI ? 1 : 0} 1 ${x.toFixed(3)} ${y.toFixed(3)} Z`}
+          fill="currentColor"
+        />
+      )}
+    </svg>
   );
 }
 
@@ -66,6 +102,7 @@ export function AvailableButton({
   format,
   actions,
   caution = false,
+  target,
 }: {
   categoryId: string;
   categoryName: string;
@@ -73,6 +110,7 @@ export function AvailableButton({
   format: Format;
   actions: MoveActions;
   caution?: boolean;
+  target?: TargetMark;
 }) {
   const [open, setOpen] = useState(false);
   const overspent = amount.startsWith("-");
@@ -88,6 +126,7 @@ export function AvailableButton({
             amount={amount}
             format={format}
             caution={caution}
+            target={target}
             className="hover:brightness-95"
           />
         </button>

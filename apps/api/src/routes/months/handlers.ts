@@ -4,6 +4,7 @@ import {
   category,
   categoryAssignment,
   categoryGroup,
+  categoryTarget,
   moneyMove,
   subTransaction,
   transaction,
@@ -28,6 +29,8 @@ import {
   monthBounds,
   monthOf,
   readyToAssign,
+  type TargetNeed,
+  targetNeed,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, max, min, or } from "drizzle-orm";
@@ -395,10 +398,17 @@ export async function budgetMonthJson(
     .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
     .where(eq(category.budgetId, budgetId));
 
+  const targetRows = await db
+    .select()
+    .from(categoryTarget)
+    .where(eq(categoryTarget.budgetId, budgetId));
+  const targets = new Map(targetRows.map((t) => [t.categoryId, t]));
+
   const listed: {
     categoryId: string;
     figures: CategoryMonth;
     auto: Record<AutoAssignOption, bigint>;
+    need: TargetNeed | null;
   }[] = [];
   const groups = new Map<string, CategoryMonth>();
   let hidden = ZERO;
@@ -422,7 +432,20 @@ export async function budgetMonthJson(
       if (entries.some((e) => e.month === month)) uncategorized = figures;
       continue;
     }
-    listed.push({ categoryId: cat.id, figures, auto: autoAssignAmounts(entries, month) });
+    const target = targets.get(cat.id);
+    listed.push({
+      categoryId: cat.id,
+      figures,
+      auto: autoAssignAmounts(entries, month),
+      need: target
+        ? targetNeed(
+            entries,
+            { ...target, startMonth: monthOf(target.startMonth) },
+            month,
+            monthOf(today),
+          )
+        : null,
+    });
     if (cat.hidden || cat.groupHidden) {
       hidden = addTo(hidden, figures);
     } else {
@@ -503,6 +526,12 @@ export async function budgetMonthJson(
       categoryId: l.categoryId,
       ...totalsJson(l.figures),
       payment: paymentJson(l.categoryId, l.figures),
+      target: l.need && {
+        needed: l.need.needed.toString(),
+        funded: l.need.funded.toString(),
+        underfunded: l.need.underfunded.toString(),
+        dueDate: l.need.dueDate,
+      },
       autoAssign: Object.fromEntries(
         Object.entries(l.auto).map(([option, amount]) => [option, amount.toString()]),
       ) as Record<AutoAssignOption, string>,

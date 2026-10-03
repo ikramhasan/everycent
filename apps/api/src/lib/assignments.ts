@@ -46,7 +46,7 @@ export async function adjustAssigned(
     })
     .onConflictDoUpdate({
       target: [categoryAssignment.categoryId, categoryAssignment.month],
-      set: { amount: sql`${categoryAssignment.amount} + ${delta}`, updatedAt: new Date() },
+      set: { amount: sql`${categoryAssignment.amount} + ${delta}`, updatedAt: sql`now()` },
     });
 }
 

@@ -15,6 +15,7 @@ const c = (id: string, groupId: string, hidden = false) => ({
   hidden,
   linkedAccountId: null,
   hasTransactions: false,
+  target: null,
 });
 
 const list: CategoryList = {

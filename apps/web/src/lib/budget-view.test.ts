@@ -7,6 +7,7 @@ import {
   matchesFilter,
   overspentCount,
   summarize,
+  targetMark,
   UNCATEGORIZED,
 } from "./budget-view";
 import type { BudgetMonthData } from "./months";
@@ -21,6 +22,7 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   cashOverspent: available.startsWith("-") ? available : "0",
   creditOverspent: "0",
   payment: null,
+  target: null,
   autoAssign: NO_AUTO_ASSIGN,
 });
 
@@ -99,6 +101,30 @@ describe("budget views", () => {
       cashOverspent: -2550n,
       creditOverspent: -150n,
     });
+  });
+});
+
+describe("targets", () => {
+  const need = (underfunded: string, funded = "4000") => ({
+    available: "4000",
+    cashOverspent: "0",
+    target: { needed: "10000", funded, underfunded, dueDate: null },
+  });
+  it("is yellow while a target is underfunded, unless cash overspending makes it red", () => {
+    expect(isCaution(need("6000"), "2026-10", "2026-10")).toBe(true);
+    expect(isCaution(need("0"), "2026-10", "2026-10")).toBe(false);
+    expect(
+      isCaution(
+        { ...need("6000"), available: "-100", cashOverspent: "-100" },
+        "2026-10",
+        "2026-10",
+      ),
+    ).toBe(false);
+  });
+  it("marks the pill with the funded share or a check", () => {
+    expect(targetMark(need("6000").target)).toEqual({ met: false, percent: 40 });
+    expect(targetMark(need("0", "15000").target)).toEqual({ met: true });
+    expect(targetMark(null)).toBeUndefined();
   });
 });
 

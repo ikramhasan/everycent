@@ -28,6 +28,7 @@ type Category = {
   note: string;
   hidden: boolean;
   linkedAccountId: string | null;
+  target: Record<string, unknown> | null;
 };
 type Group = { name: string; kind: string | null; hidden: boolean; categories: Category[] };
 type Txn = { amount: string; payeeName: string | null; categoryName: string | null; date: string };
@@ -175,6 +176,37 @@ describe("fresh start", () => {
     const again = await freshStart(budget.id, owner.cookie);
     expect(again.status).toBe(409);
     expect((await json<{ error: { code: string } }>(again)).error.code).toBe("ALREADY_ARCHIVED");
+  });
+
+  it("copies targets, starting in the fresh start's month", async () => {
+    const { owner, budget, base } = await setup();
+    const categories = async (b: string) =>
+      (
+        await json<{ groups: Group[] }>(
+          await send("GET", `/v1/budgets/${b}/categories`, owner.cookie),
+        )
+      ).groups.flatMap((g) => g.categories);
+    const [rent] = await categories(budget.id);
+    if (!rent) throw new Error("starter data missing");
+    await send("PUT", `${base}/categories/${rent.id}/target`, owner.cookie, {
+      cadence: "monthly",
+      behavior: "refill",
+      amount: "12000",
+      dueDay: 5,
+      month: "2026-08",
+    });
+    const fresh = await json<Budget>(await freshStart(budget.id, owner.cookie));
+    const copy = (await categories(fresh.id)).find((c) => c.name === rent.name);
+    expect(copy?.target).toEqual({
+      cadence: "monthly",
+      behavior: "refill",
+      amount: "12000",
+      dueDay: 5,
+      dueDate: null,
+      repeatEvery: null,
+      repeatUnit: null,
+      startMonth: "2026-10",
+    });
   });
 
   it("starts budgets created from scratch with the template", async () => {
