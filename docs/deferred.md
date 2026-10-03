@@ -41,8 +41,28 @@ before starting a roadmap phase** and remove an entry once it's done.
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
   on a selection are auto-assign's (6e). The inspector's Target section and the Underfunded,
-  Overfunded and Snoozed views wait for targets (phase 8); Credit Spending is always zero until
-  phase 7.
+  Overfunded and Snoozed views wait for targets (phase 8).
+- Funded card spending moves into each card's payment category (phase 7b), computed from history
+  on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
+  (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
+  Assign. Payments from budget accounts come out of the payment category (7d); statement credits
+  and cash advances don't move payment money. Not yet: positive card balances acting as cash (7e,
+  deferred: see "Credit lifecycle and loans" below), and transfers into a card from a tracking
+  account (docs/verify.md). Uncategorized card spending counts as credit overspending, as YNAB's
+  "Uncategorized cash transactions … $2.00 will be deducted" note suggests (cash part only).
+- A payment category's Activity opens the card's register for the month with YNAB's Spending /
+  Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
+  transactions with their categories; ours uses the same columns as other categories (Account,
+  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button and no
+  "Create a Debt Payoff Target" (phase 8); its Current Balance and Available for Payment lines
+  aren't collapsible as YNAB's are. Auto-Assign on payment categories (YNAB: Underfunded,
+  Paid Last Month, Average Paid) is still the spending set.
+- The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
+  cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;
+  YNAB quotes only the cash part (docs/verify.md).
+- The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
+  listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded
+  first, a 7c verification gate.
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category.
@@ -56,6 +76,30 @@ before starting a roadmap phase** and remove an entry once it's done.
   for on-budget accounts it's categorized to Ready to Assign (as YNAB does). With the phase 6 math
   that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
   its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
+
+## Credit lifecycle and loans (phase 7e–7g, deferred)
+
+Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g wait until after phase 8; the roadmap
+artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps their scope, and
+`docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and what's still open.
+
+- **Positive card balances (7e) behave wrongly until built.** YNAB counts the part of a card's
+  balance above zero as cash in Ready to Assign, and spending while the card is positive is cash.
+  everycent doesn't: an overpayment is red cash overspending that comes out of next month's Ready
+  to Assign, but the positive balance never goes in, so the plan loses that money; spending on a
+  positive card still moves money to its payment category. Closing a positive card takes its
+  balance out of Ready to Assign a second time.
+- **Closing a card hides its payment category.** YNAB leaves it visible (the help center tells you
+  to hide it yourself). Confirmed; a small fix, waiting with 7e.
+- **The close dialog** has one wording; YNAB words it differently for a positive balance ("The
+  money in this account will be removed from your plan") and for debt (only the adjustment).
+- **Account types:** YNAB can't change an account's type at all. everycent allows changes within
+  a family (no money moves). Kept as is; cross-family changes are not planned.
+- **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
+  accounts store rate, minimum payment and escrow, unused. Phase 8's loan debt-payment targets
+  need 7f, so they wait too.
+- Lines of credit are treated as credit cards; YNAB's app showed the same behaviour, but the API
+  readings behind it need re-checking (docs/verify.md).
 
 ## Onboarding and fresh start
 
@@ -145,10 +189,11 @@ before starting a roadmap phase** and remove an entry once it's done.
 ## Accounts (phase 3 follow-ups)
 
 - Changing an account's type is allowed only within the same family (cash, credit, loan,
-  tracking). YNAB also allows switching between families, which has to move money in or out of the
-  budget and create or remove payment categories. Revisit with phase 7.
+  tracking). YNAB doesn't allow changing an account's type at all (support.ynab.com "Changing an
+  Account Type"; its Edit Account dialog has no type field), so cross-family changes aren't
+  planned.
 - Loan accounts store interest rate, minimum payment and escrow, but nothing uses them until the
-  loan features in phase 7.
+  loan features (phase 7f–7g, deferred).
 
 ## Budgets and sharing (phase 16)
 

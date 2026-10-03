@@ -58,6 +58,15 @@ export interface MonthFigures {
   month: BudgetMonth;
   assigned: bigint;
   activity: bigint;
+  /** The part of `activity` on credit accounts (the rest was paid with cash). Defaults to zero. */
+  creditActivity?: bigint;
+  /**
+   * Payment categories: the part of `activity` that is money moved in for funded card spending
+   * (negative for returns). Defaults to zero.
+   */
+  fundedSpending?: bigint;
+  /** Payment categories: the part of `activity` that is card payments (negative). Defaults to zero. */
+  payments?: bigint;
 }
 
 export interface CategoryMonth {
@@ -65,13 +74,49 @@ export interface CategoryMonth {
   carried: bigint;
   assigned: bigint;
   activity: bigint;
+  /** The month's activity in cash accounts (YNAB's Cash Spending). */
+  cashActivity: bigint;
+  /** The month's activity in credit accounts (YNAB's Credit Spending). */
+  creditActivity: bigint;
+  /** Payment categories: money moved in this month for funded card spending (YNAB's Funded Spending). */
+  fundedSpending: bigint;
+  /** Payment categories: this month's card payments, negative (YNAB's Payments Made). */
+  payments: bigint;
   available: bigint;
+  /**
+   * The part of a negative Available that's cash overspending (it comes out of next month's Ready
+   * to Assign); zero when Available isn't negative.
+   */
+  cashOverspent: bigint;
+  /** The rest of a negative Available: credit overspending, new card debt. */
+  creditOverspent: bigint;
+}
+
+/**
+ * How a month's overspending divides between cash and credit (YNAB, checked in its web app on
+ * 2026-10-03): cash spending is funded first, so the cash shortfall is cash overspending (as much
+ * of the negative Available as the cash spending accounts for) and the rest is credit. R2: Wallet
+ * −$3 and Citi −$2 with $0 → $3 cash, $2 credit; with $2 → $1 cash, $2 credit; with $4 → $1 credit.
+ */
+export function splitOverspending(
+  available: bigint,
+  cashBeforeCards: bigint,
+): { cashOverspent: bigint; creditOverspent: bigint } {
+  if (available >= 0n) return { cashOverspent: 0n, creditOverspent: 0n };
+  const cash =
+    cashBeforeCards < 0n ? (cashBeforeCards < available ? available : cashBeforeCards) : 0n;
+  return { cashOverspent: cash, creditOverspent: available - cash };
 }
 
 /**
  * A category's numbers for `month`, from its assigned amounts and activity in every month. What's
  * available rolls into the next month; a negative balance (overspending) doesn't, the category
  * starts the next month at zero.
+ *
+ * Activity is also split by how it was paid, as YNAB's inspector shows it (checked in its web app
+ * on 2026-10-03): Cash Spending is the net of the month's activity in cash accounts and Credit
+ * Spending the net in credit accounts, refunds included (−$4 and +$10 in cash showed as $6.00).
+ * The split changes nothing else here; how credit spending moves money is phase 7b.
  */
 export function categoryMonth(history: readonly MonthFigures[], month: BudgetMonth): CategoryMonth {
   const sorted = [...history].filter((h) => h.month <= month).sort(byMonth);
@@ -79,6 +124,9 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
   let available = 0n;
   let assigned = 0n;
   let activity = 0n;
+  let creditActivity = 0n;
+  let fundedSpending = 0n;
+  let payments = 0n;
   let previous: BudgetMonth | null = null;
   for (const entry of sorted) {
     if (entry.month !== previous) {
@@ -86,18 +134,48 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
       available = carried;
       assigned = 0n;
       activity = 0n;
+      creditActivity = 0n;
+      fundedSpending = 0n;
+      payments = 0n;
       previous = entry.month;
     }
     assigned += entry.assigned;
     activity += entry.activity;
+    creditActivity += entry.creditActivity ?? 0n;
+    fundedSpending += entry.fundedSpending ?? 0n;
+    payments += entry.payments ?? 0n;
     available += entry.assigned + entry.activity;
   }
   if (previous !== month) {
     // Nothing happened in `month` itself: it starts from what the last active month left.
     carried = previous === null || available < 0n ? 0n : available;
-    return { carried, assigned: 0n, activity: 0n, available: carried };
+    return {
+      carried,
+      assigned: 0n,
+      activity: 0n,
+      cashActivity: 0n,
+      creditActivity: 0n,
+      fundedSpending: 0n,
+      payments: 0n,
+      available: carried,
+      cashOverspent: 0n,
+      creditOverspent: 0n,
+    };
   }
-  return { carried, assigned, activity, available };
+  const cashActivity = activity - creditActivity - fundedSpending - payments;
+  return {
+    carried,
+    assigned,
+    activity,
+    cashActivity,
+    creditActivity,
+    fundedSpending,
+    payments,
+    available,
+    // What it had before card spending: carried in, assigned and cash activity. A payment category
+    // paid below zero is cash overspending (YNAB: red, deducted from next month).
+    ...splitOverspending(available, available - creditActivity - fundedSpending),
+  };
 }
 
 function byMonth(a: MonthFigures, b: MonthFigures) {
@@ -110,15 +188,16 @@ export interface MonthAmount {
 }
 
 /**
- * What a category overspent in each month: its negative Available at the end of the month (YNAB's
- * cash overspending). Only months with activity or assignments can end negative, because what a
- * category carries in is never negative.
+ * What a category overspent in cash in each month: the cash part of its negative Available at the
+ * end of the month (YNAB's cash overspending, which comes out of the next month's Ready to Assign).
+ * Credit overspending is new card debt and isn't listed. Only months with activity or assignments
+ * can end negative, because what a category carries in is never negative.
  */
 export function categoryOverspending(history: readonly MonthFigures[]): MonthAmount[] {
   const months = [...new Set(history.map((h) => h.month))].sort();
   return months.flatMap((month) => {
-    const { available } = categoryMonth(history, month);
-    return available < 0n ? [{ month, amount: available }] : [];
+    const { cashOverspent } = categoryMonth(history, month);
+    return cashOverspent < 0n ? [{ month, amount: cashOverspent }] : [];
   });
 }
 

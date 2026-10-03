@@ -27,7 +27,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
+import { isCaution, UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
 import {
   type Category,
   type CategoryGroup,
@@ -40,7 +40,7 @@ import {
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
-import { ActivityButton, type ActivityTarget } from "./category-activity";
+import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 
@@ -75,6 +75,8 @@ type PendingDelete = {
 /** A month's numbers for the list, with the budget's amount formatting. */
 export interface CategoryFigures {
   month: BudgetMonthData;
+  /** The user's current month (payment categories warn from it on). */
+  currentMonth: string;
   /** Formats an amount in minor units (an integer string) in the month's currency. */
   format: (minorUnits: string) => string;
   /** Makes the Assigned column editable. */
@@ -688,13 +690,15 @@ function CategoryRow({
   index: number;
   groupId: string;
   actions: CategoryListActions;
-  totals: MonthTotals | undefined;
+  totals: BudgetMonthData["categories"][number] | undefined;
   figures: CategoryFigures | undefined;
   reorderable: boolean;
   onDelete: () => void;
 }) {
   const { format, assign, move, selection } = figures ?? {};
   const isPayment = Boolean(category.linkedAccountId);
+  const caution =
+    totals && figures ? isCaution(totals, figures.month.month, figures.currentMonth) : false;
   const { ref, handleRef, isDragSource } = useSortable({
     id: category.id,
     index,
@@ -805,6 +809,7 @@ function CategoryRow({
                 target={{ categoryId: category.id }}
                 name={category.name}
                 amount={totals.activity}
+                card={isPayment ? totals.payment : undefined}
               />
             )}
           </span>
@@ -816,9 +821,10 @@ function CategoryRow({
                 amount={totals.available}
                 format={format}
                 actions={move}
+                caution={caution}
               />
             ) : (
-              <AvailablePill amount={totals.available} format={format} />
+              <AvailablePill amount={totals.available} format={format} caution={caution} />
             )}
           </span>
         </>
@@ -875,11 +881,14 @@ function Activity({
   target,
   name,
   amount,
+  card,
 }: {
   figures: CategoryFigures;
   target: ActivityTarget;
   name: string;
   amount: string;
+  /** A payment category's card figures: the popover adds YNAB's card summary. */
+  card?: CardSummary | null;
 }) {
   if (!figures.activity) return <>{figures.format(amount)}</>;
   return (
@@ -889,6 +898,7 @@ function Activity({
       target={target}
       name={name}
       amount={amount}
+      card={card ?? undefined}
       format={figures.format}
       formatDate={figures.activity.formatDate}
     />

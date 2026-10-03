@@ -166,14 +166,19 @@ and fresh start (after phase 5 core).
 
 ### 7. Credit cards & debt
 
-- [ ] Spending on a credit card moves funds into its payment category automatically
-- [ ] Credit overspending (becomes new debt, shown yellow)
-- [ ] Payment category shows amount available to pay the card
-- [ ] Existing credit card debt handling (starting negative balance, paying down debt)
-- [ ] Credit card payment transfers reduce the payment category
-- [ ] Credit card returns / refunds
-- [ ] Loan accounts: principal vs interest split, escrow, extra payments
-- [ ] Loan planner: payoff date, interest saved with extra payments
+7a–7d are built (stacked branches, not merged); 7e–7g (positive balances and closing, loan
+activity, loan planner) are deferred until after phase 8 — see `docs/deferred.md`.
+
+
+- [x] Spending on a credit card moves funds into its payment category automatically
+- [x] Credit overspending (becomes new debt, shown yellow)
+- [x] Payment category shows amount available to pay the card
+- [x] Existing credit card debt handling (starting negative balance, paying down debt)
+- [x] Credit card payment transfers reduce the payment category
+- [x] Credit card returns / refunds
+- [ ] Positive card balances, closing a card (7e, deferred)
+- [ ] Loan accounts: principal vs interest split, escrow, extra payments (7f, deferred)
+- [ ] Loan planner: payoff date, interest saved with extra payments (7g, deferred)
 
 ### 8. Targets (goals)
 

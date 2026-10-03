@@ -20,24 +20,33 @@ export interface MoveActions {
 
 type Format = (minorUnits: string) => string;
 
-/** Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. */
+/**
+ * Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. Yellow
+ * ("cautious") is credit overspending, and a payment category that doesn't cover what the card owes.
+ */
 export function AvailablePill({
   amount,
   format,
   className,
+  caution = false,
 }: {
   amount: string;
   format: Format;
   className?: string;
+  caution?: boolean;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   return (
     <span
       className={cn(
         "inline-block max-w-full truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
-        sign > 0 && "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
-        sign < 0 && "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
-        sign === 0 && "bg-muted text-muted-foreground",
+        caution
+          ? "bg-yellow-100 text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100"
+          : [
+              sign > 0 && "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
+              sign < 0 && "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
+              sign === 0 && "bg-muted text-muted-foreground",
+            ],
         className,
       )}
     >
@@ -56,12 +65,14 @@ export function AvailableButton({
   amount,
   format,
   actions,
+  caution = false,
 }: {
   categoryId: string;
   categoryName: string;
   amount: string;
   format: Format;
   actions: MoveActions;
+  caution?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const overspent = amount.startsWith("-");
@@ -73,7 +84,12 @@ export function AvailableButton({
           aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}`}
           className="max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <AvailablePill amount={amount} format={format} className="hover:brightness-95" />
+          <AvailablePill
+            amount={amount}
+            format={format}
+            caution={caution}
+            className="hover:brightness-95"
+          />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72">

@@ -22,6 +22,39 @@ transactions and run the actions you're checking. Look before asking the user, a
 found (in `docs/verify.md`, or in the commit/plan you're working on). The same browser is how you
 check your own UI changes in the running app.
 
+**Use the YNAB API to set up and read cases.** Clicking through YNAB's UI to build test data is
+slow (payee/category autocomplete, cell-by-cell editing). The test account has a personal access
+token in `.env` as `YNAB_TOKEN` (gitignored; never print or commit it). With it you can create
+accounts and transactions and read the numbers YNAB computes in seconds:
+
+```sh
+set -a; . ./.env; set +a
+A=https://api.ynab.com/v1/budgets/6fd24aaa-939f-4f59-b0bf-9fc527df1323   # "ihni7's Plan"
+curl -s -H "Authorization: Bearer $YNAB_TOKEN" -H "Content-Type: application/json" "$A/months/2026-10-01"
+```
+
+- Useful endpoints (docs: https://api.ynab.com/v1): `POST /accounts` (`type: "creditCard"`,
+  `balance` in milliunits), `POST /transactions` (a transfer is `payee_id` = the other account's
+  `transfer_payee_id`; YNAB creates both sides), `PATCH`/`DELETE /transactions/{id}`,
+  `PATCH /months/{month}/categories/{id}` (`budgeted`), `GET /months/{YYYY-MM-01}` (Ready to
+  Assign as `to_be_budgeted`, and each category's `budgeted`/`activity`/`balance`), `GET /accounts`.
+- Amounts are **milliunits** (1000 = $1.00).
+- **Reads straight after a write can be stale.** A month read right after creating a transaction
+  has missed its effect. Wait a few seconds before reading, and confirm a delta by deleting and
+  re-adding the transaction: both directions must move the numbers by the same amount.
+- Use a fresh category and a fresh card per case. A busy test plan makes deltas hard to
+  attribute.
+- The API can't create a line of credit or loan account (`type` only takes checking, savings,
+  cash, creditCard, otherAsset, otherLiability) and can't close, reopen or delete an account. Do
+  those in the browser, then carry on through the API.
+- The API returns YNAB's computed results (category balances, payment-category Available,
+  Ready to Assign), which settles most budget-math questions. It does **not** show UI-only
+  details: colours (cash vs credit overspending), messages and inspector copy, dialogs, and the
+  Ready to Assign breakdown lines. Check those in the browser. Next month's `to_be_budgeted`
+  shows how much cash overspending was deducted.
+- Name test data so it's easy to spot ("Card X", memo "x-spend") and note what you created in
+  your findings; the user may clean up the test plan.
+
 If the app can't settle it (no browser tool is connected, or the case can't be reproduced):
 
 - Don't guess and don't fill the gap with a "sensible default". Skip that part of the feature.

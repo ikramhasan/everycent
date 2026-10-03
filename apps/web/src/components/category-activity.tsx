@@ -7,6 +7,14 @@ import { useState } from "react";
 import { $api } from "@/lib/api";
 import { todayIso } from "@/lib/dates";
 
+/** A payment category's card figures for the month (minor units). */
+export interface CardSummary {
+  spendingAndOutflows: string;
+  paymentsAndInflows: string;
+  fundedSpending: string;
+  paymentsMade: string;
+}
+
 /** Which Activity to list: a category's, a group's or Uncategorized's. */
 export type ActivityTarget = { categoryId: string } | { groupId: string } | { uncategorized: true };
 
@@ -23,6 +31,7 @@ export function ActivityButton({
   format,
   formatDate,
   className,
+  card,
 }: {
   budgetId: string;
   month: string;
@@ -32,6 +41,7 @@ export function ActivityButton({
   format: (minorUnits: string) => string;
   formatDate: (isoDate: string) => string;
   className?: string;
+  card?: CardSummary;
 }) {
   const [open, setOpen] = useState(false);
   // YNAB disables the button when there's no activity.
@@ -60,6 +70,7 @@ export function ActivityButton({
             format={format}
             formatDate={formatDate}
             onClose={() => setOpen(false)}
+            card={card}
           />
         )}
       </PopoverContent>
@@ -75,6 +86,7 @@ function ActivityList({
   format,
   formatDate,
   onClose,
+  card,
 }: {
   budgetId: string;
   month: string;
@@ -83,6 +95,7 @@ function ActivityList({
   format: (minorUnits: string) => string;
   formatDate: (isoDate: string) => string;
   onClose: () => void;
+  card?: CardSummary;
 }) {
   const navigate = useNavigate();
   const query = {
@@ -109,6 +122,7 @@ function ActivityList({
         <p className="font-semibold text-sm">Activity</p>
         <p className="text-muted-foreground text-sm">{name}</p>
       </div>
+      {card && <CardActivitySummary card={card} format={format} />}
       <div className="max-h-80 overflow-y-auto">
         {activity.isPending ? (
           <Skeleton className="m-4 h-16" />
@@ -163,5 +177,55 @@ function ActivityList({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The numbers of YNAB's card Activity window. Spending is the card's outflows; Returns its
+ * inflows other than payments (returns and statement credits). Funded Spending is what moved into
+ * the payment category; returns that moved money back out are listed with Payments & Returns, so
+ * a month whose returns outweigh its funded spending shows them there instead.
+ */
+export function cardActivity(card: CardSummary) {
+  const spending = BigInt(card.spendingAndOutflows);
+  const payments = BigInt(card.paymentsMade);
+  const returns = BigInt(card.paymentsAndInflows) + payments;
+  const net = BigInt(card.fundedSpending);
+  const funded = net > 0n ? net : 0n;
+  return { spending, returns, funded, paymentsAndReturns: payments + (net < 0n ? net : 0n) };
+}
+
+/**
+ * YNAB's card Activity window header (support.ynab.com "Credit Card Activity"): Total Spending
+ * (the card's outflows and inflows other than payments) beside Total Activity (Funded Spending
+ * and Payments & Returns, what moved in and out of the payment category).
+ */
+function CardActivitySummary({
+  card,
+  format,
+}: {
+  card: CardSummary;
+  format: (minorUnits: string) => string;
+}) {
+  const c = cardActivity(card);
+  const row = (label: string, value: bigint, strong = false) => (
+    <div className={cn("flex justify-between gap-4", strong && "border-t pt-1 font-medium")}>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="tabular-nums">{format(value.toString())}</dd>
+    </div>
+  );
+  return (
+    <dl className="grid grid-cols-2 gap-6 border-b px-4 py-3 text-sm">
+      <div className="grid gap-1">
+        {row("Spending", c.spending)}
+        {row("Returns", c.returns)}
+        {row("Total Spending", c.spending + c.returns, true)}
+      </div>
+      <div className="grid gap-1">
+        {row("Funded Spending", c.funded)}
+        {row("Payments & Returns", c.paymentsAndReturns)}
+        {row("Total Activity", c.funded + c.paymentsAndReturns, true)}
+      </div>
+    </dl>
   );
 }

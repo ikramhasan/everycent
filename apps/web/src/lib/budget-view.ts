@@ -39,12 +39,37 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
   return filteredIds("overspent", month, visible).size;
 }
 
+/**
+ * Whether YNAB draws a category's Available yellow: overspent with credit only (any uncovered cash
+ * part keeps it red), or a payment category that doesn't cover what its card owes. YNAB shows the
+ * payment's Underfunded alert only from the current month on; earlier months stay green
+ * (support.ynab.com, docs/verify.md phase 7c).
+ */
+export function isCaution(
+  totals: Pick<MonthTotals, "available" | "cashOverspent"> & {
+    payment?: { underfunded: string } | null;
+  },
+  month: string,
+  current: string,
+) {
+  if (totals.payment) return totals.payment.underfunded !== "0" && month >= current;
+  return totals.available.startsWith("-") && totals.cashOverspent === "0";
+}
+
 export interface Breakdown {
   /** Left over from last month (what the categories carried in). */
   carried: bigint;
   assigned: bigint;
   activity: bigint;
+  /** The part of activity in cash accounts (YNAB's Cash Spending). */
+  cashActivity: bigint;
+  /** The part of activity in credit accounts (YNAB's Credit Spending). */
+  creditActivity: bigint;
   available: bigint;
+  /** The cash part of a negative Available (taken from next month's Ready to Assign). */
+  cashOverspent: bigint;
+  /** The credit part of a negative Available (new card debt). */
+  creditOverspent: bigint;
 }
 
 /** What a category carried in from last month: Available less this month's assigned and activity. */
@@ -52,7 +77,16 @@ export function breakdown(totals: MonthTotals): Breakdown {
   const assigned = BigInt(totals.assigned);
   const activity = BigInt(totals.activity);
   const available = BigInt(totals.available);
-  return { carried: available - assigned - activity, assigned, activity, available };
+  return {
+    carried: available - assigned - activity,
+    assigned,
+    activity,
+    cashActivity: BigInt(totals.cashActivity),
+    creditActivity: BigInt(totals.creditActivity),
+    available,
+    cashOverspent: BigInt(totals.cashOverspent),
+    creditOverspent: BigInt(totals.creditOverspent),
+  };
 }
 
 /**
@@ -61,7 +95,16 @@ export function breakdown(totals: MonthTotals): Breakdown {
  */
 export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakdown {
   const byId = new Map(month.categories.map((c) => [c.categoryId, c]));
-  const sum: Breakdown = { carried: 0n, assigned: 0n, activity: 0n, available: 0n };
+  const sum: Breakdown = {
+    carried: 0n,
+    assigned: 0n,
+    activity: 0n,
+    cashActivity: 0n,
+    creditActivity: 0n,
+    available: 0n,
+    cashOverspent: 0n,
+    creditOverspent: 0n,
+  };
   for (const id of ids) {
     const totals =
       id === UNCATEGORIZED
@@ -72,6 +115,10 @@ export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakd
     sum.carried += b.carried;
     sum.assigned += b.assigned;
     sum.activity += b.activity;
+    sum.cashActivity += b.cashActivity;
+    sum.creditActivity += b.creditActivity;
+    sum.cashOverspent += b.cashOverspent;
+    sum.creditOverspent += b.creditOverspent;
     sum.available += b.available;
   }
   return sum;

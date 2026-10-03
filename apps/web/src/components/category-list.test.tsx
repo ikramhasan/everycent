@@ -123,7 +123,12 @@ function renderList(list: CategoryListData = data) {
 const totals = (assigned: string, activity: string, available: string) => ({
   assigned,
   activity,
+  cashActivity: activity,
+  creditActivity: "0",
   available,
+  cashOverspent: available.startsWith("-") ? available : "0",
+  creditOverspent: "0",
+  payment: null,
   autoAssign: NO_AUTO_ASSIGN,
 });
 
@@ -142,7 +147,14 @@ const month: BudgetMonthData = {
   ],
   groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],
   hidden: totals("0", "-2", "-2"),
-  uncategorized: { activity: "-9", available: "-9" },
+  uncategorized: {
+    activity: "-9",
+    cashActivity: "-9",
+    creditActivity: "0",
+    available: "-9",
+    cashOverspent: "-9",
+    creditOverspent: "0",
+  },
 };
 
 function renderWithFigures() {
@@ -150,7 +162,7 @@ function renderWithFigures() {
     <CategoryList
       data={data}
       actions={makeActions()}
-      figures={{ month, format: (a) => `A${a}` }}
+      figures={{ month, currentMonth: "2026-10", format: (a) => `A${a}` }}
     />,
   );
 }
@@ -336,6 +348,7 @@ describe("CategoryList", () => {
           actions={actions}
           figures={{
             month,
+            currentMonth: "2026-10",
             format: (a) => `A${a}`,
             selection,
             shown,
