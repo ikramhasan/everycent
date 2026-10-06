@@ -237,16 +237,23 @@ export function readyToAssign(input: {
   return { readyToAssign: base - taken, assignedInFuture };
 }
 
-/** YNAB's Auto-Assign options (Underfunded and Reduce Overfunding need targets, phase 8). */
+/** YNAB's Auto-Assign options, in its order. */
 export const AUTO_ASSIGN_OPTIONS = [
+  "underfunded",
   "assignedLastMonth",
   "spentLastMonth",
   "averageAssigned",
   "averageSpent",
+  "reduceOverfunding",
   "resetAvailable",
   "resetAssigned",
 ] as const;
 export type AutoAssignOption = (typeof AUTO_ASSIGN_OPTIONS)[number];
+/** The options worked out from a category's history alone (the others need its target). */
+export type HistoryAutoAssignOption = Exclude<
+  AutoAssignOption,
+  "underfunded" | "reduceOverfunding"
+>;
 
 /** How many months YNAB's averages look back (its help center: "up to the last 12 months"). */
 const AVERAGE_MONTHS = 12;
@@ -268,7 +275,7 @@ const AVERAGE_MONTHS = 12;
 export function autoAssignAmounts(
   history: readonly MonthFigures[],
   month: BudgetMonth,
-): Record<AutoAssignOption, bigint> {
+): Record<HistoryAutoAssignOption, bigint> {
   const last = addMonths(month, -1);
   const byMonth = new Map<BudgetMonth, { assigned: bigint; activity: bigint }>();
   for (const h of history) {

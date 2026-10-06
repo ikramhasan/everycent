@@ -44,9 +44,11 @@ const AutoAssignSchema = z
     >,
   )
   .describe(
-    "What each Auto-Assign option would set the category's Assigned to this month: last month's " +
-      "assigned or spending, the average over up to the last 12 months (from the first with money " +
-      "assigned or spent), Available reset to zero, or zero",
+    "What each Auto-Assign option would set the category's Assigned to this month: enough to meet " +
+      "its target and cover overspending (underfunded, when there's enough Ready to Assign), " +
+      "last month's assigned or spending, the average over up to the last 12 months (from the " +
+      "first with money assigned or spent), less what's above its target (reduceOverfunding), " +
+      "Available reset to zero, or zero",
   )
   .openapi("AutoAssignAmounts");
 
@@ -103,11 +105,33 @@ const TargetNeedSchema = z
   )
   .openapi("TargetNeed");
 
+const FundingPartSchema = z
+  .object({
+    amount: zMinorUnits,
+    step: z
+      .number()
+      .int()
+      .min(1)
+      .max(5)
+      .describe(
+        "1 overspending, 2 due on a date this month, 3 due at the end of the month, 4 due in a " +
+          "later month, 5 credit card payment",
+      ),
+    date: z.string().describe("YYYY-MM-DD it's due; empty when the step isn't ordered by date"),
+  })
+  .openapi("FundingPart");
+
 const MonthCategorySchema = Totals.extend({
   categoryId: z.string(),
   payment: PaymentSchema,
   target: TargetNeedSchema,
   autoAssign: AutoAssignSchema,
+  underfundedParts: z
+    .array(FundingPartSchema)
+    .describe(
+      "What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short " +
+        "(they add up to `autoAssign.underfunded` less Assigned)",
+    ),
 }).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");
 
@@ -143,6 +167,15 @@ const MonthSchema = z
       .object({ ...Activity, available: zMinorUnits, ...Overspent })
       .nullable()
       .describe("Spending without a category; null in months without any"),
+    targets: z
+      .object({
+        month: zMinorUnits.describe(
+          "What the targets of the categories that aren't hidden ask of this month (YNAB's " +
+            "\"October's Targets\"): each month's amount, or this month's share of a dated target",
+        ),
+        nextMonth: zMinorUnits.describe("The same for the month after"),
+      })
+      .openapi("MonthTargets"),
   })
   .openapi("BudgetMonth");
 
@@ -318,7 +351,8 @@ export const autoAssign = createRoute({
   description:
     "Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without " +
     "`categoryIds` it covers every category that isn't hidden. Each change is a move in Recent " +
-    "Moves.",
+    "Moves. Underfunded funds selected categories in full; over the whole plan or a view " +
+    "(`scope: view`) it funds `underfundedParts` in order and stops when Ready to Assign runs out.",
   request: {
     params: BudgetParams,
     body: {
@@ -329,6 +363,13 @@ export const autoAssign = createRoute({
             .object({
               option: z.enum(AUTO_ASSIGN_OPTIONS),
               categoryIds: z.array(z.string()).min(1).optional(),
+              scope: z
+                .enum(["selection", "view"])
+                .optional()
+                .describe(
+                  "Whether `categoryIds` are the user's selection (the default) or the rows of a " +
+                    "view; Underfunded stops at Ready to Assign only for a view or the whole plan",
+                ),
               today: Today.optional(),
             })
             .openapi("AutoAssign"),

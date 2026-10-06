@@ -41,6 +41,15 @@ export {
   zDateFormat,
   zNumberFormat,
 } from "./format-settings";
+export {
+  type CategoryFunding,
+  FUNDING_STEPS,
+  type FundingPart,
+  type FundingStep,
+  fundUnderfunded,
+  paymentFunding,
+  spendingFunding,
+} from "./funding";
 export { convert } from "./fx";
 export {
   add,
@@ -67,6 +76,7 @@ export {
   type CategoryMonth,
   categoryMonth,
   categoryOverspending,
+  type HistoryAutoAssignOption,
   isBudgetMonth,
   type MonthAmount,
   type MonthFigures,

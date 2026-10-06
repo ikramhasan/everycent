@@ -155,13 +155,13 @@ and fresh start (after phase 5 core).
 - [x] Month navigation, budgeting in future months, "assigned in future" indicator
 - [x] Income for future months (assign next month's income): today's YNAB has no separate
       next-month income; money is assigned in future months instead
-- [x] Auto-assign / quick budget: assigned last month, spent last month, average assigned,
-      average spent, reset available, reset assigned (underfunded needs targets, phase 8)
+- [x] Auto-assign / quick budget: underfunded, assigned last month, spent last month, average
+      assigned, average spent, reduce overfunding, reset available, reset assigned
 - [x] Category inspector: balance breakdown (cash left over, assigned, activity), notes (the
       target part comes with phase 8)
 - [x] Category activity drill-down (transactions for category + month)
 - [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
-      (collapse, overspent and money available done; underfunded and snoozed need targets)
+      (all but snoozed done; snoozed comes with phase 8d)
 - [x] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt
@@ -189,7 +189,8 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
       another" covers it
 - [ ] Debt payment targets (for loans / credit cards; include interest)
 - [ ] Target progress bars and status (funded, underfunded, overspent, on track)
-- [ ] Underfunded total + "Assign underfunded" button
+- [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
+      Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)
 - [ ] Snooze a target for a month
 - [ ] Repeat on/off (done in 8b), target history across months (8f)
 - [ ] Targets overview (total needed this month vs next month)

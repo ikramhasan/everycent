@@ -23,6 +23,7 @@ import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import {
   breakdown,
+  EMPTY_VIEW,
   filteredIds,
   isCaution,
   overspentCount,
@@ -179,10 +180,7 @@ function BudgetPage() {
       activity: { budgetId: budget.id, formatDate },
       shown,
       emptyView: {
-        message:
-          filter === "overspent"
-            ? "That's a win! You've knocked out all overspent categories."
-            : "You don't currently have categories with money available.",
+        message: filter === "all" ? "" : EMPTY_VIEW[filter],
         onViewAll: () => setFilter("all"),
       },
       selection: {
@@ -381,6 +379,7 @@ function BudgetPage() {
                 onViewAll={() => setFilter("all")}
                 names={listed}
                 selection={selection.size > 0}
+                readyToAssign={BigInt(listFigures.month.readyToAssign)}
                 format={listFigures.format}
                 onApply={async (option) => {
                   // Selected, or the rows in view; the server takes no list as every visible one.
@@ -404,6 +403,8 @@ function BudgetPage() {
                       body: {
                         option,
                         ...(categoryIds.length ? { categoryIds } : {}),
+                        // A view's rows share Ready to Assign, as the whole plan does.
+                        ...(selection.size === 0 && shown ? { scope: "view" as const } : {}),
                         today: todayIso(),
                       },
                     });
@@ -612,5 +613,17 @@ function Inspector({
     ...month.categories.map((c) => c.categoryId),
     ...(month.uncategorized ? [UNCATEGORIZED] : []),
   ];
-  return <MonthSummary month={month.month} totals={summarize(month, ids)} format={format} />;
+  return (
+    <MonthSummary
+      month={month.month}
+      totals={summarize(month, ids)}
+      format={format}
+      // The whole plan's targets, whatever the view; YNAB shows them in the current month only.
+      targets={
+        month.month === figures.currentMonth
+          ? { month: BigInt(month.targets.month), nextMonth: BigInt(month.targets.nextMonth) }
+          : undefined
+      }
+    />
+  );
 }

@@ -29,7 +29,7 @@ const need = (h: MonthFigures[], t: CategoryTarget, month = "2026-10") =>
 describe("targetNeed", () => {
   it("set aside counts only this month's Assigned", () => {
     const setAside = target("set_aside");
-    expect(need([], setAside)).toEqual({
+    expect(need([], setAside)).toMatchObject({
       needed: 100_00n,
       funded: 0n,
       underfunded: 100_00n,
@@ -97,7 +97,7 @@ describe("dated targets", () => {
     dueDate: "2026-12-30",
   });
   it("spreads what's missing over the months left, rounding up", () => {
-    expect(need([], yearly)).toEqual({
+    expect(need([], yearly)).toMatchObject({
       needed: 1000_00n,
       funded: 0n,
       underfunded: 333_34n,
@@ -120,19 +120,21 @@ describe("dated targets", () => {
       repeatUnit: "month",
     });
     expect(need([], everyTwo)?.underfunded).toBe(150_00n);
-    expect(need([f("2026-10", 150_00n), f("2026-11", 150_00n)], everyTwo, "2026-12")).toEqual({
-      needed: 300_00n,
-      funded: 0n,
-      underfunded: 150_00n,
-      dueDate: "2027-01-01",
-    });
+    expect(need([f("2026-10", 150_00n), f("2026-11", 150_00n)], everyTwo, "2026-12")).toMatchObject(
+      {
+        needed: 300_00n,
+        funded: 0n,
+        underfunded: 150_00n,
+        dueDate: "2027-01-01",
+      },
+    );
     const refill = target("refill", "2026-10", {
       cadence: "yearly",
       amount: 1000_00n,
       dueDate: "2026-11-01",
     });
     const carried = [f("2026-09", 70_00n)];
-    expect(need(carried, refill)).toEqual({
+    expect(need(carried, refill)).toMatchObject({
       needed: 1000_00n,
       funded: 70_00n,
       underfunded: 465_00n,
@@ -157,7 +159,7 @@ describe("dated targets", () => {
 
   it("balance targets ask only with a date", () => {
     const eventually = target("balance", "2026-10", { cadence: "custom", amount: 300_00n });
-    expect(need([], eventually)).toEqual({
+    expect(need([], eventually)).toMatchObject({
       needed: 300_00n,
       funded: 0n,
       underfunded: 0n,
@@ -168,6 +170,66 @@ describe("dated targets", () => {
     expect(need([f("2026-10", 100_00n)], byDec)).toMatchObject({
       funded: 100_00n,
       underfunded: 0n,
+    });
+  });
+});
+
+// YNAB's test categories O1–O10 and T8 F/L in docs/verify.md ("Underfunded and Reduce
+// Overfunding"), checked on 2026-10-07.
+describe("what's over and the month's targets", () => {
+  const carried = (amount: bigint) => f("2026-09", amount);
+  it("takes back Assigned above the month's amount, up to what's Available", () => {
+    expect(need([f("2026-10", 150_00n)], target("set_aside"))?.overfunded).toBe(50_00n); // T8 L
+    expect(need([f("2026-10", 150_00n, -120_00n)], target("set_aside"))?.overfunded).toBe(30_00n); // O1
+    expect(need([carried(100_00n), f("2026-10", 150_00n)], target("set_aside"))?.overfunded).toBe(
+      50_00n,
+    ); // O9
+    expect(need([f("2026-10", 150_00n)], target("refill"))?.overfunded).toBe(50_00n); // O2
+    expect(need([f("2026-10", 150_00n, -120_00n)], target("refill"))?.overfunded).toBe(30_00n); // O8
+  });
+
+  it("counts carried money for refill, so Assigned can go below zero", () => {
+    expect(need([carried(80_00n), f("2026-10", 50_00n)], target("refill"))?.overfunded).toBe(
+      30_00n,
+    ); // O3
+    expect(need([carried(150_00n)], target("refill"))?.overfunded).toBe(50_00n); // O4
+    // In a future month carried money doesn't count, so nothing is over (O4 in November).
+    expect(need([carried(150_00n)], target("refill"), "2026-11")?.overfunded).toBe(0n);
+  });
+
+  it("weekly and dated targets compare against this month's amount", () => {
+    const weekly = target("set_aside", "2026-10", { cadence: "weekly", amount: 10_00n, dueDay: 6 });
+    expect(need([f("2026-10", 70_00n)], weekly)?.overfunded).toBe(20_00n); // O6
+    const byDec = target("set_aside", "2026-10", {
+      cadence: "custom",
+      amount: 100_00n,
+      dueDate: "2026-12-31",
+    });
+    expect(need([f("2026-10", 100_00n)], byDec)).toMatchObject({
+      monthAmount: 33_34n,
+      overfunded: 66_66n,
+    }); // O10
+    const yearly = target("set_aside", "2026-10", {
+      cadence: "yearly",
+      amount: 1000_00n,
+      dueDate: "2026-12-30",
+    });
+    expect(need([f("2026-10", 333_34n)], yearly)?.overfunded).toBe(0n); // T8 F
+  });
+
+  it("asks the month's full amount, or this month's share of a dated target", () => {
+    // Monthly refill counts in full in the month's targets even with money carried in (T8 H).
+    expect(need([carried(70_00n)], target("refill"))?.monthAmount).toBe(100_00n);
+    const refill = target("refill", "2026-10", {
+      cadence: "yearly",
+      amount: 1000_00n,
+      dueDate: "2026-11-01",
+    });
+    expect(need([carried(70_00n)], refill)?.monthAmount).toBe(465_00n); // T8 G
+    const eventually = target("balance", "2026-10", { cadence: "custom", amount: 300_00n });
+    expect(need([f("2026-10", 500_00n)], eventually)).toMatchObject({
+      monthAmount: 0n,
+      overfunded: 0n,
     });
   });
 });

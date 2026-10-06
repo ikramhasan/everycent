@@ -24,6 +24,7 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   payment: null,
   target: null,
   autoAssign: NO_AUTO_ASSIGN,
+  underfundedParts: [],
 });
 
 const month: BudgetMonthData = {
@@ -34,6 +35,7 @@ const month: BudgetMonthData = {
   readyToAssign: "0",
   assignedInFuture: "0",
   futureMonths: [],
+  targets: { month: "0", nextMonth: "0" },
   categories: [
     cat("rent", "4000", "0", "4000"),
     cat("power", "0", "-2500", "-2500"),
@@ -69,6 +71,21 @@ describe("budget views", () => {
     expect(matchesFilter("available", { available: "1" })).toBe(true);
     expect(matchesFilter("available", { available: "0" })).toBe(false);
     expect(matchesFilter("all", { available: "0" })).toBe(true);
+  });
+
+  it("matches underfunded and overfunded by what Auto-Assign would change", () => {
+    const auto = (assigned: string, underfunded: string, reduceOverfunding: string) => ({
+      available: "0",
+      assigned,
+      autoAssign: { underfunded, reduceOverfunding },
+    });
+    expect(matchesFilter("underfunded", auto("1000", "1500", "1000"))).toBe(true);
+    expect(matchesFilter("underfunded", auto("1000", "1000", "1000"))).toBe(false);
+    expect(matchesFilter("overfunded", auto("1000", "1000", "600"))).toBe(true);
+    expect(matchesFilter("overfunded", auto("1000", "1000", "1000"))).toBe(false);
+    // Uncategorized has no Auto-Assign: it's underfunded while negative, never overfunded.
+    expect(matchesFilter("underfunded", { available: "-200" })).toBe(true);
+    expect(matchesFilter("overfunded", { available: "200" })).toBe(false);
   });
 
   it("leaves hidden categories out and counts Uncategorized", () => {

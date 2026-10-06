@@ -3,21 +3,55 @@ import { useCallback, useState } from "react";
 import type { BudgetMonthData, MonthTotals } from "./months";
 import type { TargetNeed } from "./targets";
 
-/**
- * YNAB's views above the budget list. Underfunded, Overfunded and Snoozed need targets (phase 8).
- */
-export const BUDGET_FILTERS = ["all", "overspent", "available"] as const;
+/** YNAB's views above the budget list, in its order. Snoozed comes with snoozing (phase 8d). */
+export const BUDGET_FILTERS = [
+  "all",
+  "overspent",
+  "underfunded",
+  "overfunded",
+  "available",
+] as const;
 export type BudgetFilter = (typeof BUDGET_FILTERS)[number];
 
 /** The id the Uncategorized Transactions row is selected under. */
 export const UNCATEGORIZED = "uncategorized";
 
-/** Whether a category's numbers belong in a view: Overspent is below zero, Money Available above. */
-export function matchesFilter(filter: BudgetFilter, totals: { available: string }) {
+/**
+ * Whether a category's numbers belong in a view: Overspent is below zero, Money Available above;
+ * Underfunded is anything Underfunded would add to (overspending included), Overfunded anything
+ * Reduce Overfunding would take from (YNAB, docs/verify.md "Underfunded and Reduce Overfunding").
+ * Uncategorized, with no Auto-Assign, counts as underfunded while it's negative.
+ */
+export function matchesFilter(
+  filter: BudgetFilter,
+  totals: {
+    available: string;
+    assigned?: string;
+    autoAssign?: { underfunded: string; reduceOverfunding: string };
+  },
+) {
   if (filter === "all") return true;
   const available = BigInt(totals.available);
-  return filter === "overspent" ? available < 0n : available > 0n;
+  const { assigned = "0", autoAssign } = totals;
+  switch (filter) {
+    case "overspent":
+      return available < 0n;
+    case "available":
+      return available > 0n;
+    case "underfunded":
+      return autoAssign ? BigInt(autoAssign.underfunded) > BigInt(assigned) : available < 0n;
+    case "overfunded":
+      return autoAssign ? BigInt(autoAssign.reduceOverfunding) < BigInt(assigned) : false;
+  }
 }
+
+/** What each view says when nothing is in it (YNAB's wording). */
+export const EMPTY_VIEW: Record<Exclude<BudgetFilter, "all">, string> = {
+  overspent: "That's a win! You've knocked out all overspent categories.",
+  underfunded: "Cheers! You don't currently have any underfunded categories.",
+  overfunded: "You don't currently have any overfunded targets.",
+  available: "You don't currently have categories with money available.",
+};
 
 /**
  * The categories a view shows, visible ones only (YNAB leaves hidden categories out of every view
