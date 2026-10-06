@@ -28,8 +28,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
   real-time collaboration or phase 19 audit history).
 - Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
-  (docs/verify.md). Underfunded and Reduce Overfunding wait for targets (phase 8). The assigned
-  field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+  (docs/verify.md). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
 - YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
   transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
@@ -40,8 +39,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
-  on a selection are auto-assign's (6e). The Underfunded, Overfunded and Snoozed views wait for
-  phase 8c–8d.
+  on a selection are auto-assign's (6e). The Snoozed view waits for phase 8d.
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
@@ -55,8 +53,9 @@ before starting a roadmap phase** and remove an entry once it's done.
   transactions with their categories; ours uses the same columns as other categories (Account,
   Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button and no
   "Create a Debt Payoff Target" (phase 8); its Current Balance and Available for Payment lines
-  aren't collapsible as YNAB's are. Auto-Assign on payment categories (YNAB: Underfunded,
-  Paid Last Month, Average Paid) is still the spending set.
+  aren't collapsible as YNAB's are. Auto-Assign on payment categories has Underfunded and Reduce
+  Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
+  Average Paid when only payment categories are covered).
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
   cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;
   YNAB quotes only the cash part (docs/verify.md).
@@ -82,10 +81,17 @@ before starting a roadmap phase** and remove an entry once it's done.
 - 8a–8b built every target YNAB's form offers: weekly, monthly, yearly and custom (set aside,
   fill up to, have a balance of; one-time or repeating), the inspector's Target section and editor,
   the row note and the yellow/green Available with its pie or check.
+- 8c added Underfunded and Reduce Overfunding to Auto-Assign (in YNAB's funding order, stopping
+  at Ready to Assign for the whole plan or a view), the Underfunded and Overfunded views, and the
+  summary's "Cost to Be Me" / "October's Targets".
 - Not yet: the row's progress bars and "Spent $x of $y" notes (8d), Snooze (8d; YNAB shows
-  "Snooze target for this month" under Edit Target), Underfunded and Reduce Overfunding in
-  Auto-Assign and the month summary's "October's Targets" / "Cost to Be Me" (8c), payment-category
-  targets (8e, the API refuses them with 409 `MANAGED_CATEGORY`).
+  "Snooze target for this month" under Edit Target), payment-category targets (8e, the API refuses
+  them with 409 `MANAGED_CATEGORY`).
+- Snooze (8d) has to take a snoozed target out of Underfunded (`spendingFunding`) while Reduce
+  Overfunding still sees it (support.ynab.com: "Snoozed targets will still show overfunding").
+- Underfunded ignores scheduled transactions (phase 10); YNAB funds them with the due-date step.
+- The summary's "Enter your expected income" (under Cost to Be Me) isn't built; no phase has it
+  yet.
 - Target edits aren't in the undo history (docs/verify.md).
 - A category's history is reassigned on delete, but its target is deleted with it.
 

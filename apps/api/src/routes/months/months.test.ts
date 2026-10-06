@@ -35,10 +35,13 @@ type Month = {
       | "paymentsMade",
       string
     > | null;
+    autoAssign: Record<string, string>;
+    underfundedParts: { amount: string; step: number; date: string }[];
   })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
   uncategorized: Omit<Totals, "assigned"> | null;
+  targets: { month: string; nextMonth: string };
 };
 type Category = { id: string; name: string };
 type Group = { id: string; kind: string | null; categories: Category[] };
@@ -1015,6 +1018,146 @@ describe("budget months", () => {
         today: TODAY,
       });
       expect(far.status).toBe(400);
+    });
+  });
+
+  // YNAB's rules, checked in its web app on 2026-10-07 (docs/verify.md "Underfunded and Reduce
+  // Overfunding").
+  describe("underfunded and reduce overfunding", () => {
+    const target = (
+      ctx: { cookie: string; base: string },
+      categoryId: string,
+      input: Record<string, unknown> = {},
+    ) =>
+      send("PUT", `${ctx.base}/categories/${categoryId}/target`, ctx.cookie, {
+        cadence: "monthly",
+        behavior: "set_aside",
+        amount: "10000",
+        dueDay: null,
+        month: "2026-10",
+        ...input,
+      });
+    const auto = (
+      ctx: { cookie: string; base: string },
+      option: string,
+      extra: Record<string, unknown> = {},
+    ) =>
+      send("POST", `${ctx.base}/months/2026-10/auto-assign`, ctx.cookie, {
+        option,
+        today: TODAY,
+        ...extra,
+      });
+
+    it("lists what each category asks for and what's over", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone, groceries } = ctx;
+      expect((await target(ctx, rent.id)).status).toBe(200);
+      expect((await target(ctx, phone.id, { behavior: "refill", dueDay: 15 })).status).toBe(200);
+      await put(rent.id, "2026-10", "15000");
+      await spend({ date: "2026-10-01", amount: "-2500", categoryId: groceries.id });
+
+      const oct = await month("2026-10");
+      // Rent: $150.00 against $100.00, so $50.00 is over.
+      expect(oct.byCategory(rent.id)).toMatchObject({
+        autoAssign: { underfunded: "15000", reduceOverfunding: "10000" },
+        underfundedParts: [],
+      });
+      // Phone: due on the 15th. Groceries: no target, only its overspending.
+      expect(oct.byCategory(phone.id)).toMatchObject({
+        autoAssign: { underfunded: "10000", reduceOverfunding: "0" },
+        underfundedParts: [{ amount: "10000", step: 2, date: "2026-10-15" }],
+      });
+      expect(oct.byCategory(groceries.id)).toMatchObject({
+        autoAssign: { underfunded: "2500" },
+        underfundedParts: [{ amount: "2500", step: 1, date: "" }],
+      });
+      // October's Targets: each target's month amount, met or not.
+      expect(oct.targets).toEqual({ month: "20000", nextMonth: "20000" });
+    });
+
+    it("meets the target or covers overspending, whichever is more (YNAB O11, O13)", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id);
+      await spend({ date: "2026-10-01", amount: "-3000", categoryId: rent.id });
+      await put(phone.id, "2026-10", "10000");
+      await spend({ date: "2026-10-01", amount: "-13000", categoryId: phone.id });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)?.autoAssign.underfunded).toBe("10000");
+      expect(oct.byCategory(phone.id)?.autoAssign.underfunded).toBe("13000");
+    });
+
+    it("funds in YNAB's order and stops when Ready to Assign runs out", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone, groceries } = ctx;
+      await target(ctx, rent.id); // end of month
+      await target(ctx, phone.id, { dueDay: 15 }); // due on a date: before end of month
+      await spend({ date: "2026-10-01", amount: "-500", categoryId: groceries.id }); // first
+      // $1,000.00 in; leave $60.00 to assign.
+      const { groups } = await json<{ groups: Group[] }>(
+        await send("GET", `${ctx.base}/categories`, ctx.cookie),
+      );
+      const spare = groups.find((g) => g.id === ctx.needs.id)?.categories[1];
+      if (!spare) throw new Error("starter data missing");
+      await put(spare.id, "2026-10", "94000");
+      expect((await month("2026-10")).readyToAssign).toBe("6000");
+
+      expect((await auto(ctx, "underfunded")).status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(groceries.id)).toMatchObject(t("500", "-500", "0"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("5500", "0", "5500"));
+      expect(oct.byCategory(rent.id)).toMatchObject(t("0", "0", "0"));
+      expect(oct.readyToAssign).toBe("0");
+
+      // A selection is funded in full, even past Ready to Assign.
+      expect((await auto(ctx, "underfunded", { categoryIds: [rent.id] })).status).toBe(200);
+      const after = await month("2026-10");
+      expect(after.byCategory(rent.id)).toMatchObject(t("10000", "0", "10000"));
+      expect(after.readyToAssign).toBe("-10000");
+    });
+
+    it("keeps a view's Underfunded to Ready to Assign, in order", async () => {
+      const ctx = await setup();
+      const { put, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id, { dueDay: 15 });
+      await put(ctx.groceries.id, "2026-10", "95000");
+      expect(
+        (await auto(ctx, "underfunded", { categoryIds: [rent.id, phone.id], scope: "view" }))
+          .status,
+      ).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(phone.id)?.assigned).toBe("5000");
+      expect(oct.byCategory(rent.id)?.assigned).toBe("0");
+    });
+
+    it("takes back what's over, up to what's Available (YNAB O1, O4)", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id, { behavior: "refill" });
+      await put(rent.id, "2026-10", "15000");
+      await spend({ date: "2026-10-01", amount: "-12000", categoryId: rent.id });
+      await put(phone.id, "2026-09", "15000");
+
+      expect((await auto(ctx, "reduceOverfunding")).status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("12000", "-12000", "0"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("-5000", "0", "10000"));
+    });
+
+    it("asks a card's payment category for what's owed, and gives back the rest", async () => {
+      const ctx = await cards(5000n);
+      await ctx.put(ctx.amex.paymentCategoryId, "2026-10", "600");
+      const oct = await ctx.month("2026-10");
+      expect(oct.byCategory(ctx.visa.paymentCategoryId)).toMatchObject({
+        autoAssign: { underfunded: "5000", reduceOverfunding: "0" },
+        underfundedParts: [{ amount: "5000", step: 5, date: "" }],
+      });
+      expect(oct.byCategory(ctx.amex.paymentCategoryId)).toMatchObject({
+        autoAssign: { underfunded: "600", reduceOverfunding: "0" },
+      });
     });
   });
 });

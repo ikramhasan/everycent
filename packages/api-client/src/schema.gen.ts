@@ -521,7 +521,7 @@ export interface paths {
         put?: never;
         /**
          * Set categories' Assigned from one of YNAB's Auto-Assign options
-         * @description Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves.
+         * @description Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves. Underfunded funds selected categories in full; over the whole plan or a view (`scope: view`) it funds `underfundedParts` in order and stops when Ready to Assign runs out.
          */
         post: operations["autoAssign"];
         delete?: never;
@@ -1178,12 +1178,15 @@ export interface components {
                 /** @description The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise */
                 creditOverspent: string;
             } | null;
+            targets: components["schemas"]["MonthTargets"];
         };
         MonthCategory: components["schemas"]["MonthTotals"] & {
             categoryId: string;
             payment: components["schemas"]["PaymentDetails"];
             target: components["schemas"]["TargetNeed"];
             autoAssign: components["schemas"]["AutoAssignAmounts"];
+            /** @description What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned) */
+            underfundedParts: components["schemas"]["FundingPart"][];
         };
         /** @description Set on a credit account's payment category */
         PaymentDetails: {
@@ -1218,8 +1221,10 @@ export interface components {
              */
             dueDate: string | null;
         } | null;
-        /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
+        /** @description What each Auto-Assign option would set the category's Assigned to this month: enough to meet its target and cover overspending (underfunded, when there's enough Ready to Assign), last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), less what's above its target (reduceOverfunding), Available reset to zero, or zero */
         AutoAssignAmounts: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            underfunded: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             assignedLastMonth: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -1229,9 +1234,19 @@ export interface components {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             averageSpent: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            reduceOverfunding: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             resetAvailable: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             resetAssigned: string;
+        };
+        FundingPart: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /** @description 1 overspending, 2 due on a date this month, 3 due at the end of the month, 4 due in a later month, 5 credit card payment */
+            step: number;
+            /** @description YYYY-MM-DD it's due; empty when the step isn't ordered by date */
+            date: string;
         };
         MonthTotals: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -1251,6 +1266,12 @@ export interface components {
         };
         MonthGroup: components["schemas"]["MonthTotals"] & {
             groupId: string;
+        };
+        MonthTargets: {
+            /** @description What the targets of the categories that aren't hidden ask of this month (YNAB's "October's Targets"): each month's amount, or this month's share of a dated target */
+            month: string;
+            /** @description The same for the month after */
+            nextMonth: string;
         };
         AssignCategory: {
             /** @description The new Assigned amount; negative takes money out */
@@ -1274,8 +1295,13 @@ export interface components {
         };
         AutoAssign: {
             /** @enum {string} */
-            option: "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "resetAvailable" | "resetAssigned";
+            option: "underfunded" | "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "reduceOverfunding" | "resetAvailable" | "resetAssigned";
             categoryIds?: string[];
+            /**
+             * @description Whether `categoryIds` are the user's selection (the default) or the rows of a view; Underfunded stops at Ready to Assign only for a view or the whole plan
+             * @enum {string}
+             */
+            scope?: "selection" | "view";
             /**
              * Format: date
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.

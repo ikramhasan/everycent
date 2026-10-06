@@ -244,7 +244,8 @@ as found:
 
 - The inspector's Auto-Assign lists Assigned Last Month, Spent Last Month, Average Assigned,
   Average Spent, Reset Available Amount(s), Reset Assigned Amount(s), each with an amount; singular
-  labels when one category is selected. Underfunded and Reduce Overfunding need targets (phase 8).
+  labels when one category is selected. Underfunded and Reduce Overfunding came with targets
+  (phase 8c, below).
 - An option replaces Assigned (Groceries $50.00 → $30.00 with $30.00 assigned last month). With
   nothing selected it covers every visible category after "Auto-Assign Preview: …" ("This will
   update the assigned amount for 1 category.", the changes by group, "Update Assigned
@@ -627,3 +628,67 @@ saved). Built as found:
   in (spending this month doesn't change it), Funded and Current Balance show carried + assigned;
   (2) no, the period starts no earlier than the start month; (3) "Fill Up to $X …"; (4) as a
   monthly refill with the weekly amount; (5) any date.
+
+## Underfunded and Reduce Overfunding (phase 8c)
+
+Checked against support.ynab.com ("Underfunded", "Auto-Assign") and in YNAB's web app and API on
+2026-10-07. Test data added to the test plan: categories O1–O13 in the Test group (O5's and O10's
+targets later removed), Brac transactions with memos `x-spend` (October) and `x-carry`
+(September inflows, because the API can't assign in a month before a category's creation). An
+Underfunded "Assign Money" in the web app didn't persist after a reload, so the plan is unchanged
+by it. Built as found:
+
+- **Underfunded** per category = enough to meet the target and to cover overspending, whichever is
+  more: O11 ($100 set aside, nothing assigned, $30 spent) asked $100.00; O13 (met, $130 spent of
+  $100) asked $30.00; overspent categories without a target ask their overspending (Utilities
+  $25.00). Categories with neither ask nothing (Phone & Internet with $13.00 left).
+- Payment categories ask what's owed beyond Available, less this month's credit overspending on
+  the card: Card B (owes $103, $3 set aside) $100.00; Card X (paid off, −$10.00) $10.00; Card Z3
+  (owes $2, −$10.00) $12.00; Visa (owes $65, $31 set aside, $33 credit overspending) $1.00; LOC A
+  $0.00. Cards with credit overspending are listed apart in the preview ("These credit cards may
+  need more attention, because of credit overspending, or uncategorized transactions.") and are
+  still funded (Assigned rose by the button's full $1,525.00).
+- Underfunded adds to Assigned (T8 M −$20.00 → $30.00). The button shows the total to add; the
+  preview says "45 categories will be fully funded." with the list by group and "Assign Money".
+  The help center's order (overspending; scheduled and dated-this-month by date, weekly per
+  occurrence; end-of-month monthly; later due dates; card payments; ties top to bottom), its stop
+  at $0.00 Ready to Assign with nothing selected, and full funding of a selection are built as
+  written there.
+- **Reduce Overfunding** takes back this month's Assigned above what the month asks, never more
+  than Available: T8 L ($150 vs $100) −$50.00; O1 ($150 assigned, $120 spent) −$30.00; O2/O8
+  refill likewise −$50.00/−$30.00; O3 (refill, $80 carried + $50) −$30.00; O4 (refill, $150
+  carried, nothing assigned) −$50.00, so Assigned goes negative; O9 (set aside, $100 carried +
+  $150) −$50.00; O6 (weekly $10, asked $50, $70 assigned) −$20.00; O10 ($100 by Dec 31, $100
+  assigned in October, this month's share $33.34) −$66.66. Payment categories give back Available
+  above what's owed (Amex −$6.00, Card Y −$7.00). In November O4 and O9 weren't overfunded
+  (carried money doesn't count in a future month). Preview: "This will update the assigned amount
+  for 11 categories." and "Update Assigned Amounts".
+- Options: with one category selected, Underfunded is left out when nothing is short (O4, O10)
+  and Reduce Overfunding when nothing is over (O5). For a view or the whole plan Underfunded is
+  always listed ($0.00 in the Overfunded view) and Reduce Overfunding only when something is over.
+- **Views**: Underfunded lists every category Underfunded would add to (overspent ones and card
+  payments included, and Uncategorized while negative); Overfunded those Reduce Overfunding would
+  take from. Empty: "Cheers! You don't currently have any underfunded categories." / "You don't
+  currently have any overfunded targets." (YNAB adds a mug illustration), with View All.
+- **Cost to Be Me**: the summary's "October's Targets" adds up each target's month amount (monthly
+  and weekly in full, refill too; dated targets this month's share, even when met: O10 $33.34;
+  balance without a date $0) over the whole plan, whatever the view; "Next month's targets could
+  increase your total to $2,703.33" below it. Shown only in the current month (not in September or
+  November).
+
+### Details of 8c not seen in YNAB
+
+- **Question:** (1) The preview's wording when Ready to Assign runs out part-way (partly funded
+  categories). (2) Reduce Overfunding on a "Have a balance of" target without a date. (3) A dated
+  refill or balance target carrying more than its total. (4) Underfunded's first-month rule
+  (targets due before the plan started go after those coming up). (5) Whether "Next month's
+  targets…" shows when next month asks the same or less. (6) Whether hidden categories' targets
+  count in October's Targets, and what the summary shows with categories selected. (7) Which
+  "uncategorized transactions" put a card in the attention list. (8) Auto-Assign labels when only
+  payment categories are covered (September showed "Paid Last Month", "Average Paid").
+- **Built so far (before this rule):** (1) "N categories will be fully funded." counting only the
+  full ones, partly funded ones listed with what they get; (2) nothing is over; (3) the surplus
+  over the total is over; (4) not built; (5) shown only when higher; (6) hidden categories left
+  out, Cost to Be Me only with nothing selected; (7) credit overspending only; (8) the usual
+  labels.
+

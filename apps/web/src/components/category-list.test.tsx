@@ -137,6 +137,7 @@ const totals = (assigned: string, activity: string, available: string) => ({
   payment: null,
   target: null,
   autoAssign: NO_AUTO_ASSIGN,
+  underfundedParts: [],
 });
 
 const month: BudgetMonthData = {
@@ -147,10 +148,26 @@ const month: BudgetMonthData = {
   readyToAssign: "0",
   assignedInFuture: "0",
   futureMonths: [],
+  targets: { month: "0", nextMonth: "0" },
   categories: [
-    { categoryId: "c1", ...totals("100", "-30", "70"), autoAssign: NO_AUTO_ASSIGN },
-    { categoryId: "c2", ...totals("0", "-5", "-5"), autoAssign: NO_AUTO_ASSIGN },
-    { categoryId: "c3", ...totals("0", "-2", "-2"), autoAssign: NO_AUTO_ASSIGN },
+    {
+      categoryId: "c1",
+      ...totals("100", "-30", "70"),
+      autoAssign: NO_AUTO_ASSIGN,
+      underfundedParts: [],
+    },
+    {
+      categoryId: "c2",
+      ...totals("0", "-5", "-5"),
+      autoAssign: NO_AUTO_ASSIGN,
+      underfundedParts: [],
+    },
+    {
+      categoryId: "c3",
+      ...totals("0", "-2", "-2"),
+      autoAssign: NO_AUTO_ASSIGN,
+      underfundedParts: [],
+    },
   ],
   groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],
   hidden: totals("0", "-2", "-2"),

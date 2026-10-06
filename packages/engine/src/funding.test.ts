@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import { FUNDING_STEPS, fundUnderfunded, paymentFunding, spendingFunding } from "./funding";
+import type { TargetNeed } from "./targets";
+
+const need = (underfunded: bigint, extra: Partial<TargetNeed> = {}): TargetNeed => ({
+  needed: 100_00n,
+  funded: 100_00n - underfunded,
+  underfunded,
+  monthAmount: 100_00n,
+  overfunded: 0n,
+  dueDate: null,
+  ...extra,
+});
+const monthly = { cadence: "monthly" as const, dueDay: null };
+
+// YNAB's test categories in docs/verify.md ("Underfunded and Reduce Overfunding"), 2026-10-07.
+describe("spendingFunding", () => {
+  it("meets the target or covers overspending, whichever is more", () => {
+    expect(spendingFunding("2026-10", -30_00n, monthly, need(100_00n)).underfunded).toBe(100_00n); // O11
+    expect(spendingFunding("2026-10", -30_00n, monthly, need(0n)).underfunded).toBe(30_00n); // O13
+    expect(spendingFunding("2026-10", -4_00n, null, null)).toEqual({
+      underfunded: 4_00n,
+      overfunded: 0n,
+      parts: [{ amount: 4_00n, step: FUNDING_STEPS.overspent, date: "" }],
+    }); // Groceries, no target
+    expect(spendingFunding("2026-10", 13_00n, null, null).underfunded).toBe(0n); // Phone, no target
+  });
+
+  it("places a target's shortfall by its due date", () => {
+    expect(spendingFunding("2026-10", 0n, monthly, need(60_00n)).parts).toEqual([
+      { amount: 60_00n, step: FUNDING_STEPS.endOfMonth, date: "" },
+    ]);
+    expect(
+      spendingFunding("2026-11", 0n, { cadence: "monthly", dueDay: 31 }, need(60_00n)).parts,
+    ).toEqual([{ amount: 60_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-11-30" }]);
+    const dated = need(150_00n, { dueDate: "2026-11-30" });
+    expect(
+      spendingFunding("2026-10", 0n, { cadence: "custom", dueDay: null }, dated).parts,
+    ).toEqual([{ amount: 150_00n, step: FUNDING_STEPS.dueLater, date: "2026-11-30" }]);
+    expect(
+      spendingFunding("2026-11", 0n, { cadence: "custom", dueDay: null }, dated).parts[0]?.step,
+    ).toBe(FUNDING_STEPS.dueThisMonth);
+  });
+
+  it("splits a weekly shortfall into its occurrences, earliest funded first", () => {
+    // $10 on Saturdays: five in October 2026; $15 assigned covers the 3rd and half the 10th.
+    const weekly = need(35_00n, { needed: 50_00n });
+    expect(
+      spendingFunding("2026-10", 15_00n, { cadence: "weekly", dueDay: 6 }, weekly).parts,
+    ).toEqual([
+      { amount: 5_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-10" },
+      { amount: 10_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-17" },
+      { amount: 10_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-24" },
+      { amount: 10_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-31" },
+    ]);
+  });
+});
+
+describe("paymentFunding", () => {
+  it("asks for what's owed beyond Available, less this month's credit overspending", () => {
+    expect(paymentFunding(3_00n, 103_00n, 0n).underfunded).toBe(100_00n); // Card B
+    expect(paymentFunding(-10_00n, 0n, 0n).underfunded).toBe(10_00n); // Card X
+    expect(paymentFunding(-10_00n, 2_00n, 0n).underfunded).toBe(12_00n); // Card Z3
+    expect(paymentFunding(31_00n, 65_00n, 33_00n).underfunded).toBe(1_00n); // Visa
+    expect(paymentFunding(2_00n, 5_00n, 3_00n).underfunded).toBe(0n); // LOC A
+  });
+
+  it("gives back Available above what's owed", () => {
+    expect(paymentFunding(6_00n, 0n, 0n).overfunded).toBe(6_00n); // Amex
+    expect(paymentFunding(2_00n, 7_00n, 0n).overfunded).toBe(0n); // Card W
+  });
+});
+
+describe("fundUnderfunded", () => {
+  const part = (amount: bigint, step: number, date = "") => ({
+    amount,
+    step: step as (typeof FUNDING_STEPS)[keyof typeof FUNDING_STEPS],
+    date,
+  });
+  const categories = [
+    { categoryId: "card", parts: [part(50_00n, FUNDING_STEPS.cardPayment)] },
+    { categoryId: "rent", parts: [part(100_00n, FUNDING_STEPS.endOfMonth)] },
+    { categoryId: "netflix", parts: [part(15_00n, FUNDING_STEPS.dueThisMonth, "2026-10-23")] },
+    { categoryId: "groceries", parts: [part(10_00n, FUNDING_STEPS.dueThisMonth, "2026-10-17")] },
+    { categoryId: "over", parts: [part(4_00n, FUNDING_STEPS.overspent)] },
+  ];
+
+  it("funds everything when there's enough", () => {
+    expect(fundUnderfunded(categories, 1000_00n)).toEqual(
+      new Map([
+        ["over", 4_00n],
+        ["groceries", 10_00n],
+        ["netflix", 15_00n],
+        ["rent", 100_00n],
+        ["card", 50_00n],
+      ]),
+    );
+  });
+
+  it("stops when Ready to Assign runs out, in YNAB's order", () => {
+    expect(fundUnderfunded(categories, 50_00n)).toEqual(
+      new Map([
+        ["over", 4_00n],
+        ["groceries", 10_00n],
+        ["netflix", 15_00n],
+        ["rent", 21_00n],
+      ]),
+    );
+    expect(fundUnderfunded(categories, 0n).size).toBe(0);
+  });
+
+  it("goes top to bottom within a step", () => {
+    const tied = [
+      { categoryId: "a", parts: [part(10_00n, FUNDING_STEPS.endOfMonth)] },
+      { categoryId: "b", parts: [part(10_00n, FUNDING_STEPS.endOfMonth)] },
+    ];
+    expect(fundUnderfunded(tied, 15_00n)).toEqual(
+      new Map([
+        ["a", 10_00n],
+        ["b", 5_00n],
+      ]),
+    );
+  });
+});

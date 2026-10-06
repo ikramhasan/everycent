@@ -1,4 +1,9 @@
-import { AUTO_ASSIGN_OPTIONS, type AutoAssignOption } from "@everycent/engine";
+import {
+  AUTO_ASSIGN_OPTIONS,
+  type AutoAssignOption,
+  type FundingStep,
+  fundUnderfunded,
+} from "@everycent/engine";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +24,10 @@ type MonthCategory = BudgetMonthData["categories"][number];
 /** YNAB's labels, singular when one category is selected. */
 function label(option: AutoAssignOption, one: boolean) {
   switch (option) {
+    case "underfunded":
+      return "Underfunded";
+    case "reduceOverfunding":
+      return "Reduce Overfunding";
     case "assignedLastMonth":
       return "Assigned Last Month";
     case "spentLastMonth":
@@ -42,14 +51,35 @@ export interface AutoAssignChange {
   delta: bigint;
 }
 
-/** What an option would change: each category whose Assigned moves, and by how much. */
+/**
+ * What an option would change: each category whose Assigned moves, and by how much. Underfunded
+ * with `readyToAssign` given (the whole plan or a view) funds in YNAB's order until it runs out;
+ * the server does the same (`fundUnderfunded`).
+ */
 export function autoAssignChanges(
   option: AutoAssignOption,
   categories: readonly MonthCategory[],
   names: ReadonlyMap<string, { name: string; group: string }>,
+  readyToAssign?: bigint,
 ): AutoAssignChange[] {
+  const given =
+    option === "underfunded" && readyToAssign !== undefined
+      ? fundUnderfunded(
+          categories.map((c) => ({
+            categoryId: c.categoryId,
+            parts: c.underfundedParts.map((p) => ({
+              amount: BigInt(p.amount),
+              step: p.step as FundingStep,
+              date: p.date,
+            })),
+          })),
+          readyToAssign,
+        )
+      : null;
   return categories.flatMap((c) => {
-    const delta = BigInt(c.autoAssign[option]) - BigInt(c.assigned);
+    const delta = given
+      ? (given.get(c.categoryId) ?? 0n)
+      : BigInt(c.autoAssign[option]) - BigInt(c.assigned);
     const named = names.get(c.categoryId);
     return delta !== 0n && named ? [{ categoryId: c.categoryId, ...named, delta }] : [];
   });
@@ -58,15 +88,39 @@ export function autoAssignChanges(
 /**
  * The amount on an option's button: what the categories would end up with (YNAB showed $30.00 on
  * Assigned Last Month for $30.00 assigned last month, and $0.00 on both resets). For Reset
- * Available that's the Available after it, otherwise the Assigned.
+ * Available that's the Available after it, otherwise the Assigned. Underfunded and Reduce
+ * Overfunding show what they'd add or take back (YNAB: $1,525.00 and $63.00).
  */
 function buttonAmount(option: AutoAssignOption, categories: readonly MonthCategory[]) {
   return categories.reduce((sum, c) => {
     const target = BigInt(c.autoAssign[option]);
-    if (option !== "resetAvailable") return sum + target;
-    return sum + BigInt(c.available) + target - BigInt(c.assigned);
+    const assigned = BigInt(c.assigned);
+    switch (option) {
+      case "underfunded":
+        return sum + target - assigned;
+      case "reduceOverfunding":
+        return sum + assigned - target;
+      case "resetAvailable":
+        return sum + BigInt(c.available) + target - assigned;
+      default:
+        return sum + target;
+    }
   }, 0n);
 }
+
+/**
+ * Whether YNAB lists an option: Reduce Overfunding only when something is over, and Underfunded
+ * on a single category only while it's short (a met target has no Underfunded button).
+ */
+function listsOption(option: AutoAssignOption, amount: bigint, one: boolean) {
+  if (option === "reduceOverfunding") return amount !== 0n;
+  if (option === "underfunded") return !one || amount !== 0n;
+  return true;
+}
+
+/** Cards Underfunded flags: their payment categories wait on this month's credit overspending. */
+const needsAttention = (c: MonthCategory) =>
+  Boolean(c.payment && c.payment.overspentCategories !== "0");
 
 /**
  * YNAB's Auto-Assign section of the inspector. With categories selected an option applies to them
@@ -77,6 +131,7 @@ export function AutoAssignPanel({
   categories,
   names,
   selection,
+  readyToAssign,
   format,
   onApply,
   onViewAll,
@@ -86,6 +141,8 @@ export function AutoAssignPanel({
   names: ReadonlyMap<string, { name: string; group: string }>;
   /** Whether categories are selected (no preview then). */
   selection: boolean;
+  /** The month's Ready to Assign: what Underfunded can give the whole plan or a view. */
+  readyToAssign: bigint;
   format: Format;
   onApply: (option: AutoAssignOption) => Promise<void>;
   /** A view that keeps nothing: YNAB says so instead of listing the options. */
@@ -94,9 +151,29 @@ export function AutoAssignPanel({
   const [preview, setPreview] = useState<AutoAssignOption | null>(null);
   // YNAB's labels go singular whenever one category is covered (selected or the only one in view).
   const one = categories.length === 1;
-  const changes = preview ? autoAssignChanges(preview, categories, names) : [];
+  const underfunded = preview === "underfunded";
+  const changes = preview ? autoAssignChanges(preview, categories, names, readyToAssign) : [];
+  // Underfunded lists the cards that need attention on their own, changed or not (YNAB showed
+  // LOC A at $0.00), and counts the categories it funds in full.
+  const attention = underfunded
+    ? categories.filter(needsAttention).flatMap((c) => {
+        const named = names.get(c.categoryId);
+        if (!named) return [];
+        const delta = changes.find((ch) => ch.categoryId === c.categoryId)?.delta ?? 0n;
+        return [{ categoryId: c.categoryId, ...named, delta }];
+      })
+    : [];
+  const listed = changes.filter((c) => !attention.some((a) => a.categoryId === c.categoryId));
+  const full = new Map(categories.map((c) => [c.categoryId, c]));
+  const fullyFunded = listed.filter((c) => {
+    const category = full.get(c.categoryId);
+    return (
+      category && BigInt(category.assigned) + c.delta === BigInt(category.autoAssign.underfunded)
+    );
+  }).length;
   const byGroup = new Map<string, AutoAssignChange[]>();
-  for (const c of changes) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
+  for (const c of listed) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
+  const amountText = (delta: bigint) => `${delta > 0n ? "+" : ""}${format(delta.toString())}`;
 
   return (
     <section aria-label="Auto-Assign" className="grid gap-2 rounded-lg border p-4">
@@ -113,7 +190,9 @@ export function AutoAssignPanel({
       ) : (
         <div className="grid gap-1">
           {AUTO_ASSIGN_OPTIONS.map((option) => {
-            const amount = format(buttonAmount(option, categories).toString());
+            const value = buttonAmount(option, categories);
+            if (!listsOption(option, value, one)) return null;
+            const amount = format(value.toString());
             return (
               <Button
                 key={option}
@@ -140,12 +219,30 @@ export function AutoAssignPanel({
             <AlertDialogDescription>
               {changes.length === 0
                 ? "This won't change any assigned amounts."
-                : `This will update the assigned amount for ${changes.length} ${
-                    changes.length === 1 ? "category" : "categories"
-                  }.`}
+                : underfunded
+                  ? `${fullyFunded} ${fullyFunded === 1 ? "category" : "categories"} will be fully funded.`
+                  : `This will update the assigned amount for ${changes.length} ${
+                      changes.length === 1 ? "category" : "categories"
+                    }.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {changes.length > 0 && (
+          {attention.length > 0 && (
+            <div className="grid gap-2 rounded-md bg-yellow-100 p-3 text-sm text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100">
+              <p>
+                These credit cards may need more attention, because of credit overspending, or
+                uncategorized transactions.
+              </p>
+              <div className="grid gap-1">
+                {attention.map((c) => (
+                  <div key={c.categoryId} className="flex justify-between gap-2 pl-2">
+                    <span className="truncate">{c.name}</span>
+                    <span className="tabular-nums">{amountText(c.delta)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {listed.length > 0 && (
             <div className="grid max-h-72 gap-3 overflow-y-auto text-sm">
               {[...byGroup].map(([group, list]) => (
                 <div key={group} className="grid gap-1">
@@ -153,10 +250,7 @@ export function AutoAssignPanel({
                   {list.map((c) => (
                     <div key={c.categoryId} className="flex justify-between gap-2 pl-2">
                       <span className="truncate">{c.name}</span>
-                      <span className="tabular-nums">
-                        {c.delta > 0n ? "+" : ""}
-                        {format(c.delta.toString())}
-                      </span>
+                      <span className="tabular-nums">{amountText(c.delta)}</span>
                     </div>
                   ))}
                 </div>
@@ -172,7 +266,7 @@ export function AutoAssignPanel({
                 setPreview(null);
               }}
             >
-              Update Assigned Amounts
+              {underfunded ? "Assign Money" : "Update Assigned Amounts"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

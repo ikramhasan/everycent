@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { addMonths, type BudgetMonth, categoryMonth, type MonthFigures, monthOf } from "./months";
+import {
+  addMonths,
+  type BudgetMonth,
+  type CategoryMonth,
+  categoryMonth,
+  type MonthFigures,
+  monthOf,
+} from "./months";
 
 /**
  * What a target asks for (YNAB's "Next month I want to" / "I want to"):
@@ -53,6 +60,17 @@ export interface TargetNeed {
   funded: bigint;
   /** What's still to assign this month to stay on track; never below zero. */
   underfunded: bigint;
+  /**
+   * What the target asks of this month before anything is assigned in it: the month's amount
+   * (weekly, monthly) or this month's share of what's missing (yearly, custom); zero for a balance
+   * with no date. YNAB adds these up as the month's targets ("October's Targets").
+   */
+  monthAmount: bigint;
+  /**
+   * What Reduce Overfunding takes back: this month's Assigned above what the month asks, never more
+   * than the category's Available; zero for a balance with no date.
+   */
+  overfunded: bigint;
   /** The due date of the period `month` is in (yearly, custom), YYYY-MM-DD; null otherwise. */
   dueDate: string | null;
 }
@@ -143,25 +161,43 @@ export function targetNeed(
       target.cadence === "weekly"
         ? target.amount * BigInt(weekdaysIn(month, target.dueDay ?? 0))
         : target.amount;
-    const funded = holds ? carried + figures.assigned : figures.assigned;
-    return { needed, funded, underfunded: under(needed, funded), dueDate: null };
+    // What this month's Assigned has to reach: refill counts what was carried in (below zero
+    // when more was carried in than the target).
+    const due = holds ? needed - carried : needed;
+    return {
+      needed,
+      funded: holds ? carried + figures.assigned : figures.assigned,
+      underfunded: under(due, figures.assigned),
+      monthAmount: needed,
+      overfunded: over(figures, due),
+      dueDate: null,
+    };
   }
 
   const needed = target.amount;
   if (!target.dueDate) {
     // "Have a balance of…" eventually: tracked, never asked for this month.
-    return { needed, funded: carried + figures.assigned, underfunded: 0n, dueDate: null };
+    return {
+      needed,
+      funded: carried + figures.assigned,
+      underfunded: 0n,
+      monthAmount: 0n,
+      overfunded: 0n,
+      dueDate: null,
+    };
   }
   const period = periodOf(target, target.dueDate, month);
   if (!period) return null;
   const monthsLeft = BigInt(monthsThrough(month, period.dueMonth));
 
   if (holds) {
-    const share = ceilDiv(needed - carried, monthsLeft);
+    const share = shareOf(needed - carried, monthsLeft);
     return {
       needed,
       funded: carried + figures.assigned,
       underfunded: under(share, figures.assigned),
+      monthAmount: share > 0n ? share : 0n,
+      overfunded: over(figures, share),
       dueDate: period.due,
     };
   }
@@ -172,16 +208,36 @@ export function targetNeed(
   for (const h of history) {
     if (h.month >= from && h.month < month) before += h.assigned;
   }
-  const share = ceilDiv(needed - before, monthsLeft);
+  const share = shareOf(needed - before, monthsLeft);
   return {
     needed,
     funded: before + figures.assigned,
     underfunded: under(share, figures.assigned),
+    monthAmount: share > 0n ? share : 0n,
+    overfunded: over(figures, share),
     dueDate: period.due,
   };
 }
 
 const under = (needed: bigint, funded: bigint) => (funded < needed ? needed - funded : 0n);
+
+/**
+ * This month's share of what's still missing from a dated target, rounding up. When nothing is
+ * missing (more is already in than the target), it's the surplus, below zero, so Reduce
+ * Overfunding can take it back.
+ */
+const shareOf = (missing: bigint, monthsLeft: bigint) =>
+  missing > 0n ? ceilDiv(missing, monthsLeft) : missing;
+
+/**
+ * What's over: this month's Assigned above what it has to reach (`due`), but never more than is
+ * Available (YNAB: $150.00 assigned against $100.00 with $120.00 spent gave back $30.00).
+ */
+function over(figures: CategoryMonth, due: bigint) {
+  const extra = figures.assigned - due;
+  if (extra <= 0n || figures.available <= 0n) return 0n;
+  return extra < figures.available ? extra : figures.available;
+}
 
 /**
  * The share of a target that's funded, in whole percent from 0 to 100, rounded down so it never

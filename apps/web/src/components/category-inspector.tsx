@@ -47,12 +47,18 @@ export function MonthSummary({
   totals,
   format,
   selectedNames,
+  targets,
 }: {
   month: string;
   totals: Breakdown;
   format: Format;
   /** Names of the selected categories, when two or more are. */
   selectedNames?: string[];
+  /**
+   * What the plan's targets ask of this month and the next (YNAB's "Cost to Be Me"), shown in the
+   * current month only, as YNAB does.
+   */
+  targets?: { month: bigint; nextMonth: bigint };
 }) {
   const previous = monthName(addMonths(month, -1));
   const name = monthName(month);
@@ -91,6 +97,21 @@ export function MonthSummary({
           hint={`The total amount of money you have available in ${name}.`}
         />
       </dl>
+      {targets && (
+        <>
+          <h3 className="font-semibold text-sm">Cost to Be Me</h3>
+          <dl className="grid gap-2">
+            <Line label={`${name}’s Targets`} value={targets.month} format={format} />
+          </dl>
+          {/* YNAB showed this line whenever next month's total was higher; equal or lower wasn't seen. */}
+          {targets.nextMonth > targets.month && (
+            <p className="rounded-md bg-muted p-2 text-center text-muted-foreground text-xs">
+              Next month's targets could increase your total to{" "}
+              {format(targets.nextMonth.toString())}
+            </p>
+          )}
+        </>
+      )}
     </Panel>
   );
 }
