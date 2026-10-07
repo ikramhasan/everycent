@@ -101,9 +101,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Credit lifecycle and loans (phase 7e–7g, deferred)
 
-Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g wait until after phase 8; the roadmap
-artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps their scope, and
-`docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and what's still open.
+Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g waited for phase 8, which is done now; the
+roadmap artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps their scope,
+and `docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and what's still open.
 
 - **Positive card balances (7e) behave wrongly until built.** YNAB counts the part of a card's
   balance above zero as cash in Ready to Assign, and spending while the card is positive is cash.
