@@ -18,10 +18,26 @@ export const TARGET_BEHAVIORS = ["set_aside", "refill", "balance"] as const;
 export type TargetBehavior = (typeof TARGET_BEHAVIORS)[number];
 export const zTargetBehavior = z.enum(TARGET_BEHAVIORS);
 
-/** YNAB's four target tabs. */
-export const TARGET_CADENCES = ["weekly", "monthly", "yearly", "custom"] as const;
+/**
+ * YNAB's four target tabs, then the two targets a credit card's payment category takes instead
+ * (support.ynab.com "Paired Targets"): "Pay Specific Amount Monthly" (`payment_monthly`) and "Pay
+ * Off Balance by Date" (`payoff_by_date`).
+ */
+export const TARGET_CADENCES = [
+  "weekly",
+  "monthly",
+  "yearly",
+  "custom",
+  "payment_monthly",
+  "payoff_by_date",
+] as const;
 export type TargetCadence = (typeof TARGET_CADENCES)[number];
 export const zTargetCadence = z.enum(TARGET_CADENCES);
+
+/** The targets only payment categories take. */
+export const PAYMENT_TARGET_CADENCES = ["payment_monthly", "payoff_by_date"] as const;
+export const isPaymentTarget = (target: Pick<CategoryTarget, "cadence">) =>
+  (PAYMENT_TARGET_CADENCES as readonly string[]).includes(target.cadence);
 
 /** How a custom target repeats: every N months (1–11) or years (1–2). */
 export const TARGET_REPEAT_UNITS = ["month", "year"] as const;
@@ -29,8 +45,12 @@ export type TargetRepeatUnit = (typeof TARGET_REPEAT_UNITS)[number];
 
 export interface CategoryTarget {
   cadence: TargetCadence;
+  /** Payment targets: set_aside for Pay Specific Amount Monthly, balance for Pay Off by Date. */
   behavior: TargetBehavior;
-  /** Minor units: per week (weekly), per month (monthly), or per period (yearly, custom). */
+  /**
+   * Minor units: per week (weekly), per month (monthly, payment_monthly), or per period (yearly,
+   * custom); zero for payoff_by_date, which pays off whatever the card owes.
+   */
   amount: bigint;
   /**
    * Monthly: day of the month it's due (1–31), null for the last day. Weekly: the weekday
@@ -39,7 +59,8 @@ export interface CategoryTarget {
   dueDay: number | null;
   /**
    * Yearly and custom: the (first) due date, YYYY-MM-DD; a balance target's is the first of its
-   * month, or null for "eventually". Null for weekly and monthly.
+   * month, or null for "eventually". payoff_by_date: the first of the month to pay off by. Null for
+   * weekly and monthly.
    */
   dueDate: string | null;
   /** Custom: repeats every `repeatEvery` `repeatUnit`s; null for a one-time target. */
@@ -144,19 +165,28 @@ function clampDay(date: string) {
  *
  * In a month after `currentMonth` (the user's month) carried money doesn't count for refill and
  * balance: leftover money only counts once the month begins.
+ *
+ * Payment categories (`owed`: what the card owes, zero when it isn't in debt): Pay Specific Amount
+ * Monthly asks like a monthly "Set aside another…"; Pay Off Balance by Date see `payoffNeed`.
  */
 export function targetNeed(
   history: readonly MonthFigures[],
   target: CategoryTarget,
   month: BudgetMonth,
   currentMonth: BudgetMonth,
+  owed = 0n,
 ): TargetNeed | null {
   if (month < target.startMonth) return null;
   const figures = categoryMonth(history, month);
+  if (target.cadence === "payoff_by_date") return payoffNeed(figures, target, month, owed);
   const carried = month <= currentMonth ? figures.carried : 0n;
   const holds = target.behavior !== "set_aside";
 
-  if (target.cadence === "monthly" || target.cadence === "weekly") {
+  if (
+    target.cadence === "monthly" ||
+    target.cadence === "weekly" ||
+    target.cadence === "payment_monthly"
+  ) {
     const needed =
       target.cadence === "weekly"
         ? target.amount * BigInt(weekdaysIn(month, target.dueDay ?? 0))
@@ -216,6 +246,46 @@ export function targetNeed(
     monthAmount: share > 0n ? share : 0n,
     overfunded: over(figures, share),
     dueDate: period.due,
+  };
+}
+
+/**
+ * Pay Off Balance by Date (YNAB, checked through its API and web app on 2026-10-08, docs/verify.md
+ * "Credit card payment targets"): pay off what the card owes by the end of the target's month.
+ *
+ * - What's still to pay off is what's owed beyond Available (Card E1: $125.00 owed, $50.00
+ *   available → $75.00 to go). This month's Funded Spending is left out of both sides, so funded
+ *   card spending changes nothing (E2: $110.00 owed, $10.00 funded spending → "Pay off $100.00",
+ *   0%), while credit overspending raises what's owed at once (E1: $120.00 + $5.00 → $125.00).
+ * - This month's share is what was still to go before this month's Assigned, spread over the months
+ *   left up to the target's month and rounded up, as for dated targets ($100.00 by December from
+ *   October: $33.34; $125.00 by March: $20.84). Money carried in counts in a future month too (E1
+ *   in November: ($125.00 − $50.00) ÷ 5 = $15.00).
+ * - After the target's month it asks for nothing (YNAB keeps no target with a past date).
+ */
+function payoffNeed(
+  figures: CategoryMonth,
+  target: CategoryTarget,
+  month: BudgetMonth,
+  owed: bigint,
+): TargetNeed | null {
+  if (!target.dueDate) return null;
+  const dueMonth = monthOf(target.dueDate);
+  if (month > dueMonth) return null;
+  const left = owed - figures.fundedSpending;
+  const needed = left > 0n ? left : 0n;
+  const funded = figures.available - figures.fundedSpending;
+  const share = shareOf(
+    needed - (funded - figures.assigned),
+    BigInt(monthsThrough(month, dueMonth)),
+  );
+  return {
+    needed,
+    funded,
+    underfunded: under(share, figures.assigned),
+    monthAmount: share > 0n ? share : 0n,
+    overfunded: over(figures, share),
+    dueDate: target.dueDate,
   };
 }
 

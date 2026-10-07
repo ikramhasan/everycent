@@ -75,9 +75,27 @@ export const shortDate = (iso: string) =>
 /** YNAB's "Dec 2026" for a balance target's month. */
 const shortMonth = (iso: string) => `${monthLabel(iso).slice(0, 3)} ${iso.slice(0, 4)}`;
 
-/** Whether a target spreads a total over months up to a due date (yearly, custom, dated balance). */
+/**
+ * Whether a target spreads a total over months up to a due date (yearly, custom, dated balance,
+ * a card's pay off by date).
+ */
 export const isDated = (target: Pick<CategoryTarget, "cadence">) =>
-  target.cadence === "yearly" || target.cadence === "custom";
+  target.cadence === "yearly" || target.cadence === "custom" || target.cadence === "payoff_by_date";
+
+/** Whether a target is one of a credit card payment category's two. */
+export const isPaymentTarget = (target: Pick<CategoryTarget, "cadence">) =>
+  target.cadence === "payment_monthly" || target.cadence === "payoff_by_date";
+
+/** YNAB's names for the payment targets, in its form's order (Pay Off Balance by Date first). */
+export const PAYMENT_TARGET_OPTIONS = [
+  { value: "payoff_by_date", label: "Pay Off Balance by Date" },
+  { value: "payment_monthly", label: "Pay Specific Amount Monthly" },
+] as const;
+
+/** A payment target's kind, which YNAB's inspector shows above its heading. */
+export function paymentTargetKind(target: CategoryTarget) {
+  return PAYMENT_TARGET_OPTIONS.find((o) => o.value === target.cadence)?.label ?? null;
+}
 
 /** "Each Month", "Every 2 Months", "Each Year", "Every 2 Years", or "" for a one-time target. */
 function repeatPhrase(target: Pick<CategoryTarget, "repeatEvery" | "repeatUnit">) {
@@ -89,9 +107,13 @@ function repeatPhrase(target: Pick<CategoryTarget, "repeatEvery" | "repeatUnit">
 /**
  * YNAB's inspector heading (docs/verify.md "Monthly targets", "Weekly, yearly and custom targets"):
  * "Set Aside Another $100.00 Each Month", "Refill Up to $10.00 Each Week", "Set Aside Another
- * $300.00 Every 2 Months", "Have a Balance of $300.00".
+ * $300.00 Every 2 Months", "Have a Balance of $300.00". Payment targets (docs/verify.md "Credit card
+ * payment targets"): "$30.00" (Pay Specific Amount Monthly) and "Pay off $125.00" (Pay Off Balance
+ * by Date, `amount` being what's still to pay off: what the target needs).
  */
 export function targetHeading(target: CategoryTarget, amount: string) {
+  if (target.cadence === "payment_monthly") return amount;
+  if (target.cadence === "payoff_by_date") return `Pay off ${amount}`;
   if (target.behavior === "balance") return `Have a Balance of ${amount}`;
   const suffix =
     target.cadence === "weekly"
@@ -110,9 +132,14 @@ export function targetHeading(target: CategoryTarget, amount: string) {
 
 /**
  * YNAB's line under the heading: "By the End of the Month", "By the 15th of the Month", "By
- * Saturday", "By Dec 30 2026" (the current period's due date), "By Dec 2026", "Eventually".
+ * Saturday", "By Dec 30 2026" (the current period's due date), "By Dec 2026", "Eventually"; for
+ * payment targets "Each Month" and "By Mar 2027".
  */
 export function targetDueLine(target: CategoryTarget, need: Pick<TargetNeed, "dueDate"> | null) {
+  if (target.cadence === "payment_monthly") return "Each Month";
+  if (target.cadence === "payoff_by_date") {
+    return target.dueDate ? `By ${shortMonth(target.dueDate)}` : "";
+  }
   if (target.cadence === "weekly") return `By ${WEEKDAYS[target.dueDay ?? 0]}`;
   if (target.cadence === "monthly") {
     return target.dueDay === null
@@ -166,8 +193,26 @@ export function targetRowNote(
 
 /**
  * The inspector's lines (YNAB): what's needed, what counts, and To Go (what's left of the total).
+ * Pay Off Balance by Date shows the card's whole debt and Available (YNAB's "Needed for Payoff",
+ * "Available for Payment"), which include this month's `fundedSpending`; the target leaves it out
+ * of both, so To Go is the same.
  */
-export function targetLines(target: CategoryTarget, need: TargetNeed, format: Format) {
+export function targetLines(
+  target: CategoryTarget,
+  need: TargetNeed,
+  format: Format,
+  fundedSpending = "0",
+) {
+  const toGo = BigInt(need.needed) - BigInt(need.funded);
+  const toGoLine = { label: "To Go", value: format((toGo > 0n ? toGo : 0n).toString()) };
+  if (target.cadence === "payoff_by_date") {
+    const extra = BigInt(fundedSpending);
+    return [
+      { label: "Needed for Payoff", value: format((BigInt(need.needed) + extra).toString()) },
+      { label: "Available for Payment", value: format((BigInt(need.funded) + extra).toString()) },
+      toGoLine,
+    ];
+  }
   const due = need.dueDate ? shortDate(need.dueDate) : null;
   const setAside = target.behavior === "set_aside";
   const [neededLabel, fundedLabel] =
@@ -183,11 +228,10 @@ export function targetLines(target: CategoryTarget, need: TargetNeed, format: Fo
         : setAside
           ? [`Total to Assign by ${due}`, "Assigned So Far"]
           : [`Needed by ${due}`, "Funded"];
-  const toGo = BigInt(need.needed) - BigInt(need.funded);
   return [
     { label: neededLabel, value: format(need.needed) },
     { label: fundedLabel, value: format(need.funded) },
-    { label: "To Go", value: format((toGo > 0n ? toGo : 0n).toString()) },
+    toGoLine,
   ];
 }
 

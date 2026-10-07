@@ -456,9 +456,10 @@ async function monthState(
     if (!accountId) return null;
     const balance = balances.get(accountId)?.working ?? 0n;
     const owed = balance < 0n ? -balance : 0n;
-    // A negative Available is overpayment (cash overspending, shown red); what's underfunded is
-    // the debt the money set aside doesn't reach.
-    const setAside = figures.available > 0n ? figures.available : 0n;
+    // What's underfunded is the debt Available doesn't reach. A negative Available (overpayment,
+    // red cash overspending) adds to it while the card still owes (YNAB, 2026-10-08: Card E2 owing
+    // $90.00 at −$10.00 showed Total Underfunded $100.00); a paid-off card's is open (verify.md).
+    const setAside = owed > 0n || figures.available > 0n ? figures.available : 0n;
     const underfunded = owed > setAside ? owed - setAside : 0n;
     const overspentNow = creditOverspent.get(accountId)?.get(month) ?? 0n;
     const fromOverspending = overspentNow < underfunded ? overspentNow : underfunded;
@@ -502,16 +503,19 @@ async function monthState(
     }
     const isHidden = cat.hidden || cat.groupHidden;
     const target = targets.get(cat.id) ?? null;
-    const need = target && targetNeed(entries, target, month, monthOf(today));
-    const snoozed = snoozedNow.has(cat.id);
     const payment = paymentOf(cat.id, figures);
+    // A payment target pays toward what the card owes; next month starts from the same balance.
+    const owed = payment?.owed ?? 0n;
+    const need = target && targetNeed(entries, target, month, monthOf(today), owed);
+    // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
+    const snoozed = !payment && snoozedNow.has(cat.id);
     const funding = payment
-      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending)
+      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need)
       : spendingFunding(month, figures.available, target, need, snoozed);
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
-        targetNeed(entries, target, nextMonth, monthOf(today))?.monthAmount ?? 0n;
+        targetNeed(entries, target, nextMonth, monthOf(today), owed)?.monthAmount ?? 0n;
     }
     listed.push({
       categoryId: cat.id,

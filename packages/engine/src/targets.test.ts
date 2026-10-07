@@ -234,6 +234,84 @@ describe("what's over and the month's targets", () => {
   });
 });
 
+// The YNAB test cards in docs/verify.md ("Credit card payment targets"), checked 2026-10-08.
+describe("payment targets", () => {
+  const card = (month: string, assigned: bigint, fundedSpending = 0n, payments = 0n) => ({
+    month,
+    assigned,
+    activity: fundedSpending + payments,
+    fundedSpending,
+    payments,
+  });
+  const payoff = (dueDate: string) =>
+    target("balance", "2026-10", { cadence: "payoff_by_date", amount: 0n, dueDate });
+  const pay = (h: MonthFigures[], t: CategoryTarget, owed: bigint, month = "2026-10") =>
+    targetNeed(h, t, month, "2026-10", owed);
+
+  it("pay off by date spreads what's owed beyond Available over the months left", () => {
+    // E1: $120.00 by March 2027 from October asks a sixth.
+    expect(pay([], payoff("2027-03-01"), 120_00n)).toMatchObject({
+      needed: 120_00n,
+      funded: 0n,
+      underfunded: 20_00n,
+      monthAmount: 20_00n,
+      dueDate: "2027-03-01",
+    });
+    // E2: $100.00 by December rounds up.
+    expect(pay([], payoff("2026-12-01"), 100_00n)?.underfunded).toBe(33_34n);
+    // E1 with $5.00 of credit overspending: what's owed rises at once.
+    expect(pay([], payoff("2027-03-01"), 125_00n)?.underfunded).toBe(20_84n);
+  });
+
+  it("pay off by date: funded card spending changes nothing", () => {
+    // E2: $10.00 of funded spending, $110.00 owed: "Pay off $100.00", 0%.
+    const h = [card("2026-10", 0n, 10_00n)];
+    expect(pay(h, payoff("2026-12-01"), 110_00n)).toMatchObject({
+      needed: 100_00n,
+      funded: 0n,
+      underfunded: 33_34n,
+    });
+    // November: the $10.00 carried in counts: ($110.00 − $10.00) ÷ 2.
+    expect(pay(h, payoff("2026-12-01"), 110_00n, "2026-11")?.underfunded).toBe(50_00n);
+  });
+
+  it("pay off by date: a payment without money set aside leaves what's to go alone", () => {
+    // E2 after a $20.00 payment: $90.00 owed, −$10.00 Available; still $100.00 to go.
+    const h = [card("2026-10", 0n, 10_00n, -20_00n)];
+    const need = pay(h, payoff("2026-12-01"), 90_00n);
+    expect(need && need.needed - need.funded).toBe(100_00n);
+    expect(need?.underfunded).toBe(33_34n);
+    // The overpayment is cash overspending and doesn't roll over: November asks $90.00 ÷ 2.
+    expect(pay(h, payoff("2026-12-01"), 90_00n, "2026-11")?.underfunded).toBe(45_00n);
+  });
+
+  it("pay off by date: assigning more than the share is on track, and the rest is over", () => {
+    // E1: $50.00 assigned against $125.00: 40%, nothing more this month, $29.16 over.
+    const h = [card("2026-10", 50_00n)];
+    const need = pay(h, payoff("2027-03-01"), 125_00n);
+    expect(need).toMatchObject({ needed: 125_00n, funded: 50_00n, underfunded: 0n });
+    expect(need?.overfunded).toBe(29_16n);
+    expect(need && targetPercent(need)).toBe(40);
+    // November: ($125.00 − $50.00) ÷ 5.
+    expect(pay(h, payoff("2027-03-01"), 125_00n, "2026-11")?.underfunded).toBe(15_00n);
+  });
+
+  it("pay off by date asks the rest in its month and nothing after it", () => {
+    expect(pay([], payoff("2026-10-01"), 120_00n)?.underfunded).toBe(120_00n);
+    expect(pay([], payoff("2026-09-01"), 120_00n)).toBeNull();
+  });
+
+  it("pay specific amount monthly asks the amount each month, whatever was paid or spent", () => {
+    const monthly = target("set_aside", "2026-10", { cadence: "payment_monthly", amount: 30_00n });
+    // E3: $30.00 a month, $5.00 credit overspending on the card.
+    expect(pay([], monthly, 105_00n)).toMatchObject({ needed: 30_00n, underfunded: 30_00n });
+    // $50.00 assigned: met, $20.00 over; November asks $30.00 again with $50.00 carried in.
+    const h = [card("2026-10", 50_00n)];
+    expect(pay(h, monthly, 105_00n)).toMatchObject({ underfunded: 0n, overfunded: 20_00n });
+    expect(pay(h, monthly, 105_00n, "2026-11")?.underfunded).toBe(30_00n);
+  });
+});
+
 describe("targetPercent", () => {
   it("rounds down and stays within 0–100", () => {
     expect(targetPercent({ needed: 100_00n, funded: 40_00n })).toBe(40);

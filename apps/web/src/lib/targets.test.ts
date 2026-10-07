@@ -147,3 +147,46 @@ describe("target wording", () => {
     expect(targetMessage(eventually, need("30000", "0", "0"), format)).toBeNull();
   });
 });
+
+// docs/verify.md "Credit card payment targets" (YNAB, 2026-10-08).
+describe("payment target wording", () => {
+  const payoff = target({
+    cadence: "payoff_by_date",
+    behavior: "balance",
+    amount: "0",
+    dueDate: "2027-03-01",
+  });
+  const monthly = target({ cadence: "payment_monthly", amount: "3000" });
+
+  it("heads Pay off by date with what's left to pay off, and its month", () => {
+    expect(targetHeading(payoff, "$100.00")).toBe("Pay off $100.00");
+    expect(targetDueLine(payoff, null)).toBe("By Mar 2027");
+    // Card E2: $110.00 owed, $10.00 of it funded spending: the lines add it back.
+    expect(targetLines(payoff, need("10000", "0", "3334", "2026-12-01"), format, "1000")).toEqual([
+      { label: "Needed for Payoff", value: "$110.00" },
+      { label: "Available for Payment", value: "$10.00" },
+      { label: "To Go", value: "$100.00" },
+    ]);
+    expect(targetMessage(payoff, need("12500", "0", "2084"), format)).toEqual({
+      prompt: "$20.84",
+      suffix: " this month to stay on track",
+    });
+    expect(targetMessage(payoff, need("12500", "5000", "0"), format)).toEqual({
+      text: "You're on track to meet your target!",
+    });
+  });
+
+  it("heads Pay Specific Amount Monthly with its amount, each month", () => {
+    expect(targetHeading(monthly, "$30.00")).toBe("$30.00");
+    expect(targetDueLine(monthly, null)).toBe("Each Month");
+    expect(targetLines(monthly, need("3000", "0", "3000"), format).map((l) => l.label)).toEqual([
+      "Amount to Assign This Month",
+      "Assigned So Far",
+      "To Go",
+    ]);
+    expect(targetMessage(monthly, need("3000", "0", "3000"), format)).toEqual({
+      prompt: "$30.00",
+      suffix: " to meet your target",
+    });
+  });
+});

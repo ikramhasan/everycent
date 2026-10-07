@@ -110,6 +110,8 @@ export { divideRounded, type RoundingMode } from "./rounding";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,
+  isPaymentTarget,
+  PAYMENT_TARGET_CADENCES,
   TARGET_BEHAVIORS,
   TARGET_CADENCES,
   TARGET_REPEAT_UNITS,

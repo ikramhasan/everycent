@@ -124,24 +124,40 @@ function targetParts(
 
 /**
  * What Underfunded and Reduce Overfunding do to a credit card's payment category (YNAB, checked
- * in its web app on 2026-10-07):
+ * in its web app on 2026-10-07), without a target:
  * - Underfunded assigns what the card owes beyond Available, less this month's credit overspending
  *   on it (covering those categories moves that money in): Card B owed $103.00 with $3.00 → $100.00;
  *   Card X owed nothing with −$10.00 → $10.00; Visa owed $65.00, had $31.00 and $33.00 of credit
  *   overspending → $1.00.
  * - Reduce Overfunding takes back Available above what's owed (Amex, paid off, $6.00 → $6.00).
+ *
+ * With a target that applies this month, both follow the target instead (support.ynab.com: "the
+ * Underfunded alert will function on that target instead of your working balance"; checked
+ * 2026-10-08): Card E3 ($30.00 a month, $5.00 credit overspending) asked $30.00; Card E1 (pay off
+ * by date) asked its share, $20.84; Card E2, red at −$10.00, still asked its $33.34 share (the
+ * overspending, if more, is covered too). Assigning $50.00 gave back $20.00 (E3) and $29.16 (E1).
  */
 export function paymentFunding(
   available: bigint,
   owed: bigint,
   creditOverspending: bigint,
+  need: TargetNeed | null = null,
 ): CategoryFunding {
-  const short = owed - available - creditOverspending;
-  const extra = available - owed;
-  const underfunded = short > 0n ? short : 0n;
+  let underfunded: bigint;
+  let overfunded: bigint;
+  if (need) {
+    const overspent = available < 0n ? -available : 0n;
+    underfunded = need.underfunded > overspent ? need.underfunded : overspent;
+    overfunded = need.overfunded;
+  } else {
+    const short = owed - available - creditOverspending;
+    const extra = available - owed;
+    underfunded = short > 0n ? short : 0n;
+    overfunded = extra > 0n ? extra : 0n;
+  }
   return {
     underfunded,
-    overfunded: extra > 0n ? extra : 0n,
+    overfunded,
     parts: underfunded ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date: "" }] : [],
   };
 }

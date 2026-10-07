@@ -69,6 +69,21 @@ describe("paymentFunding", () => {
     expect(paymentFunding(6_00n, 0n, 0n).overfunded).toBe(6_00n); // Amex
     expect(paymentFunding(2_00n, 7_00n, 0n).overfunded).toBe(0n); // Card W
   });
+
+  it("follows the card's target when it has one", () => {
+    // E3: $30.00 a month asks $30.00, credit overspending or not.
+    expect(paymentFunding(0n, 105_00n, 5_00n, need(30_00n))).toMatchObject({
+      underfunded: 30_00n,
+      parts: [{ amount: 30_00n, step: FUNDING_STEPS.cardPayment, date: "" }],
+    });
+    // E2: red at −$10.00 still asks its $33.34 share; overspending beyond the share is covered.
+    expect(paymentFunding(-10_00n, 90_00n, 0n, need(33_34n)).underfunded).toBe(33_34n);
+    expect(paymentFunding(-40_00n, 90_00n, 0n, need(33_34n)).underfunded).toBe(40_00n);
+    // E1: $50.00 against a $20.84 share gives back $29.16, not Available above what's owed.
+    expect(paymentFunding(50_00n, 125_00n, 0n, need(0n, { overfunded: 29_16n })).overfunded).toBe(
+      29_16n,
+    );
+  });
 });
 
 describe("fundUnderfunded", () => {

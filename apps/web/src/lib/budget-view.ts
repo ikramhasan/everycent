@@ -83,7 +83,8 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
 
 /**
  * Whether YNAB draws a category's Available yellow: overspent with credit only (any uncovered cash
- * part keeps it red), or a payment category that doesn't cover what its card owes. YNAB shows the
+ * part keeps it red), or a payment category that doesn't cover what its card owes (or, with a
+ * target, what the target asks). YNAB shows the
  * payment's Underfunded alert only from the current month on; earlier months stay green
  * (support.ynab.com, docs/verify.md phase 7c).
  */
@@ -95,7 +96,14 @@ export function isCaution(
   month: string,
   current: string,
 ) {
-  if (totals.payment) return totals.payment.underfunded !== "0" && month >= current;
+  if (totals.payment) {
+    // Paying more than was set aside is red (docs/verify.md, phase 7d).
+    if (totals.available.startsWith("-")) return false;
+    // With a target, its own status decides, as for any target (YNAB, 2026-10-08: Card E1 on
+    // track was green with a part-filled pie, underfunded yellow).
+    if (totals.target) return totals.target.underfunded !== "0";
+    return totals.payment.underfunded !== "0" && month >= current;
+  }
   if (totals.available.startsWith("-")) return totals.cashOverspent === "0";
   // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a), unless
   // it's snoozed: then green or grey (support.ynab.com "Snooze a Target").

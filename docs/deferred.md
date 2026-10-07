@@ -83,10 +83,14 @@ before starting a roadmap phase** and remove an entry once it's done.
   summary's "Cost to Be Me" / "October's Targets".
 - 8d added Snooze (inspector switch, Zz pill, Snoozed view), progress bars with the On/Off toggle
   and the "Spent $x of $y" / "Fully Spent" notes.
-- Not yet: payment-category targets (8e, the API refuses them with 409 `MANAGED_CATEGORY`); the
-  rollover section of a dated "Set aside another…" target (support.ynab.com: money left at the end
-  of the last target period gets its own first section; drawn as one section for now); YNAB's
-  Shift+Z snooze shortcut (keyboard shortcuts phase).
+- 8e added the two credit card payment targets (Pay Specific Amount Monthly, Pay Off Balance by
+  Date) with "Create a Debt Payoff Target", the payment inspector's Target section and their place
+  in Underfunded, Reduce Overfunding and the month's targets. Not built there: the form's "Making
+  minimum payments?" help link (YNAB's help center; everycent has none), "Cover Overspent
+  Categories", and loan "Monthly Debt Payment" targets (they need 7f's loan activity).
+- Not yet: the rollover section of a dated "Set aside another…" target (support.ynab.com: money
+  left at the end of the last target period gets its own first section; drawn as one section for
+  now); YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
 - Underfunded ignores scheduled transactions (phase 10); YNAB funds them with the due-date step.
 - The summary's "Enter your expected income" (under Cost to Be Me) isn't built; no phase has it
   yet.

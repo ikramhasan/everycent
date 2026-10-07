@@ -1,4 +1,5 @@
 import { addMonths } from "@everycent/engine";
+import { Button } from "@everycent/ui/components/button";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
 import { type ReactNode, useEffect, useState } from "react";
@@ -199,7 +200,8 @@ export interface PaymentFigures {
  * The inspector for a credit card's payment category (YNAB's "Payment" panel, checked in its web
  * app on 2026-10-03): whether Available covers the balance, the Total Underfunded split into this
  * month's overspent categories and the rest, then Current Balance and Available for Payment with
- * where the money came from. "Cover Overspent Categories" and Debt Payoff Targets aren't built.
+ * where the money came from. With a target that applies, `target` (the Target section) takes the
+ * alert's place (YNAB, 2026-10-08). "Cover Overspent Categories" isn't built.
  */
 export function PaymentInspector({
   name,
@@ -210,6 +212,7 @@ export function PaymentInspector({
   note,
   onNoteChange,
   warn,
+  target,
 }: {
   name: string;
   totals: Breakdown;
@@ -220,48 +223,13 @@ export function PaymentInspector({
   onNoteChange: (note: string) => Promise<void>;
   /** YNAB only shows the Underfunded alert from the current month on. */
   warn: boolean;
+  /** The Target section, which shows the alert itself when no target applies. */
+  target?: ReactNode;
 }) {
-  const f = (n: bigint) => format(n.toString());
-  const rest = payment.underfunded - payment.overspentCategories;
   return (
     <Panel label={`${name} inspector`}>
       <h2 className="truncate font-semibold">{name}</h2>
-      <section aria-label="Payment" className="grid gap-1 text-sm">
-        <h3 className="font-semibold">Payment</h3>
-        {totals.available < 0n ? (
-          <p className="text-destructive">
-            You sent more to {name} than you had set aside for the payment.
-          </p>
-        ) : warn && payment.overspentCategories > 0n ? (
-          <p>
-            <span className="font-medium">Overspent Categories.</span> Cover{" "}
-            {f(payment.overspentCategories)} in overspent categories in order to pay off your
-            current balance.
-          </p>
-        ) : warn && payment.underfunded > 0n ? (
-          <p>
-            <span className="font-medium">Underfunded.</span> You need to assign{" "}
-            {f(payment.underfunded)} more to pay off your current balance.
-          </p>
-        ) : payment.balance >= 0n ? (
-          <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
-        ) : null}
-      </section>
-      {warn && payment.underfunded > 0n && (
-        <dl className="grid gap-2">
-          <Line label="Total Underfunded" value={payment.underfunded} format={format} />
-          {payment.overspentCategories > 0n && (
-            <Line
-              label="Overspent Categories"
-              value={payment.overspentCategories}
-              format={format}
-            />
-          )}
-          {payment.overspentCategories > 0n && rest > 0n && (
-            <Line label="Underfunded" value={rest} format={format} />
-          )}
-        </dl>
-      )}
+      {target ?? <PaymentAlert {...{ name, totals, payment, format, warn }} />}
       <dl className="grid gap-2">
         <Line label="Current Balance" value={payment.balance} format={format} />
         <Line label="Prior Balance" value={payment.priorBalance} format={format} />
@@ -280,6 +248,84 @@ export function PaymentInspector({
       </dl>
       <NoteField key={name} note={note} onChange={onNoteChange} />
     </Panel>
+  );
+}
+
+/**
+ * YNAB's Payment alert: the payment was more than was set aside (red), this month's overspent
+ * categories or the rest of the balance still to cover, or the card paid off. While the balance
+ * isn't covered it offers "Create a Debt Payoff Target" (`onCreateTarget`), then Total
+ * Underfunded with its parts.
+ */
+export function PaymentAlert({
+  name,
+  totals,
+  payment,
+  format,
+  warn,
+  onCreateTarget,
+}: {
+  name: string;
+  totals: Pick<Breakdown, "available">;
+  payment: PaymentFigures;
+  format: Format;
+  warn: boolean;
+  onCreateTarget?: () => void;
+}) {
+  const f = (n: bigint) => format(n.toString());
+  const rest = payment.underfunded - payment.overspentCategories;
+  const overpaid = totals.available < 0n;
+  return (
+    <>
+      <section aria-label="Payment" className="grid gap-2 text-sm">
+        <h3 className="font-semibold">Payment</h3>
+        {overpaid ? (
+          <p className="text-destructive">
+            You sent more to {name} than you had set aside for the payment.
+          </p>
+        ) : warn && payment.overspentCategories > 0n ? (
+          <p>
+            <span className="font-medium">Overspent Categories.</span> Cover{" "}
+            {f(payment.overspentCategories)} in overspent categories in order to pay off your
+            current balance.
+          </p>
+        ) : warn && payment.underfunded > 0n ? (
+          <p>
+            <span className="font-medium">Underfunded.</span> You need to assign{" "}
+            {f(payment.underfunded)} more to pay off your current balance.
+          </p>
+        ) : payment.balance >= 0n ? (
+          <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
+        ) : null}
+        {!overpaid && warn && payment.underfunded > 0n && onCreateTarget && (
+          <>
+            <p className="text-center text-muted-foreground">
+              {payment.overspentCategories > 0n
+                ? "Can't cover the overspent categories?"
+                : "Don't have more money to assign?"}
+            </p>
+            <Button size="sm" variant="secondary" onClick={onCreateTarget}>
+              Create a Debt Payoff Target
+            </Button>
+          </>
+        )}
+      </section>
+      {warn && payment.underfunded > 0n && (
+        <dl className="grid gap-2">
+          <Line label="Total Underfunded" value={payment.underfunded} format={format} />
+          {payment.overspentCategories > 0n && (
+            <Line
+              label="Overspent Categories"
+              value={payment.overspentCategories}
+              format={format}
+            />
+          )}
+          {payment.overspentCategories > 0n && rest > 0n && (
+            <Line label="Underfunded" value={rest} format={format} />
+          )}
+        </dl>
+      )}
+    </>
   );
 }
 

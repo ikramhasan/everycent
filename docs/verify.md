@@ -402,8 +402,8 @@ Built as found:
   says previous months show green)?
 - **Built so far (before this rule):** the pill is yellow when Available is below what's owed in
   the current month and later, green before it. The inspector lists Total Underfunded with its two
-  parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button and the
-  Debt Payoff Target (phase 8) aren't built.
+  parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button isn't
+  built. "Create a Debt Payoff Target" came with 8e ("Credit card payment targets" below).
 
 ## Payments, returns and statement credits (phase 7d)
 
@@ -684,13 +684,14 @@ by it. Built as found:
   (targets due before the plan started go after those coming up). (5) Whether "Next month's
   targets…" shows when next month asks the same or less. (6) Whether hidden categories' targets
   count in October's Targets, and what the summary shows with categories selected. (7) Which
-  "uncategorized transactions" put a card in the attention list. (8) Auto-Assign labels when only
-  payment categories are covered (September showed "Paid Last Month", "Average Paid").
+  "uncategorized transactions" put a card in the attention list. (8) Auto-Assign labels when
+  several categories, all of them payment categories, are covered (one selected payment category
+  reads "Paid Last Month", "Average Paid": seen in 8e, built).
 - **Built so far (before this rule):** (1) "N categories will be fully funded." counting only the
   full ones, partly funded ones listed with what they get; (2) nothing is over; (3) the surplus
   over the total is over; (4) not built; (5) shown only when higher; (6) hidden categories left
   out, Cost to Be Me only with nothing selected; (7) credit overspending only; (8) the usual
-  labels.
+  labels for several.
 
 ## Snooze and progress bars (phase 8d)
 
@@ -734,3 +735,66 @@ bars were read from the page (section `flex-basis`, segment widths and classes).
   carried plus assigned; (3) not built; (4) current month only; (5) Tailwind green/yellow/red,
   6px.
 
+
+## Credit card payment targets (phase 8e)
+
+Checked against support.ynab.com ("Paired Targets", "Underfunded Alert in the Credit Card Payment
+Category") and in YNAB's web app and API on 2026-10-08. Test data added to the test plan: cards
+Card E1 ($120 debt), Card E2 and Card E3 ($100 each), categories E-O1, E-F2 and E-O3 in the Test
+group, transactions with memos `x-e1-over`, `x-e2-funded`, `x-e3-over` and `x-e2-pay` (a $20 payment
+from Brac). E1's target was later saved with a past date, which removed it. Built as found:
+
+- **The form**: "Create a Debt Payoff Target" (under the Underfunded or Overspent Categories alert,
+  after "Don't have more money to assign?" / "Can't cover the overspent categories?") opens a type
+  menu with "Pay Off Balance by Date" (the default) and "Pay Specific Amount Monthly", plus a
+  "Making minimum payments?" help link. Pay off by date: a month (January–December) and a year
+  (this year and the next 49), next month by default. Specific amount: one amount field. Delete,
+  Cancel, Save Target. The API reports them as `TBD` (with `goal_target` 0) and `MF`. There's no
+  snooze switch.
+- **Pay Off Balance by Date** spreads what's still to pay off over the months left, counting both
+  ends and rounding up: $120.00 by March 2027 asked $20.00 in October, $100.00 by December
+  $33.34. What's left is what's owed beyond Available, with this month's Funded Spending left out
+  of both: E2 with $10.00 of funded spending ($110.00 owed) still asked $33.34 ("Pay off $100.00",
+  0%). Credit overspending raises what's owed at once: E1's $5.00 made it "Pay off $125.00",
+  $20.84. A payment without money set aside changes nothing (E2: $90.00 owed, −$10.00 Available,
+  still $100.00 to go). Money carried in counts in a future month (E1 with $50.00 assigned in
+  October asked ($125.00 − $50.00) ÷ 5 = $15.00 in November; E2 after the payment ($90.00) ÷ 2 =
+  $45.00).
+- Its inspector: "Pay Off Balance by Date", "Pay off $125.00", "By Mar 2027", the ring (Available
+  less funded spending against the same: E1 40% for $50.00 of $125.00), "Assign $20.84 this month
+  to stay on track" with Assign, or "You're on track to meet your target!", then "Needed for
+  Payoff" (what's owed), "Available for Payment" and "To Go".
+- **Pay Specific Amount Monthly** asks like a monthly "Set aside another…": the amount every month
+  whatever was carried, paid or spent (E3 $30.00 asked $30.00 again in November with $50.00
+  carried in). Inspector: "Pay Specific Amount Monthly", "$30.00", "Each Month", "Assign $30.00 to
+  meet your target", "Amount to Assign This Month / Assigned So Far / To Go".
+- With a target that applies, the Target section takes the place of the Payment alert and Total
+  Underfunded; Current Balance and Available for Payment stay. While the category is red (paid
+  more than set aside) the alert shows instead ("You sent more to Card E2…", Total Underfunded
+  $100.00 = $90.00 owed − (−$10.00)), and there's no Edit Target.
+- The Available pill follows the target: yellow with a pie while it asks for more (E1, E3), green
+  with a part-filled pie on track (E1, $50.00), green with a check when met (E3, $50.00), red when
+  overpaid (E2). No note under payment rows, target or not.
+- **Underfunded** asks what the target asks, not the balance: E1 $20.84, E2 (red) $33.34, E3 $30.00
+  with $5.00 of credit overspending on it (the button fell by exactly these). **Reduce
+  Overfunding** takes back Assigned above this month's ask: E3 $50.00 against $30.00 gave $20.00,
+  E1 $50.00 against $20.84 gave $29.16. Card targets count in October's Targets (it rose by
+  $84.18 = $20.84 + $33.34 + $30.00).
+- With one payment category selected, Auto-Assign lists "Assigned Last Month", "Paid Last Month",
+  "Average Assigned", "Average Paid" (amounts not checked).
+- Saving a pay-off month before the current month left no target (API `goal_type` null; the
+  inspector offered "Create a Debt Payoff Target" again).
+
+### Details of 8e not seen in YNAB
+
+- **Question:** (1) What a pay-off target shows in months after its month (April 2027 for E1's
+  March) and in a month when Available covers the whole balance ("You've met your target!"?).
+  (2) Whether a targeted payment category keeps its place last in Underfunded's funding order.
+  (3) The Total Underfunded of a paid-off card that's red (owes nothing, −$10.00). (4) What
+  "Paid Last Month" and "Average Paid" add up. (5) Whether the pill of a payment target is yellow
+  in past months (spending targets are). (6) The help text behind "Making minimum payments?".
+- **Built so far (before this rule):** (1) no target after its month; met reads "You've met your
+  target!" as for other targets; a past month is refused when saving ("Choose this month or
+  later"), since YNAB drops the target; (2) last, with the other card payments; (3) $0.00, as
+  before; (4) the usual Spent Last Month / Average Spent amounts, relabelled; (5) the usual target
+  colours in every month; (6) the link isn't built (everycent has no help center).

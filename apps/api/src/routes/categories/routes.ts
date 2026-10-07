@@ -33,10 +33,12 @@ const TargetSchema = z
     behavior: zTargetBehavior.describe(
       "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what " +
         "brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: " +
-        "reach the amount, by a month or eventually ('Have a balance of', custom only)",
+        "reach the amount, by a month or eventually ('Have a balance of', custom only). Payment " +
+        "targets: set_aside for payment_monthly, balance for payoff_by_date",
     ),
     amount: zMinorUnits.describe(
-      "Per week (weekly), per month (monthly) or per period (yearly, custom)",
+      "Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); " +
+        "0 for payoff_by_date, which pays off what the card owes",
     ),
     dueDay: z
       .number()
@@ -47,7 +49,8 @@ const TargetSchema = z
       .date()
       .nullable()
       .describe(
-        "Yearly and custom: the first due date; a balance target's month (day 1), null for eventually",
+        "Yearly and custom: the first due date; a balance target's month (day 1), null for " +
+          "eventually. payoff_by_date: the month to pay off by (day 1)",
       ),
     repeatEvery: z
       .number()
@@ -102,9 +105,23 @@ const SetTargetSchema = z
           "Every 1–11 months or 1–2 years; null for one-time. Balance targets can't repeat",
         ),
     }),
+    // Credit card payment categories take only these two (YNAB's "Pay Specific Amount Monthly"
+    // and "Pay Off Balance by Date"); other categories can't take them.
+    z.object({
+      cadence: z.literal("payment_monthly"),
+      amount: Amount,
+    }),
+    z.object({
+      cadence: z.literal("payoff_by_date"),
+      dueMonth: zMonth.describe("Pay off the card's balance by the end of this month"),
+    }),
   ])
   .and(z.object({ month: zMonth.describe("The month the target is set from") }))
   .superRefine((v, ctx) => {
+    // YNAB keeps no pay-off target dated before the month it's saved from (docs/verify.md).
+    if (v.cadence === "payoff_by_date" && v.dueMonth < v.month) {
+      ctx.addIssue({ code: "custom", path: ["dueMonth"], message: "Choose this month or later" });
+    }
     if (v.cadence !== "custom") return;
     if (v.behavior !== "balance" && v.dueDate === null) {
       ctx.addIssue({ code: "custom", path: ["dueDate"], message: "Choose when it's due" });
@@ -430,7 +447,8 @@ export const setCategoryTarget = createRoute({
   description:
     "A category has one target at a time; saving changes it in every month from its start. A new " +
     "target starts in `month` (the month it's set from); saving from an earlier month than its " +
-    "start moves the start back. Payment categories can't have targets yet.",
+    "start moves the start back. Credit card payment categories take only payment_monthly and " +
+    "payoff_by_date targets, and only they take them.",
   request: {
     params: CategoryParams,
     body: json(SetTargetSchema),
@@ -441,7 +459,9 @@ export const setCategoryTarget = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
-    409: jsonError("MANAGED_CATEGORY: payment categories can't have targets yet"),
+    409: jsonError(
+      "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
+    ),
   },
 });
 
@@ -472,7 +492,8 @@ export const snoozeCategoryTarget = createRoute({
   summary: "Snooze a category's target for this month, or wake it",
   description:
     "A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks " +
-    "again. Only the user's current month can be snoozed (YNAB).",
+    "again. Only the user's current month can be snoozed, and never a credit card payment " +
+    "target (YNAB).",
   request: {
     params: CategoryParams,
     body: json(
@@ -494,5 +515,6 @@ export const snoozeCategoryTarget = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: jsonError("No such category or target, or the caller isn't a member"),
+    409: jsonError("MANAGED_CATEGORY: credit card payment targets can't be snoozed"),
   },
 });
