@@ -3397,11 +3397,20 @@
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "The same for the month after"
+          },
+          "expectedIncome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The budget's expected monthly income (YNAB's \"Expected Income\" under Cost to Be Me), the same in every month; null until entered"
           }
         },
         "required": [
           "month",
-          "nextMonth"
+          "nextMonth",
+          "expectedIncome"
         ]
       },
       "AssignCategory": {
@@ -3631,6 +3640,32 @@
           "amount",
           "movedAt",
           "userName"
+        ]
+      },
+      "ExpectedIncome": {
+        "type": "object",
+        "properties": {
+          "expectedIncome": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "expectedIncome"
+        ]
+      },
+      "SetExpectedIncome": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "amount"
         ]
       }
     },
@@ -4952,7 +4987,7 @@
           }
         ],
         "summary": "Create or replace a category's target",
-        "description": "A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.",
+        "description": "A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.",
         "parameters": [
           {
             "schema": {
@@ -7195,6 +7230,93 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/expected-income": {
+      "put": {
+        "operationId": "setExpectedIncome",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set the budget's expected monthly income",
+        "description": "YNAB's \"Enter your expected income\" under Cost to Be Me: entered once, it stays from month to month. It must be positive; like YNAB, it can be changed but not cleared.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetExpectedIncome"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpectedIncome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't assign money in this budget",
             "content": {
               "application/json": {
                 "schema": {

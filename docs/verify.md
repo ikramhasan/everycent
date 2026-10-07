@@ -548,8 +548,10 @@ November, T8 B's due day is the 15th). Built as found:
 - The target applies from its creation month (API `goal_creation_month`). Before it the category
   shows no target ("How much do you need for T8 G? … Create Target"), with plain green/grey
   Available. A target is created in the month being viewed (R4 from November didn't show in
-  October). Saving it from an earlier month moves its start back to that month; saving from a later
-  month leaves the start alone. Editing changes every month from the start on.
+  October). Saving it from an earlier month moves its start back to that month; saving it unchanged
+  from a later month leaves the start alone, but changing it starts it again in the month it's
+  saved from (phase 8f, "Targets overview and history"). Editing changes every month from the
+  start on.
 - The form: Weekly / Monthly / Yearly / Custom; "I need" (calculator field); "By" (Last Day of
   Month, 31st … 1st); "Next month I want to" (Set aside another $X — "Use for: bills,
   subscriptions, saving over time", "Most people choose this" and the default; Refill up to $X —
@@ -681,15 +683,15 @@ by it. Built as found:
 - **Question:** (1) The preview's wording when Ready to Assign runs out part-way (partly funded
   categories). (2) Reduce Overfunding on a "Have a balance of" target without a date. (3) A dated
   refill or balance target carrying more than its total. (4) Underfunded's first-month rule
-  (targets due before the plan started go after those coming up). (5) Whether "Next month's
-  targets…" shows when next month asks the same or less. (6) Whether hidden categories' targets
+  (targets due before the plan started go after those coming up). (5) Settled: "Next month's
+  targets…" shows only when higher (support.ynab.com, 8f). (6) Whether hidden categories' targets
   count in October's Targets, and what the summary shows with categories selected. (7) Which
   "uncategorized transactions" put a card in the attention list. (8) Auto-Assign labels when
   several categories, all of them payment categories, are covered (one selected payment category
   reads "Paid Last Month", "Average Paid": seen in 8e, built).
 - **Built so far (before this rule):** (1) "N categories will be fully funded." counting only the
   full ones, partly funded ones listed with what they get; (2) nothing is over; (3) the surplus
-  over the total is over; (4) not built; (5) shown only when higher; (6) hidden categories left
+  over the total is over; (4) not built; (5) —; (6) hidden categories left
   out, Cost to Be Me only with nothing selected; (7) credit overspending only; (8) the usual
   labels for several.
 
@@ -729,10 +731,10 @@ bars were read from the page (section `flex-basis`, segment widths and classes).
 
 - **Question:** (1) The note of a snoozed category with spending. (2) "Spent $x of $y" for a set
   aside target with money carried in: is $y only this month's money? (3) The "?" help text beside
-  the snooze switch. (4) Whether the switch shows in past months (the help center only rules out
-  future months). (5) Exact bar colours and thickness.
+  the snooze switch. (4) Settled in 8f: the switch shows in every month, disabled
+  outside the current one. (5) Exact bar colours and thickness.
 - **Built so far (before this rule):** (1) the no-target notes ("Spent …", "Fully Spent"); (2)
-  carried plus assigned; (3) not built; (4) current month only; (5) Tailwind green/yellow/red,
+  carried plus assigned; (3) not built; (4) —; (5) Tailwind green/yellow/red,
   6px.
 
 
@@ -798,3 +800,43 @@ from Brac). E1's target was later saved with a past date, which removed it. Buil
   later"), since YNAB drops the target; (2) last, with the other card payments; (3) $0.00, as
   before; (4) the usual Spent Last Month / Average Spent amounts, relabelled; (5) the usual target
   colours in every month; (6) the link isn't built (everycent has no help center).
+
+## Targets overview and history (phase 8f)
+
+Checked against support.ynab.com ("Plan and Adjust with Edit Plan and Cost to Be Me") and in
+YNAB's web app on 2026-10-08. Test data: category F-Y1 in the Test group (target changed several
+times, now a monthly refill of $90.00 from October); the test plan's expected income is $2,000.00
+(it can't be cleared). Built as found:
+
+- **The overview** on the web is the summary's Cost to Be Me (built in 8c); YNAB has no per-group
+  totals and no other overview, so none is built. "Next month's targets could increase your total
+  to …" shows only when it's higher (help center). The help center says yearly and custom targets
+  count there only when not due this month, but YNAB's numbers didn't follow it: F-Y1 as a yearly
+  $120.00 due Oct 31 moved next month's total from $4,048.33 (as a monthly $120.00) to $3,938.33,
+  i.e. it counted the new year's first share ($10.00), which is what everycent computes.
+- **Expected Income**: "Enter your expected income" (nothing selected, current month) opens an
+  "Expected Income" amount field with Cancel and Save. Once saved: "Expected Income $5,000.00" with
+  a pencil ("Edit your income"), and a 4px bar under each line, scaled to the larger of the two:
+  October's Targets blue (67.6% for $3,381.68 of $5,000.00), the income grey (100%); with $2,000.00
+  the targets bar is red (a gradient) at 100% and the income bar 59.1%. No other message. It's kept
+  from month to month (help center); November showed no Cost to Be Me at all. Saving 0 or an empty
+  field left the amount as it was.
+- **Target history**: YNAB keeps one target and no older versions. Changing a target (its type or
+  amount) starts it in the month it's saved from: F-Y1 saved from September applied there; changed
+  to $80.00 from October, September showed no target (API `goal_creation_month` 2026-10); changed
+  to $90.00 from November, October showed none. Saving it unchanged from an earlier month moved the
+  start back (October); unchanged from a later month (November) left it there. The form in a month
+  before the start ("Create Target") opens filled with the existing target, with Delete.
+- **Past and future months**: the inspector's target shows as in the current month, but in a past
+  month the prompt has no Assign button ("Assign $120.00 to meet your target" only). The snooze
+  switch shows in every month, disabled outside the current one ("You can only snooze targets in the
+  current month."). Before a target's start month the category shows no target (API: no
+  `goal_under_funded`).
+
+### Details of 8f not seen in YNAB
+
+- **Question:** (1) Whether a fresh start copies the expected income. (2) Whether changing only a
+  target's snooze or due day counts as a change (only amount and type were seen). (3) Whether
+  editing a target into a month that's snoozed keeps the snooze.
+- **Built so far (before this rule):** (1) not copied; (2) any field of the target counts (the
+  snooze isn't a field of it); (3) the snooze is kept.

@@ -6,6 +6,7 @@ import {
   getBudgetMonthHandler,
   listMovesHandler,
   moveMoneyHandler,
+  setExpectedIncomeHandler,
 } from "./handlers";
 import {
   assignCategory,
@@ -14,6 +15,7 @@ import {
   listMonthActivity,
   listMoves,
   moveMoney,
+  setExpectedIncome,
 } from "./routes";
 
 export const monthsRouter = createRouter()
@@ -22,4 +24,5 @@ export const monthsRouter = createRouter()
   .openapi(moveMoney, moveMoneyHandler)
   .openapi(autoAssign, autoAssignHandler)
   .openapi(listMonthActivity, listMonthActivityHandler)
-  .openapi(listMoves, listMovesHandler);
+  .openapi(listMoves, listMovesHandler)
+  .openapi(setExpectedIncome, setExpectedIncomeHandler);

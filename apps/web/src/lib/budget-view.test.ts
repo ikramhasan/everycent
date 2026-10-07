@@ -36,7 +36,7 @@ const month: BudgetMonthData = {
   readyToAssign: "0",
   assignedInFuture: "0",
   futureMonths: [],
-  targets: { month: "0", nextMonth: "0" },
+  targets: { month: "0", nextMonth: "0", expectedIncome: null },
   categories: [
     cat("rent", "4000", "0", "4000"),
     cat("power", "0", "-2500", "-2500"),

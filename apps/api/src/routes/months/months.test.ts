@@ -1072,7 +1072,7 @@ describe("budget months", () => {
         underfundedParts: [{ amount: "2500", step: 1, date: "" }],
       });
       // October's Targets: each target's month amount, met or not.
-      expect(oct.targets).toEqual({ month: "20000", nextMonth: "20000" });
+      expect(oct.targets).toEqual({ month: "20000", nextMonth: "20000", expectedIncome: null });
     });
 
     it("meets the target or covers overspending, whichever is more (YNAB O11, O13)", async () => {

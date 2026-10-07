@@ -445,9 +445,10 @@ export const setCategoryTarget = createRoute({
   middleware: [requireAuth] as const,
   summary: "Create or replace a category's target",
   description:
-    "A category has one target at a time; saving changes it in every month from its start. A new " +
-    "target starts in `month` (the month it's set from); saving from an earlier month than its " +
-    "start moves the start back. Credit card payment categories take only payment_monthly and " +
+    "A category has one target at a time, the same in every month from its start. A new or changed " +
+    "target starts in `month` (the month it's saved from), so earlier months show none; saving it " +
+    "unchanged from an earlier month moves the start back. Credit card payment categories take " +
+    "only payment_monthly and " +
     "payoff_by_date targets, and only they take them.",
   request: {
     params: CategoryParams,

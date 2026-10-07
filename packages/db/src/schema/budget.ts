@@ -4,7 +4,7 @@ import {
   DATE_FORMATS,
   NUMBER_FORMATS,
 } from "@everycent/engine";
-import { char, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, char, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { timestamps } from "./columns";
 
@@ -29,6 +29,12 @@ export const budget = pgTable("budget", {
   dateFormat: text({ enum: DATE_FORMATS }).notNull(),
   /** Set when a fresh start replaced this budget. It stays fully usable, as in YNAB. */
   archivedAt: timestamp({ withTimezone: true }),
+  /**
+   * YNAB's "Expected Income" under Cost to Be Me: what the household expects to earn in a month,
+   * entered once and kept from month to month. Null until entered; YNAB can't clear it again.
+   */
+  expectedIncome: bigint({ mode: "bigint" }),
+  expectedIncomeCurrency: char({ length: 3 }).$type<CurrencyCode>(),
   ...timestamps,
 });
 

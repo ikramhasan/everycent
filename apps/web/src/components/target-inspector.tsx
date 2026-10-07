@@ -77,6 +77,7 @@ export function TargetSection({
   onDelete,
   onAssign,
   onSnooze,
+  snoozeLocked = false,
   payment,
 }: {
   name: string;
@@ -92,6 +93,11 @@ export function TargetSection({
   onAssign?: (amount: bigint) => Promise<void>;
   /** Snoozes or wakes the target; undefined outside the current month (YNAB snoozes only it). */
   onSnooze?: (snoozed: boolean) => Promise<void>;
+  /**
+   * Outside the current month YNAB still shows the snooze switch, disabled: "You can only snooze
+   * targets in the current month." (seen 2026-10-08).
+   */
+  snoozeLocked?: boolean;
   /**
    * For a payment category: the month on screen (the target is saved from it), its Funded
    * Spending, whether it's red, and its alert.
@@ -215,10 +221,20 @@ export function TargetSection({
       <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
         Edit Target
       </Button>
-      {onSnooze && (
+      {(onSnooze || (snoozeLocked && !payment)) && (
         // YNAB keeps the target's details on show while it's snoozed.
-        <Label className="flex items-center gap-2 font-normal text-sm">
-          <Switch checked={need.snoozed} onCheckedChange={(checked) => void onSnooze(checked)} />
+        <Label
+          className={cn(
+            "flex items-center gap-2 font-normal text-sm",
+            !onSnooze && "text-muted-foreground",
+          )}
+          title={onSnooze ? undefined : "You can only snooze targets in the current month."}
+        >
+          <Switch
+            checked={need.snoozed}
+            disabled={!onSnooze}
+            onCheckedChange={(checked) => void onSnooze?.(checked)}
+          />
           Snooze target for this month
         </Label>
       )}

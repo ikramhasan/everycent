@@ -278,18 +278,28 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     dueDate,
     repeatEvery: repeat?.every ?? null,
     repeatUnit: repeat?.unit ?? null,
-    // YNAB (docs/verify.md): saving from a month before the start moves the start back to it.
-    startMonth: existing && existing.startMonth < start ? existing.startMonth : start,
   };
+  // YNAB (docs/verify.md "Targets overview and history"): a changed target starts in the month
+  // it's saved from, so earlier months show none; saving it unchanged only moves the start back.
+  const unchanged =
+    existing &&
+    existing.cadence === values.cadence &&
+    existing.behavior === values.behavior &&
+    existing.amount === values.amount &&
+    existing.dueDay === values.dueDay &&
+    existing.dueDate === values.dueDate &&
+    existing.repeatEvery === values.repeatEvery &&
+    existing.repeatUnit === values.repeatUnit;
+  const startMonth = unchanged && existing.startMonth < start ? existing.startMonth : start;
   const [target] = existing
     ? await db
         .update(categoryTarget)
-        .set(values)
+        .set({ ...values, startMonth })
         .where(eq(categoryTarget.id, existing.id))
         .returning()
     : await db
         .insert(categoryTarget)
-        .values({ id: newId(), budgetId, categoryId, ...values })
+        .values({ id: newId(), budgetId, categoryId, ...values, startMonth })
         .returning();
   return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
 };

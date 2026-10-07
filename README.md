@@ -165,9 +165,8 @@ and fresh start (after phase 5 core).
 
 ### 7. Credit cards & debt
 
-7a–7d are built (stacked branches, not merged); 7e–7g (positive balances and closing, loan
-activity, loan planner) are deferred until after phase 8 — see `docs/deferred.md`.
-
+7a–7d are built and merged; 7e–7g (positive balances and closing, loan activity, loan planner)
+were deferred until after phase 8, which is now done — see `docs/deferred.md`.
 
 - [x] Spending on a credit card moves funds into its payment category automatically
 - [x] Credit overspending (becomes new debt, shown yellow)
@@ -181,19 +180,25 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 
 ### 8. Targets (goals)
 
+Done: 8a–8d are merged; 8e (credit card payment targets) and 8f (expected income, target
+history) are on branches, not merged yet. Loan debt targets wait for 7f; scheduled-transaction
+funding waits for phase 10 — see `docs/deferred.md` and `docs/verify.md`.
+
 - [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
       (every N months/years), by a specific date; refill vs set aside another
 - [x] Savings balance (YNAB's custom "Have a balance of", optionally by a month)
 - [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
       another" covers it
-- [ ] Debt payment targets: credit cards done (8e, Pay Specific Amount Monthly and Pay Off
-      Balance by Date); loans (with interest) wait for 7f
+- [x] Credit card payment targets: Pay Specific Amount Monthly, Pay Off Balance by Date (8e)
+- [ ] Loan debt payment targets, with interest (wait for 7f's loan activity)
 - [x] Target progress bars and status (funded, underfunded, overspent, on track)
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)
 - [x] Snooze a target for a month
-- [ ] Repeat on/off (done in 8b), target history across months (8f)
-- [ ] Targets overview (total needed this month vs next month)
+- [x] Repeat on/off (8b), target history across months (8f: a changed target starts in the month
+      it's saved from, as YNAB)
+- [x] Targets overview (total needed this month vs next month: Cost to Be Me, 8c; expected income,
+      8f)
 
 ### 9. Reconciliation
 

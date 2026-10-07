@@ -1,8 +1,10 @@
 import { addMonths } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { Input } from "@everycent/ui/components/input";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
-import { type ReactNode, useEffect, useState } from "react";
+import { SquarePen } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import type { Breakdown } from "@/lib/budget-view";
 import { monthName } from "@/lib/months";
 
@@ -56,10 +58,18 @@ export function MonthSummary({
   /** Names of the selected categories, when two or more are. */
   selectedNames?: string[];
   /**
-   * What the plan's targets ask of this month and the next (YNAB's "Cost to Be Me"), shown in the
-   * current month only, as YNAB does.
+   * What the plan's targets ask of this month and the next (YNAB's "Cost to Be Me"), with the
+   * budget's expected income; shown in the current month only, as YNAB does.
    */
-  targets?: { month: bigint; nextMonth: bigint };
+  targets?: {
+    month: bigint;
+    nextMonth: bigint;
+    expectedIncome: bigint | null;
+    /** Saves the expected income; undefined when the user can't (no editor then). */
+    onSetIncome?: (amount: bigint) => Promise<boolean>;
+    parse?: (text: string) => bigint | string;
+    toInput?: (amount: string) => string;
+  };
 }) {
   const previous = monthName(addMonths(month, -1));
   const name = monthName(month);
@@ -101,9 +111,7 @@ export function MonthSummary({
       {targets && (
         <>
           <h3 className="font-semibold text-sm">Cost to Be Me</h3>
-          <dl className="grid gap-2">
-            <Line label={`${name}’s Targets`} value={targets.month} format={format} />
-          </dl>
+          <CostToBeMe name={name} targets={targets} format={format} />
           {/* YNAB showed this line whenever next month's total was higher; equal or lower wasn't seen. */}
           {targets.nextMonth > targets.month && (
             <p className="rounded-md bg-muted p-2 text-center text-muted-foreground text-xs">
@@ -114,6 +122,124 @@ export function MonthSummary({
         </>
       )}
     </Panel>
+  );
+}
+
+/** Bar width for `part` of `whole`, as a CSS percentage capped at 100%. */
+const barWidth = (part: bigint, whole: bigint) =>
+  whole <= 0n || part >= whole ? "100%" : `${Number((part * 10000n) / whole) / 100}%`;
+
+/**
+ * YNAB's Cost to Be Me (seen 2026-10-08, docs/verify.md "Targets overview and history"): the
+ * month's targets and, once entered, the expected income, each with a bar against the larger of
+ * the two. The targets bar is blue while the income covers them and red when it falls short;
+ * the income bar is grey. "Enter your expected income" opens an amount field; zero leaves it as
+ * it was (YNAB can't clear it).
+ */
+function CostToBeMe({
+  name,
+  targets,
+  format,
+}: {
+  name: string;
+  targets: NonNullable<Parameters<typeof MonthSummary>[0]["targets"]>;
+  format: Format;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const income = targets.expectedIncome;
+  const { onSetIncome, parse, toInput } = targets;
+  const short = income !== null && targets.month > income;
+
+  function open() {
+    setText(income !== null && toInput ? toInput(income.toString()) : "0.00");
+    setEditing(true);
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const amount = parse && text.trim() !== "" ? parse(text) : 0n;
+    if (typeof amount === "string" || amount <= 0n || !onSetIncome) return setEditing(false);
+    setBusy(true);
+    try {
+      if (await onSetIncome(amount)) setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <dl className="grid gap-1">
+        <Line label={`${name}’s Targets`} value={targets.month} format={format} />
+        {income !== null && (
+          <div
+            role="img"
+            aria-label={short ? "Targets are more than the expected income" : "Targets"}
+            className={cn(
+              "h-1 rounded-full",
+              short ? "bg-linear-to-r from-red-400 to-red-700" : "bg-blue-600 dark:bg-blue-500",
+            )}
+            style={{ width: barWidth(targets.month, income) }}
+          />
+        )}
+      </dl>
+      {editing ? (
+        <form onSubmit={save} className="grid gap-2">
+          <label htmlFor="expected-income" className="font-semibold text-sm">
+            Expected Income
+          </label>
+          <Input
+            id="expected-income"
+            autoFocus
+            inputMode="decimal"
+            value={text}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={busy}>
+              Save
+            </Button>
+          </div>
+        </form>
+      ) : income !== null ? (
+        <div className="grid gap-1">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">Expected Income</span>
+            <span className="flex items-center gap-1 tabular-nums">
+              {format(income.toString())}
+              {onSetIncome && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  aria-label="Edit your income"
+                  onClick={open}
+                >
+                  <SquarePen className="size-3.5" />
+                </Button>
+              )}
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label="Expected income"
+            className="h-1 rounded-full bg-muted-foreground/30"
+            style={{ width: barWidth(income, targets.month) }}
+          />
+        </div>
+      ) : (
+        onSetIncome && (
+          <Button size="sm" variant="secondary" onClick={open}>
+            Enter your expected income
+          </Button>
+        )
+      )}
+    </div>
   );
 }
 
