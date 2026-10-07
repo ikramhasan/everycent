@@ -80,6 +80,7 @@ a.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .step { scroll-margin-top: 16px; }
 .node.now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .node.later { border-style: dashed; }
+.node.done { opacity: .6; }
 .node:not(:last-child)::after {
   content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%);
   color: var(--muted); font-size: 14px; background: var(--bg); line-height: 1; padding: 2px 0;
@@ -121,6 +122,7 @@ a.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .pill.now { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .pill.later { border-style: dashed; }
+.pill.done { color: var(--muted); }
 .why { margin: 0; max-width: 65ch; }
 .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
 .meta h3 {
@@ -149,36 +151,36 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
   <header>
     <div class="eyebrow">everycent · after phase 8 · 8 Oct 2026</div>
     <h1>What to build next</h1>
-    <p class="lede">Phase 8 is done; 8e and 8f still wait on their branches. Next comes the work the earlier phases parked: <strong>credit cards that go positive or close</strong>, <strong>reconciliation</strong>, and <strong>scheduled transactions</strong>, with loans after them. The order puts known money bugs first, then the small phase that clears the most deferred items, then the large one that the plan screen keeps pointing at. Each stage starts by settling its open questions in YNAB.</p>
+    <p class="lede">Phase 8 is done and merged. Next comes the work the earlier phases parked: <strong>credit cards that go positive or close</strong>, <strong>reconciliation</strong>, and <strong>scheduled transactions</strong>, with loans after them. The order puts known money bugs first, then the small phase that clears the most deferred items, then the large one that the plan screen keeps pointing at. Each stage starts by settling its open questions in YNAB.</p>
   </header>
 
   <section class="flow" aria-label="Recommended order">
     <div class="lane">
-      <a class="node now" href="#s00"><span class="n">00 · next</span><span class="t">Merge 8e + 8f</span><span class="s">Branches into main</span></a>
-      <a class="node" href="#s7e"><span class="n">7e</span><span class="t">Credit lifecycle</span><span class="s">Positive, close, type changes</span></a>
+      <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Merge 8e + 8f</span><span class="s">Branches into main</span></a>
+      <a class="node now" href="#s7e"><span class="n">7e · next</span><span class="t">Credit lifecycle</span><span class="s">Positive, close, type changes</span></a>
       <a class="node" href="#s9"><span class="n">9</span><span class="t">Reconciliation</span><span class="s">Reconcile, adjust, unlock</span></a>
       <a class="node" href="#s10a"><span class="n">10a</span><span class="t">Scheduled transactions</span><span class="s">Repeats, upcoming list</span></a>
       <a class="node" href="#s10b"><span class="n">10b</span><span class="t">Scheduled in the plan</span><span class="s">Auto-entry, Underfunded, pill</span></a>
       <a class="node later" href="#s7f"><span class="n">7f–7g · later</span><span class="t">Loans</span><span class="s">Activity, planner, targets</span></a>
     </div>
     <div class="side"><b>Alongside:</b> <code>docs/verify.md</code> holds 35 open YNAB questions from Phases 5–8. A check-in session in the test plan settles them in a batch; each answer either confirms what's built or becomes a small fix.</div>
-    <div class="then">To pick up: <span class="mono">Merge phase-8e-card-targets and phase-8f-overview into main, then start 7e on a branch from main. Read docs/deferred.md ("Credit lifecycle and loans") and docs/verify.md ("Credit lifecycle (phase 7e)"); settle 7e's gate in YNAB first.</span></div>
+    <div class="then">To pick up: <span class="mono">Phase 8 is merged to main (01ab6b8). Start 7e on a branch from main. Read docs/deferred.md ("Credit lifecycle and loans") and docs/verify.md ("Credit lifecycle (phase 7e)"); settle 7e's gate in YNAB first.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
     <article class="step" id="s00">
       <div class="num">00</div>
       <div class="body">
-        <div class="head"><h2>Merge Phase 8</h2><span class="pill now">Next</span></div>
-        <p class="why">8e (card payment targets) and 8f (expected income, target history) are committed but not on main. Merging first keeps the next phase from stacking a third branch on top.</p>
+        <div class="head"><h2>Merge Phase 8</h2><span class="pill done">Done</span></div>
+        <p class="why">8e (card payment targets) and 8f (expected income, target history) are merged to main (87cfeff, 01ab6b8), so the next phase starts from main instead of stacking a third branch.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
             <ul><li>Merge <code>phase-8e-card-targets</code>, then <code>phase-8f-overview</code> (stacked on it), as merge commits like Phases 7 and 8a–8d</li><li>Migration <code>0014</code> (expected income) applied on main</li><li><code>pnpm check</code> on main after the merge</li></ul>
           </div>
           <div>
-            <h3>Waiting on</h3>
-            <ul><li>Your go-ahead; nothing has been merged or pushed</li></ul>
+            <h3>Result</h3>
+            <ul><li>Merged locally as two merge commits, not pushed</li><li><code>pnpm check</code> passes on main; migration <code>0014</code> applied</li></ul>
           </div>
         </div>
       </div>
@@ -187,7 +189,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s7e">
       <div class="num">7e</div>
       <div class="body">
-        <div class="head"><h2>Credit lifecycle</h2><span class="pill">Recommended first</span></div>
+        <div class="head"><h2>Credit lifecycle</h2><span class="pill now">Next</span></div>
         <p class="why">This is the one place the plan's money is wrong today. A card with a positive balance should count as cash, but everycent treats an overpayment as cash overspending and never adds the positive balance back, so the plan loses that money. Closing a positive card takes its balance out twice.</p>
         <div class="meta">
           <div>

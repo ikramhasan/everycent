@@ -180,9 +180,8 @@ were deferred until after phase 8, which is now done — see `docs/deferred.md`.
 
 ### 8. Targets (goals)
 
-Done: 8a–8d are merged; 8e (credit card payment targets) and 8f (expected income, target
-history) are on branches, not merged yet. Loan debt targets wait for 7f; scheduled-transaction
-funding waits for phase 10 — see `docs/deferred.md` and `docs/verify.md`.
+Done and merged (8a–8f). Loan debt targets wait for 7f; scheduled-transaction funding waits for
+phase 10 — see `docs/deferred.md` and `docs/verify.md`.
 
 - [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
       (every N months/years), by a specific date; refill vs set aside another
