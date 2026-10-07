@@ -23,6 +23,7 @@ const categories = [
       assignedLastMonth: "3000",
       resetAvailable: "0",
     },
+    bar: null,
     underfundedParts: [],
   },
   {
@@ -37,6 +38,7 @@ const categories = [
     target: null,
     available: "0",
     autoAssign: { ...NO_AUTO_ASSIGN, assignedLastMonth: "0" },
+    bar: null,
     underfundedParts: [],
   },
 ];

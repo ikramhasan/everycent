@@ -60,15 +60,18 @@ function weekdayDates(month: BudgetMonth, weekday: number) {
  *   (O11: $100.00 target, $30.00 overspent → $100.00; O13: met, $30.00 overspent → $30.00). A
  *   category without a target only gets its overspending covered.
  * - Reduce Overfunding takes back what the target says is over (`TargetNeed.overfunded`).
+ * - A snoozed target asks for nothing, but its overspending is still covered and what's over can
+ *   still be taken back (YNAB, 2026-10-07: snoozed O11 asked $30.00, snoozed O9 gave back $50.00).
  */
 export function spendingFunding(
   month: BudgetMonth,
   available: bigint,
   target: Pick<CategoryTarget, "cadence" | "dueDay"> | null,
   need: TargetNeed | null,
+  snoozed = false,
 ): CategoryFunding {
   const overspent = available < 0n ? -available : 0n;
-  const short = need?.underfunded ?? 0n;
+  const short = snoozed ? 0n : (need?.underfunded ?? 0n);
   const underfunded = short > overspent ? short : overspent;
   const overfunded = need?.overfunded ?? 0n;
   if (underfunded === 0n) return { ...NONE, overfunded };

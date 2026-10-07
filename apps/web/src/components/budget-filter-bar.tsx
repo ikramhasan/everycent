@@ -3,7 +3,7 @@ import { BUDGET_FILTERS, type BudgetFilter } from "@/lib/budget-view";
 
 /**
  * YNAB's views above the budget list: All, Overspent (with its count), Underfunded, Overfunded and
- * Money Available. Snoozed comes with snoozing (phase 8d).
+ * Money Available and Snoozed.
  */
 export function BudgetFilterBar({
   filter,
@@ -21,6 +21,7 @@ export function BudgetFilterBar({
     underfunded: "Underfunded",
     overfunded: "Overfunded",
     available: "Money Available",
+    snoozed: "Snoozed",
   };
   return (
     <ToggleGroup

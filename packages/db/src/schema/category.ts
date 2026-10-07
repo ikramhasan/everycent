@@ -177,6 +177,8 @@ export const categoryTarget = pgTable(
     repeatUnit: text({ enum: TARGET_REPEAT_UNITS }),
     /** First day of the first month the target applies to, YYYY-MM-01. */
     startMonth: date({ mode: "string" }).notNull(),
+    /** YYYY-MM-01 of the month the target is snoozed for (YNAB's snooze lasts one month). */
+    snoozedMonth: date({ mode: "string" }),
     ...timestamps,
   },
   (t) => [index("category_target_budget_id_idx").on(t.budgetId)],

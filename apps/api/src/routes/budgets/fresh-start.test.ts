@@ -206,6 +206,7 @@ describe("fresh start", () => {
       repeatEvery: null,
       repeatUnit: null,
       startMonth: "2026-10",
+      snoozedMonth: null,
     });
   });
 

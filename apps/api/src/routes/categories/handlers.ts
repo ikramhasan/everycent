@@ -1,8 +1,11 @@
 import { newId } from "@everycent/db";
 import { category, categoryGroup, categoryTarget } from "@everycent/db/schema";
+import { monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { AppError } from "../../lib/errors";
+import { serverToday } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -29,6 +32,7 @@ import type {
   moveCategory,
   moveCategoryGroup,
   setCategoryTarget,
+  snoozeCategoryTarget,
   updateCategory,
   updateCategoryGroup,
 } from "./routes";
@@ -281,4 +285,30 @@ export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarg
   const row = await findCategory(db, budgetId, categoryId);
   await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
   return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
+};
+
+export const snoozeCategoryTargetHandler: RouteHandler<typeof snoozeCategoryTarget, Env> = async (
+  c,
+) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { month, snoozed, today = serverToday() } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  const existing = await findTarget(db, categoryId);
+  if (!existing) throw new AppError(404, "NOT_FOUND", "The category has no target");
+  // YNAB: "You can only snooze a target in the current month."
+  if (month !== monthOf(today)) {
+    throw new AppError(
+      400,
+      "SNOOZE_CURRENT_MONTH",
+      "Only the current month's target can be snoozed",
+    );
+  }
+  const [target] = await db
+    .update(categoryTarget)
+    .set({ snoozedMonth: snoozed ? `${month}-01` : null })
+    .where(eq(categoryTarget.id, existing.id))
+    .returning();
+  return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
 };

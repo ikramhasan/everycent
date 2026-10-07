@@ -14,6 +14,7 @@ import { CategoryInspector, MonthSummary, PaymentInspector } from "@/components/
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
 import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
+import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
 import { TargetSection } from "@/components/target-inspector";
@@ -31,6 +32,7 @@ import {
   targetMark,
   UNCATEGORIZED,
   useBudgetFilter,
+  useProgressBars,
 } from "@/lib/budget-view";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
@@ -74,6 +76,7 @@ function BudgetPage() {
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
   const { filter, setFilter } = useBudgetFilter(budget.id);
+  const { progressBars, setProgressBars } = useProgressBars();
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const queryClient = useQueryClient();
   const assignMutation = $api.useMutation(
@@ -179,6 +182,7 @@ function BudgetPage() {
       format: (amount) => formatAmount(toMoney(amount, data.currency)),
       activity: { budgetId: budget.id, formatDate },
       shown,
+      progressBars,
       emptyView: {
         message: filter === "all" ? "" : EMPTY_VIEW[filter],
         onViewAll: () => setFilter("all"),
@@ -266,6 +270,7 @@ function BudgetPage() {
     selection,
     history,
     today,
+    progressBars,
   ]);
 
   return (
@@ -342,7 +347,7 @@ function BudgetPage() {
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
               toolbar={
-                <div className="flex items-center gap-1">
+                <div className="flex flex-1 items-center gap-1">
                   <UndoRedoButtons />
                   {listFigures && (
                     <RecentMoves
@@ -352,6 +357,11 @@ function BudgetPage() {
                       formatDate={formatDate}
                     />
                   )}
+                  <ProgressBarsToggle
+                    on={progressBars}
+                    onChange={setProgressBars}
+                    className="ml-auto"
+                  />
                 </div>
               }
             />
@@ -516,6 +526,7 @@ function Inspector({
   targetActions: ReturnType<typeof useTargetActions>;
 }) {
   const { budget } = useBudget();
+  const history = useUndo();
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
   if (only === UNCATEGORIZED && month.uncategorized) {
@@ -589,6 +600,20 @@ function Inspector({
               onSave={(input) => targetActions.save(only, month.month, input)}
               onDelete={() => targetActions.remove(only)}
               onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}
+              onSnooze={
+                month.month === figures.currentMonth
+                  ? async (snoozed) => {
+                      const snooze = (on: boolean) =>
+                        targetActions.snooze(only, month.month, on).then(() => undefined);
+                      if (!(await targetActions.snooze(only, month.month, snoozed))) return;
+                      history.record({
+                        label: snoozed ? "snooze target" : "wake target",
+                        undo: () => snooze(!snoozed),
+                        redo: () => snooze(snoozed),
+                      });
+                    }
+                  : undefined
+              }
             />
           )
         }

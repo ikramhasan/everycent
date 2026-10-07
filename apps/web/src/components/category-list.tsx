@@ -39,11 +39,12 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
-import { targetRowNote } from "@/lib/targets";
+import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
+import { ProgressBar } from "./progress-bar";
 
 export interface CategoryListActions {
   createGroup: (name: string) => Promise<void>;
@@ -95,6 +96,8 @@ export interface CategoryFigures {
   shown?: ReadonlySet<string>;
   /** What to say when a view keeps nothing, with a way back to All. */
   emptyView?: { message: string; onViewAll: () => void };
+  /** YNAB's Progress Bars setting: off hides the bars and the notes under category names. */
+  progressBars?: boolean;
 }
 
 export interface SelectionActions {
@@ -722,81 +725,95 @@ function CategoryRow({
         selected && SELECTED_ROW,
       )}
     >
-      <div className={NAME_CELL}>
-        <Spacer />
-        {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
-        {reorderable ? (
-          <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
-        ) : (
+      <div className="grid min-w-0 gap-1">
+        <div className={NAME_CELL}>
           <Spacer />
-        )}
-        <NamePopover
-          title="Category name"
-          withNote
-          nameLockedReason={
-            isPayment ? "Named after its credit account. Rename the account instead." : undefined
-          }
-          initial={{ name: category.name, note: category.note }}
-          onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
-          actions={(close) => (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  close();
-                  await actions.updateCategory(category.id, { hidden: true });
-                }}
-              >
-                Hide
-              </Button>
-              {!isPayment && (
+          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
+          {reorderable ? (
+            <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+          ) : (
+            <Spacer />
+          )}
+          <NamePopover
+            title="Category name"
+            withNote
+            nameLockedReason={
+              isPayment ? "Named after its credit account. Rename the account instead." : undefined
+            }
+            initial={{ name: category.name, note: category.note }}
+            onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
+            actions={(close) => (
+              <>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="text-destructive"
-                  onClick={() => {
+                  onClick={async () => {
                     close();
-                    onDelete();
+                    await actions.updateCategory(category.id, { hidden: true });
                   }}
                 >
-                  Delete
+                  Hide
                 </Button>
-              )}
-            </>
-          )}
-          trigger={
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(NAME_BUTTON, "font-normal text-sm")}
-              onClick={(e) => {
-                if (!selection || onlySelected) return;
-                // Selecting comes first; Radix skips opening the editor on a prevented click.
-                e.preventDefault();
-                selection.selectOnly(category.id);
-              }}
-            >
-              <span className="truncate">{category.name}</span>
-            </Button>
-          }
-        />
-        {category.note && (
-          <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
-        )}
-        {totals && format && figures && totals.available.startsWith("-") ? (
-          <OverspentNote totals={totals} format={format} />
-        ) : (
-          totals?.target &&
-          category.target &&
-          format &&
-          figures && (
-            <TargetNote
-              {...targetRowNote(category.target, totals.target, figures.month.month, format)}
+                {!isPayment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => {
+                      close();
+                      onDelete();
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
+            trigger={
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(NAME_BUTTON, "font-normal text-sm")}
+                onClick={(e) => {
+                  if (!selection || onlySelected) return;
+                  // Selecting comes first; Radix skips opening the editor on a prevented click.
+                  e.preventDefault();
+                  selection.selectOnly(category.id);
+                }}
+              >
+                <span className="truncate">{category.name}</span>
+              </Button>
+            }
+          />
+          {category.note && (
+            <StickyNote
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Has a note"
             />
-          )
+          )}
+          {totals &&
+            format &&
+            figures &&
+            figures.progressBars !== false &&
+            (totals.available.startsWith("-") ? (
+              <OverspentNote totals={totals} format={format} />
+            ) : (
+              <RowNote
+                note={categoryRowNote(
+                  category.target,
+                  totals.target,
+                  totals.bar,
+                  figures.month.month,
+                  format,
+                )}
+              />
+            ))}
+        </div>
+        {totals?.bar && figures?.progressBars !== false && (
+          // Lined up with the name, past the three slots and the name button's padding.
+          <ProgressBar bar={totals.bar} className="mr-1 ml-[5.75rem]" />
         )}
       </div>
       {totals && format && (
@@ -849,16 +866,13 @@ function CategoryRow({
   );
 }
 
-/** What a category's target still asks for this month, under its name (YNAB's row note). */
-function TargetNote({ text, met }: { text: string; met: boolean }) {
+/** The note under a category's name: its target's status, or what was spent (YNAB's row note). */
+function RowNote({ note }: { note: { strong: string; rest: string } | null }) {
+  if (!note) return null;
   return (
-    <span
-      className={cn(
-        "min-w-0 flex-1 basis-0 truncate pl-2 text-right text-xs",
-        met ? "font-medium text-foreground" : "text-muted-foreground",
-      )}
-    >
-      {text}
+    <span className="min-w-0 flex-1 basis-0 truncate pl-2 text-right text-muted-foreground text-xs">
+      {note.strong && <span className="font-medium text-foreground">{note.strong}</span>}
+      {note.rest}
     </span>
   );
 }

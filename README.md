@@ -160,8 +160,7 @@ and fresh start (after phase 5 core).
 - [x] Category inspector: balance breakdown (cash left over, assigned, activity), notes (the
       target part comes with phase 8)
 - [x] Category activity drill-down (transactions for category + month)
-- [ ] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
-      (all but snoozed done; snoozed comes with phase 8d)
+- [x] Collapse/expand groups, filters (underfunded, overspent, money available, snoozed)
 - [x] Undo / redo for budget and transaction edits
 
 ### 7. Credit cards & debt
@@ -188,10 +187,10 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 - [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
       another" covers it
 - [ ] Debt payment targets (for loans / credit cards; include interest)
-- [ ] Target progress bars and status (funded, underfunded, overspent, on track)
+- [x] Target progress bars and status (funded, underfunded, overspent, on track)
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)
-- [ ] Snooze a target for a month
+- [x] Snooze a target for a month
 - [ ] Repeat on/off (done in 8b), target history across months (8f)
 - [ ] Targets overview (total needed this month vs next month)
 

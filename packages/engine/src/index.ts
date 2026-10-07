@@ -93,6 +93,7 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,
   DATE_LABELS,

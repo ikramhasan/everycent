@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { $api } from "./api";
 import { apiErrorMessage } from "./budgets";
 import { categoriesQueryOptions } from "./categories";
+import { todayIso } from "./dates";
 import { invalidateMonths } from "./months";
 
 export type CategoryTarget = NonNullable<components["schemas"]["CategoryTarget"]>;
@@ -219,6 +220,10 @@ export function useTargetActions(budgetId: string) {
     "delete",
     "/v1/budgets/{budgetId}/categories/{categoryId}/target",
   );
+  const snooze = $api.useMutation(
+    "put",
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/snooze",
+  );
   return useMemo(() => {
     async function run(work: () => Promise<unknown>, failure: string) {
       try {
@@ -250,7 +255,53 @@ export function useTargetActions(budgetId: string) {
           () => remove.mutateAsync({ params: { path: { budgetId, categoryId } } }),
           "Couldn't delete the target.",
         ),
+      /** Snoozes the target for `month` (the current month), or wakes it. */
+      snooze: (categoryId: string, month: BudgetMonth, snoozed: boolean) =>
+        run(
+          () =>
+            snooze.mutateAsync({
+              params: { path: { budgetId, categoryId } },
+              body: { month, snoozed, today: todayIso() },
+            }),
+          snoozed ? "Couldn't snooze the target." : "Couldn't wake the target.",
+        ),
     };
     // mutateAsync is stable; the mutation objects change every render.
   }, [budgetId, queryClient]);
+}
+
+type MonthBar = NonNullable<components["schemas"]["ProgressBar"]>;
+
+/**
+ * The note under a category that isn't overspent (YNAB, docs/verify.md "Snooze and progress
+ * bars"). With a target that's working this month: its note ("Funded", "$60.00 more needed by the
+ * 31st", …), a met one adding what was spent of its money ("Funded. Spent $30.00 of $100.00").
+ * Without one (or snoozed): "Fully Spent" when spending used all the money, "Spent $7.00 of $20.00"
+ * while some is left, nothing otherwise. `strong` is the part YNAB sets in bold.
+ */
+export function categoryRowNote(
+  target: CategoryTarget | null,
+  need: TargetNeed | null,
+  bar: MonthBar | null,
+  month: BudgetMonth,
+  format: Format,
+): { strong: string; rest: string } | null {
+  let spent = 0n;
+  let money = 0n;
+  let left = 0n;
+  for (const section of bar?.sections ?? []) {
+    for (const g of section.segments) {
+      if (g.kind === "spent") spent += BigInt(g.amount);
+      if (g.kind === "available") left += BigInt(g.amount);
+    }
+  }
+  money = spent + left;
+  const spentOf = `Spent ${format(spent.toString())} of ${format(money.toString())}`;
+  if (target && need && !need.snoozed) {
+    const note = targetRowNote(target, need, month, format);
+    if (!note.met) return { strong: "", rest: note.text };
+    return { strong: note.text, rest: spent > 0n ? `. ${spentOf}` : "" };
+  }
+  if (spent === 0n) return null;
+  return left === 0n ? { strong: "", rest: "Fully Spent" } : { strong: "", rest: spentOf };
 }

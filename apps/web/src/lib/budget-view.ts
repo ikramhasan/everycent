@@ -3,13 +3,14 @@ import { useCallback, useState } from "react";
 import type { BudgetMonthData, MonthTotals } from "./months";
 import type { TargetNeed } from "./targets";
 
-/** YNAB's views above the budget list, in its order. Snoozed comes with snoozing (phase 8d). */
+/** YNAB's views above the budget list, in its order. */
 export const BUDGET_FILTERS = [
   "all",
   "overspent",
   "underfunded",
   "overfunded",
   "available",
+  "snoozed",
 ] as const;
 export type BudgetFilter = (typeof BUDGET_FILTERS)[number];
 
@@ -20,7 +21,8 @@ export const UNCATEGORIZED = "uncategorized";
  * Whether a category's numbers belong in a view: Overspent is below zero, Money Available above;
  * Underfunded is anything Underfunded would add to (overspending included), Overfunded anything
  * Reduce Overfunding would take from (YNAB, docs/verify.md "Underfunded and Reduce Overfunding").
- * Uncategorized, with no Auto-Assign, counts as underfunded while it's negative.
+ * Uncategorized, with no Auto-Assign, counts as underfunded while it's negative. Snoozed is a
+ * target snoozed this month.
  */
 export function matchesFilter(
   filter: BudgetFilter,
@@ -28,6 +30,7 @@ export function matchesFilter(
     available: string;
     assigned?: string;
     autoAssign?: { underfunded: string; reduceOverfunding: string };
+    target?: { snoozed: boolean } | null;
   },
 ) {
   if (filter === "all") return true;
@@ -42,6 +45,8 @@ export function matchesFilter(
       return autoAssign ? BigInt(autoAssign.underfunded) > BigInt(assigned) : available < 0n;
     case "overfunded":
       return autoAssign ? BigInt(autoAssign.reduceOverfunding) < BigInt(assigned) : false;
+    case "snoozed":
+      return Boolean(totals.target?.snoozed);
   }
 }
 
@@ -51,6 +56,7 @@ export const EMPTY_VIEW: Record<Exclude<BudgetFilter, "all">, string> = {
   underfunded: "Cheers! You don't currently have any underfunded categories.",
   overfunded: "You don't currently have any overfunded targets.",
   available: "You don't currently have categories with money available.",
+  snoozed: "You don't currently have categories with snoozed targets in this month.",
 };
 
 /**
@@ -84,32 +90,37 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
 export function isCaution(
   totals: Pick<MonthTotals, "available" | "cashOverspent"> & {
     payment?: { underfunded: string } | null;
-    target?: { underfunded: string } | null;
+    target?: { underfunded: string; snoozed?: boolean } | null;
   },
   month: string,
   current: string,
 ) {
   if (totals.payment) return totals.payment.underfunded !== "0" && month >= current;
   if (totals.available.startsWith("-")) return totals.cashOverspent === "0";
-  // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a).
-  return Boolean(totals.target && totals.target.underfunded !== "0");
+  // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a), unless
+  // it's snoozed: then green or grey (support.ynab.com "Snooze a Target").
+  return Boolean(totals.target && totals.target.underfunded !== "0" && !totals.target.snoozed);
 }
 
 /**
  * What a category's target shows on its Available pill: a pie filled to the funded percentage while
- * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets").
+ * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets"), Zz when snoozed.
  */
-export type TargetMark = { met: true } | { met: false; percent: number };
+export type TargetMark =
+  | { kind: "met" }
+  | { kind: "underfunded"; percent: number }
+  | { kind: "snoozed" };
 
 /** The mark a category's target puts on its Available pill, if it has one this month. */
 export function targetMark(target: TargetNeed | null | undefined): TargetMark | undefined {
   if (!target) return undefined;
+  if (target.snoozed) return { kind: "snoozed" };
   const needed = BigInt(target.needed);
   const funded = BigInt(target.funded);
   // Met shows a check; underfunded and "on track" show a pie filled to the share of the total.
   return funded >= needed
-    ? { met: true }
-    : { met: false, percent: targetPercent({ needed, funded }) };
+    ? { kind: "met" }
+    : { kind: "underfunded", percent: targetPercent({ needed, funded }) };
 }
 
 export interface Breakdown {
@@ -208,4 +219,29 @@ export function useBudgetFilter(budgetId: string) {
     [key],
   );
   return { filter, setFilter: update };
+}
+
+const PROGRESS_BARS_KEY = "everycent:progress-bars";
+
+/**
+ * YNAB's Progress Bars On/Off, kept in this browser (support.ynab.com: they "reset when cookies or
+ * local storage are cleared"). On unless turned off.
+ */
+export function useProgressBars() {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(PROGRESS_BARS_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const update = useCallback((next: boolean) => {
+    setOn(next);
+    try {
+      localStorage.setItem(PROGRESS_BARS_KEY, next ? "on" : "off");
+    } catch {
+      // Storage can be unavailable (private windows); the setting still works for this visit.
+    }
+  }, []);
+  return { progressBars: on, setProgressBars: update };
 }

@@ -24,6 +24,7 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   payment: null,
   target: null,
   autoAssign: NO_AUTO_ASSIGN,
+  bar: null,
   underfundedParts: [],
 });
 
@@ -125,10 +126,15 @@ describe("targets", () => {
   const need = (underfunded: string, funded = "4000") => ({
     available: "4000",
     cashOverspent: "0",
-    target: { needed: "10000", funded, underfunded, dueDate: null },
+    target: { needed: "10000", funded, underfunded, dueDate: null, snoozed: false },
   });
   it("is yellow while a target is underfunded, unless cash overspending makes it red", () => {
     expect(isCaution(need("6000"), "2026-10", "2026-10")).toBe(true);
+    // Snoozed: green or grey instead (support.ynab.com "Snooze a Target").
+    const snoozed = need("6000");
+    expect(
+      isCaution({ ...snoozed, target: { ...snoozed.target, snoozed: true } }, "2026-10", "2026-10"),
+    ).toBe(false);
     expect(isCaution(need("0"), "2026-10", "2026-10")).toBe(false);
     expect(
       isCaution(
@@ -139,8 +145,9 @@ describe("targets", () => {
     ).toBe(false);
   });
   it("marks the pill with the funded share or a check", () => {
-    expect(targetMark(need("6000").target)).toEqual({ met: false, percent: 40 });
-    expect(targetMark(need("0", "15000").target)).toEqual({ met: true });
+    expect(targetMark(need("6000").target)).toEqual({ kind: "underfunded", percent: 40 });
+    expect(targetMark(need("0", "15000").target)).toEqual({ kind: "met" });
+    expect(targetMark({ ...need("6000").target, snoozed: true })).toEqual({ kind: "snoozed" });
     expect(targetMark(null)).toBeUndefined();
   });
 });

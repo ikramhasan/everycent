@@ -18,9 +18,6 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Past months' negative banner ("Overdraft?") has no "Next Steps" link (a YNAB help page).
 - The current month doesn't warn when a later month is negative (YNAB's future-months panel:
   "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
-- YNAB draws a progress bar under every category (green as money is spent, red stripes when
-  overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
-  the bars belong with targets (phase 8), which they mostly show.
 - Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
   partners cannot undo one another's history. Undo and redo still call the API, so the resulting
   budget/transaction state is saved on the server. It covers assigning, moving and auto-assign,
@@ -39,7 +36,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
-  on a selection are auto-assign's (6e). The Snoozed view waits for phase 8d.
+  on a selection are auto-assign's (6e).
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
@@ -84,11 +81,12 @@ before starting a roadmap phase** and remove an entry once it's done.
 - 8c added Underfunded and Reduce Overfunding to Auto-Assign (in YNAB's funding order, stopping
   at Ready to Assign for the whole plan or a view), the Underfunded and Overfunded views, and the
   summary's "Cost to Be Me" / "October's Targets".
-- Not yet: the row's progress bars and "Spent $x of $y" notes (8d), Snooze (8d; YNAB shows
-  "Snooze target for this month" under Edit Target), payment-category targets (8e, the API refuses
-  them with 409 `MANAGED_CATEGORY`).
-- Snooze (8d) has to take a snoozed target out of Underfunded (`spendingFunding`) while Reduce
-  Overfunding still sees it (support.ynab.com: "Snoozed targets will still show overfunding").
+- 8d added Snooze (inspector switch, Zz pill, Snoozed view), progress bars with the On/Off toggle
+  and the "Spent $x of $y" / "Fully Spent" notes.
+- Not yet: payment-category targets (8e, the API refuses them with 409 `MANAGED_CATEGORY`); the
+  rollover section of a dated "Set aside another…" target (support.ynab.com: money left at the end
+  of the last target period gets its own first section; drawn as one section for now); YNAB's
+  Shift+Z snooze shortcut (keyboard shortcuts phase).
 - Underfunded ignores scheduled transactions (phase 10); YNAB funds them with the due-date step.
 - The summary's "Enter your expected income" (under Cost to Be Me) isn't built; no phase has it
   yet.

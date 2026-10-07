@@ -32,7 +32,9 @@ import {
   type MonthFigures,
   monthBounds,
   monthOf,
+  type ProgressBar,
   paymentFunding,
+  progressBar,
   readyToAssign,
   spendingFunding,
   type TargetNeed,
@@ -419,6 +421,12 @@ async function monthState(
       { ...t, startMonth: monthOf(t.startMonth) },
     ]),
   );
+  // A snooze lasts for the month it was set in.
+  const snoozedNow = new Set(
+    targetRows
+      .filter((t) => t.snoozedMonth && monthOf(t.snoozedMonth) === month)
+      .map((t) => t.categoryId),
+  );
 
   // Each card's payment details: what's owed at the end of the month (up to today) against what's
   // set aside, and how much of the shortfall is this month's credit overspending.
@@ -462,6 +470,8 @@ async function monthState(
     figures: CategoryMonth;
     auto: Record<AutoAssignOption, bigint>;
     need: TargetNeed | null;
+    snoozed: boolean;
+    bar: ProgressBar | null;
     payment: ReturnType<typeof paymentOf>;
     funding: CategoryFunding;
     hidden: boolean;
@@ -493,10 +503,11 @@ async function monthState(
     const isHidden = cat.hidden || cat.groupHidden;
     const target = targets.get(cat.id) ?? null;
     const need = target && targetNeed(entries, target, month, monthOf(today));
+    const snoozed = snoozedNow.has(cat.id);
     const payment = paymentOf(cat.id, figures);
     const funding = payment
       ? paymentFunding(figures.available, payment.owed, payment.fromOverspending)
-      : spendingFunding(month, figures.available, target, need);
+      : spendingFunding(month, figures.available, target, need, snoozed);
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
@@ -511,6 +522,8 @@ async function monthState(
         reduceOverfunding: figures.assigned - funding.overfunded,
       },
       need,
+      snoozed,
+      bar: payment ? null : progressBar(figures, target, need, snoozed, month),
       payment,
       funding,
       hidden: isHidden,
@@ -586,6 +599,15 @@ export async function budgetMonthJson(
           funded: l.need.funded.toString(),
           underfunded: l.need.underfunded.toString(),
           dueDate: l.need.dueDate,
+          snoozed: l.snoozed,
+        },
+        bar: l.bar && {
+          tone: l.bar.tone,
+          sections: l.bar.sections.map((section) => ({
+            kind: section.kind,
+            size: section.size.toString(),
+            segments: section.segments.map((g) => ({ kind: g.kind, amount: g.amount.toString() })),
+          })),
         },
         autoAssign: Object.fromEntries(
           Object.entries(l.auto).map(([option, amount]) => [option, amount.toString()]),
