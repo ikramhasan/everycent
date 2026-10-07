@@ -149,7 +149,7 @@ const month: BudgetMonthData = {
   readyToAssign: "0",
   assignedInFuture: "0",
   futureMonths: [],
-  targets: { month: "0", nextMonth: "0" },
+  targets: { month: "0", nextMonth: "0", expectedIncome: null },
   categories: [
     {
       categoryId: "c1",

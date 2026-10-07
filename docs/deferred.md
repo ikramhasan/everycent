@@ -92,8 +92,10 @@ before starting a roadmap phase** and remove an entry once it's done.
   left at the end of the last target period gets its own first section; drawn as one section for
   now); YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
 - Underfunded ignores scheduled transactions (phase 10); YNAB funds them with the due-date step.
-- The summary's "Enter your expected income" (under Cost to Be Me) isn't built; no phase has it
-  yet.
+- 8f added the summary's Expected Income (with its bars), YNAB's start-month rule for changed
+  targets, and the past/future month details (no Assign in past months, the snooze switch disabled
+  outside the current month). A fresh start doesn't copy the expected income yet (not seen in
+  YNAB, docs/verify.md).
 - Target edits aren't in the undo history (docs/verify.md).
 - A category's history is reassigned on delete, but its target is deleted with it.
 

@@ -125,6 +125,21 @@ describe("category targets", () => {
     expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-09");
   });
 
+  it("a changed target starts again in the month it's saved from (YNAB F-Y1)", async () => {
+    const { rent, setTarget, findCategory, need } = await setup();
+    await setTarget(rent.id, { month: "2026-09" });
+    // $80.00 from October: September shows no target any more.
+    await setTarget(rent.id, { amount: "8000", month: "2026-10" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+    expect(await need(rent.id, "2026-09")).toBeNull();
+    // A change from a later month moves it forward too; saved unchanged, it stays.
+    await setTarget(rent.id, { amount: "9000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-11");
+    await setTarget(rent.id, { amount: "9000", month: "2026-10" });
+    await setTarget(rent.id, { amount: "9000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+  });
+
   it("set aside counts this month's Assigned (YNAB T8 B, C, E)", async () => {
     const { rent, phone, setTarget, assign, spend, need } = await setup();
     await setTarget(rent.id, {});

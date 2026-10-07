@@ -192,8 +192,10 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)
 - [x] Snooze a target for a month
-- [ ] Repeat on/off (done in 8b), target history across months (8f)
-- [ ] Targets overview (total needed this month vs next month)
+- [x] Repeat on/off (8b), target history across months (8f: a changed target starts in the month
+      it's saved from, as YNAB)
+- [x] Targets overview (total needed this month vs next month: Cost to Be Me, 8c; expected income,
+      8f)
 
 ### 9. Reconciliation
 

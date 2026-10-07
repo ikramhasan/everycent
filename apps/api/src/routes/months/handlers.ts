@@ -1,6 +1,7 @@
 import { sql } from "@everycent/db";
 import {
   budgetAccount,
+  budget as budgetTable,
   category,
   categoryAssignment,
   categoryGroup,
@@ -49,7 +50,14 @@ import { AppError } from "../../lib/errors";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import type { assignCategory, autoAssign, getBudgetMonth, listMoves, moveMoney } from "./routes";
+import type {
+  assignCategory,
+  autoAssign,
+  getBudgetMonth,
+  listMoves,
+  moveMoney,
+  setExpectedIncome,
+} from "./routes";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -561,7 +569,7 @@ async function monthState(
 /** The budget screen's numbers for `month`, as of the user's `today`. */
 export async function budgetMonthJson(
   db: Db,
-  budget: { id: string; currency: CurrencyCode },
+  budget: { id: string; currency: CurrencyCode; expectedIncome?: bigint | null },
   month: BudgetMonth,
   today: string,
 ) {
@@ -636,6 +644,7 @@ export async function budgetMonthJson(
     targets: {
       month: state.monthTargets.month.toString(),
       nextMonth: state.monthTargets.nextMonth.toString(),
+      expectedIncome: budget.expectedIncome?.toString() ?? null,
     },
   };
 }
@@ -793,3 +802,16 @@ export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) =
 
 /** How many moves "Recent Moves" lists (YNAB's limit is open in docs/verify.md). */
 const RECENT_MOVES = 100;
+
+export const setExpectedIncomeHandler: RouteHandler<typeof setExpectedIncome, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { amount } = c.req.valid("json");
+  const { db } = c.var.deps;
+  // A planning number like Assigned, so whoever can assign can set it.
+  const { budget: row } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
+  await db
+    .update(budgetTable)
+    .set({ expectedIncome: BigInt(amount), expectedIncomeCurrency: row.currency })
+    .where(eq(budgetTable.id, budgetId));
+  return c.json({ expectedIncome: amount }, 200);
+};

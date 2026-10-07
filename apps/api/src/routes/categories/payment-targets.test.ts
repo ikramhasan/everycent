@@ -155,7 +155,7 @@ describe("credit card payment targets", () => {
     expect(oct?.autoAssign.reduceOverfunding).toBe("2084");
     expect((await row(payment.id, "2026-11"))?.target?.underfunded).toBe("1500");
     // The month's targets count the share; next month's ($125.00 − $50.00) ÷ 5.
-    expect((await month("2026-10")).targets).toEqual({ month: "2084", nextMonth: "1500" });
+    expect((await month("2026-10")).targets).toMatchObject({ month: "2084", nextMonth: "1500" });
   });
 
   it("pays a specific amount monthly, whatever is paid or spent (Card E3)", async () => {

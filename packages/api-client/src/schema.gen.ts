@@ -210,7 +210,7 @@ export interface paths {
         get?: never;
         /**
          * Create or replace a category's target
-         * @description A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.
+         * @description A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.
          */
         put: operations["setCategoryTarget"];
         post?: never;
@@ -580,6 +580,26 @@ export interface paths {
         /** Recent changes to assigned money, newest first */
         get: operations["listMoves"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/expected-income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the budget's expected monthly income
+         * @description YNAB's "Enter your expected income" under Cost to Be Me: entered once, it stays from month to month. It must be positive; like YNAB, it can be changed but not cleared.
+         */
+        put: operations["setExpectedIncome"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1340,6 +1360,8 @@ export interface components {
             month: string;
             /** @description The same for the month after */
             nextMonth: string;
+            /** @description The budget's expected monthly income (YNAB's "Expected Income" under Cost to Be Me), the same in every month; null until entered */
+            expectedIncome: string | null;
         };
         AssignCategory: {
             /** @description The new Assigned amount; negative takes money out */
@@ -1416,6 +1438,14 @@ export interface components {
             movedAt: string;
             /** @description Who moved it; null if they left the budget */
             userName: string | null;
+        };
+        ExpectedIncome: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            expectedIncome: string;
+        };
+        SetExpectedIncome: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
         };
     };
     responses: never;
@@ -3831,6 +3861,68 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setExpectedIncome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetExpectedIncome"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedIncome"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't assign money in this budget */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -597,7 +597,11 @@ function Inspector({
                 dateFormat={budget.dateFormat}
                 onSave={(input) => targetActions.save(only, month.month, input)}
                 onDelete={() => targetActions.remove(only)}
-                onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}
+                onAssign={
+                  month.month < figures.currentMonth
+                    ? undefined
+                    : (amount) => assign.assign(only, BigInt(totals.assigned) + amount)
+                }
                 payment={{
                   month: month.month,
                   fundedSpending: totals.payment.fundedSpending,
@@ -633,7 +637,13 @@ function Inspector({
               dateFormat={budget.dateFormat}
               onSave={(input) => targetActions.save(only, month.month, input)}
               onDelete={() => targetActions.remove(only)}
-              onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}
+              onAssign={
+                // YNAB leaves the Assign button out in past months (seen 2026-10-08).
+                month.month < figures.currentMonth
+                  ? undefined
+                  : (amount) => assign.assign(only, BigInt(totals.assigned) + amount)
+              }
+              snoozeLocked={month.month !== figures.currentMonth}
               onSnooze={
                 month.month === figures.currentMonth
                   ? async (snoozed) => {
@@ -680,7 +690,15 @@ function Inspector({
       // The whole plan's targets, whatever the view; YNAB shows them in the current month only.
       targets={
         month.month === figures.currentMonth
-          ? { month: BigInt(month.targets.month), nextMonth: BigInt(month.targets.nextMonth) }
+          ? {
+              month: BigInt(month.targets.month),
+              nextMonth: BigInt(month.targets.nextMonth),
+              expectedIncome:
+                month.targets.expectedIncome === null ? null : BigInt(month.targets.expectedIncome),
+              onSetIncome: assign && targetActions.setExpectedIncome,
+              parse: assign?.parse,
+              toInput: assign?.toInput,
+            }
           : undefined
       }
     />

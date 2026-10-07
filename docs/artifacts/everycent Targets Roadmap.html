@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 8 Oct 2026 (8a–8d merged to main, 8e on a branch; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 8 Oct 2026 (8a–8d merged to main; 8e and 8f on branches; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -162,10 +162,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s8c"><span class="n">8c · done</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
       <a class="node done" href="#s8d"><span class="n">8d · done</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
       <a class="node done" href="#s8e"><span class="n">8e · done</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
-      <a class="node now" href="#s8f"><span class="n">8f · next</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
+      <a class="node done" href="#s8f"><span class="n">8f · done</span><span class="t">Overview</span><span class="s">Income, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a–8d are merged to <span class="mono">main</span> (e08f13f); 8e is on <span class="mono">phase-8e-card-targets</span>, not merged. To pick up: <span class="mono">Start 8f (targets overview, history, parity pass) once 8e is merged. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8f's gate in YNAB. YNAB's API can't snooze or set payment-category target types; use the web app for those (snoozes and target edits there do persist).</span></div>
+    <div class="then">8a–8d are merged to <span class="mono">main</span> (e08f13f); 8e is on <span class="mono">phase-8e-card-targets</span> and 8f on <span class="mono">phase-8f-overview</span> (stacked on 8e), neither merged. Phase 8 is complete apart from what it parks (loan targets with 7f, scheduled transactions with Phase 10). To pick up: <span class="mono">Merge 8e and 8f, then choose the next phase: 7e–7g (positive balances, loans) or Phase 9 (reconciliation). Open target details are in docs/verify.md.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -306,18 +306,20 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8f">
       <div class="num">8f</div>
       <div class="body">
-        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill now">Next</span></div>
-        <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f.</p>
+        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill done">Done</span></div>
+        <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f. YNAB's overview turned out to be Cost to Be Me (8c) plus Expected Income; it has no per-group totals, so none were built.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Targets overview: total needed this month vs next month, and per group</li><li>Target history: past months show what that month's target asked for</li><li>Browser parity pass of every target type in both themes; deferred.md and verify.md updated</li><li><code>pnpm check</code>; OpenAPI/client and migrations generated and committed</li></ul>
+            <ul><li>Expected Income under Cost to Be Me: entered once, kept every month, with YNAB's two bars (targets blue, or red when income falls short; income grey)</li><li>Target history as YNAB keeps it: a changed target starts in the month it's saved from, so earlier months show none; an unchanged save only moves the start back</li><li>Past and future months: no Assign button in past months; the snooze switch shown but disabled outside the current month</li><li>Parity pass in both themes; deferred.md and verify.md updated; <code>pnpm check</code>; OpenAPI/client and the migration committed</li></ul>
             <h3>Depends on</h3>
             <ul><li>8a–8e</li></ul>
           </div>
           <div>
-            <h3>Verification gate</h3>
-            <ul><li>Where YNAB shows the overview today (month summary, “Cost to Be Me” in Edit Plan) and what it totals</li><li>How a past month shows a target that was edited later (help center: edits apply to every month)</li></ul>
+            <h3>Found in YNAB (app + help center, 8 Oct)</h3>
+            <ul><li>On the web the overview is the summary's Cost to Be Me; “Next month's targets…” only when higher; a yearly target due this month counts its new year's share there (help center wording aside)</li><li>Expected Income: amount field with Cancel/Save, then a pencil; bars scaled to the larger of the two; 0 can't clear it</li><li>No target versions: changing a target restarts it in the month it's saved from (F-Y1 Sept → Oct → Nov)</li><li>Past months: no Assign button; snooze switch disabled outside the current month (“You can only snooze targets in the current month.”)</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Fresh start and expected income; which edits count as a change; snooze kept across a change <span class="src">verify.md</span></li></ul>
             <h3>Not here</h3>
             <ul><li>Loan “Monthly Debt Payment” targets: need 7f's loan activity and amortization</li><li>Scheduled-transaction funding and the calendar pill (Phase 10)</li><li>Daily or biweekly cadences (YNAB has none)</li></ul>
           </div>

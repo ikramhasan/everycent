@@ -202,6 +202,12 @@ const MonthSchema = z
             "\"October's Targets\"): each month's amount, or this month's share of a dated target",
         ),
         nextMonth: zMinorUnits.describe("The same for the month after"),
+        expectedIncome: zMinorUnits
+          .nullable()
+          .describe(
+            "The budget's expected monthly income (YNAB's \"Expected Income\" under Cost to Be " +
+              "Me), the same in every month; null until entered",
+          ),
       })
       .openapi("MonthTargets"),
   })
@@ -455,6 +461,50 @@ export const listMoves = createRoute({
       },
     },
     401: jsonError("Not signed in"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const setExpectedIncome = createRoute({
+  method: "put",
+  path: "/budgets/{budgetId}/expected-income",
+  operationId: "setExpectedIncome",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Set the budget's expected monthly income",
+  description:
+    'YNAB\'s "Enter your expected income" under Cost to Be Me: entered once, it stays from ' +
+    "month to month. It must be positive; like YNAB, it can be changed but not cleared.",
+  request: {
+    params: z.object({
+      budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              amount: zMinorUnits.refine((v) => BigInt(v) > 0n, "The amount must be positive"),
+            })
+            .openapi("SetExpectedIncome"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Saved",
+      content: {
+        "application/json": {
+          schema: z.object({ expectedIncome: zMinorUnits }).openapi("ExpectedIncome"),
+        },
+      },
+    },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't assign money in this budget"),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });

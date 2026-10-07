@@ -268,6 +268,7 @@ export function useTargetActions(budgetId: string) {
     "put",
     "/v1/budgets/{budgetId}/categories/{categoryId}/target/snooze",
   );
+  const income = $api.useMutation("put", "/v1/budgets/{budgetId}/expected-income");
   return useMemo(() => {
     async function run(work: () => Promise<unknown>, failure: string) {
       try {
@@ -308,6 +309,16 @@ export function useTargetActions(budgetId: string) {
               body: { month, snoozed, today: todayIso() },
             }),
           snoozed ? "Couldn't snooze the target." : "Couldn't wake the target.",
+        ),
+      /** Sets the budget's expected monthly income (Cost to Be Me). */
+      setExpectedIncome: (amount: bigint) =>
+        run(
+          () =>
+            income.mutateAsync({
+              params: { path: { budgetId } },
+              body: { amount: amount.toString() },
+            }),
+          "Couldn't save the expected income.",
         ),
     };
     // mutateAsync is stable; the mutation objects change every render.
