@@ -97,6 +97,9 @@ const TargetNeedSchema = z
       .date()
       .nullable()
       .describe("Yearly and custom: the due date of the period this month is in"),
+    snoozed: z
+      .boolean()
+      .describe("Snoozed this month: it asks for nothing more (Underfunded leaves it out)"),
   })
   .nullable()
   .describe(
@@ -121,11 +124,36 @@ const FundingPartSchema = z
   })
   .openapi("FundingPart");
 
+const ProgressBarSchema = z
+  .object({
+    tone: z
+      .enum(["funded", "underfunded"])
+      .describe("underfunded (yellow) while the target asks for more this month; funded (green)"),
+    sections: z.array(
+      z.object({
+        kind: z
+          .enum(["rollover", "target", "extra"])
+          .describe(
+            "rollover: money carried into a set aside target; target: the month, target period or " +
+              "a week; extra: a weekly target's money or spending beyond its weeks",
+          ),
+        size: zMinorUnits.describe("What the section stands for; drawn in proportion"),
+        segments: z.array(
+          z.object({ kind: z.enum(["spent", "available", "overspent"]), amount: zMinorUnits }),
+        ),
+      }),
+    ),
+  })
+  .nullable()
+  .describe("YNAB's progress bar under the category; null for payment categories")
+  .openapi("ProgressBar");
+
 const MonthCategorySchema = Totals.extend({
   categoryId: z.string(),
   payment: PaymentSchema,
   target: TargetNeedSchema,
   autoAssign: AutoAssignSchema,
+  bar: ProgressBarSchema,
   underfundedParts: z
     .array(FundingPartSchema)
     .describe(

@@ -692,3 +692,45 @@ by it. Built as found:
   out, Cost to Be Me only with nothing selected; (7) credit overspending only; (8) the usual
   labels.
 
+## Snooze and progress bars (phase 8d)
+
+Checked against support.ynab.com ("Snooze a Target", "Progress Bars") and in YNAB's web app on
+2026-10-07: T8 E, O9 and O11 were snoozed in October (left snoozed), and categories P1–P3 were
+added to the Test group (P1 set aside $100 with $80 carried in by a September inflow and $50 spent,
+P2 weekly set aside $10, P3 weekly refill $10 with $15 spent; transactions with memo `x-bar`). The
+bars were read from the page (section `flex-basis`, segment widths and classes). Built as found:
+
+- **Snooze**: the inspector's "Snooze target for this month" switch, current month only (it saved:
+  the API's `goal_snoozed_at` was set). A snoozed category loses its row note, its pill turns
+  green or grey with a "zᶻ" mark (red stays red: O11), Underfunded leaves it out (the button fell
+  by T8 E's $100.00) but still covers its overspending (O11 asked $30.00), Reduce Overfunding still
+  takes back what's over (O9 $50.00), and October's Targets still counts it. Undo covers it.
+- **Snoozed view**: the snoozed categories; empty: "You don't currently have categories with
+  snoozed targets in this month."
+- **Bars**: one section for the month (no target, snoozed, refill) or the target period (dated:
+  T8 G 7% = $70 of $1,000; T8 F 33.3%); "Set aside another…" monthly and weekly targets put money
+  carried in first in its own section (T8 N 60%/40% for $150 carried against $100; P1 44.4%/55.6%,
+  its $50 spent from the first section); weekly targets one section per week (P2 $25: 100%, 100%,
+  50%, empty, empty; P3: spent 100%, spent 50% + available 50%, available 100%) and an extra one
+  for money beyond the weeks (O6 $70 against 5 × $10: an extra 28.6%). Otherwise the section grows
+  to the money or spending (T8 L $150 against $100: full; O13 $130 spent of $100: 76.9% spent,
+  23.1% overspent). Without a target the month is what was carried in plus assigned (L1: 62.5%
+  spent, 37.5% overspent); an inflow that wasn't assigned isn't drawn (Q6, T8 J's refund).
+- Colours: light = spent, dark = available, green when met, on track, snoozed or without a target,
+  yellow while the target asks for more, red stripes for overspending, grey where nothing is.
+  Payment categories have no bar.
+- Notes: "Funded. Spent $30.00 of $100.00" (met, with spending), "Spent $7.00 of $20.00" and
+  "Fully Spent" (no target), none without spending.
+- The two toolbar icons switch bars on and off; off hides the bars and the notes too. The setting
+  is this browser's (support.ynab.com).
+
+### Details of 8d not seen in YNAB
+
+- **Question:** (1) The note of a snoozed category with spending. (2) "Spent $x of $y" for a set
+  aside target with money carried in: is $y only this month's money? (3) The "?" help text beside
+  the snooze switch. (4) Whether the switch shows in past months (the help center only rules out
+  future months). (5) Exact bar colours and thickness.
+- **Built so far (before this rule):** (1) the no-target notes ("Spent …", "Fully Spent"); (2)
+  carried plus assigned; (3) not built; (4) current month only; (5) Tailwind green/yellow/red,
+  6px.
+

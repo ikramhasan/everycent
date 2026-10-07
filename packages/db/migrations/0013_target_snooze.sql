@@ -1,0 +1,1 @@
+ALTER TABLE "category_target" ADD COLUMN "snoozed_month" date;

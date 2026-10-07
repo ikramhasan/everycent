@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 7 Oct 2026 (8a–8b merged to main; 8c built on a branch; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 7 Oct 2026 (8a–8c merged to main; 8d built on a branch; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -160,12 +160,12 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s8a"><span class="n">8a · done</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
       <a class="node done" href="#s8b"><span class="n">8b · done</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
       <a class="node done" href="#s8c"><span class="n">8c · done</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
-      <a class="node now" href="#s8d"><span class="n">8d · next</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
-      <a class="node" href="#s8e"><span class="n">8e</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
+      <a class="node done" href="#s8d"><span class="n">8d · done</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
+      <a class="node now" href="#s8e"><span class="n">8e · next</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
       <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a and 8b are merged to <span class="mono">main</span> (09dab2a). 8c is built on <span class="mono">phase-8c-underfunded</span>, branched from main (not merged; the user decides). To pick up: <span class="mono">Start 8d on a branch from phase-8c-underfunded (or from main once 8c is merged). Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8d's gate in YNAB. The API's write limit is easy to hit (200 requests an hour): read whole months, and test in the web app when it's used up (its Auto-Assign writes didn't persist on 7 Oct, previews still work).</span></div>
+    <div class="then">8a–8c are merged to <span class="mono">main</span> (f275a3b). 8d is built on <span class="mono">phase-8d-snooze-bars</span>, branched from main (not merged; the user decides). To pick up: <span class="mono">Start 8e (credit card payment targets) on a branch from phase-8d-snooze-bars, or from main once 8d is merged. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8e's gate in YNAB. YNAB's API can't snooze or set payment-category target types; use the web app for those (snoozes and target edits there do persist).</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -260,7 +260,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8d">
       <div class="num">8d</div>
       <div class="body">
-        <div class="head"><h2>Snooze and progress bars</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Snooze and progress bars</h2><span class="pill done">Done</span></div>
         <p class="why">The visible layer: let the user mute a target for a month, and draw each category's progress the way YNAB does so the plan reads at a glance.</p>
         <div class="meta">
           <div>
@@ -272,8 +272,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>Snooze lasts for the month it's set in and only the current month can be snoozed; the next month asks again</li><li>A snoozed category shows green (money) or grey (zero) instead of yellow</li><li>Credit card payment targets can't be snoozed</li><li>Rollover money is always spent first; “Refill up to…” rollover isn't progress in a future month</li><li>Progress bar on/off resets when local storage is cleared (so it's a browser setting)</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Exact bar geometry for mixed spent/available/overspent, in both themes, against YNAB screenshots</li></ul>
+            <h3>Found in YNAB (app, 7 Oct)</h3>
+            <ul><li>A snoozed category loses its note, gets a “zᶻ” green/grey pill (red stays red), leaves Underfunded except for its overspending, still gives back what's over, and still counts in October's Targets; Undo covers it</li><li>Snoozed view empty state: “You don't currently have categories with snoozed targets in this month.”</li><li>Bar geometry read from YNAB's page: set aside rollover section (T8 N 60/40), weekly sections plus an extra one beyond the weeks (O6), one section growing to money or spending otherwise (O13 76.9% spent / 23.1% overspent), dated targets against their total (T8 G 7%); spending eats the first section first; unassigned inflows aren't drawn</li><li>Notes: “Funded. Spent $x of $y”, “Spent $x of $y”, “Fully Spent”; bars off hides bars and notes; payment categories have no bar</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">A snoozed category's note with spending; $y in “Spent $x of $y” with money carried in; the snooze “?” text; the switch in past months; exact colours <span class="src">verify.md</span></li><li class="q">Dated set aside rollover section (help center) not drawn yet <span class="src">deferred.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -281,7 +283,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8e">
       <div class="num">8e</div>
       <div class="body">
-        <div class="head"><h2>Credit card payment targets</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Credit card payment targets</h2><span class="pill now">Next</span></div>
         <p class="why">Payment categories get their own two target types. They reuse 8a's model but measure progress differently: a fixed monthly payment, or the card's balance paid off by a date.</p>
         <div class="meta">
           <div>

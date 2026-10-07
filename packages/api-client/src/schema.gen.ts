@@ -221,6 +221,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Snooze a category's target for this month, or wake it
+         * @description A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks again. Only the user's current month can be snoozed (YNAB).
+         */
+        put: operations["snoozeCategoryTarget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts": {
         parameters: {
             query?: never;
@@ -739,6 +759,8 @@ export interface components {
             repeatUnit: "month" | "year" | null;
             /** @description The first month the target applies to */
             startMonth: string;
+            /** @description The month it's snoozed for: it asks for nothing more that month only */
+            snoozedMonth: string | null;
         } | null;
         CreateCategoryGroup: {
             name: string;
@@ -817,6 +839,16 @@ export interface components {
         }) & {
             /** @description The month the target is set from */
             month: string;
+        };
+        SnoozeTarget: {
+            /** @description The month to snooze; must be the user's current month */
+            month: string;
+            snoozed: boolean;
+            /**
+             * Format: date
+             * @description The user's today. Defaults to the server's UTC date.
+             */
+            today?: string;
         };
         AccountList: {
             /** @description In sidebar order, closed ones included */
@@ -1185,6 +1217,7 @@ export interface components {
             payment: components["schemas"]["PaymentDetails"];
             target: components["schemas"]["TargetNeed"];
             autoAssign: components["schemas"]["AutoAssignAmounts"];
+            bar: components["schemas"]["ProgressBar"];
             /** @description What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned) */
             underfundedParts: components["schemas"]["FundingPart"][];
         };
@@ -1220,6 +1253,8 @@ export interface components {
              * @description Yearly and custom: the due date of the period this month is in
              */
             dueDate: string | null;
+            /** @description Snoozed this month: it asks for nothing more (Underfunded leaves it out) */
+            snoozed: boolean;
         } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: enough to meet its target and cover overspending (underfunded, when there's enough Ready to Assign), last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), less what's above its target (reduceOverfunding), Available reset to zero, or zero */
         AutoAssignAmounts: {
@@ -1240,6 +1275,29 @@ export interface components {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             resetAssigned: string;
         };
+        /** @description YNAB's progress bar under the category; null for payment categories */
+        ProgressBar: {
+            /**
+             * @description underfunded (yellow) while the target asks for more this month; funded (green)
+             * @enum {string}
+             */
+            tone: "funded" | "underfunded";
+            sections: {
+                /**
+                 * @description rollover: money carried into a set aside target; target: the month, target period or a week; extra: a weekly target's money or spending beyond its weeks
+                 * @enum {string}
+                 */
+                kind: "rollover" | "target" | "extra";
+                /** @description What the section stands for; drawn in proportion */
+                size: string;
+                segments: {
+                    /** @enum {string} */
+                    kind: "spent" | "available" | "overspent";
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    amount: string;
+                }[];
+            }[];
+        } | null;
         FundingPart: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             amount: string;
@@ -2427,6 +2485,69 @@ export interface operations {
                 };
             };
             /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    snoozeCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeTarget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Invalid input, or SNOOZE_CURRENT_MONTH: only the current month can be snoozed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such category or target, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

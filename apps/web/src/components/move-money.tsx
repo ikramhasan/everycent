@@ -57,12 +57,20 @@ export function AvailablePill({
         className,
       )}
     >
-      {mark &&
-        (mark.met ? (
-          <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
-        ) : (
-          <TargetPie percent={mark.percent} />
-        ))}
+      {mark?.kind === "met" && (
+        <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
+      )}
+      {mark?.kind === "underfunded" && <TargetPie percent={mark.percent} />}
+      {mark?.kind === "snoozed" && (
+        // YNAB's "Zz" snooze icon.
+        <span
+          className="shrink-0 font-semibold text-[0.65rem] leading-none"
+          role="img"
+          aria-label="Target snoozed"
+        >
+          z<sup>z</sup>
+        </span>
+      )}
       <span className="truncate">{format(amount)}</span>
     </span>
   );

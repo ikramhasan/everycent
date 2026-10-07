@@ -68,6 +68,7 @@ export function TargetSection({
   onSave,
   onDelete,
   onAssign,
+  onSnooze,
 }: {
   name: string;
   target: CategoryTarget | null;
@@ -80,6 +81,8 @@ export function TargetSection({
   onDelete: () => Promise<boolean>;
   /** Assigns what's still to go this month; undefined when the month can't take money. */
   onAssign?: (amount: bigint) => Promise<void>;
+  /** Snoozes or wakes the target; undefined outside the current month (YNAB snoozes only it). */
+  onSnooze?: (snoozed: boolean) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
@@ -165,6 +168,13 @@ export function TargetSection({
       <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
         Edit Target
       </Button>
+      {onSnooze && (
+        // YNAB keeps the target's details on show while it's snoozed.
+        <Label className="flex items-center gap-2 font-normal text-sm">
+          <Switch checked={need.snoozed} onCheckedChange={(checked) => void onSnooze(checked)} />
+          Snooze target for this month
+        </Label>
+      )}
     </Section>
   );
 }

@@ -56,6 +56,9 @@ const TargetSchema = z
       .describe("Custom: repeats every N months or years; null for one-time"),
     repeatUnit: RepeatUnit.nullable(),
     startMonth: zMonth.describe("The first month the target applies to"),
+    snoozedMonth: zMonth
+      .nullable()
+      .describe("The month it's snoozed for: it asks for nothing more that month only"),
   })
   .openapi("CategoryTarget");
 
@@ -456,5 +459,40 @@ export const deleteCategoryTarget = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),
     404: notFound,
+  },
+});
+
+export const snoozeCategoryTarget = createRoute({
+  method: "put",
+  path: "/budgets/{budgetId}/categories/{categoryId}/target/snooze",
+  operationId: "snoozeCategoryTarget",
+  tags: ["Categories"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Snooze a category's target for this month, or wake it",
+  description:
+    "A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks " +
+    "again. Only the user's current month can be snoozed (YNAB).",
+  request: {
+    params: CategoryParams,
+    body: json(
+      z
+        .object({
+          month: zMonth.describe("The month to snooze; must be the user's current month"),
+          snoozed: z.boolean(),
+          today: z.iso
+            .date()
+            .optional()
+            .describe("The user's today. Defaults to the server's UTC date."),
+        })
+        .openapi("SnoozeTarget"),
+    ),
+  },
+  responses: {
+    200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },
+    400: jsonError("Invalid input, or SNOOZE_CURRENT_MONTH: only the current month can be snoozed"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't edit categories"),
+    404: jsonError("No such category or target, or the caller isn't a member"),
   },
 });

@@ -22,6 +22,7 @@ const target = (extra: Partial<CategoryTarget> = {}): CategoryTarget => ({
   repeatEvery: null,
   repeatUnit: null,
   startMonth: "2026-10",
+  snoozedMonth: null,
   ...extra,
 });
 const need = (
@@ -29,7 +30,7 @@ const need = (
   funded: string,
   underfunded: string,
   dueDate: string | null = null,
-): TargetNeed => ({ needed, funded, underfunded, dueDate });
+): TargetNeed => ({ needed, funded, underfunded, dueDate, snoozed: false });
 
 describe("target wording", () => {
   it("writes ordinals", () => {

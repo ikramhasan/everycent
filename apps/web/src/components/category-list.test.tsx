@@ -137,6 +137,7 @@ const totals = (assigned: string, activity: string, available: string) => ({
   payment: null,
   target: null,
   autoAssign: NO_AUTO_ASSIGN,
+  bar: null,
   underfundedParts: [],
 });
 
@@ -154,18 +155,21 @@ const month: BudgetMonthData = {
       categoryId: "c1",
       ...totals("100", "-30", "70"),
       autoAssign: NO_AUTO_ASSIGN,
+      bar: null,
       underfundedParts: [],
     },
     {
       categoryId: "c2",
       ...totals("0", "-5", "-5"),
       autoAssign: NO_AUTO_ASSIGN,
+      bar: null,
       underfundedParts: [],
     },
     {
       categoryId: "c3",
       ...totals("0", "-2", "-2"),
       autoAssign: NO_AUTO_ASSIGN,
+      bar: null,
       underfundedParts: [],
     },
   ],
