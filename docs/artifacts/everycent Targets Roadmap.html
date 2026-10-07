@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 7 Oct 2026 (8a–8d merged to main; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 8 Oct 2026 (8a–8d merged to main, 8e on a branch; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -161,11 +161,11 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s8b"><span class="n">8b · done</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
       <a class="node done" href="#s8c"><span class="n">8c · done</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
       <a class="node done" href="#s8d"><span class="n">8d · done</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
-      <a class="node now" href="#s8e"><span class="n">8e · next</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
-      <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
+      <a class="node done" href="#s8e"><span class="n">8e · done</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
+      <a class="node now" href="#s8f"><span class="n">8f · next</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a–8d are merged to <span class="mono">main</span> (e08f13f). To pick up: <span class="mono">Start 8e (credit card payment targets) on a branch from main. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8e's gate in YNAB. YNAB's API can't snooze or set payment-category target types; use the web app for those (snoozes and target edits there do persist).</span></div>
+    <div class="then">8a–8d are merged to <span class="mono">main</span> (e08f13f); 8e is on <span class="mono">phase-8e-card-targets</span>, not merged. To pick up: <span class="mono">Start 8f (targets overview, history, parity pass) once 8e is merged. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8f's gate in YNAB. YNAB's API can't snooze or set payment-category target types; use the web app for those (snoozes and target edits there do persist).</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -283,7 +283,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8e">
       <div class="num">8e</div>
       <div class="body">
-        <div class="head"><h2>Credit card payment targets</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Credit card payment targets</h2><span class="pill done">Done</span></div>
         <p class="why">Payment categories get their own two target types. They reuse 8a's model but measure progress differently: a fixed monthly payment, or the card's balance paid off by a date.</p>
         <div class="meta">
           <div>
@@ -295,8 +295,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>Two types only for payment categories; specific-amount progress is for this month only</li><li>Pay-off-by-date progress is Available against the whole balance; uncovered credit overspending raises next month's ask</li><li>Funded card spending moving into the payment category doesn't change what the target asks</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Rounding and the month the date falls in for pay-off-by-date</li><li>Positive card balances (7e is deferred): skip target behavior for them until 7e</li></ul>
+            <h3>Found in YNAB (API + app, 8 Oct)</h3>
+            <ul><li>Pay off by date spreads what's owed beyond Available over the months left, both ends counted, rounding up: $120 by March asked $20.00, $100 by December $33.34</li><li>This month's Funded Spending is left out of both sides (E2: $110 owed, $10 funded → “Pay off $100.00”, 0%); credit overspending raises the ask at once ($125 → $20.84); a payment without money set aside changes nothing</li><li>Specific amount asks like a monthly “Set aside another…”; Underfunded asks the target, not the balance; Reduce Overfunding gives back Assigned above the ask (E3 $20.00, E1 $29.16); card targets count in October's Targets</li><li>The Target section replaces the Payment alert, except while the category is red; no row note, no snooze; one payment category's Auto-Assign reads “Paid Last Month”, “Average Paid”</li><li>A pay-off month in the past leaves no target</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">After the pay-off month; a fully covered balance; funding order; a red paid-off card's Total Underfunded; past-month colours <span class="src">verify.md</span></li><li class="q">Positive card balances wait for 7e; “Making minimum payments?” link and “Cover Overspent Categories” not built <span class="src">deferred.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -304,7 +306,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8f">
       <div class="num">8f</div>
       <div class="body">
-        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill now">Next</span></div>
         <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f.</p>
         <div class="meta">
           <div>

@@ -237,24 +237,42 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
-  // Credit card payment targets are their own kinds (phase 8e).
-  if (row.linkedAccountId) throw managedError("Payment categories can't have targets yet");
+  // A card's payment category takes only its own two targets (YNAB's target form there offers just
+  // these), and other categories can't take them.
+  const paymentTarget = body.cadence === "payment_monthly" || body.cadence === "payoff_by_date";
+  if (row.linkedAccountId && !paymentTarget) {
+    throw managedError(
+      "Payment categories take Pay Specific Amount Monthly or Pay Off Balance by Date targets",
+    );
+  }
+  if (!row.linkedAccountId && paymentTarget) {
+    throw managedError("Only credit card payment categories take payment targets");
+  }
   const start = `${body.month}-01`;
   const existing = await findTarget(db, categoryId);
   const repeat = body.cadence === "custom" ? body.repeat : null;
   const dueDate =
     body.cadence === "yearly"
       ? body.dueDate
-      : body.cadence === "custom" && body.dueDate
-        ? // A balance target is due by a month (YNAB: "By Dec 2026").
-          body.behavior === "balance"
-          ? `${body.dueDate.slice(0, 7)}-01`
-          : body.dueDate
-        : null;
+      : body.cadence === "payoff_by_date"
+        ? `${body.dueMonth}-01`
+        : body.cadence === "custom" && body.dueDate
+          ? // A balance target is due by a month (YNAB: "By Dec 2026").
+            body.behavior === "balance"
+            ? `${body.dueDate.slice(0, 7)}-01`
+            : body.dueDate
+          : null;
   const values = {
     cadence: body.cadence,
-    behavior: body.behavior,
-    amount: BigInt(body.amount),
+    // Pay Specific Amount Monthly asks like a monthly set aside; Pay Off by Date reaches a balance.
+    behavior:
+      body.cadence === "payment_monthly"
+        ? ("set_aside" as const)
+        : body.cadence === "payoff_by_date"
+          ? ("balance" as const)
+          : body.behavior,
+    // Pay Off by Date pays off what the card owes, so it has no amount of its own (YNAB's API: 0).
+    amount: body.cadence === "payoff_by_date" ? 0n : BigInt(body.amount),
     currency: budget.currency,
     dueDay: body.cadence === "weekly" || body.cadence === "monthly" ? body.dueDay : null,
     dueDate,
@@ -297,6 +315,8 @@ export const snoozeCategoryTargetHandler: RouteHandler<typeof snoozeCategoryTarg
   const row = await findCategory(db, budgetId, categoryId);
   const existing = await findTarget(db, categoryId);
   if (!existing) throw new AppError(404, "NOT_FOUND", "The category has no target");
+  // support.ynab.com "Paired Targets": "Credit card targets can't be snoozed."
+  if (row.linkedAccountId) throw managedError("Credit card payment targets can't be snoozed");
   // YNAB: "You can only snooze a target in the current month."
   if (month !== monthOf(today)) {
     throw new AppError(

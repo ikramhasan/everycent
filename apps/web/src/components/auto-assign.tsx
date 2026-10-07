@@ -21,8 +21,11 @@ import type { BudgetMonthData } from "@/lib/months";
 type Format = (minorUnits: string) => string;
 type MonthCategory = BudgetMonthData["categories"][number];
 
-/** YNAB's labels, singular when one category is selected. */
-function label(option: AutoAssignOption, one: boolean) {
+/**
+ * YNAB's labels, singular when one category is selected; a lone payment category's spending options
+ * read "Paid Last Month" and "Average Paid" (seen 2026-10-08 on Cards E1–E3).
+ */
+function label(option: AutoAssignOption, one: boolean, payment = false) {
   switch (option) {
     case "underfunded":
       return "Underfunded";
@@ -31,11 +34,11 @@ function label(option: AutoAssignOption, one: boolean) {
     case "assignedLastMonth":
       return "Assigned Last Month";
     case "spentLastMonth":
-      return "Spent Last Month";
+      return payment ? "Paid Last Month" : "Spent Last Month";
     case "averageAssigned":
       return "Average Assigned";
     case "averageSpent":
-      return "Average Spent";
+      return payment ? "Average Paid" : "Average Spent";
     case "resetAvailable":
       return one ? "Reset Available Amount" : "Reset Available Amounts";
     case "resetAssigned":
@@ -151,6 +154,7 @@ export function AutoAssignPanel({
   const [preview, setPreview] = useState<AutoAssignOption | null>(null);
   // YNAB's labels go singular whenever one category is covered (selected or the only one in view).
   const one = categories.length === 1;
+  const payment = one && Boolean(categories[0]?.payment);
   const underfunded = preview === "underfunded";
   const changes = preview ? autoAssignChanges(preview, categories, names, readyToAssign) : [];
   // Underfunded lists the cards that need attention on their own, changed or not (YNAB showed
@@ -198,11 +202,11 @@ export function AutoAssignPanel({
                 key={option}
                 variant="secondary"
                 size="sm"
-                aria-label={`${label(option, one)} ${amount}`}
+                aria-label={`${label(option, one, payment)} ${amount}`}
                 className="justify-between font-normal"
                 onClick={() => (selection ? void onApply(option) : setPreview(option))}
               >
-                <span>{label(option, one)}</span>
+                <span>{label(option, one, payment)}</span>
                 <span className="tabular-nums">{amount}</span>
               </Button>
             );

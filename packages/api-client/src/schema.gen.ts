@@ -210,7 +210,7 @@ export interface paths {
         get?: never;
         /**
          * Create or replace a category's target
-         * @description A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Payment categories can't have targets yet.
+         * @description A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.
          */
         put: operations["setCategoryTarget"];
         post?: never;
@@ -231,7 +231,7 @@ export interface paths {
         get?: never;
         /**
          * Snooze a category's target for this month, or wake it
-         * @description A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks again. Only the user's current month can be snoozed (YNAB).
+         * @description A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks again. Only the user's current month can be snoozed, and never a credit card payment target (YNAB).
          */
         put: operations["snoozeCategoryTarget"];
         post?: never;
@@ -738,19 +738,19 @@ export interface components {
         };
         CategoryTarget: {
             /** @enum {string} */
-            cadence: "weekly" | "monthly" | "yearly" | "custom";
+            cadence: "weekly" | "monthly" | "yearly" | "custom" | "payment_monthly" | "payoff_by_date";
             /**
-             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only)
+             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly, balance for payoff_by_date
              * @enum {string}
              */
             behavior: "set_aside" | "refill" | "balance";
-            /** @description Per week (weekly), per month (monthly) or per period (yearly, custom) */
+            /** @description Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes */
             amount: string;
             /** @description Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday */
             dueDay: number | null;
             /**
              * Format: date
-             * @description Yearly and custom: the first due date; a balance target's month (day 1), null for eventually
+             * @description Yearly and custom: the first due date; a balance target's month (day 1), null for eventually. payoff_by_date: the month to pay off by (day 1)
              */
             dueDate: string | null;
             /** @description Custom: repeats every N months or years; null for one-time */
@@ -836,6 +836,16 @@ export interface components {
                 /** @enum {string} */
                 unit: "month" | "year";
             } | null;
+        } | {
+            /** @enum {string} */
+            cadence: "payment_monthly";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+        } | {
+            /** @enum {string} */
+            cadence: "payoff_by_date";
+            /** @description Pay off the card's balance by the end of this month */
+            dueMonth: string;
         }) & {
             /** @description The month the target is set from */
             month: string;
@@ -2434,7 +2444,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description MANAGED_CATEGORY: payment categories can't have targets yet */
+            /** @description MANAGED_CATEGORY: payment categories take only payment targets, other categories none */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2549,6 +2559,15 @@ export interface operations {
             };
             /** @description No such category or target, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: credit card payment targets can't be snoozed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

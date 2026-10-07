@@ -186,7 +186,8 @@ activity, loan planner) are deferred until after phase 8 — see `docs/deferred.
 - [x] Savings balance (YNAB's custom "Have a balance of", optionally by a month)
 - [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
       another" covers it
-- [ ] Debt payment targets (for loans / credit cards; include interest)
+- [ ] Debt payment targets: credit cards done (8e, Pay Specific Amount Monthly and Pay Off
+      Balance by Date); loans (with interest) wait for 7f
 - [x] Target progress bars and status (funded, underfunded, overspent, on track)
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)

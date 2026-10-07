@@ -144,6 +144,22 @@ describe("targets", () => {
       ),
     ).toBe(false);
   });
+  it("colours a payment category by its target, and red when overpaid", () => {
+    const card = (available: string, underfunded: string, target?: string) => ({
+      available,
+      cashOverspent: "0",
+      payment: { underfunded },
+      target: target === undefined ? null : { ...need(target).target },
+    });
+    // No target: yellow while the balance isn't covered (phase 7c).
+    expect(isCaution(card("0", "12000"), "2026-10", "2026-10")).toBe(true);
+    // Card E1: underfunded target yellow, on track green although the balance isn't covered.
+    expect(isCaution(card("0", "12000", "2084"), "2026-10", "2026-10")).toBe(true);
+    expect(isCaution(card("5000", "7500", "0"), "2026-10", "2026-10")).toBe(false);
+    // Card E2: a payment beyond what was set aside is red, target or not.
+    expect(isCaution(card("-1000", "10000", "3334"), "2026-10", "2026-10")).toBe(false);
+    expect(isCaution(card("-1000", "10000"), "2026-10", "2026-10")).toBe(false);
+  });
   it("marks the pill with the funded share or a check", () => {
     expect(targetMark(need("6000").target)).toEqual({ kind: "underfunded", percent: 40 });
     expect(targetMark(need("0", "15000").target)).toEqual({ kind: "met" });

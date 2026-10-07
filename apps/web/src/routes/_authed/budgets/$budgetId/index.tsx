@@ -10,7 +10,12 @@ import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
-import { CategoryInspector, MonthSummary, PaymentInspector } from "@/components/category-inspector";
+import {
+  CategoryInspector,
+  MonthSummary,
+  PaymentAlert,
+  PaymentInspector,
+} from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
 import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
@@ -565,16 +570,45 @@ function Inspector({
       />
     );
     if (totals.payment) {
+      const payment = paymentFigures(totals.payment);
+      const alertProps = {
+        name: category.name,
+        totals: breakdown(totals),
+        payment,
+        format,
+        warn: month.month >= figures.currentMonth,
+      };
       return (
         <PaymentInspector
-          name={category.name}
-          totals={breakdown(totals)}
-          payment={paymentFigures(totals.payment)}
-          format={format}
+          {...alertProps}
           available={available}
           note={category.note}
           onNoteChange={(note) => onNoteChange(only, note)}
-          warn={month.month >= figures.currentMonth}
+          target={
+            assign && (
+              <TargetSection
+                key={only}
+                name={category.name}
+                target={category.target}
+                need={totals.target}
+                format={format}
+                parse={assign.parse}
+                toInput={assign.toInput}
+                dateFormat={budget.dateFormat}
+                onSave={(input) => targetActions.save(only, month.month, input)}
+                onDelete={() => targetActions.remove(only)}
+                onAssign={(amount) => assign.assign(only, BigInt(totals.assigned) + amount)}
+                payment={{
+                  month: month.month,
+                  fundedSpending: totals.payment.fundedSpending,
+                  overpaid: totals.available.startsWith("-"),
+                  alert: (createTarget) => (
+                    <PaymentAlert {...alertProps} onCreateTarget={createTarget} />
+                  ),
+                }}
+              />
+            )
+          }
         />
       );
     }

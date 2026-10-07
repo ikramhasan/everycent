@@ -797,6 +797,8 @@ function CategoryRow({
             format &&
             figures &&
             figures.progressBars !== false &&
+            // YNAB writes no note under a payment category, target or not (seen 2026-10-08).
+            !isPayment &&
             (totals.available.startsWith("-") ? (
               <OverspentNote totals={totals} format={format} />
             ) : (
