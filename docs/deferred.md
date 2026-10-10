@@ -120,8 +120,9 @@ and `docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and wh
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
   accounts store rate, minimum payment and escrow, unused. Phase 8's loan debt-payment targets
   need 7f, so they wait too.
-- Lines of credit are treated as credit cards; YNAB's app showed the same behaviour, but the API
-  readings behind it need re-checking (docs/verify.md).
+- Lines of credit are treated as credit cards, as YNAB does (re-checked 2026-10-11, docs/verify.md).
+- **Cash advances** (card → budget account) don't raise Ready to Assign; YNAB adds the part that
+  becomes new debt (7e gate, docs/verify.md). Waiting with 7e.
 
 ## Onboarding and fresh start
 
