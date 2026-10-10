@@ -10,7 +10,11 @@ export interface CardActivity {
 export interface FundedCardSpending {
   /** accountId → what moves into (positive) or out of (negative) the card's payment category. */
   moved: Map<string, bigint>;
-  /** accountId → that card's spending left unfunded: credit overspending (positive). */
+  /**
+   * accountId → that card's spending left unfunded when it happened (positive): its payment
+   * category's "Overspent Categories". A later refill doesn't lower it (YNAB, 2026-10-11: Card R4
+   * kept its $3 from G-X2 after another card's return refilled the category).
+   */
   unfunded: Map<string, bigint>;
 }
 
@@ -31,8 +35,7 @@ export interface FundedCardSpending {
  *   refill cash overspending: it moves out in full (2026-10-03, Groceries).
  *
  * Built so far, before YNAB settles it: two equal purchases on the same day fund the newest card
- * (highest UUIDv7 account id) first, which matched all three cases seen in 2026-10-03; refills go
- * to the earliest unfunded purchase first.
+ * (highest UUIDv7 account id) first, which matched all three cases seen in 2026-10-03.
  */
 export function fundedCardSpending(
   cash: bigint,
@@ -42,8 +45,8 @@ export function fundedCardSpending(
   const unfunded = new Map<string, bigint>();
   const add = (map: Map<string, bigint>, id: string, n: bigint) =>
     map.set(id, (map.get(id) ?? 0n) + n);
-  /** Unfunded purchases, oldest first, that a later return can refill. */
-  const holes: { accountId: string; left: bigint }[] = [];
+  /** What's left of each unfunded purchase, oldest first, for a later return to refill. */
+  const holes: bigint[] = [];
   /** What the category has for card spending; negative while it's overspent in cash. */
   let pool = cash;
 
@@ -61,17 +64,16 @@ export function fundedCardSpending(
       add(moved, accountId, funded);
       if (spent > funded) {
         add(unfunded, accountId, spent - funded);
-        holes.push({ accountId, left: spent - funded });
+        holes.push(spent - funded);
       }
     } else if (amount > 0n) {
       let rest = amount;
       while (rest > 0n && holes.length > 0) {
-        const hole = holes[0] as (typeof holes)[number];
-        const fill = hole.left < rest ? hole.left : rest;
-        hole.left -= fill;
+        const hole = holes[0] as bigint;
+        const fill = hole < rest ? hole : rest;
         rest -= fill;
-        add(unfunded, hole.accountId, -fill);
-        if (hole.left === 0n) holes.shift();
+        if (hole === fill) holes.shift();
+        else holes[0] = hole - fill;
       }
       add(moved, accountId, -rest);
       pool += rest;
@@ -80,6 +82,5 @@ export function fundedCardSpending(
   for (const card of cards) {
     if (!moved.has(card.accountId)) moved.set(card.accountId, 0n);
   }
-  for (const [id, n] of unfunded) if (n === 0n) unfunded.delete(id);
   return { moved, unfunded };
 }

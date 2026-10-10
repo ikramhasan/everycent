@@ -49,9 +49,10 @@ before starting a roadmap phase** and remove an entry once it's done.
 - A payment category's Activity opens the card's register for the month with YNAB's Spending /
   Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
   transactions with their categories; ours uses the same columns as other categories (Account,
-  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button and no
-  "Create a Debt Payoff Target" (phase 8); its Current Balance and Available for Payment lines
-  aren't collapsible as YNAB's are. Auto-Assign on payment categories has Underfunded and Reduce
+  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button (YNAB's
+  switches to the Overspent view), still shows Current Balance in past months (YNAB hides it), and
+  its Current Balance and Available for Payment lines aren't collapsible as YNAB's are
+  (EVERYCENT-22). Auto-Assign on payment categories has Underfunded and Reduce
   Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
   Average Paid when only payment categories are covered).
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for

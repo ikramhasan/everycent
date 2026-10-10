@@ -383,19 +383,26 @@ Built as found:
   Payments and Inflows) and Available for Payment (Cash Left Over, Assigned, Funded Spending,
   Payments Made).
 
-### Payment category messages and the next month
+### Payment category messages and the next month (settled 2026-10-11)
 
-- **Found:** in October, Visa said "Overspent Categories — Cover $29.00 in overspent categories in
-  order to pay off your current balance" with "Cover Overspent Categories" and "Create a Debt
-  Payoff Target"; November said "Underfunded — You need to assign $29.00 more to pay off your
-  current balance." Card A (with old debt as well) listed both lines under Total Underfunded.
-- **Question:** what does the payment category say when both apply, what does "Cover Overspent
-  Categories" do (one click, or a picker?), and is the pill yellow in past months (the help center
-  says previous months show green)?
-- **Built so far (before this rule):** the pill is yellow when Available is below what's owed in
-  the current month and later, green before it. The inspector lists Total Underfunded with its two
-  parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button isn't
-  built. "Create a Debt Payoff Target" came with 8e ("Credit card payment targets" below).
+- **Found (2026-10-03):** in October, Visa said "Overspent Categories — Cover $29.00 in overspent
+  categories in order to pay off your current balance" with "Cover Overspent Categories" and
+  "Create a Debt Payoff Target"; November said "Underfunded — You need to assign $29.00 more to
+  pay off your current balance."
+- **Both apply** (Card R4 in "Onboarding Check": $100 old debt, $9 of October credit
+  overspending): only the Overspent Categories message shows ("Cover $9.00 in overspent
+  categories…", "Cover Overspent Categories", "Can't cover the overspent categories?", "Create a
+  Debt Payoff Target"); Total Underfunded $109.00 lists Overspent Categories $9.00 and Underfunded
+  $100.00. everycent already does this.
+- The $9.00 kept R4's $3 from G-X2, even though another card's later return refilled that
+  category. A card's overspent categories are its spending left unfunded when it happened.
+- **"Cover Overspent Categories"** moves no money: it switches the plan to the Overspent view
+  (the "Overspent" filter chip), and Ready to Assign stayed the same. Not built yet (EVERYCENT-22).
+- **Past months:** September (before the current month) showed the payment pills grey at $0.00
+  and green at $2.00 for a card owing $100 (Card R6); the inspector there has no Payment section,
+  no Total Underfunded and no Current Balance: only Target, Available for Payment (Cash Left Over,
+  Assigned, Funded Spending, Payments Made), Auto-Assign and Notes. everycent's pill matches;
+  its past-month inspector still shows Current Balance (EVERYCENT-22).
 
 ## Payments, returns and statement credits (phase 7d)
 

@@ -351,8 +351,12 @@ describe("budget months", () => {
       await create({ accountId: amex.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
       await create({ accountId: visa.id, date: "2026-10-02", amount: "500", categoryId: rent.id });
       const oct = await month("2026-10");
-      // Amex stays unfunded; only $2 of Visa's $5 return leaves its payment category.
-      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({ available: "0" });
+      // Amex stays unfunded and keeps its overspent categories (YNAB: Card R4); only $2 of
+      // Visa's $5 return leaves its payment category.
+      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({
+        available: "0",
+        payment: { overspentCategories: "300" },
+      });
       expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({ available: "-200" });
       expect(oct.byCategory(rent.id)).toMatchObject({ available: "200", creditOverspent: "0" });
     });

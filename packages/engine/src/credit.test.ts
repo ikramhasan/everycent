@@ -97,14 +97,13 @@ describe("fundedCardSpending", () => {
     expect(funded(cash, cards)).toEqual(moved);
   });
 
-  it("leaves a refilled purchase out of credit overspending", () => {
-    const { unfunded } = fundedCardSpending(0n, [
+  it("keeps a refilled purchase in its card's overspent categories (YNAB: Card R4)", () => {
+    const { moved, unfunded } = fundedCardSpending(0n, [
       card(VISA, -300n, "2026-10-01"),
-      card(CITI, -200n, "2026-10-02"),
-      card(AMEX, 400n, "2026-10-03"),
+      card(AMEX, 500n, "2026-10-02"),
     ]);
-    // The return refills the earliest unfunded purchase first.
-    expect(Object.fromEntries(unfunded)).toEqual({ [CITI]: 100n });
+    expect(Object.fromEntries(moved)).toEqual({ [VISA]: 0n, [AMEX]: -200n });
+    expect(Object.fromEntries(unfunded)).toEqual({ [VISA]: 300n });
   });
 
   it("doesn't fund card spending from a return while the category is overspent in cash", () => {
@@ -115,8 +114,7 @@ describe("fundedCardSpending", () => {
   it("keeps money and debt in balance", () => {
     // Whatever isn't funded stays in the category as (credit) overspending.
     const cards = [card(VISA, -700n), card(AMEX, -200n), card(CITI, 100n, "2026-10-02")];
-    const { moved, unfunded } = fundedCardSpending(300n, cards);
+    const { moved } = fundedCardSpending(300n, cards);
     expect([...moved.values()].reduce((a, b) => a + b, 0n)).toBe(300n);
-    expect([...unfunded.values()].reduce((a, b) => a + b, 0n)).toBe(500n);
   });
 });
