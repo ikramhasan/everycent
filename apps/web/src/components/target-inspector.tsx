@@ -6,7 +6,7 @@ import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Switch } from "@everycent/ui/components/switch";
 import { cn } from "@everycent/ui/lib/utils";
-import { Trash2 } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { todayIso } from "@/lib/dates";
 import {
@@ -16,6 +16,7 @@ import {
   MONTH_OPTIONS,
   PAYMENT_TARGET_OPTIONS,
   paymentTargetKind,
+  payoffAmount,
   type TargetInput,
   type TargetNeed,
   targetDueLine,
@@ -100,12 +101,15 @@ export function TargetSection({
   snoozeLocked?: boolean;
   /**
    * For a payment category: the month on screen (the target is saved from it), its Funded
-   * Spending, whether it's red, and its alert.
+   * Spending and Payments Made, whether it's red, and its alert.
    */
   payment?: {
     month: string;
     fundedSpending: string;
+    paymentsMade: string;
     overpaid: boolean;
+    /** A month before the current one: YNAB shows no Payment alert there, only "Create Target". */
+    past: boolean;
     alert: (createTarget: () => void) => ReactNode;
   };
 }) {
@@ -131,7 +135,7 @@ export function TargetSection({
       />
     );
   }
-  if (payment && (!target || !need || payment.overpaid)) {
+  if (payment && !payment.past && (!target || !need || payment.overpaid)) {
     return payment.alert(() => setEditing(true));
   }
   if (editing) {
@@ -175,8 +179,11 @@ export function TargetSection({
   const message = targetMessage(target, need, format);
   const met = BigInt(need.funded) >= BigInt(need.needed);
   const kind = paymentTargetKind(target);
-  // Pay off by date has no amount of its own: its heading is what's still to pay off.
-  const headingAmount = format(target.cadence === "payoff_by_date" ? need.needed : target.amount);
+  const headingAmount = format(
+    target.cadence === "payoff_by_date"
+      ? payoffAmount(need, payment?.paymentsMade ?? "0")
+      : target.amount,
+  );
   return (
     <Section>
       {kind && <p className="font-medium text-sm">{kind}</p>}
@@ -184,9 +191,16 @@ export function TargetSection({
         <p className="font-medium text-sm">{targetHeading(target, headingAmount)}</p>
         <p className="text-muted-foreground text-xs">{targetDueLine(target, need)}</p>
       </div>
-      {!met && <ProgressRing percent={percent} />}
+      {met ? <MetRing /> : <ProgressRing percent={percent} />}
       {message && "text" in message && (
-        <p className="text-center font-medium text-sm">{message.text}</p>
+        <p
+          className={cn(
+            "rounded-md p-3 text-center font-medium text-sm",
+            met && "bg-green-100 text-green-950 dark:bg-green-900/40 dark:text-green-50",
+          )}
+        >
+          {message.text}
+        </p>
       )}
       {message && "prompt" in message && (
         <div className="grid gap-2 rounded-md bg-yellow-100 p-3 text-center text-sm text-yellow-950 dark:bg-yellow-900/40 dark:text-yellow-50">
@@ -261,6 +275,19 @@ function Row({ label, value, className }: { label: string; value: string; classN
 }
 
 /** YNAB's progress ring with the funded percentage in the middle. */
+/** YNAB's met target: a green ring with a check (seen 2026-10-11 on spending and card targets). */
+function MetRing() {
+  return (
+    <div
+      role="img"
+      aria-label="Target met"
+      className="mx-auto grid size-16 place-items-center rounded-full border-4 border-muted bg-green-600 text-white"
+    >
+      <Check className="size-8" strokeWidth={3} aria-hidden />
+    </div>
+  );
+}
+
 function ProgressRing({ percent }: { percent: number }) {
   const r = 26;
   const c = 2 * Math.PI * r;

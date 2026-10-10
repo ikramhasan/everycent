@@ -906,6 +906,8 @@ export interface components {
             escrowAmount: string | null;
             /** @description Credit accounts: their payment category */
             paymentCategoryId: string | null;
+            /** @description Has transactions besides its starting balance (so it can be closed, not deleted) */
+            hasHistory: boolean;
             balances: components["schemas"]["AccountBalances"];
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */

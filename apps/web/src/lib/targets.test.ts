@@ -3,6 +3,7 @@ import {
   type CategoryTarget,
   dueDayIn,
   ordinal,
+  payoffAmount,
   type TargetNeed,
   targetDueLine,
   targetHeading,
@@ -173,6 +174,23 @@ describe("payment target wording", () => {
     });
     expect(targetMessage(payoff, need("12500", "5000", "0"), format)).toEqual({
       text: "You're on track to meet your target!",
+    });
+  });
+
+  // YNAB, 2026-10-11 (docs/verify.md "Credit lifecycle (phase 7e)").
+  it("cheers a met pay-off target and heads it with what's been put in plus To Go", () => {
+    // Card T2: owes $14.00, $20.00 assigned and $6.00 paid, so $14.00 counts.
+    expect(targetMessage(payoff, need("1400", "1400", "0"), format)).toEqual({
+      text: "Cheers to a debt-free future!",
+    });
+    expect(payoffAmount(need("1400", "1400", "0"), "-600")).toBe("2000");
+    // Card T7 paid off: nothing owed or counted, $20.00 paid.
+    expect(payoffAmount(need("0", "0", "0"), "-2000")).toBe("2000");
+    // Card E1: $50.00 counted of $125.00, nothing paid.
+    expect(payoffAmount(need("12500", "5000", "2084"), "0")).toBe("12500");
+    // A met Pay Specific Amount Monthly keeps the usual words (Card T3).
+    expect(targetMessage(monthly, need("500", "500", "0"), format)).toEqual({
+      text: "You've met your target!",
     });
   });
 

@@ -192,6 +192,17 @@ export function targetRowNote(
 }
 
 /**
+ * Pay Off Balance by Date's heading amount ("Pay off $125.00"): what's been put toward the payoff
+ * (carried and assigned: what counts plus this month's payments) and what's still to go (YNAB:
+ * E1 $50.00 + $75.00 = $125.00; T7 $0.00 counted + $20.00 paid = $20.00; T2 $14.00 + $6.00).
+ */
+export function payoffAmount(need: Pick<TargetNeed, "needed" | "funded">, paymentsMade: string) {
+  const funded = BigInt(need.funded);
+  const toGo = BigInt(need.needed) - funded;
+  return (funded - BigInt(paymentsMade) + (toGo > 0n ? toGo : 0n)).toString();
+}
+
+/**
  * The inspector's lines (YNAB): what's needed, what counts, and To Go (what's left of the total).
  * Pay Off Balance by Date shows the card's whole debt and Available (YNAB's "Needed for Payoff",
  * "Available for Payment"), which include this month's `fundedSpending`; the target leaves it out
@@ -242,7 +253,16 @@ export function targetLines(
  */
 export function targetMessage(target: CategoryTarget, need: TargetNeed, format: Format) {
   const status = targetStatus(need);
-  if (status === "met") return { text: "You've met your target!" };
+  if (status === "met") {
+    // YNAB, 2026-10-11: Cards T2 (still owing) and T7 (paid off); Pay Specific Amount Monthly
+    // keeps the usual words (Card T3).
+    return {
+      text:
+        target.cadence === "payoff_by_date"
+          ? "Cheers to a debt-free future!"
+          : "You've met your target!",
+    };
+  }
   if (status === "onTrack") {
     return target.behavior === "balance" && !target.dueDate
       ? null

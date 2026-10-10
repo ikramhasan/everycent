@@ -30,6 +30,9 @@ export const AccountSchema = z
     minimumPayment: zMinorUnits.nullable(),
     escrowAmount: zMinorUnits.nullable(),
     paymentCategoryId: z.string().nullable().describe("Credit accounts: their payment category"),
+    hasHistory: z
+      .boolean()
+      .describe("Has transactions besides its starting balance (so it can be closed, not deleted)"),
     balances: BalancesSchema,
   })
   .openapi("Account");

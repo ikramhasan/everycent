@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { cardLedger, fundedCardSpending } from "./credit";
+import { type CardLineKind, cardLedger, fundedCardSpending } from "./credit";
 
 // Account ids sort by creation (UUIDv7): visa < amex < citi.
 const VISA = "01-visa";
 const AMEX = "02-amex";
 const CITI = "03-citi";
-const card = (accountId: string, amount: bigint, date = "2026-10-01") => ({
+const card = (accountId: string, amount: bigint, date = "2026-10-01", order = accountId) => ({
   accountId,
   date,
   amount,
+  order,
 });
 const funded = (cash: bigint, cards: ReturnType<typeof card>[]) =>
   Object.fromEntries(fundedCardSpending(cash, cards).moved);
@@ -58,19 +59,19 @@ describe("fundedCardSpending", () => {
       [card(VISA, -300n), card(AMEX, -400n)],
       { [AMEX]: 400n, [VISA]: 100n },
     ],
-    // $5 and two −$4 purchases on one day: Medical and Emergency gave Amex (newer) $4; Dining gave
-    // Citi $4. Provisional tie-break.
+    // G-E1–G-E4 ($5, two −$4 on one day): the smaller transaction id is funded first, whichever
+    // card it's on.
     [
-      "newest card first on a tie",
+      "equal purchases by transaction id",
       500n,
-      [card(VISA, -400n), card(AMEX, -400n)],
+      [card(VISA, -400n, "2026-10-06", "tx-b"), card(AMEX, -400n, "2026-10-06", "tx-a")],
       { [AMEX]: 400n, [VISA]: 100n },
     ],
     [
-      "newest of three on a tie",
+      "equal purchases by transaction id, swapped",
       500n,
-      [card(AMEX, -400n), card(CITI, -400n)],
-      { [CITI]: 400n, [AMEX]: 100n },
+      [card(VISA, -400n, "2026-10-06", "tx-a"), card(AMEX, -400n, "2026-10-06", "tx-b")],
+      { [VISA]: 400n, [AMEX]: 100n },
     ],
     // G-X1 ($0): Card R1 +$5 on 10/01, Card R2 −$3 on 10/02.
     [
@@ -122,14 +123,10 @@ describe("fundedCardSpending", () => {
 describe("cardLedger", () => {
   // Cases from YNAB's "Onboarding Check" plan (2026-10-11), docs/verify.md phase 7e.
   let n = 0;
-  const line = (
-    date: string,
-    amount: bigint,
-    kind: "category" | "readyToAssign" | "budgetTransfer" | "neutral",
-  ) => {
+  const line = (date: string, amount: bigint, kind: CardLineKind) => {
     n += 1;
     const id = `t${String(n).padStart(3, "0")}`;
-    return { id, transactionId: id, date, transactionAmount: amount, amount, kind };
+    return { id, transactionId: id, date, transactionAmount: amount, lineOrder: 0, amount, kind };
   };
   const effects = (lines: ReturnType<typeof line>[]) =>
     cardLedger(lines).map(({ cash, credit, readyToAssign }) => ({ cash, credit, readyToAssign }));
@@ -214,9 +211,43 @@ describe("cardLedger", () => {
     ).toEqual([fx(0n, 0n, 1000n), fx(0n, 0n, -1000n)]);
   });
 
-  it("moves no plan money between two cards", () => {
-    expect(
-      effects([line("2026-10-01", 1000n, "budgetTransfer"), line("2026-10-02", -600n, "neutral")]),
-    ).toEqual([fx(0n, 0n, 1000n), fx(0n, 0n, 0n)]);
+  it("pays another card from the part above zero only (YNAB: Cards T1–T9)", () => {
+    // T1 at +$10 sends $6 to a card: all of it from above zero, a payment there; no new debt.
+    const out = cardLedger([
+      line("2026-10-01", 1000n, "budgetTransfer"),
+      line("2026-10-03", -600n, "creditTransfer"),
+    ]);
+    expect(out[1]).toMatchObject({ paidFromCash: 600n, readyToAssign: 0n });
+    // T3 owing $10 sends $5: new debt, nothing paid from cash and nothing to Ready to Assign.
+    const owing = cardLedger([
+      line("2026-09-01", -1000n, "readyToAssign"),
+      line("2026-10-03", -500n, "creditTransfer"),
+    ]);
+    expect(owing[1]).toMatchObject({ paidFromCash: 0n, readyToAssign: 0n });
+    // T6 owing $2 receives $5: $2 pays its debt, $3 above zero goes to Ready to Assign.
+    const received = cardLedger([
+      line("2026-09-01", -200n, "readyToAssign"),
+      line("2026-10-03", 500n, "creditTransfer"),
+    ]);
+    expect(received[1]).toMatchObject({ readyToAssign: 300n });
+  });
+
+  it("gives a split's cash part to its lines in order (YNAB: Cards T5, T8)", () => {
+    const split = (id: string, order: number, amount: bigint) => ({
+      id,
+      transactionId: "s1",
+      date: "2026-10-03",
+      transactionAmount: -800n,
+      lineOrder: order,
+      amount,
+      kind: "category" as const,
+    });
+    const effects = cardLedger([
+      line("2026-10-01", 500n, "budgetTransfer"),
+      split("first", 0, -500n),
+      split("second", 1, -300n),
+    ]);
+    expect(effects.find((e) => e.id === "first")).toMatchObject({ cash: -500n, credit: 0n });
+    expect(effects.find((e) => e.id === "second")).toMatchObject({ cash: 0n, credit: -300n });
   });
 });

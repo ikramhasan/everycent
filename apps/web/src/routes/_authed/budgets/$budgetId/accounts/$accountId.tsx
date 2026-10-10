@@ -15,6 +15,7 @@ import { Button } from "@everycent/ui/components/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@everycent/ui/components/dialog";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@everycent/ui/components/empty";
 import { Skeleton } from "@everycent/ui/components/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/components/tooltip";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -196,8 +197,10 @@ function AccountPage() {
             initial={account}
             onSubmit={handleSave}
           />
+          {/* YNAB: an open account offers Close, or Delete while it has only its starting
+              balance; a closed one offers Re-open and Delete, disabled while it has history. */}
           <div className="flex flex-wrap gap-2 border-t pt-4">
-            {account.closed ? (
+            {account.closed && (
               <Button
                 variant="outline"
                 size="sm"
@@ -209,21 +212,39 @@ function AccountPage() {
                   )
                 }
               >
-                Reopen account
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={handleClose}>
-                Close account
+                Re-open
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive"
-              onClick={() => setConfirm("delete")}
-            >
-              Delete account
-            </Button>
+            {!account.closed && account.hasHistory && (
+              <Button variant="outline" size="sm" onClick={handleClose}>
+                Close Account
+              </Button>
+            )}
+            {(account.closed || !account.hasHistory) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* A disabled button gets no pointer events; the wrapper shows the tooltip. */}
+                  <span className="inline-flex" tabIndex={account.hasHistory ? 0 : undefined}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive"
+                      disabled={account.hasHistory}
+                      onClick={() => setConfirm("delete")}
+                    >
+                      {account.closed ? "Delete" : "Delete Account"}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {account.hasHistory && (
+                  <TooltipContent className="max-w-xs">
+                    If you want to delete this account, first delete all of the transactions in it
+                    and transfers pointing to it. Be cautious, as this will potentially change your
+                    plan values.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
           </div>
         </DialogContent>
       </Dialog>

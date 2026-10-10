@@ -341,10 +341,10 @@ showing the same numbers. Built as found (`fundedCardSpending`, `packages/engine
   10/02 → R1 −$5, R2 +$3, G-X1 $2. G-X2 ($0): R4 −$3 on 10/01, R3 +$5 on 10/02 → R4 $0 (stays
   unfunded), R3 −$2, G-X2 $2. A return in a category overspent in cash still leaves the payment
   category in full (Groceries, 2026-10-03).
-- **Still provisional:** two equal purchases on the same day fund the newest card first (fits the
-  three 2026-10-03 cases: Medical, Emergency fund, Dining out); a refill goes to the earliest
-  unfunded purchase first, which only changes how the payment categories' "Overspent Categories"
-  line splits between cards (not checked in YNAB).
+- **Equal purchases on the same day** are funded in transaction id order, smallest first (4 of 4:
+  G-E1–G-E4, Cards U2/U3, whatever the card or the entry order). YNAB's ids are random, which is
+  why the 2026-10-03 cases looked like "newest card first". everycent's ids are time-ordered, so
+  the same rule funds the earlier-entered purchase first.
 - A first run (Cards F5–F10) was invalid: cards created through the API get their starting
   balance dated the day before, so returns dated earlier hit a $0 card and made it positive
   (7e rule). Cards R1–R7 carry their debt on 09/01 instead.
@@ -483,8 +483,9 @@ dated the same day as an inflow applied before the inflow:
   - Card S1 paid $10 on 10/05, −$4 in G-S1 the same day: October −$4, November no further
     deduction, G-S1 yellow (credit overspending). The spending counted before the payment, so the
     card was at $0 and the payment only took it $6 above zero. Explains L5/Card Z2 (2026-10-03).
-  - A return pays down debt first: +$5 in G-Q1 on Card R8 owing $3 took $3 out of its payment
-    category (red, deducted next month), G-Q1 got $5 and October didn't change. A return to a $0
+  - A return pays down debt first (delete and re-add, 2026-10-11): +$5 in G-Q1 on Card R8
+    owing $3 took $3 out of its payment category (red, deducted next month), G-Q1 got $5 and
+    October didn't change. A return to a $0
     card is all cash and leaves the payment category alone (Q6/Card T, 2026-10-03); the help
     center's "clothing" example (refund after paying off takes from the payment category) isn't
     what the app does.
@@ -518,9 +519,46 @@ dated the same day as an inflow applied before the inflow:
 - Card Y's inspector after closing showed Prior Balance −$21.00 (the starting balance) and
   Payments and Inflows $21.00 (the $1 payment and the $20 adjustment).
 
-**Not checked:** a credit card payment target (phase 8e) on a card above zero. everycent treats
-such a card as owing nothing, so a pay-off target asks for nothing; YNAB's inspector and pill for
-it are open.
+**Transfers between two credit accounts** (2026-10-11, API, delete and re-add): the part paid from
+the sending card's balance above zero acts as a payment from a cash account (the receiving card's
+payment category gives it up); the rest pays down the receiving card's debt, and whatever takes
+the receiving card above zero goes to Ready to Assign. The sending card's new debt adds nothing.
+T1 at +$10 → T2 owing $20, $6: T2's payment category −$6, October unchanged, November −$6. T3
+owing $10 → T4 at $0, $5: October +$5, no payment category moved. T7 owing $10 → T6 owing $2,
+$5: October +$3, nothing moved. T1 at +$4 → T9 at $0, $3: T9's payment category −$3, October +$3.
+
+**A split on a positive card** gives the cash part to its lines in their order: T5 at +$5 with a
+−$8 split (G-S5a −$3 with $3 assigned first, G-S5b −$5 second) funded nothing and November lost
+$2; with the lines the other way round (T8: G-S6b −$5 first, G-S6a −$3 with $3 second) the
+second line's $3 was credit, funded, and moved to T8's payment category.
+
+**Payment targets on a card above zero** (2026-10-11, web app): a positive card's payment
+category shows only "Your Card T4 is paid off!" (no Target section, no "Create a Debt Payoff
+Target"), so a target can't be added there. A target made while the card owed keeps working:
+Card T7 (Pay Off Balance by Date, Nov 2026) after an overpayment asked $10.00 while its payment
+category was −$20.00 (red: the alert shows instead of the target, as for E2); funded back to
+$0.00 it read "Pay off $20.00", the check ring, "Cheers to a debt-free future!", Needed for
+Payoff $0.00, Available for Payment $0.00, To Go $0.00, Edit Target, with a grey pill and a
+check; at $5.00 "Pay off $25.00" and a green pill with a check, and Reduce Overfunding rose by
+$5.00. A pay-off target met while the card still owes reads the same (Card T2: owes $14.00,
+$14.00 available, "Pay off $20.00", "Cheers to a debt-free future!"), while a met Pay Specific
+Amount Monthly target reads "You've met your target!" (Card T3). The "Pay off" amount is what's
+been put in (carried and assigned, less this month's funded spending) plus To Go: E1 $50 + $75 =
+$125.00, T7 $25 + $0, T2 $20 + $0.
+
+**Reopening** (Card P, web app): a closed account's Edit Account dialog has only the nickname and
+notes, with "Re-open", "Delete", "Cancel" and "Save". Re-open happens at once (no dialog); the
+closing adjustment stays, the balance stays $0.00, and Ready to Assign doesn't change. Delete is
+disabled while the account has transactions, with the tooltip "If you want to delete this
+account, first delete all of the transactions in it and transfers pointing to it. Be cautious,
+as this will potentially change your plan values." (Card Y). An open account's dialog offers
+"Close Account", or "Delete Account" instead when it has only its starting balance.
+
+**Uncategorized** funds and returns card money like any category: with $7.00 available, −$3 of
+uncategorized spending on Card R4 moved $3 to its payment category; an uncategorized +$5 on Card
+R3 (a transfer from Track T, category Uncategorized) took $5 out of R3's payment category and
+added $5 to Uncategorized. An uncategorized inflow to Wallet just raised Uncategorized (−$3 →
++$2), which carried into November.
 
 **Lines of credit** behave as credit cards (LOC G/H, API): G-L1 $5 assigned, −$8 on LOC G moved
 $5 to its payment category and left G-L1 at −$3 not deducted next month; a $4 payment took the

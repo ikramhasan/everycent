@@ -39,8 +39,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   on a selection are auto-assign's (6e).
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
   on every read (`fundedCardSpending`, no stored rows), cash first and then card activity in date
-  order (settled 2026-10-11). The same-day tie-break for equal purchases is provisional
-  (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
+  order, equal same-day purchases by transaction id (all settled 2026-10-11, docs/verify.md).
+  Uncategorized funds and returns card money like any category. Credit overspending (7c) is yellow and stays out of next month's Ready to
   Assign. Payments from budget accounts come out of the payment category (7d); statement credits
   and cash advances don't move payment money. A card's balance above zero is cash (7e, see
   "Credit lifecycle and loans" below). Uncategorized card spending counts as credit overspending,
@@ -49,10 +49,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 - A payment category's Activity opens the card's register for the month with YNAB's Spending /
   Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
   transactions with their categories; ours uses the same columns as other categories (Account,
-  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button (YNAB's
-  switches to the Overspent view), still shows Current Balance in past months (YNAB hides it), and
-  its Current Balance and Available for Payment lines aren't collapsible as YNAB's are
-  (EVERYCENT-22). Auto-Assign on payment categories has Underfunded and Reduce
+  Date, Payee, Memo, Amount). "Cover Overspent Categories" switches to the Overspent view and past
+  months hide the alert and Current Balance, as YNAB does; the Current Balance and Available for
+  Payment lines aren't collapsible as YNAB's are (EVERYCENT-22). Auto-Assign on payment categories has Underfunded and Reduce
   Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
   Average Paid when only payment categories are covered).
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
@@ -108,13 +107,17 @@ before starting a roadmap phase** and remove an entry once it's done.
 (phase 7e)") has what YNAB showed and what's still open.
 
 - **Positive card balances (7e)** are built: `cardLedger` walks each card's lines by date and
-  splits them at zero (docs/verify.md). Provisional there: transfers between two credit accounts
-  move no plan money, and a split's lines take the cash part largest outflow first (neither seen
-  in YNAB). A credit card payment target on a positive card asks for nothing (not seen in YNAB).
-- **Closing** keeps the payment category visible (YNAB) and uses YNAB's two dialog wordings; a
-  zero-balance account closes without a dialog. YNAB offers "Delete Account" instead of "Close
-  Account" in its Edit Account dialog when an account has only its starting balance; everycent
-  shows both buttons and refuses the delete otherwise.
+  splits them at zero, including transfers between two cards and a split's lines in their order
+  (all checked in YNAB, docs/verify.md). A payment target on a card above zero follows YNAB (it
+  can't be created there; an existing one reads "Cheers to a debt-free future!" when met).
+- **Closing** keeps the payment category visible, uses YNAB's dialog wordings and the "Closed
+  Account" memo; a zero-balance account closes without a dialog. Edit account offers Close, or
+  Delete while an account has only its starting balance; a closed account offers Re-open and
+  Delete (disabled with YNAB's tooltip while it has history).
+- **Edit account has no Working Balance field.** YNAB's Edit Account dialog lets you type a new
+  working balance and creates an adjustment for the difference ("An adjustment transaction will be
+  created automatically if you change this amount."). Not built; it shares reconciliation's
+  adjustment (phase 9).
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan

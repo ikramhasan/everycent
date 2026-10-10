@@ -5,6 +5,8 @@ export interface CardActivity {
   date: string;
   /** Net of the card's spending and returns in the category that day (minor units). */
   amount: bigint;
+  /** Breaks ties between equal purchases on one day: the smallest transaction id goes first. */
+  order: string;
 }
 
 export interface FundedCardSpending {
@@ -27,15 +29,13 @@ export interface FundedCardSpending {
  *   month's cash activity. Cash is funded first, even cash spending dated after the card's
  *   (2026-10-11: $10 assigned, card −$8 on 10/01, cash −$6 on 10/05 moved $4).
  * - Card activity then runs in date order; on the same day the largest outflow goes first
- *   (2026-10-11, cards F1/F2). Each purchase is funded with what the category has left; the rest
- *   is credit overspending (phase 7c).
+ *   (2026-10-11, cards F1/F2), and equal ones by transaction id, smallest first (Cards U2/U3, 4 of
+ *   4; YNAB's ids are random, ours are time-ordered). Each purchase is funded with what the
+ *   category has left; the rest is credit overspending (phase 7c).
  * - A return first refills what earlier card spending left unfunded; only the rest leaves the
  *   returning card's payment category and is the category's again (2026-10-11: card −$3 on 10/01,
  *   another card's +$5 return on 10/02 left the first unfunded and moved $2 out). A return doesn't
  *   refill cash overspending: it moves out in full (2026-10-03, Groceries).
- *
- * Built so far, before YNAB settles it: two equal purchases on the same day fund the newest card
- * (highest UUIDv7 account id) first, which matched all three cases seen in 2026-10-03.
  */
 export function fundedCardSpending(
   cash: bigint,
@@ -54,7 +54,7 @@ export function fundedCardSpending(
     (a, b) =>
       a.date.localeCompare(b.date) ||
       (a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0) ||
-      (a.accountId < b.accountId ? 1 : a.accountId > b.accountId ? -1 : 0),
+      a.order.localeCompare(b.order),
   );
   for (const { accountId, amount } of ordered) {
     if (amount < 0n) {
@@ -88,10 +88,15 @@ export function fundedCardSpending(
 /**
  * What one card line is, for `cardLedger`: spending or a return in a category (Uncategorized
  * included), money to or from Ready to Assign (statement credits, starting balances, the closing
- * adjustment), a transfer with a cash budget account (a payment in, a cash advance out), or
- * something that moves no plan money (a transfer with another credit account).
+ * adjustment), a transfer with a cash budget account (a payment in, a cash advance out), a
+ * transfer with another credit account, or something that moves no plan money.
  */
-export type CardLineKind = "category" | "readyToAssign" | "budgetTransfer" | "neutral";
+export type CardLineKind =
+  | "category"
+  | "readyToAssign"
+  | "budgetTransfer"
+  | "creditTransfer"
+  | "neutral";
 
 export interface CardLine {
   /** The line's id (a transaction's, or a split line's). */
@@ -101,6 +106,8 @@ export interface CardLine {
   date: string;
   /** The whole transaction's amount; orders a day's transactions. */
   transactionAmount: bigint;
+  /** A split line's place in its split (0 for a whole transaction); orders a split's lines. */
+  lineOrder: number;
   amount: bigint;
   kind: CardLineKind;
 }
@@ -114,6 +121,11 @@ export interface CardLineEffect {
   credit: bigint;
   /** What the line adds to (or takes from) Ready to Assign. */
   readyToAssign: bigint;
+  /**
+   * Transfers out to another credit account: the part paid from this card's balance above zero,
+   * which reaches the other card as a payment (out of its payment category).
+   */
+  paidFromCash: bigint;
 }
 
 /**
@@ -121,7 +133,7 @@ export interface CardLineEffect {
  * of a balance above zero is cash (YNAB, checked 2026-10-11 in "Onboarding Check"; docs/verify.md
  * "Credit lifecycle (phase 7e)"). Lines run by date; on the same day outflows come first, the
  * largest first (Card S1: spending dated the day of the payment that made the card positive was
- * credit), and a split's lines go largest outflow first too.
+ * credit), and a split's lines in their order (Cards T5, T8).
  *
  * - Spending is cash up to the balance above zero and credit for the rest (Card Q3: −$10 at +$6
  *   was $6 cash and $4 credit). A return pays down debt first (credit, out of the payment
@@ -131,8 +143,9 @@ export interface CardLineEffect {
  *   Card P).
  * - A cash advance adds what becomes new debt: the amount less what was above zero (Card A at +$6
  *   moving $8: +$2; Card W owing $5 moving $3: +$3).
- *
- * Built so far, before YNAB settles it: transfers between two credit accounts move no plan money.
+ * - Between two credit accounts, the sending card's new debt adds nothing; the part it paid from
+ *   above zero (`paidFromCash`) is a payment to the other card, and the receiving card counts like
+ *   a payment in: what takes it above zero goes to Ready to Assign (Cards T1–T9).
  */
 export function cardLedger(lines: readonly CardLine[]): CardLineEffect[] {
   const ordered = [...lines].sort(
@@ -140,12 +153,19 @@ export function cardLedger(lines: readonly CardLine[]): CardLineEffect[] {
       a.date.localeCompare(b.date) ||
       compare(a.transactionAmount, b.transactionAmount) ||
       a.transactionId.localeCompare(b.transactionId) ||
-      compare(a.amount, b.amount) ||
+      a.lineOrder - b.lineOrder ||
       a.id.localeCompare(b.id),
   );
   let balance = 0n;
   return ordered.map(({ id, date, amount, kind }) => {
-    const effect: CardLineEffect = { id, date, cash: 0n, credit: 0n, readyToAssign: 0n };
+    const effect: CardLineEffect = {
+      id,
+      date,
+      cash: 0n,
+      credit: 0n,
+      readyToAssign: 0n,
+      paidFromCash: 0n,
+    };
     if (amount < 0n) {
       const above = balance > 0n ? balance : 0n;
       const fromAbove = above < -amount ? above : -amount;
@@ -156,6 +176,8 @@ export function cardLedger(lines: readonly CardLine[]): CardLineEffect[] {
         effect.readyToAssign = -fromAbove;
       } else if (kind === "budgetTransfer") {
         effect.readyToAssign = -amount - fromAbove;
+      } else if (kind === "creditTransfer") {
+        effect.paidFromCash = fromAbove;
       }
     } else if (amount > 0n) {
       const owed = balance < 0n ? -balance : 0n;
@@ -163,7 +185,7 @@ export function cardLedger(lines: readonly CardLine[]): CardLineEffect[] {
       if (kind === "category") {
         effect.credit = toDebt;
         effect.cash = amount - toDebt;
-      } else if (kind === "readyToAssign" || kind === "budgetTransfer") {
+      } else if (kind !== "neutral") {
         effect.readyToAssign = amount - toDebt;
       }
     }
