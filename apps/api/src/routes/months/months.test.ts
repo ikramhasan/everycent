@@ -334,6 +334,29 @@ describe("budget months", () => {
       expect(await pay()).toBe("0");
     });
 
+    it("funds the earliest purchase first (YNAB: G-F1, $5, −$4 on 10/02 and −$3 on 10/01)", async () => {
+      const { month, assign, create, rent, visa, amex } = await cards();
+      await assign(rent.id, "2026-10", 500n);
+      // Visa is the older card and its purchase is entered first; the date decides.
+      await create({ accountId: visa.id, date: "2026-10-02", amount: "-400", categoryId: rent.id });
+      await create({ accountId: amex.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({ available: "300" });
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({ available: "200" });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "-200" });
+    });
+
+    it("refills earlier unfunded card spending with a later return (YNAB: G-X2)", async () => {
+      const { month, create, rent, visa, amex } = await cards(10000n);
+      await create({ accountId: amex.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      await create({ accountId: visa.id, date: "2026-10-02", amount: "500", categoryId: rent.id });
+      const oct = await month("2026-10");
+      // Amex stays unfunded; only $2 of Visa's $5 return leaves its payment category.
+      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({ available: "0" });
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({ available: "-200" });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "200", creditOverspent: "0" });
+    });
+
     it("funds September's card spending from September's money only", async () => {
       const { month, assign, create, rent, visa } = await cards();
       await assign(rent.id, "2026-09", 500n);
@@ -535,6 +558,41 @@ describe("budget months", () => {
         available: "-700",
         payment: { paymentsMade: "-700", balance: "-800" },
       });
+    });
+
+    it("treats a categorized transfer from a tracking account as a refund (YNAB: Track T)", async () => {
+      const { cookie, base, month, create, rent, visa, readyToAssignCategoryId } =
+        await cards(2000n);
+      const asset = await json<{ id: string }>(
+        await send("POST", `${base}/accounts`, cookie, {
+          name: "House",
+          type: "asset",
+          balance: "100000",
+          date: "2026-08-20",
+        }),
+      );
+      // Into Inflow: Ready to Assign it only lowers what's owed, like a statement credit.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "200",
+        transferAccountId: asset.id,
+        categoryId: readyToAssignCategoryId,
+      });
+      // Into a spending category it moves money from the payment category, like a refund.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "500",
+        transferAccountId: asset.id,
+        categoryId: rent.id,
+      });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({
+        available: "-500",
+        payment: { paymentsMade: "0", balance: "-1300" },
+      });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "500" });
     });
 
     it("leaves the payment category alone for statement credits and cash advances", async () => {

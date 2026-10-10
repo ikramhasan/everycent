@@ -324,38 +324,30 @@ categories T1–T6). Confirmed:
   category into the category, overspent or not: Vacation +$2 and Groceries +$1 on Visa each
   showed in Visa's Payments & Returns and raised the category's Available.
 
-### Several cards competing for one category's money
+### Funding order and returns across cards (settled 2026-10-11)
 
-- **Found:** with $5 assigned and two −$4 card purchases on the same day, one card got $4 and the
-  other $1, but not by entry order or sidebar order: Medical (Visa then Amex) and Emergency fund
-  (Amex then Visa) both gave Amex $4; Dining out (Citi then Amex) gave Citi $4.
-- **Question:** how does YNAB split a category's money between cards when it can't fund them all
-  (transaction date, account creation, transaction id …)? This is also 7c's "which payment method
-  is funded first" gate.
-- **Built so far (before this rule):** the newest card (latest-created account) is funded first,
-  which fits all three cases seen (`fundedCardSpending` in `packages/engine/src/credit.ts`).
-- **How to settle it:** two new cards (Card A then Card B, each starting at $100 owed), $5
-  assigned to a new category, then Card A −$4 dated 10/02 and Card B −$3 dated 10/01, entered in
-  that order; reload twice and read both payment categories' Available. Repeat with the purchases
-  swapped between the cards. A 4/1 split means a whole purchase was funded first; anything like
-  2.86/2.14 means a proportional split.
+Checked in the "Onboarding Check" plan (group "Gate 7e") through the API, with the web app
+showing the same numbers. Built as found (`fundedCardSpending`, `packages/engine/src/credit.ts`):
 
-### Returns on one card, spending on another, in the same category
-
-- **Found:** results didn't follow a single model, and the payment categories' numbers changed
-  after a page reload (Visa Funded Spending $35.00 live, $38.00–$39.00 after reloads with nothing
-  edited in between). Examples after reload: T2 ($0; Amex +$5, Visa −$3) ended Available $2.00;
-  T3 and T4 ($0; Amex +$3, Visa −$3) ended $0.00; Amex's Payments & Returns was $10.00 against
-  $22.00 of categorized Amex returns.
-- **Question:** does a return on one card fund spending on another card in the same category,
-  and how much leaves the returning card's payment category?
-- **Built so far (before this rule):** card returns go back into the category's money and can fund
-  another card's spending there; each returning card's payment category gives up its whole return.
-  This matched the categories' Available in every case (T2 $2.00, T3/T4 $0.00) but not every
-  payment category's number, which YNAB itself changed between reloads.
-- **How to settle it:** with the two new cards above (balances below zero throughout), a category
-  with $0 assigned: Card A +$5 dated 10/01, Card B −$3 dated 10/02; reload twice and read both
-  payment categories and the category. Then the same with the dates swapped.
+- **Cash first, for the whole month:** $10 assigned (G-C1), Card R1 −$8 on 10/01, Wallet −$6 on
+  10/05: adding the later cash purchase cut R1's funding from $8 to $4.
+- **Then card activity in date order:** $5 assigned, F1 −$4 on 10/02 (older card, entered first)
+  and F2 −$3 on 10/01: F2 got $3, F1 $2 (G-F1); with the purchases swapped F3 −$3 on 10/01 got $3
+  (G-F2). The 2026-10-03 "newest card first" fit only same-day ties.
+- **Same day, largest outflow first:** $5, F1 −$4 and F2 −$3 on one day → F1 $4, F2 $1 (G-T1);
+  F1 −$3 and F2 −$4 → F2 $4, F1 $1 (G-T2). This is the register's same-day order, and the 7e
+  finding that same-day outflows come before inflows.
+- **Returns refill earlier unfunded card spending first:** G-X1 ($0): R1 +$5 on 10/01, R2 −$3 on
+  10/02 → R1 −$5, R2 +$3, G-X1 $2. G-X2 ($0): R4 −$3 on 10/01, R3 +$5 on 10/02 → R4 $0 (stays
+  unfunded), R3 −$2, G-X2 $2. A return in a category overspent in cash still leaves the payment
+  category in full (Groceries, 2026-10-03).
+- **Still provisional:** two equal purchases on the same day fund the newest card first (fits the
+  three 2026-10-03 cases: Medical, Emergency fund, Dining out); a refill goes to the earliest
+  unfunded purchase first, which only changes how the payment categories' "Overspent Categories"
+  line splits between cards (not checked in YNAB).
+- A first run (Cards F5–F10) was invalid: cards created through the API get their starting
+  balance dated the day before, so returns dated earlier hit a $0 card and made it positive
+  (7e rule). Cards R1–R7 carry their debt on 09/01 instead.
 
 ## Credit overspending and existing debt (phase 7c)
 
@@ -437,21 +429,21 @@ Rewards and Statement Credits", "Paid in Full Credit Cards") and in YNAB's web a
   original reading here ("raised Ready to Assign by nothing") was taken in the web app with other
   changes in flight. everycent doesn't do this yet; 7e builds it (see "Credit lifecycle" below).
 
-### A refund larger than what was funded, and refunds in a later month
+### Refunds in a later month or larger than the month's purchases (settled 2026-10-11)
 
-- **Question:** R4 had $5 of unfunded credit spending and a $5 refund on the same card in the same
-  month; the category went to $0 and Citi didn't change (netting, 7b). A refund in a later month
-  than the purchase, or one larger than the month's purchases, would take money out of the
-  payment category in the refund's month (support.ynab.com) — not checked in the app.
-- **Built so far (before this rule):** the refund's month and the card's net activity in that
-  month decide it, as 7b computes (a later-month refund moves its whole amount out).
+- Card R6: −$10 in G-X5 in September (unfunded), +$10 refund in October: the refund took its whole
+  $10 out of R6's payment category in October. Card R7: −$2 then +$6 in G-X6 in October ($0
+  assigned): $4 left the payment category. Both are what everycent already does.
 
-### Payment from a tracking account, and payments into a positive card
+### Payment from a tracking account (settled 2026-10-11)
 
-- **Question:** a "payment" from an off-budget account (the transfer gets a category on the
-  budget side, phase 5 rules) and paying a card that's already positive (7e).
-- **Skipped:** a transfer into a card from a tracking account moves no payment money here; a
-  positive card balance is phase 7e.
+- A transfer from a tracking account (Track T) into a card in debt is never a payment; it acts as
+  an inflow on the card with the category its card side has: Inflow: Ready to Assign changed
+  nothing (like a statement credit); a spending category (G-Y) got +$5 and the card's payment
+  category gave up $5 (like a refund). everycent already does both (API test "treats a categorized
+  transfer from a tracking account as a refund"). Left uncategorized, it also took $5 out of the
+  payment category and next month's Ready to Assign moved by +$3; not built (an uncategorized
+  card inflow is an open question, not checked further).
 
 ## Credit lifecycle (phase 7e)
 

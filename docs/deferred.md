@@ -38,13 +38,14 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
   on a selection are auto-assign's (6e).
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
-  on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
+  on every read (`fundedCardSpending`, no stored rows), cash first and then card activity in date
+  order (settled 2026-10-11). The same-day tie-break for equal purchases is provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
   Assign. Payments from budget accounts come out of the payment category (7d); statement credits
   and cash advances don't move payment money. Not yet: positive card balances acting as cash (7e,
-  deferred: see "Credit lifecycle and loans" below), and transfers into a card from a tracking
-  account (docs/verify.md). Uncategorized card spending counts as credit overspending, as YNAB's
-  "Uncategorized cash transactions … $2.00 will be deducted" note suggests (cash part only).
+  deferred: see "Credit lifecycle and loans" below). Uncategorized card spending counts as credit
+  overspending, as YNAB's "Uncategorized cash transactions … $2.00 will be deducted" note suggests
+  (cash part only).
 - A payment category's Activity opens the card's register for the month with YNAB's Spending /
   Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
   transactions with their categories; ours uses the same columns as other categories (Account,

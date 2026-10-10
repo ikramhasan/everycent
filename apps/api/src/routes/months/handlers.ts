@@ -169,7 +169,8 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
  * account comes out of the card's payment category in the payment's month (YNAB, checked in its
  * web app on 2026-10-03: Citi $14.00 → $8.00 for a $6.00 payment from Wallet; paying more than
  * is set aside leaves it negative). Money moved out of a card to a budget account (a cash advance)
- * only raises what's owed. Transfers from tracking accounts are skipped (docs/verify.md).
+ * only raises what's owed. A transfer from a tracking account is no payment: its category on the card
+ * side decides, as for any card inflow (YNAB, 2026-10-11; docs/verify.md).
  */
 async function addPayments(
   db: Db,
@@ -227,18 +228,18 @@ async function cardActivity(db: Db, budgetId: string, cutoff: string) {
   const rows = await db
     .select({
       categoryId: transaction.categoryId,
-      month: monthKey(transaction.date),
+      date: transaction.date,
       accountId: transaction.accountId,
       amount: total(transaction.amount),
     })
     .from(transaction)
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
     .where(and(onCard, isNotNull(transaction.categoryId)))
-    .groupBy(transaction.categoryId, monthKey(transaction.date), transaction.accountId);
+    .groupBy(transaction.categoryId, transaction.date, transaction.accountId);
   const lines = await db
     .select({
       categoryId: subTransaction.categoryId,
-      month: monthKey(transaction.date),
+      date: transaction.date,
       accountId: transaction.accountId,
       amount: total(subTransaction.amount),
     })
@@ -246,16 +247,19 @@ async function cardActivity(db: Db, budgetId: string, cutoff: string) {
     .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
     .where(and(onCard, isNotNull(subTransaction.categoryId)))
-    .groupBy(subTransaction.categoryId, monthKey(transaction.date), transaction.accountId);
+    .groupBy(subTransaction.categoryId, transaction.date, transaction.accountId);
 
-  // categoryId → month → accountId → amount (a card's transactions and split lines added up).
-  const byCategory = new Map<string, Map<BudgetMonth, Map<string, bigint>>>();
+  // categoryId → month → each card's net activity per day (transactions and split lines added up).
+  const byCategory = new Map<string, Map<BudgetMonth, CardActivity[]>>();
   for (const r of [...rows, ...lines]) {
     if (!r.categoryId) continue;
-    const months = byCategory.get(r.categoryId) ?? new Map<BudgetMonth, Map<string, bigint>>();
-    const cards = months.get(r.month) ?? new Map<string, bigint>();
-    cards.set(r.accountId, (cards.get(r.accountId) ?? 0n) + BigInt(r.amount));
-    months.set(r.month, cards);
+    const months = byCategory.get(r.categoryId) ?? new Map<BudgetMonth, CardActivity[]>();
+    const month = monthOf(r.date);
+    const days = months.get(month) ?? [];
+    const same = days.find((d) => d.date === r.date && d.accountId === r.accountId);
+    if (same) same.amount += BigInt(r.amount);
+    else days.push({ accountId: r.accountId, date: r.date, amount: BigInt(r.amount) });
+    months.set(month, days);
     byCategory.set(r.categoryId, months);
   }
   return byCategory;
@@ -281,20 +285,16 @@ async function addFundedSpending(
   for (const [categoryId, months] of cards) {
     if (skip.has(categoryId)) continue;
     const entries = history.get(categoryId) ?? [];
-    for (const [month, byAccount] of months) {
+    for (const [month, days] of months) {
       const figures = categoryMonth(entries, month);
       const cash = figures.carried + figures.assigned + figures.cashActivity;
-      const activity: CardActivity[] = [...byAccount].map(([accountId, amount]) => ({
-        accountId,
-        amount,
-      }));
-      for (const [accountId, amount] of fundedCardSpending(cash, activity)) {
-        const spent = -(byAccount.get(accountId) ?? 0n);
-        if (spent > amount) {
-          const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
-          months.set(month, (months.get(month) ?? 0n) + spent - amount);
-          unfunded.set(accountId, months);
-        }
+      const { moved, unfunded: short } = fundedCardSpending(cash, days);
+      for (const [accountId, amount] of short) {
+        const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
+        months.set(month, (months.get(month) ?? 0n) + amount);
+        unfunded.set(accountId, months);
+      }
+      for (const [accountId, amount] of moved) {
         const paymentId = paymentCategoryByAccount.get(accountId);
         if (!paymentId || amount === 0n) continue;
         const list = funded.get(paymentId) ?? [];
