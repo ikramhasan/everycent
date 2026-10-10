@@ -203,7 +203,7 @@ describe("accounts", () => {
     expect((await accounts()).map((x) => x.name)).toEqual(["B", "A"]);
   });
 
-  it("closes an account, zeroing its balance and hiding its payment category", async () => {
+  it("closes an account, zeroing its balance and keeping its payment category", async () => {
     const { cookie, base, addAccount, transactions, groups } = await setup();
     const savings = await addAccount({ name: "Savings", type: "savings", balance: "10000" });
     const res = await send("POST", `${base}/accounts/${savings.id}/close`, cookie, { date: TODAY });
@@ -217,7 +217,8 @@ describe("accounts", () => {
 
     const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "0" });
     await send("POST", `${base}/accounts/${visa.id}/close`, cookie, { date: TODAY });
-    expect((await groups())[0]?.categories[0]?.hidden).toBe(true);
+    // YNAB leaves it visible with whatever is set aside.
+    expect((await groups())[0]?.categories[0]?.hidden).toBe(false);
     // A zero balance needs no adjustment.
     expect(await transactions(visa.id)).toHaveLength(1);
 

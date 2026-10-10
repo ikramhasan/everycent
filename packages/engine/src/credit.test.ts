@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fundedCardSpending } from "./credit";
+import { cardLedger, fundedCardSpending } from "./credit";
 
 // Account ids sort by creation (UUIDv7): visa < amex < citi.
 const VISA = "01-visa";
@@ -116,5 +116,107 @@ describe("fundedCardSpending", () => {
     const cards = [card(VISA, -700n), card(AMEX, -200n), card(CITI, 100n, "2026-10-02")];
     const { moved } = fundedCardSpending(300n, cards);
     expect([...moved.values()].reduce((a, b) => a + b, 0n)).toBe(300n);
+  });
+});
+
+describe("cardLedger", () => {
+  // Cases from YNAB's "Onboarding Check" plan (2026-10-11), docs/verify.md phase 7e.
+  let n = 0;
+  const line = (
+    date: string,
+    amount: bigint,
+    kind: "category" | "readyToAssign" | "budgetTransfer" | "neutral",
+  ) => {
+    n += 1;
+    const id = `t${String(n).padStart(3, "0")}`;
+    return { id, transactionId: id, date, transactionAmount: amount, amount, kind };
+  };
+  const effects = (lines: ReturnType<typeof line>[]) =>
+    cardLedger(lines).map(({ cash, credit, readyToAssign }) => ({ cash, credit, readyToAssign }));
+  const fx = (cash: bigint, credit: bigint, readyToAssign: bigint) => ({
+    cash,
+    credit,
+    readyToAssign,
+  });
+
+  it("adds a payment's part above zero to Ready to Assign (Card X)", () => {
+    expect(effects([line("2026-10-01", 1000n, "budgetTransfer")])).toEqual([fx(0n, 0n, 1000n)]);
+  });
+
+  it("makes spending while positive cash, and splits spending that crosses zero (Card Z)", () => {
+    const lines = [
+      line("2026-10-01", 500n, "budgetTransfer"),
+      line("2026-10-02", -400n, "category"),
+      line("2026-10-03", -300n, "category"),
+    ];
+    expect(effects(lines)).toEqual([fx(0n, 0n, 500n), fx(-400n, 0n, 0n), fx(-100n, -200n, 0n)]);
+  });
+
+  it("puts a day's spending before the payment that day (Card S1)", () => {
+    // Entered after the payment, still counted first: credit, and the payment only adds $6.
+    const lines = [
+      line("2026-10-05", 1000n, "budgetTransfer"),
+      line("2026-10-05", -400n, "category"),
+    ];
+    // Effects come back in the ledger's order: the spending, then the payment.
+    expect(effects(lines)).toEqual([fx(0n, -400n, 0n), fx(0n, 0n, 600n)]);
+  });
+
+  it("counts money to and from Ready to Assign only above zero (Cards V and W)", () => {
+    expect(
+      effects([
+        line("2026-10-01", 300n, "budgetTransfer"),
+        line("2026-10-03", -500n, "readyToAssign"),
+      ]),
+    ).toEqual([fx(0n, 0n, 300n), fx(0n, 0n, -300n)]);
+    expect(
+      effects([
+        line("2026-10-01", -500n, "readyToAssign"),
+        line("2026-10-11", -200n, "readyToAssign"),
+      ]),
+    ).toEqual([fx(0n, 0n, 0n), fx(0n, 0n, 0n)]);
+    // Card V (2026-10-03): $8 in at −$5 → +$3.
+    expect(
+      effects([
+        line("2026-10-01", -500n, "readyToAssign"),
+        line("2026-10-02", 800n, "readyToAssign"),
+      ]),
+    ).toEqual([fx(0n, 0n, 0n), fx(0n, 0n, 300n)]);
+  });
+
+  it("adds a cash advance's new debt (Cards A and W)", () => {
+    expect(
+      effects([
+        line("2026-10-01", 600n, "budgetTransfer"),
+        line("2026-10-03", -800n, "budgetTransfer"),
+      ]),
+    ).toEqual([fx(0n, 0n, 600n), fx(0n, 0n, 200n)]);
+    expect(
+      effects([
+        line("2026-10-01", -500n, "readyToAssign"),
+        line("2026-10-11", -300n, "budgetTransfer"),
+      ]),
+    ).toEqual([fx(0n, 0n, 0n), fx(0n, 0n, 300n)]);
+  });
+
+  it("pays down debt with a return first, the rest is cash (Card R8)", () => {
+    expect(
+      effects([line("2026-09-01", -300n, "readyToAssign"), line("2026-10-09", 500n, "category")]),
+    ).toEqual([fx(0n, 0n, 0n), fx(200n, 300n, 0n)]);
+  });
+
+  it("takes a closed positive card's balance out of Ready to Assign (Card P)", () => {
+    expect(
+      effects([
+        line("2026-10-01", 1000n, "budgetTransfer"),
+        line("2026-10-11", -1000n, "readyToAssign"),
+      ]),
+    ).toEqual([fx(0n, 0n, 1000n), fx(0n, 0n, -1000n)]);
+  });
+
+  it("moves no plan money between two cards", () => {
+    expect(
+      effects([line("2026-10-01", 1000n, "budgetTransfer"), line("2026-10-02", -600n, "neutral")]),
+    ).toEqual([fx(0n, 0n, 1000n), fx(0n, 0n, 0n)]);
   });
 });

@@ -1,4 +1,5 @@
 import { ACCOUNT_TYPE_LABELS, isOnBudget, money } from "@everycent/engine";
+import { Alert, AlertDescription } from "@everycent/ui/components/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,7 @@ import { Skeleton } from "@everycent/ui/components/skeleton";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Pencil } from "lucide-react";
+import { Info, Pencil } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -131,6 +132,19 @@ function AccountPage() {
 
   const working = BigInt(account.balances.working);
 
+  const closeNow = () =>
+    run(
+      () => close.mutateAsync({ params: { path }, body: { date: todayIso() } }),
+      "Account closed",
+      "Couldn't close the account.",
+    );
+  /** YNAB closes a zeroed account at once and asks first when the balance needs an adjustment. */
+  function handleClose() {
+    if (working !== 0n) return setConfirm("close");
+    setEditing(false);
+    void closeNow();
+  }
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -198,7 +212,7 @@ function AccountPage() {
                 Reopen account
               </Button>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => setConfirm("close")}>
+              <Button variant="outline" size="sm" onClick={handleClose}>
                 Close account
               </Button>
             )}
@@ -218,17 +232,23 @@ function AccountPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirm === "close" ? `Close “${account.name}”?` : `Delete “${account.name}”?`}
+              {confirm === "close" ? "Close Account" : `Delete “${account.name}”?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === "delete"
                 ? "Only accounts with no transactions besides their starting balance can be deleted. This can't be undone."
-                : working === 0n
-                  ? "It moves to Closed Accounts, where you can still see its history or reopen it."
-                  : `Its balance of ${show(account.balances.working)} will be zeroed out with a Manual Balance Adjustment${
-                      isOnBudget(account.type) ? ", which comes out of Ready to Assign" : ""
-                    }. To keep the money, transfer it to another account first.`}
+                : `Before you can close this account, the balance will have to be zeroed out. An adjustment transaction will be created for ${show((-working).toString())}.`}
             </AlertDialogDescription>
+            {confirm === "close" && working > 0n && isOnBudget(account.type) && (
+              <Alert>
+                <Info aria-hidden />
+                <AlertDescription>
+                  The money in this account will be removed from your plan. If you would like to
+                  keep it in your plan, you can transfer it to another account before closing this
+                  one.
+                </AlertDescription>
+              </Alert>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -239,14 +259,10 @@ function AccountPage() {
                 setConfirm(null);
                 setEditing(false);
                 if (action === "delete") return handleDelete();
-                await run(
-                  () => close.mutateAsync({ params: { path }, body: { date: todayIso() } }),
-                  "Account closed",
-                  "Couldn't close the account.",
-                );
+                await closeNow();
               }}
             >
-              {confirm === "delete" ? "Delete account" : "Close account"}
+              {confirm === "delete" ? "Delete account" : "Adjust Balance & Close"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

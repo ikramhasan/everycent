@@ -459,8 +459,8 @@ Bank Accounts", "Correcting Balances in Closed Accounts", "Changing an Account T
 Credit Accounts") and in YNAB on 2026-10-03 (cards P–Y, LOC A/B). Re-checked on 2026-10-11 in an
 empty plan ("Onboarding Check", group "Gate 7e": Wallet, Cards X/U1/S1/S2/Z/A/V/W/P/Y/K, LOC G/H,
 categories G-S1, G-S2, G-Z, G-K, G-L1, G-L2) through the API, waiting 6–8 s after each write and
-confirming every delta by delete and re-add; dialogs and colours in the web app. Not built yet;
-7e builds it.
+confirming every delta by delete and re-add; dialogs and colours in the web app. Built as found
+in phase 7e (`cardLedger`, `packages/engine/src/credit.ts`).
 
 **The rule that fits every reading:** a card (or line of credit) balance above zero is cash. Each
 card transaction is classified by the card's balance just before it, on its date, with outflows
@@ -483,6 +483,11 @@ dated the same day as an inflow applied before the inflow:
   - Card S1 paid $10 on 10/05, −$4 in G-S1 the same day: October −$4, November no further
     deduction, G-S1 yellow (credit overspending). The spending counted before the payment, so the
     card was at $0 and the payment only took it $6 above zero. Explains L5/Card Z2 (2026-10-03).
+  - A return pays down debt first: +$5 in G-Q1 on Card R8 owing $3 took $3 out of its payment
+    category (red, deducted next month), G-Q1 got $5 and October didn't change. A return to a $0
+    card is all cash and leaves the payment category alone (Q6/Card T, 2026-10-03); the help
+    center's "clothing" example (refund after paying off takes from the payment category) isn't
+    what the app does.
   - Card Z at +$5, −$3 in G-Z alone: November −$3 (cash). With −$4 uncategorized dated the day
     before: the uncategorized −$4 is cash and only $1 of the −$3 is; November −$2 net (−$4 + $2).
     Explains the "only $1" reading on Card Z1.
@@ -502,13 +507,20 @@ dated the same day as an inflow applied before the inflow:
   would like to keep it in your plan, you can transfer it to another account before closing this
   one." Buttons "Cancel" and "Adjust Balance & Close".
 - Dialog for a debt (Card Y owing $20): the same title, first sentence ("…created for $20.00.")
-  and buttons, no info box. A $0 card (Card K) closed straight away with no dialog and no
+  and buttons, no info box. A cash account with money in it (Wallet, $924.00, dialog opened and
+  cancelled) shows the info box too, so it goes with a positive balance. Not seen: an overdrawn
+  cash account or a tracking account (everycent shows the box for positive on-budget balances
+  only). A $0 card (Card K) closed straight away with no dialog and no
   adjustment.
 - The payment category keeps its money and stays visible; nothing goes back to Ready to Assign:
   Card Y kept $6 set aside (green, "Your Card Y is paid off! Being debt free is a wonderful
   thing."), Card K kept $5, Card P stayed at −$10 (red, deducted next month).
 - Card Y's inspector after closing showed Prior Balance −$21.00 (the starting balance) and
   Payments and Inflows $21.00 (the $1 payment and the $20 adjustment).
+
+**Not checked:** a credit card payment target (phase 8e) on a card above zero. everycent treats
+such a card as owing nothing, so a pay-off target asks for nothing; YNAB's inspector and pill for
+it are open.
 
 **Lines of credit** behave as credit cards (LOC G/H, API): G-L1 $5 assigned, −$8 on LOC G moved
 $5 to its payment category and left G-L1 at −$3 not deducted next month; a $4 payment took the

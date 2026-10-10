@@ -256,8 +256,9 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
         cleared: "cleared",
       });
     }
+    // The payment category stays visible with whatever is set aside (YNAB, 2026-10-11: Card Y
+    // kept $6 after closing); hiding it is up to the user.
     await tx.update(budgetAccount).set({ closed: true }).where(eq(budgetAccount.id, accountId));
-    await tx.update(category).set({ hidden: true }).where(eq(category.linkedAccountId, accountId));
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
@@ -267,10 +268,7 @@ export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = asy
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await findAccount(db, budgetId, accountId);
-  await db.transaction(async (tx) => {
-    await tx.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
-    await tx.update(category).set({ hidden: false }).where(eq(category.linkedAccountId, accountId));
-  });
+  await db.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
   return c.json(await accountJson(db, budgetId, accountId), 200);
 };
 

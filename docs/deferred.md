@@ -42,10 +42,10 @@ before starting a roadmap phase** and remove an entry once it's done.
   order (settled 2026-10-11). The same-day tie-break for equal purchases is provisional
   (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
   Assign. Payments from budget accounts come out of the payment category (7d); statement credits
-  and cash advances don't move payment money. Not yet: positive card balances acting as cash (7e,
-  deferred: see "Credit lifecycle and loans" below). Uncategorized card spending counts as credit
-  overspending, as YNAB's "Uncategorized cash transactions … $2.00 will be deducted" note suggests
-  (cash part only).
+  and cash advances don't move payment money. A card's balance above zero is cash (7e, see
+  "Credit lifecycle and loans" below). Uncategorized card spending counts as credit overspending,
+  except its cash part on a positive card, as YNAB's "Uncategorized cash transactions … $2.00
+  will be deducted" note suggests (cash part only).
 - A payment category's Activity opens the card's register for the month with YNAB's Spending /
   Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
   transactions with their categories; ours uses the same columns as other categories (Account,
@@ -63,16 +63,18 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category.
-- Credit-card starting debt has **no category**. Phase 7 must treat it as existing debt to be paid
-  from the card's payment category (YNAB: "assign money to cover the starting balance directly to
-  the Credit Card Payment category").
+- Credit-card starting debt has **no category** (YNAB's API reports Inflow: Ready to Assign; its
+  register shows "Category not needed"). It's existing debt, paid from money assigned to the
+  card's payment category (7c); `cardLedger` treats it as money to Ready to Assign, which counts
+  only above zero, so it moves nothing.
 - Deleting a category moves its transactions and assigned money to the category picked (YNAB
   reassigns transactions, assigned amounts and available money). Moving to Ready to Assign or
   Uncategorized returns the money to Ready to Assign.
 - Closing an account with a non-zero balance creates a "Manual Balance Adjustment" transaction;
   for on-budget accounts it's categorized to Ready to Assign (as YNAB does). With the phase 6 math
   that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
-  its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
+  its accounts' (checked for cash accounts). For credit accounts the adjustment counts only by
+  the balance above zero (7e; YNAB, docs/verify.md).
 
 ## Targets (phase 8)
 
@@ -100,30 +102,25 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Target edits aren't in the undo history (docs/verify.md).
 - A category's history is reassigned on delete, but its target is deleted with it.
 
-## Credit lifecycle and loans (phase 7e–7g, deferred)
+## Credit lifecycle and loans (phase 7e–7g)
 
-Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g waited for phase 8, which is done now; the
-roadmap artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps their scope,
-and `docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and what's still open.
+7e is built (2026-10-11, EVERYCENT-2); 7f–7g (loans) wait. `docs/verify.md` ("Credit lifecycle
+(phase 7e)") has what YNAB showed and what's still open.
 
-- **Positive card balances (7e) behave wrongly until built.** YNAB counts the part of a card's
-  balance above zero as cash in Ready to Assign, and spending while the card is positive is cash.
-  everycent doesn't: an overpayment is red cash overspending that comes out of next month's Ready
-  to Assign, but the positive balance never goes in, so the plan loses that money; spending on a
-  positive card still moves money to its payment category. Closing a positive card takes its
-  balance out of Ready to Assign a second time.
-- **Closing a card hides its payment category.** YNAB leaves it visible (the help center tells you
-  to hide it yourself). Confirmed; a small fix, waiting with 7e.
-- **The close dialog** has one wording; YNAB words it differently for a positive balance ("The
-  money in this account will be removed from your plan") and for debt (only the adjustment).
+- **Positive card balances (7e)** are built: `cardLedger` walks each card's lines by date and
+  splits them at zero (docs/verify.md). Provisional there: transfers between two credit accounts
+  move no plan money, and a split's lines take the cash part largest outflow first (neither seen
+  in YNAB). A credit card payment target on a positive card asks for nothing (not seen in YNAB).
+- **Closing** keeps the payment category visible (YNAB) and uses YNAB's two dialog wordings; a
+  zero-balance account closes without a dialog. YNAB offers "Delete Account" instead of "Close
+  Account" in its Edit Account dialog when an account has only its starting balance; everycent
+  shows both buttons and refuses the delete otherwise.
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
   accounts store rate, minimum payment and escrow, unused. Phase 8's loan debt-payment targets
   need 7f, so they wait too.
 - Lines of credit are treated as credit cards, as YNAB does (re-checked 2026-10-11, docs/verify.md).
-- **Cash advances** (card → budget account) don't raise Ready to Assign; YNAB adds the part that
-  becomes new debt (7e gate, docs/verify.md). Waiting with 7e.
 
 ## Onboarding and fresh start
 
