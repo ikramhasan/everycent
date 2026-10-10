@@ -1417,6 +1417,10 @@
             ],
             "description": "Credit accounts: their payment category"
           },
+          "hasHistory": {
+            "type": "boolean",
+            "description": "Has transactions besides its starting balance (so it can be closed, not deleted)"
+          },
           "balances": {
             "$ref": "#/components/schemas/AccountBalances"
           }
@@ -1432,6 +1436,7 @@
           "minimumPayment",
           "escrowAmount",
           "paymentCategoryId",
+          "hasHistory",
           "balances"
         ]
       },

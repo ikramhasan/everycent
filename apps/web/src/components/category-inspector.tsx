@@ -327,7 +327,8 @@ export interface PaymentFigures {
  * app on 2026-10-03): whether Available covers the balance, the Total Underfunded split into this
  * month's overspent categories and the rest, then Current Balance and Available for Payment with
  * where the money came from. With a target that applies, `target` (the Target section) takes the
- * alert's place (YNAB, 2026-10-08). "Cover Overspent Categories" isn't built.
+ * alert's place (YNAB, 2026-10-08). In a past month YNAB shows neither the alert nor Current
+ * Balance (Card R6, 2026-10-11).
  */
 export function PaymentInspector({
   name,
@@ -338,7 +339,9 @@ export function PaymentInspector({
   note,
   onNoteChange,
   warn,
+  past = false,
   target,
+  onCoverOverspent,
 }: {
   name: string;
   totals: Breakdown;
@@ -349,19 +352,26 @@ export function PaymentInspector({
   onNoteChange: (note: string) => Promise<void>;
   /** YNAB only shows the Underfunded alert from the current month on. */
   warn: boolean;
+  /** A month before the current one (no alert, no Current Balance). */
+  past?: boolean;
+  /** "Cover Overspent Categories": shows the Overspent view. */
+  onCoverOverspent?: () => void;
   /** The Target section, which shows the alert itself when no target applies. */
   target?: ReactNode;
 }) {
   return (
     <Panel label={`${name} inspector`}>
       <h2 className="truncate font-semibold">{name}</h2>
-      {target ?? <PaymentAlert {...{ name, totals, payment, format, warn }} />}
-      <dl className="grid gap-2">
-        <Line label="Current Balance" value={payment.balance} format={format} />
-        <Line label="Prior Balance" value={payment.priorBalance} format={format} />
-        <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
-        <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
-      </dl>
+      {target ??
+        (!past && <PaymentAlert {...{ name, totals, payment, format, warn, onCoverOverspent }} />)}
+      {!past && (
+        <dl className="grid gap-2">
+          <Line label="Current Balance" value={payment.balance} format={format} />
+          <Line label="Prior Balance" value={payment.priorBalance} format={format} />
+          <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
+          <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
+        </dl>
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-sm">Available for Payment</span>
         {available}
@@ -390,6 +400,7 @@ export function PaymentAlert({
   format,
   warn,
   onCreateTarget,
+  onCoverOverspent,
 }: {
   name: string;
   totals: Pick<Breakdown, "available">;
@@ -397,6 +408,8 @@ export function PaymentAlert({
   format: Format;
   warn: boolean;
   onCreateTarget?: () => void;
+  /** YNAB's "Cover Overspent Categories": switches the budget to the Overspent view. */
+  onCoverOverspent?: () => void;
 }) {
   const f = (n: bigint) => format(n.toString());
   const rest = payment.underfunded - payment.overspentCategories;
@@ -423,6 +436,12 @@ export function PaymentAlert({
         ) : payment.balance >= 0n ? (
           <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
         ) : null}
+        {!overpaid && warn && payment.overspentCategories > 0n && onCoverOverspent && (
+          // YNAB, 2026-10-11: one click, no money moves; it shows the Overspent view.
+          <Button size="sm" onClick={onCoverOverspent}>
+            Cover Overspent Categories
+          </Button>
+        )}
         {!overpaid && warn && payment.underfunded > 0n && onCreateTarget && (
           <>
             <p className="text-center text-muted-foreground">

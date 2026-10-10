@@ -301,8 +301,8 @@ built as found:
   Visa (Groceries was overspent) seems to take $1.00 out of the payment category rather than
   count as funded; 7b/7d have to reproduce that before building it.
 - **Uncategorized message:** "Uncategorized cash transactions still affect your plan! … $2.00
-  will be deducted" quoted only the cash part (Available −$3.00). everycent still quotes all of
-  it until credit overspending (7c) stops deducting the credit part.
+  will be deducted" quoted only the cash part (Available −$3.00). everycent does the same since
+  7c, and only the cash part comes out of next month's Ready to Assign.
 
 ## Funded card spending (phase 7b)
 
@@ -324,38 +324,30 @@ categories T1–T6). Confirmed:
   category into the category, overspent or not: Vacation +$2 and Groceries +$1 on Visa each
   showed in Visa's Payments & Returns and raised the category's Available.
 
-### Several cards competing for one category's money
+### Funding order and returns across cards (settled 2026-10-11)
 
-- **Found:** with $5 assigned and two −$4 card purchases on the same day, one card got $4 and the
-  other $1, but not by entry order or sidebar order: Medical (Visa then Amex) and Emergency fund
-  (Amex then Visa) both gave Amex $4; Dining out (Citi then Amex) gave Citi $4.
-- **Question:** how does YNAB split a category's money between cards when it can't fund them all
-  (transaction date, account creation, transaction id …)? This is also 7c's "which payment method
-  is funded first" gate.
-- **Built so far (before this rule):** the newest card (latest-created account) is funded first,
-  which fits all three cases seen (`fundedCardSpending` in `packages/engine/src/credit.ts`).
-- **How to settle it:** two new cards (Card A then Card B, each starting at $100 owed), $5
-  assigned to a new category, then Card A −$4 dated 10/02 and Card B −$3 dated 10/01, entered in
-  that order; reload twice and read both payment categories' Available. Repeat with the purchases
-  swapped between the cards. A 4/1 split means a whole purchase was funded first; anything like
-  2.86/2.14 means a proportional split.
+Checked in the "Onboarding Check" plan (group "Gate 7e") through the API, with the web app
+showing the same numbers. Built as found (`fundedCardSpending`, `packages/engine/src/credit.ts`):
 
-### Returns on one card, spending on another, in the same category
-
-- **Found:** results didn't follow a single model, and the payment categories' numbers changed
-  after a page reload (Visa Funded Spending $35.00 live, $38.00–$39.00 after reloads with nothing
-  edited in between). Examples after reload: T2 ($0; Amex +$5, Visa −$3) ended Available $2.00;
-  T3 and T4 ($0; Amex +$3, Visa −$3) ended $0.00; Amex's Payments & Returns was $10.00 against
-  $22.00 of categorized Amex returns.
-- **Question:** does a return on one card fund spending on another card in the same category,
-  and how much leaves the returning card's payment category?
-- **Built so far (before this rule):** card returns go back into the category's money and can fund
-  another card's spending there; each returning card's payment category gives up its whole return.
-  This matched the categories' Available in every case (T2 $2.00, T3/T4 $0.00) but not every
-  payment category's number, which YNAB itself changed between reloads.
-- **How to settle it:** with the two new cards above (balances below zero throughout), a category
-  with $0 assigned: Card A +$5 dated 10/01, Card B −$3 dated 10/02; reload twice and read both
-  payment categories and the category. Then the same with the dates swapped.
+- **Cash first, for the whole month:** $10 assigned (G-C1), Card R1 −$8 on 10/01, Wallet −$6 on
+  10/05: adding the later cash purchase cut R1's funding from $8 to $4.
+- **Then card activity in date order:** $5 assigned, F1 −$4 on 10/02 (older card, entered first)
+  and F2 −$3 on 10/01: F2 got $3, F1 $2 (G-F1); with the purchases swapped F3 −$3 on 10/01 got $3
+  (G-F2). The 2026-10-03 "newest card first" fit only same-day ties.
+- **Same day, largest outflow first:** $5, F1 −$4 and F2 −$3 on one day → F1 $4, F2 $1 (G-T1);
+  F1 −$3 and F2 −$4 → F2 $4, F1 $1 (G-T2). This is the register's same-day order, and the 7e
+  finding that same-day outflows come before inflows.
+- **Returns refill earlier unfunded card spending first:** G-X1 ($0): R1 +$5 on 10/01, R2 −$3 on
+  10/02 → R1 −$5, R2 +$3, G-X1 $2. G-X2 ($0): R4 −$3 on 10/01, R3 +$5 on 10/02 → R4 $0 (stays
+  unfunded), R3 −$2, G-X2 $2. A return in a category overspent in cash still leaves the payment
+  category in full (Groceries, 2026-10-03).
+- **Equal purchases on the same day** are funded in transaction id order, smallest first (4 of 4:
+  G-E1–G-E4, Cards U2/U3, whatever the card or the entry order). YNAB's ids are random, which is
+  why the 2026-10-03 cases looked like "newest card first". everycent's ids are time-ordered, so
+  the same rule funds the earlier-entered purchase first.
+- A first run (Cards F5–F10) was invalid: cards created through the API get their starting
+  balance dated the day before, so returns dated earlier hit a $0 card and made it positive
+  (7e rule). Cards R1–R7 carry their debt on 09/01 instead.
 
 ## Credit overspending and existing debt (phase 7c)
 
@@ -391,19 +383,26 @@ Built as found:
   Payments and Inflows) and Available for Payment (Cash Left Over, Assigned, Funded Spending,
   Payments Made).
 
-### Payment category messages and the next month
+### Payment category messages and the next month (settled 2026-10-11)
 
-- **Found:** in October, Visa said "Overspent Categories — Cover $29.00 in overspent categories in
-  order to pay off your current balance" with "Cover Overspent Categories" and "Create a Debt
-  Payoff Target"; November said "Underfunded — You need to assign $29.00 more to pay off your
-  current balance." Card A (with old debt as well) listed both lines under Total Underfunded.
-- **Question:** what does the payment category say when both apply, what does "Cover Overspent
-  Categories" do (one click, or a picker?), and is the pill yellow in past months (the help center
-  says previous months show green)?
-- **Built so far (before this rule):** the pill is yellow when Available is below what's owed in
-  the current month and later, green before it. The inspector lists Total Underfunded with its two
-  parts, Current Balance and Available for Payment; the "Cover Overspent Categories" button isn't
-  built. "Create a Debt Payoff Target" came with 8e ("Credit card payment targets" below).
+- **Found (2026-10-03):** in October, Visa said "Overspent Categories — Cover $29.00 in overspent
+  categories in order to pay off your current balance" with "Cover Overspent Categories" and
+  "Create a Debt Payoff Target"; November said "Underfunded — You need to assign $29.00 more to
+  pay off your current balance."
+- **Both apply** (Card R4 in "Onboarding Check": $100 old debt, $9 of October credit
+  overspending): only the Overspent Categories message shows ("Cover $9.00 in overspent
+  categories…", "Cover Overspent Categories", "Can't cover the overspent categories?", "Create a
+  Debt Payoff Target"); Total Underfunded $109.00 lists Overspent Categories $9.00 and Underfunded
+  $100.00. everycent already does this.
+- The $9.00 kept R4's $3 from G-X2, even though another card's later return refilled that
+  category. A card's overspent categories are its spending left unfunded when it happened.
+- **"Cover Overspent Categories"** moves no money: it switches the plan to the Overspent view
+  (the "Overspent" filter chip), and Ready to Assign stayed the same. Not built yet (EVERYCENT-22).
+- **Past months:** September (before the current month) showed the payment pills grey at $0.00
+  and green at $2.00 for a card owing $100 (Card R6); the inspector there has no Payment section,
+  no Total Underfunded and no Current Balance: only Target, Available for Payment (Cash Left Over,
+  Assigned, Funded Spending, Payments Made), Auto-Assign and Notes. everycent's pill matches;
+  its past-month inspector still shows Current Balance (EVERYCENT-22).
 
 ## Payments, returns and statement credits (phase 7d)
 
@@ -430,90 +429,152 @@ Rewards and Statement Credits", "Paid in Full Credit Cards") and in YNAB's web a
   category (support.ynab.com; 7b found it for funded and overspent categories). It can push the
   payment category negative (support.ynab.com: "If you've already used the $10 from the original
   purchase to pay down the balance"); there's no cap.
-- A transfer out of a card to a budget account (a cash advance, Visa → Wallet $1.00) has no
-  category: it raised Ready to Assign by nothing and left Visa's payment category alone — but it
-  raised the card's debt (Spending −$69.00) with no money set aside for it, so the payment category
-  is $1.00 more underfunded. (Ready to Assign moved $11,997.00 → $11,998.00 here; that was the
-  undone R4 money in November, not the advance.)
+- A transfer out of a card to a budget account (a cash advance) leaves the payment category alone
+  and raises the card's debt with nothing set aside for it. **Corrected by the 7e gate
+  (2026-10-11):** it does raise Ready to Assign, by the part that becomes new debt. Card W (owing
+  $5) → Wallet $3 raised October's Ready to Assign by $3, confirmed by delete and re-add. The
+  original reading here ("raised Ready to Assign by nothing") was taken in the web app with other
+  changes in flight. everycent doesn't do this yet; 7e builds it (see "Credit lifecycle" below).
 
-### A refund larger than what was funded, and refunds in a later month
+### Refunds in a later month or larger than the month's purchases (settled 2026-10-11)
 
-- **Question:** R4 had $5 of unfunded credit spending and a $5 refund on the same card in the same
-  month; the category went to $0 and Citi didn't change (netting, 7b). A refund in a later month
-  than the purchase, or one larger than the month's purchases, would take money out of the
-  payment category in the refund's month (support.ynab.com) — not checked in the app.
-- **Built so far (before this rule):** the refund's month and the card's net activity in that
-  month decide it, as 7b computes (a later-month refund moves its whole amount out).
+- Card R6: −$10 in G-X5 in September (unfunded), +$10 refund in October: the refund took its whole
+  $10 out of R6's payment category in October. Card R7: −$2 then +$6 in G-X6 in October ($0
+  assigned): $4 left the payment category. Both are what everycent already does.
 
-### Payment from a tracking account, and payments into a positive card
+### Payment from a tracking account (settled 2026-10-11)
 
-- **Question:** a "payment" from an off-budget account (the transfer gets a category on the
-  budget side, phase 5 rules) and paying a card that's already positive (7e).
-- **Skipped:** a transfer into a card from a tracking account moves no payment money here; a
-  positive card balance is phase 7e.
+- A transfer from a tracking account (Track T) into a card in debt is never a payment; it acts as
+  an inflow on the card with the category its card side has: Inflow: Ready to Assign changed
+  nothing (like a statement credit); a spending category (G-Y) got +$5 and the card's payment
+  category gave up $5 (like a refund). everycent already does both (API test "treats a categorized
+  transfer from a tracking account as a refund"). Left uncategorized, it also took $5 out of the
+  payment category and next month's Ready to Assign moved by +$3; not built (an uncategorized
+  card inflow is an open question, not checked further).
 
 ## Credit lifecycle (phase 7e)
 
 Checked against support.ynab.com ("Credit Cards with a Positive Balance", "How to Close or Delete
 Bank Accounts", "Correcting Balances in Closed Accounts", "Changing an Account Type", "Line of
-Credit Accounts") and in YNAB on 2026-10-03, through the web app and the API (test cards P–Y,
-lines of credit LOC A/B, categories Q2–Q6, R3, L1–L3). Not built yet; 7e builds it:
+Credit Accounts") and in YNAB on 2026-10-03 (cards P–Y, LOC A/B). Re-checked on 2026-10-11 in an
+empty plan ("Onboarding Check", group "Gate 7e": Wallet, Cards X/U1/S1/S2/Z/A/V/W/P/Y/K, LOC G/H,
+categories G-S1, G-S2, G-Z, G-K, G-L1, G-L2) through the API, waiting 6–8 s after each write and
+confirming every delta by delete and re-add; dialogs and colours in the web app. Built as found
+in phase 7e (`cardLedger`, `packages/engine/src/credit.ts`).
 
-- A card above zero counts as cash. The part above zero is in Ready to Assign ("Inflow from Debt
-  Account" in its breakdown): a $10 overpayment of a $0 card raised it by $10 and left the payment
-  category at −$10, red (cash overspending, deducted next month).
-- What decides it is the card's balance on each transaction's date. Spending while positive moves
-  nothing to the payment category, and unfunded spending is cash overspending (red): Q2 −$4 on
-  Card Q at +$10. Spending that crosses zero splits: Q3 ($10 assigned) −$10 on Card Q at +$6 was
-  Cash Spending −$6 and Credit Spending −$4, with Funded Spending $4. Spending dated before the
-  overpayment stays credit (Q4/Card R, Q5/Card S, R3/Card U: yellow, nothing deducted).
-- A refund to a $0 card goes to its category and leaves the payment category alone (Q6/Card T).
-- A statement credit counts toward Ready to Assign only for the part above zero: $8 on Card V at
-  −$5 raised it by $3.
-- Closing makes a Manual Balance Adjustment categorized to Inflow: Ready to Assign, and the
-  payment category stays visible (the help center says to hide it yourself). Card P at +$10: the
-  dialog says the money "will be removed from your plan", and Ready to Assign fell by $10. Card Y
-  owing $21 with $7 set aside: the dialog only says an adjustment of $21.00 will be created; Ready
-  to Assign didn't change and the payment category kept its $7.
-- Account types can't be changed (the Edit Account dialog has no type field); YNAB says to
-  create a new account and move the transactions.
-- A line of credit behaves as a credit card: its own payment category, funded spending moves
-  (L1 $5 assigned, −$8 on LOC A: $5 moved, −$3 credit overspending not deducted next month),
-  payments come out of it, and a positive balance is cash (LOC B +$10: Ready to Assign +$10; L2's
-  −$4 on it was cash overspending, deducted next month).
-- Card transactions categorized to Inflow: Ready to Assign (statement credits, outflows,
-  starting balances and the closing adjustment) change Ready to Assign only by how much they move
-  the card's balance above zero: $8 in on Card V at −$5 → +$3; $5 out on Card V at +$3 → −$3;
-  $2 out on Card W at −$5 → nothing. Closing follows the same rule (Card P +$10 → −$10, Card Y
-  owing $21 → nothing), so it needs no rule of its own.
-- A paid-off card's payment category says "Your Card T is paid off! Being debt free is a
-  wonderful thing." (Card T, +$5.)
+**The rule that fits every reading:** a card (or line of credit) balance above zero is cash. Each
+card transaction is classified by the card's balance just before it, on its date, with outflows
+dated the same day as an inflow applied before the inflow:
+
+- Money moving a card above zero adds the part above zero to Ready to Assign: a $10 payment from
+  Wallet to a $0 card (Card X) raised October by $10 and left the payment category at −$10, red
+  (cash overspending: November gave the $10 back). Statement credits and other inflows to Inflow:
+  Ready to Assign do the same ($8 in on Card V at −$5 → +$3, web app 2026-10-03).
+- Money moving a card down from above zero, with no spending category, takes the part above zero
+  out of Ready to Assign: $5 out (to Inflow: Ready to Assign) of Card V at +$3 → −$3; $2 out of
+  Card W at −$5 → nothing. Closing a card is the same: Card P at +$10 closed → −$10.
+- A cash advance (card → budget account) is the Wallet's inflow less what the card lost above
+  zero: Card A at +$6 → Wallet $8 raised Ready to Assign by $2; Card W at −$5 → Wallet $3 by $3.
+- Spending (categorized or not) while the card is above zero is cash spending up to the part above
+  zero; the rest is credit. Uncovered cash is cash overspending (red, deducted next month); the
+  credit part works as in 7b/7c (funded, or yellow credit overspending, not deducted).
+  - Card U1 at +$10, −$4 uncategorized: November −$4, October unchanged (cash).
+  - Card S2 paid $10 on 10/03, −$4 in G-S2 on 10/05: November −$4 (cash, red).
+  - Card S1 paid $10 on 10/05, −$4 in G-S1 the same day: October −$4, November no further
+    deduction, G-S1 yellow (credit overspending). The spending counted before the payment, so the
+    card was at $0 and the payment only took it $6 above zero. Explains L5/Card Z2 (2026-10-03).
+  - A return pays down debt first (delete and re-add, 2026-10-11): +$5 in G-Q1 on Card R8
+    owing $3 took $3 out of its payment category (red, deducted next month), G-Q1 got $5 and
+    October didn't change. A return to a $0
+    card is all cash and leaves the payment category alone (Q6/Card T, 2026-10-03); the help
+    center's "clothing" example (refund after paying off takes from the payment category) isn't
+    what the app does.
+  - Card Z at +$5, −$3 in G-Z alone: November −$3 (cash). With −$4 uncategorized dated the day
+    before: the uncategorized −$4 is cash and only $1 of the −$3 is; November −$2 net (−$4 + $2).
+    Explains the "only $1" reading on Card Z1.
+- Equivalently: Ready to Assign = cash in budget accounts + card balances above zero − category
+  Available (credit overspending excluded) − future assignments, which every reading above
+  satisfies.
+
+**Closing a card or line of credit:**
+
+- A card with only its starting balance offers "Delete Account" instead of "Close Account" in
+  Edit Account (Card Y before its first payment); not tested further.
+- Closing creates "Manual Balance Adjustment", category Inflow: Ready to Assign, dated the day of
+  closing, memo "Closed Account", for minus the balance, and follows the rule above.
+- Dialog for a positive balance (Card P at +$10): "Close Account" — "Before you can close this
+  account, the balance will have to be zeroed out. An adjustment transaction will be created for
+  -$10.00." plus an info box "The money in this account will be removed from your plan. If you
+  would like to keep it in your plan, you can transfer it to another account before closing this
+  one." Buttons "Cancel" and "Adjust Balance & Close".
+- Dialog for a debt (Card Y owing $20): the same title, first sentence ("…created for $20.00.")
+  and buttons, no info box. A cash account with money in it (Wallet, $924.00, dialog opened and
+  cancelled) shows the info box too, so it goes with a positive balance. Not seen: an overdrawn
+  cash account or a tracking account (everycent shows the box for positive on-budget balances
+  only). A $0 card (Card K) closed straight away with no dialog and no
+  adjustment.
+- The payment category keeps its money and stays visible; nothing goes back to Ready to Assign:
+  Card Y kept $6 set aside (green, "Your Card Y is paid off! Being debt free is a wonderful
+  thing."), Card K kept $5, Card P stayed at −$10 (red, deducted next month).
+- Card Y's inspector after closing showed Prior Balance −$21.00 (the starting balance) and
+  Payments and Inflows $21.00 (the $1 payment and the $20 adjustment).
+
+**Transfers between two credit accounts** (2026-10-11, API, delete and re-add): the part paid from
+the sending card's balance above zero acts as a payment from a cash account (the receiving card's
+payment category gives it up); the rest pays down the receiving card's debt, and whatever takes
+the receiving card above zero goes to Ready to Assign. The sending card's new debt adds nothing.
+T1 at +$10 → T2 owing $20, $6: T2's payment category −$6, October unchanged, November −$6. T3
+owing $10 → T4 at $0, $5: October +$5, no payment category moved. T7 owing $10 → T6 owing $2,
+$5: October +$3, nothing moved. T1 at +$4 → T9 at $0, $3: T9's payment category −$3, October +$3.
+
+**A split on a positive card** gives the cash part to its lines in their order: T5 at +$5 with a
+−$8 split (G-S5a −$3 with $3 assigned first, G-S5b −$5 second) funded nothing and November lost
+$2; with the lines the other way round (T8: G-S6b −$5 first, G-S6a −$3 with $3 second) the
+second line's $3 was credit, funded, and moved to T8's payment category.
+
+**Payment targets on a card above zero** (2026-10-11, web app): a positive card's payment
+category shows only "Your Card T4 is paid off!" (no Target section, no "Create a Debt Payoff
+Target"), so a target can't be added there. A target made while the card owed keeps working:
+Card T7 (Pay Off Balance by Date, Nov 2026) after an overpayment asked $10.00 while its payment
+category was −$20.00 (red: the alert shows instead of the target, as for E2); funded back to
+$0.00 it read "Pay off $20.00", the check ring, "Cheers to a debt-free future!", Needed for
+Payoff $0.00, Available for Payment $0.00, To Go $0.00, Edit Target, with a grey pill and a
+check; at $5.00 "Pay off $25.00" and a green pill with a check, and Reduce Overfunding rose by
+$5.00. A pay-off target met while the card still owes reads the same (Card T2: owes $14.00,
+$14.00 available, "Pay off $20.00", "Cheers to a debt-free future!"), while a met Pay Specific
+Amount Monthly target reads "You've met your target!" (Card T3). The "Pay off" amount is what's
+been put in (carried and assigned, less this month's funded spending) plus To Go: E1 $50 + $75 =
+$125.00, T7 $25 + $0, T2 $20 + $0.
+
+**Reopening** (Card P, web app): a closed account's Edit Account dialog has only the nickname and
+notes, with "Re-open", "Delete", "Cancel" and "Save". Re-open happens at once (no dialog); the
+closing adjustment stays, the balance stays $0.00, and Ready to Assign doesn't change. Delete is
+disabled while the account has transactions, with the tooltip "If you want to delete this
+account, first delete all of the transactions in it and transfers pointing to it. Be cautious,
+as this will potentially change your plan values." (Card Y). An open account's dialog offers
+"Close Account", or "Delete Account" instead when it has only its starting balance.
+
+**Uncategorized** funds and returns card money like any category: with $7.00 available, −$3 of
+uncategorized spending on Card R4 moved $3 to its payment category; an uncategorized +$5 on Card
+R3 (a transfer from Track T, category Uncategorized) took $5 out of R3's payment category and
+added $5 to Uncategorized. An uncategorized inflow to Wallet just raised Uncategorized (−$3 →
++$2), which carried into November.
+
+**Lines of credit** behave as credit cards (LOC G/H, API): G-L1 $5 assigned, −$8 on LOC G moved
+$5 to its payment category and left G-L1 at −$3 not deducted next month; a $4 payment took the
+payment category to $1; a $10 payment to LOC H at $0 raised Ready to Assign by $10; −$4 in G-L2
+on LOC H while positive was cash (November −$4).
+
+**Other:**
+
+- Account types can't be changed (the Edit Account dialog has no type field); YNAB says to create
+  a new account and move the transactions.
+- A card refund to a $0 card goes to its category and leaves the payment category alone (Q6/Card
+  T, 2026-10-03).
 - In the API a credit starting balance and the closing adjustment both report category
   "Inflow: Ready to Assign"; the register shows "Category not needed" for the starting balance.
-
-### Unreliable API readings, and the cases they leave open
-
-- **Found:** reading `GET /months` right after a write can return stale numbers. Creating
-  "t-uncat" (−$2 uncategorized on Card T at +$5) and "r-uncat" (−$1 on Card R at +$4) showed no
-  change in November's Ready to Assign. Deleting and re-adding the same transactions, with a few
-  seconds' wait, moved November by $2 and $1 each time. So readings taken straight after a write
-  (the bullets above marked "API": statement credit out on Cards V/W, lines of credit, Card X,
-  Card Y's close) need re-checking with a wait. The web-app readings (Cards P, Q, R, S, T, U, V)
-  stand.
-- **Still open (each needs a fresh, uncluttered test plan):**
-  - Uncategorized spending on a positive card: cash (deducted next month, as the re-add showed)
-    or credit?
-  - Spending on the same day as the payment that made the card positive: L5 −$4 on Card Z2 (paid
-    $10 that day) took $4 off October's Ready to Assign. Q2 on Card Q (paid two days before) took
-    nothing off October and $4 off November. Why the difference: same day, or something else?
-  - Spending that crosses zero after uncategorized spending: z1-l4 (Card Z1 at +$1, −$3 in L4)
-    was deducted $1, as expected, but removing z1-uncat (−$4) moved November by only $1, not $4.
-  - A cash advance from a positive card: Card Z3 at +$6 moving $8 to Wallet raised Ready to
-    Assign by $2.
-- **Skipped until then:** anything beyond the web-app findings: a positive balance from a
-  payment goes to Ready to Assign; categorized spending dated after the payment is cash; spending
-  that crosses zero splits into cash and credit; closing creates an adjustment to Ready to
-  Assign and leaves the payment category visible.
+- When creating transactions through the API, YNAB fills in the payee's last category if none is
+  given. Use a fresh payee (or none) for uncategorized test data.
 
 ## Monthly targets (phase 8a)
 

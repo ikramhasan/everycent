@@ -13,6 +13,7 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     minimumPayment: null,
     escrowAmount: null,
     paymentCategoryId: null,
+    hasHistory: false,
     balances: { cleared: working, uncleared: "0", working },
   };
 }

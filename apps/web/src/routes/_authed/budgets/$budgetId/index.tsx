@@ -381,6 +381,7 @@ function BudgetPage() {
               listed={listed}
               onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
               targetActions={targetActions}
+              onShowOverspent={() => setFilter("overspent")}
             />
             {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
             {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && (
@@ -522,6 +523,7 @@ function Inspector({
   listed,
   onNoteChange,
   targetActions,
+  onShowOverspent,
 }: {
   figures: CategoryFigures;
   selection: ReadonlySet<string>;
@@ -529,6 +531,7 @@ function Inspector({
   listed: ReadonlyMap<string, ListedCategory>;
   onNoteChange: (categoryId: string, note: string) => Promise<void>;
   targetActions: ReturnType<typeof useTargetActions>;
+  onShowOverspent: () => void;
 }) {
   const { budget } = useBudget();
   const history = useUndo();
@@ -577,10 +580,13 @@ function Inspector({
         payment,
         format,
         warn: month.month >= figures.currentMonth,
+        onCoverOverspent: onShowOverspent,
       };
+      const past = month.month < figures.currentMonth;
       return (
         <PaymentInspector
           {...alertProps}
+          past={past}
           available={available}
           note={category.note}
           onNoteChange={(note) => onNoteChange(only, note)}
@@ -605,7 +611,9 @@ function Inspector({
                 payment={{
                   month: month.month,
                   fundedSpending: totals.payment.fundedSpending,
+                  paymentsMade: totals.payment.paymentsMade,
                   overpaid: totals.available.startsWith("-"),
+                  past,
                   alert: (createTarget) => (
                     <PaymentAlert {...alertProps} onCreateTarget={createTarget} />
                   ),

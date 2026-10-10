@@ -203,8 +203,8 @@ describe("accounts", () => {
     expect((await accounts()).map((x) => x.name)).toEqual(["B", "A"]);
   });
 
-  it("closes an account, zeroing its balance and hiding its payment category", async () => {
-    const { cookie, base, addAccount, transactions, groups } = await setup();
+  it("closes an account, zeroing its balance and keeping its payment category", async () => {
+    const { cookie, base, addAccount, accounts, transactions, groups } = await setup();
     const savings = await addAccount({ name: "Savings", type: "savings", balance: "10000" });
     const res = await send("POST", `${base}/accounts/${savings.id}/close`, cookie, { date: TODAY });
     expect(res.status).toBe(200);
@@ -213,11 +213,17 @@ describe("accounts", () => {
       amount: "-10000",
       payeeName: "Manual Balance Adjustment",
       categoryName: "Inflow: Ready to Assign",
+      memo: "Closed Account",
     });
 
     const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "0" });
+    // Only a starting balance: no history (YNAB offers Delete instead of Close). The closing
+    // adjustment gives Savings some.
+    expect((await accounts()).find((a) => a.id === visa.id)).toMatchObject({ hasHistory: false });
+    expect((await accounts()).find((a) => a.id === savings.id)).toMatchObject({ hasHistory: true });
     await send("POST", `${base}/accounts/${visa.id}/close`, cookie, { date: TODAY });
-    expect((await groups())[0]?.categories[0]?.hidden).toBe(true);
+    // YNAB leaves it visible with whatever is set aside.
+    expect((await groups())[0]?.categories[0]?.hidden).toBe(false);
     // A zero balance needs no adjustment.
     expect(await transactions(visa.id)).toHaveLength(1);
 

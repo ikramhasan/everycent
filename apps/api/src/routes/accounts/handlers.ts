@@ -35,7 +35,12 @@ import type {
 type Env = AppEnv & AuthedEnv;
 type AccountRow = typeof budgetAccount.$inferSelect;
 
-function toAccountJson(a: AccountRow, balances: AccountBalances, paymentCategoryId: string | null) {
+function toAccountJson(
+  a: AccountRow,
+  balances: AccountBalances,
+  paymentCategoryId: string | null,
+  hasHistory: boolean,
+) {
   return {
     id: a.id,
     name: a.name,
@@ -47,6 +52,7 @@ function toAccountJson(a: AccountRow, balances: AccountBalances, paymentCategory
     minimumPayment: a.minimumPayment?.toString() ?? null,
     escrowAmount: a.escrowAmount?.toString() ?? null,
     paymentCategoryId,
+    hasHistory,
     balances: {
       cleared: balances.cleared.toString(),
       uncleared: balances.uncleared.toString(),
@@ -67,8 +73,24 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     .where(eq(category.budgetId, budgetId));
   const paymentByAccount = new Map(payments.map((p) => [p.accountId, p.id]));
   const balances = await accountBalances(db, budgetId, today);
+  const startingBalancePayee = await internalPayeeId(db, budgetId, "starting_balance");
+  const withHistory = await db
+    .selectDistinct({ accountId: transaction.accountId })
+    .from(transaction)
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        or(isNull(transaction.payeeId), ne(transaction.payeeId, startingBalancePayee)),
+      ),
+    );
+  const history = new Set(withHistory.map((r) => r.accountId));
   return accounts.map((a) =>
-    toAccountJson(a, balances.get(a.id) ?? ZERO_BALANCES, paymentByAccount.get(a.id) ?? null),
+    toAccountJson(
+      a,
+      balances.get(a.id) ?? ZERO_BALANCES,
+      paymentByAccount.get(a.id) ?? null,
+      history.has(a.id),
+    ),
   );
 }
 
@@ -250,14 +272,16 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
         amount: -working,
         currency: account.currency,
         payeeId: await internalPayeeId(tx, budgetId, "manual_balance_adjustment"),
+        memo: "Closed Account",
         categoryId: isOnBudget(account.type)
           ? await internalCategoryId(tx, budgetId, "ready_to_assign")
           : null,
         cleared: "cleared",
       });
     }
+    // The payment category stays visible with whatever is set aside (YNAB, 2026-10-11: Card Y
+    // kept $6 after closing); hiding it is up to the user.
     await tx.update(budgetAccount).set({ closed: true }).where(eq(budgetAccount.id, accountId));
-    await tx.update(category).set({ hidden: true }).where(eq(category.linkedAccountId, accountId));
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
@@ -267,10 +291,7 @@ export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = asy
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await findAccount(db, budgetId, accountId);
-  await db.transaction(async (tx) => {
-    await tx.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
-    await tx.update(category).set({ hidden: false }).where(eq(category.linkedAccountId, accountId));
-  });
+  await db.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
   return c.json(await accountJson(db, budgetId, accountId), 200);
 };
 

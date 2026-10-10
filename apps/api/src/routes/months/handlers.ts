@@ -7,12 +7,14 @@ import {
   categoryGroup,
   categoryTarget,
   moneyMove,
+  payee,
   subTransaction,
   transaction,
   user,
 } from "@everycent/db/schema";
 import {
   ACCOUNT_TYPES,
+  type AccountType,
   type AutoAssignOption,
   accountFamily,
   addMonths,
@@ -20,10 +22,13 @@ import {
   type BudgetMonth,
   budgetMonthRange,
   type CardActivity,
+  type CardLine,
+  type CardLineKind,
   type CategoryFunding,
   type CategoryMonth,
   type CategoryTarget,
   type CurrencyCode,
+  cardLedger,
   categoryMonth,
   categoryOverspending,
   fundedCardSpending,
@@ -42,7 +47,7 @@ import {
   targetNeed,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, gt, inArray, isNotNull, lte, max, min, or } from "drizzle-orm";
+import { and, desc, eq, exists, gt, inArray, isNotNull, lte, max, min, not, or } from "drizzle-orm";
 import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -65,7 +70,7 @@ const monthKey = (date: AnyPgColumn) => sql<string>`to_char(${date}, 'YYYY-MM')`
 // Postgres returns numeric sums as strings; BigInt parses them exactly.
 const total = (amount: AnyPgColumn) => sql<string>`sum(${amount})`;
 const CREDIT_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "credit");
-const BUDGET_TYPES = ACCOUNT_TYPES.filter(isOnBudget);
+const CASH_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "cash");
 /** The part of `amount`'s sum on credit accounts (YNAB's Credit Spending). */
 const creditTotal = (amount: AnyPgColumn) =>
   sql<string>`coalesce(sum(${amount}) filter (where ${inArray(budgetAccount.type, CREDIT_TYPES)}), 0)`;
@@ -155,21 +160,31 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
     .from(category)
     .where(eq(category.budgetId, budgetId));
   const byAccount = new Map(rows.flatMap((p) => (p.accountId ? [[p.accountId, p.id]] : [])));
-  // Card inflows to Ready to Assign (statement credits) only lower the card's balance (YNAB: "It
-  // also won't change the amount you have set aside for payment"); uncategorized card spending is
-  // credit overspending in Uncategorized. Neither moves payment money.
-  const skip = new Set(rows.filter((r) => r.accountId || r.internalKind).map((r) => r.id));
-  const creditOverspent = await addFundedSpending(db, budgetId, cutoff, history, byAccount, skip);
+  const readyToAssignId = rows.find((r) => r.internalKind === "ready_to_assign")?.id;
+  const cards = applyCardLedger(
+    history,
+    await cardLines(db, budgetId, cutoff),
+    readyToAssignId,
+    byAccount,
+  );
+  // Card money moves through every spending category, Uncategorized included (YNAB, 2026-10-11:
+  // Card R4's uncategorized −$3 was funded from Uncategorized's $7).
+  const skip = new Set(
+    rows.filter((r) => r.accountId || r.internalKind === "ready_to_assign").map((r) => r.id),
+  );
+  const creditOverspent = addFundedSpending(cards, history, byAccount, skip);
   await addPayments(db, budgetId, cutoff, history, byAccount);
   return { history, paymentAccounts: byAccount, creditOverspent };
 }
 
 /**
- * Adds each payment category's Payments Made to `history`: money moved into a card from a budget
+ * Adds each payment category's Payments Made to `history`: money moved into a card from a cash
  * account comes out of the card's payment category in the payment's month (YNAB, checked in its
  * web app on 2026-10-03: Citi $14.00 → $8.00 for a $6.00 payment from Wallet; paying more than
  * is set aside leaves it negative). Money moved out of a card to a budget account (a cash advance)
- * only raises what's owed. Transfers from tracking accounts are skipped (docs/verify.md).
+ * only raises what's owed. From another card only the part it paid from above zero is a payment
+ * (`applyCardLedger`). A transfer from a tracking account is no payment: its category on the card
+ * side decides, as for any card inflow (YNAB, 2026-10-11; docs/verify.md).
  */
 async function addPayments(
   db: Db,
@@ -183,7 +198,7 @@ async function addPayments(
   const otherLine = alias(subTransaction, "other_line");
   const otherLineTx = alias(transaction, "other_line_tx");
   const otherLineAccount = alias(budgetAccount, "other_line_account");
-  // Inflows to a card whose other side (a transaction or a split's line) is in a budget account.
+  // Inflows to a card whose other side (a transaction or a split's line) is in a cash account.
   const rows = await db
     .select({
       accountId: transaction.accountId,
@@ -203,7 +218,7 @@ async function addPayments(
         inArray(budgetAccount.type, CREDIT_TYPES),
         gt(transaction.amount, 0n),
         lte(transaction.date, cutoff),
-        or(inArray(otherAccount.type, BUDGET_TYPES), inArray(otherLineAccount.type, BUDGET_TYPES)),
+        or(inArray(otherAccount.type, CASH_TYPES), inArray(otherLineAccount.type, CASH_TYPES)),
       ),
     )
     .groupBy(transaction.accountId, monthKey(transaction.date));
@@ -217,48 +232,192 @@ async function addPayments(
   }
 }
 
-/** Each category's net activity per month on each credit account, up to `cutoff`. */
-async function cardActivity(db: Db, budgetId: string, cutoff: string) {
+/**
+ * A card line with what the plan needs to place it: its account, its category, and for transfers
+ * the line on the other side.
+ */
+type PlacedCardLine = CardLine & {
+  accountId: string;
+  categoryId: string | null;
+  otherSideId: string | null;
+};
+
+/**
+ * Every line on a credit account up to `cutoff` (a transaction, or each line of a split), with what
+ * kind of money it is for `cardLedger`.
+ */
+async function cardLines(db: Db, budgetId: string, cutoff: string): Promise<PlacedCardLine[]> {
+  const otherAccount = alias(budgetAccount, "other_account");
   const onCard = and(
     eq(transaction.budgetId, budgetId),
     inArray(budgetAccount.type, CREDIT_TYPES),
     lte(transaction.date, cutoff),
   );
-  const rows = await db
+  const whole = await db
     .select({
-      categoryId: transaction.categoryId,
-      month: monthKey(transaction.date),
+      id: transaction.id,
+      date: transaction.date,
+      amount: transaction.amount,
       accountId: transaction.accountId,
-      amount: total(transaction.amount),
+      categoryId: transaction.categoryId,
+      internalKind: category.internalKind,
+      otherType: otherAccount.type,
+      transferTransactionId: transaction.transferTransactionId,
+      transferSubTransactionId: transaction.transferSubTransactionId,
     })
     .from(transaction)
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
-    .where(and(onCard, isNotNull(transaction.categoryId)))
-    .groupBy(transaction.categoryId, monthKey(transaction.date), transaction.accountId);
-  const lines = await db
+    .leftJoin(category, eq(category.id, transaction.categoryId))
+    .leftJoin(payee, eq(payee.id, transaction.payeeId))
+    .leftJoin(otherAccount, eq(otherAccount.id, payee.transferAccountId))
+    .where(
+      and(
+        onCard,
+        not(
+          exists(
+            db
+              .select({ id: subTransaction.id })
+              .from(subTransaction)
+              .where(eq(subTransaction.transactionId, transaction.id)),
+          ),
+        ),
+      ),
+    );
+  const split = await db
     .select({
-      categoryId: subTransaction.categoryId,
-      month: monthKey(transaction.date),
+      id: subTransaction.id,
+      transactionId: transaction.id,
+      date: transaction.date,
+      transactionAmount: transaction.amount,
+      lineOrder: subTransaction.sortOrder,
+      amount: subTransaction.amount,
       accountId: transaction.accountId,
-      amount: total(subTransaction.amount),
+      categoryId: subTransaction.categoryId,
+      internalKind: category.internalKind,
+      otherType: otherAccount.type,
     })
     .from(subTransaction)
     .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
-    .where(and(onCard, isNotNull(subTransaction.categoryId)))
-    .groupBy(subTransaction.categoryId, monthKey(transaction.date), transaction.accountId);
+    .leftJoin(category, eq(category.id, subTransaction.categoryId))
+    .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
+    .leftJoin(otherAccount, eq(otherAccount.id, payee.transferAccountId))
+    .where(onCard);
 
-  // categoryId → month → accountId → amount (a card's transactions and split lines added up).
-  const byCategory = new Map<string, Map<BudgetMonth, Map<string, bigint>>>();
-  for (const r of [...rows, ...lines]) {
-    if (!r.categoryId) continue;
-    const months = byCategory.get(r.categoryId) ?? new Map<BudgetMonth, Map<string, bigint>>();
-    const cards = months.get(r.month) ?? new Map<string, bigint>();
-    cards.set(r.accountId, (cards.get(r.accountId) ?? 0n) + BigInt(r.amount));
-    months.set(r.month, cards);
-    byCategory.set(r.categoryId, months);
+  const kindOf = (r: {
+    categoryId: string | null;
+    internalKind: string | null;
+    otherType: AccountType | null;
+  }): CardLineKind => {
+    // A transfer with a budget account: cash ones are payments and advances, credit ones move
+    // money between cards. With a tracking account, the card side's category decides.
+    if (r.otherType && isOnBudget(r.otherType)) {
+      return accountFamily(r.otherType) === "cash" ? "budgetTransfer" : "creditTransfer";
+    }
+    // No category and no transfer: the card's starting debt.
+    if (!r.categoryId) return r.otherType ? "neutral" : "readyToAssign";
+    return r.internalKind === "ready_to_assign" ? "readyToAssign" : "category";
+  };
+  // A split's transfer line doesn't point at its other side; the other side points at it.
+  const lineSide = new Map(
+    whole.flatMap((r) => (r.transferSubTransactionId ? [[r.transferSubTransactionId, r.id]] : [])),
+  );
+  return [
+    ...whole.map((r) => ({
+      id: r.id,
+      transactionId: r.id,
+      date: r.date,
+      transactionAmount: r.amount,
+      lineOrder: 0,
+      amount: r.amount,
+      accountId: r.accountId,
+      categoryId: r.categoryId,
+      kind: kindOf(r),
+      otherSideId: r.transferTransactionId ?? r.transferSubTransactionId,
+    })),
+    ...split.map((r) => ({
+      id: r.id,
+      transactionId: r.transactionId,
+      date: r.date,
+      transactionAmount: r.transactionAmount,
+      lineOrder: r.lineOrder,
+      amount: r.amount,
+      accountId: r.accountId,
+      categoryId: r.categoryId,
+      kind: kindOf(r),
+      otherSideId: lineSide.get(r.id) ?? null,
+    })),
+  ];
+}
+
+/**
+ * Places each card's lines in the plan by the card's balance at the time (`cardLedger`, phase 7e):
+ * the cash part of category lines moves from credit to cash activity, and Ready to Assign gets what
+ * the card's balance above zero adds or takes (instead of every inflow to it), and a transfer from
+ * another card is a payment for the part that card paid from above zero. Returns each category's
+ * credit activity per month and day, which funds card spending.
+ */
+function applyCardLedger(
+  history: Map<string, MonthFigures[]>,
+  lines: readonly PlacedCardLine[],
+  readyToAssignId: string | undefined,
+  paymentCategoryByAccount: ReadonlyMap<string, string>,
+) {
+  const push = (categoryId: string, entry: MonthFigures) =>
+    history.set(categoryId, [...(history.get(categoryId) ?? []), entry]);
+  const byAccount = new Map<string, PlacedCardLine[]>();
+  for (const line of lines) {
+    byAccount.set(line.accountId, [...(byAccount.get(line.accountId) ?? []), line]);
   }
-  return byCategory;
+  // categoryId → month → each card's credit activity per day.
+  const credit = new Map<string, Map<BudgetMonth, CardActivity[]>>();
+  // A sending card's line id → what it paid from above zero.
+  const paidFromCash = new Map<string, bigint>();
+  const received: PlacedCardLine[] = [];
+  for (const [accountId, own] of byAccount) {
+    const byId = new Map(own.map((l) => [l.id, l]));
+    for (const effect of cardLedger(own)) {
+      const line = byId.get(effect.id) as PlacedCardLine;
+      const month = monthOf(effect.date);
+      if (line.kind === "creditTransfer") {
+        if (line.amount < 0n) paidFromCash.set(line.id, effect.paidFromCash);
+        else received.push(line);
+      }
+      // Inflows to Ready to Assign were counted in full as income; count what the ledger says.
+      const counted = line.kind === "readyToAssign" && line.categoryId ? line.amount : 0n;
+      if (readyToAssignId && effect.readyToAssign !== counted) {
+        push(readyToAssignId, { month, assigned: 0n, activity: effect.readyToAssign - counted });
+      }
+      if (line.kind !== "category" || !line.categoryId) continue;
+      if (effect.cash !== 0n) {
+        push(line.categoryId, { month, assigned: 0n, activity: 0n, creditActivity: -effect.cash });
+      }
+      if (effect.credit === 0n) continue;
+      const months = credit.get(line.categoryId) ?? new Map<BudgetMonth, CardActivity[]>();
+      const days = months.get(month) ?? [];
+      const same = days.find((d) => d.date === effect.date && d.accountId === accountId);
+      if (same) {
+        same.amount += effect.credit;
+        if (line.transactionId < same.order) same.order = line.transactionId;
+      } else {
+        days.push({
+          accountId,
+          date: effect.date,
+          amount: effect.credit,
+          order: line.transactionId,
+        });
+      }
+      months.set(month, days);
+      credit.set(line.categoryId, months);
+    }
+  }
+  for (const line of received) {
+    const paid = (line.otherSideId && paidFromCash.get(line.otherSideId)) || 0n;
+    const paymentId = paymentCategoryByAccount.get(line.accountId);
+    if (!paymentId || paid === 0n) continue;
+    push(paymentId, { month: monthOf(line.date), assigned: 0n, activity: -paid, payments: -paid });
+  }
+  return credit;
 }
 
 /**
@@ -266,35 +425,28 @@ async function cardActivity(db: Db, budgetId: string, cutoff: string) {
  * with card activity, what moved into (or, for returns, out of) each card's payment category. What
  * a category has before its card activity doesn't depend on funding, so months are independent.
  */
-async function addFundedSpending(
-  db: Db,
-  budgetId: string,
-  cutoff: string,
+function addFundedSpending(
+  cards: Map<string, Map<BudgetMonth, CardActivity[]>>,
   history: Map<string, MonthFigures[]>,
   paymentCategoryByAccount: ReadonlyMap<string, string>,
   skip: ReadonlySet<string>,
 ) {
-  const cards = await cardActivity(db, budgetId, cutoff);
   const funded = new Map<string, MonthFigures[]>();
   /** accountId → month → that card's unfunded spending (credit overspending, positive). */
   const unfunded = new Map<string, Map<BudgetMonth, bigint>>();
   for (const [categoryId, months] of cards) {
     if (skip.has(categoryId)) continue;
     const entries = history.get(categoryId) ?? [];
-    for (const [month, byAccount] of months) {
+    for (const [month, days] of months) {
       const figures = categoryMonth(entries, month);
       const cash = figures.carried + figures.assigned + figures.cashActivity;
-      const activity: CardActivity[] = [...byAccount].map(([accountId, amount]) => ({
-        accountId,
-        amount,
-      }));
-      for (const [accountId, amount] of fundedCardSpending(cash, activity)) {
-        const spent = -(byAccount.get(accountId) ?? 0n);
-        if (spent > amount) {
-          const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
-          months.set(month, (months.get(month) ?? 0n) + spent - amount);
-          unfunded.set(accountId, months);
-        }
+      const { moved, unfunded: short } = fundedCardSpending(cash, days);
+      for (const [accountId, amount] of short) {
+        const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
+        months.set(month, (months.get(month) ?? 0n) + amount);
+        unfunded.set(accountId, months);
+      }
+      for (const [accountId, amount] of moved) {
         const paymentId = paymentCategoryByAccount.get(accountId);
         if (!paymentId || amount === 0n) continue;
         const list = funded.get(paymentId) ?? [];
