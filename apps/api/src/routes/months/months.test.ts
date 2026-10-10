@@ -13,6 +13,8 @@ type Totals = {
   cashActivity: string;
   creditActivity: string;
   available: string;
+  cashOverspent: string;
+  creditOverspent: string;
 };
 type Month = {
   month: string;
@@ -247,6 +249,12 @@ describe("budget months", () => {
     expect(oct.byCategory(groceries.id)).toMatchObject(split("100", "0", "100"));
     expect(oct.byGroup(bills.id)).toMatchObject(split("-700", "600", "-1300"));
     expect(oct.uncategorized).toMatchObject(split("-300", "-200", "-100"));
+    // YNAB's "… $2.00 will be deducted" note quotes only the cash part (Available −$3.00).
+    expect(oct.uncategorized).toMatchObject({
+      available: "-300",
+      cashOverspent: "-200",
+      creditOverspent: "-100",
+    });
     // Observation only: Available and Ready to Assign are what they were before the split.
     expect(oct.byCategory(phone.id)).toMatchObject({ assigned: "0", available: "-700" });
     expect((await month("2026-11")).byCategory(phone.id)).toMatchObject(split("0", "0", "0"));

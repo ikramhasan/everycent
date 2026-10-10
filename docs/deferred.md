@@ -56,8 +56,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
   Average Paid when only payment categories are covered).
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
-  cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;
-  YNAB quotes only the cash part (docs/verify.md).
+  cash and credit, as YNAB's is; only the Available pill and the inspector change colour.
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
   listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded
   first, a 7c verification gate.

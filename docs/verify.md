@@ -301,8 +301,8 @@ built as found:
   Visa (Groceries was overspent) seems to take $1.00 out of the payment category rather than
   count as funded; 7b/7d have to reproduce that before building it.
 - **Uncategorized message:** "Uncategorized cash transactions still affect your plan! … $2.00
-  will be deducted" quoted only the cash part (Available −$3.00). everycent still quotes all of
-  it until credit overspending (7c) stops deducting the credit part.
+  will be deducted" quoted only the cash part (Available −$3.00). everycent does the same since
+  7c, and only the cash part comes out of next month's Ready to Assign.
 
 ## Funded card spending (phase 7b)
 
