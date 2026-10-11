@@ -303,3 +303,63 @@ export const enterScheduledTransaction = createRoute({
     404: notFound,
   },
 });
+
+const ScheduledBulkAction = z
+  .discriminatedUnion("type", [
+    z.strictObject({ type: z.literal("enterNow") }),
+    z.strictObject({ type: z.literal("duplicate") }),
+    z.strictObject({ type: z.literal("flag"), flag: Flag }),
+    z.strictObject({ type: z.literal("memo"), memo: Memo.min(1) }),
+    z.strictObject({ type: z.literal("categorize"), categoryId: z.string() }),
+    z.strictObject({ type: z.literal("move"), accountId: z.string() }),
+    z.strictObject({ type: z.literal("delete") }),
+  ])
+  .openapi("ScheduledBulkAction");
+
+export const bulkUpdateScheduledTransactions = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/scheduled-transactions/bulk",
+  operationId: "bulkUpdateScheduledTransactions",
+  tags: ["Scheduled transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Apply one action to every selected scheduled row it applies to",
+  description:
+    "The register's action bar on scheduled rows (by row `id`; a transfer's other side acts on " +
+    "its schedule, once). `enterNow` enters each as Enter Now does (a split's transfer line " +
+    "enters its split). `duplicate` copies each schedule, starting at its next date. `flag`, " +
+    "`memo`, `categorize`, `move` and `delete` work as on transactions. A scheduled split's " +
+    "transfer line in the other account is skipped by everything but `enterNow`, as YNAB does. " +
+    "One database transaction.",
+  request: {
+    params: BudgetParams,
+    body: json(
+      z
+        .object({
+          ids: z.array(z.string()).min(1).max(1000),
+          action: ScheduledBulkAction,
+          today: Today.optional(),
+        })
+        .openapi("ScheduledBulkUpdate"),
+    ),
+  },
+  responses: {
+    200: ok(
+      "Updated",
+      z
+        .object({
+          updated: z.number().int().describe("Schedules the action applied to"),
+          before: z
+            .array(ScheduledTransactionSchema)
+            .describe("Those schedules before, as their own account shows them (for undo)"),
+          entered: z.array(z.string()).describe("`enterNow`: the new transactions' ids"),
+          created: z.array(z.string()).describe("`duplicate`: the new schedules' ids"),
+        })
+        .openapi("ScheduledBulkResult"),
+    ),
+    400: jsonError("Invalid input, a category schedules can't use, or a closed account"),
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: notFound,
+  },
+});

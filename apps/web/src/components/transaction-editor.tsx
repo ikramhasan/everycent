@@ -42,6 +42,7 @@ export function TransactionEditor({
   label = "New transaction",
   repeat = false,
   scheduled = false,
+  openDatePicker = false,
   pending,
   error,
   onSave,
@@ -63,6 +64,8 @@ export function TransactionEditor({
   repeat?: boolean;
   /** A scheduled transaction: it has no cleared state until it's entered. */
   scheduled?: boolean;
+  /** Open the date picker first (Make Repeating, as YNAB does). */
+  openDatePicker?: boolean;
   pending: boolean;
   error: string | null;
   onSave: (draft: Draft) => void;
@@ -145,6 +148,7 @@ export function TransactionEditor({
             onChange={(date) => set({ date })}
             format={dateFormat}
             autoFocus={!columns.includes("account")}
+            defaultOpen={openDatePicker}
             repeat={
               repeat
                 ? { value: draft.frequency ?? "never", onChange: (frequency) => set({ frequency }) }

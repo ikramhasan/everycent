@@ -15,6 +15,7 @@ import {
   AutocompleteItem,
   AutocompleteList,
 } from "@everycent/ui/components/autocomplete";
+import { Button } from "@everycent/ui/components/button";
 import { Calendar } from "@everycent/ui/components/calendar";
 import {
   Combobox,
@@ -74,6 +75,8 @@ export function DateField({
   format,
   autoFocus,
   repeat,
+  onMakeRepeating,
+  defaultOpen = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -82,10 +85,14 @@ export function DateField({
   format: DateFormat;
   autoFocus?: boolean;
   repeat?: { value: ScheduleFrequency; onChange: (frequency: ScheduleFrequency) => void };
+  /** A plain transaction's date picker offers YNAB's "Make Repeating" instead. */
+  onMakeRepeating?: () => void;
+  /** Start with the calendar open (Make Repeating's new row, as YNAB opens it). */
+  defaultOpen?: boolean;
 }) {
   const display = (iso: string) => formatDate(iso, format);
   const [text, setText] = useState(() => display(value));
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const inputRef = useRef<HTMLInputElement>(null);
   const repeatId = useId();
 
@@ -127,6 +134,22 @@ export function DateField({
                 onPick?.(iso);
               }}
             />
+            {onMakeRepeating && (
+              <div className="border-t p-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    onMakeRepeating();
+                  }}
+                >
+                  Make Repeating
+                </Button>
+              </div>
+            )}
             {repeat && (
               <div className="grid gap-1.5 border-t p-3">
                 <Label htmlFor={repeatId} className="text-xs">

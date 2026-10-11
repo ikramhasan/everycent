@@ -1,4 +1,5 @@
 import { createRouter } from "../../lib/router";
+import { bulkUpdateScheduledTransactionsHandler } from "./bulk";
 import {
   createScheduledTransactionHandler,
   deleteScheduledTransactionHandler,
@@ -7,6 +8,7 @@ import {
   updateScheduledTransactionHandler,
 } from "./handlers";
 import {
+  bulkUpdateScheduledTransactions,
   createScheduledTransaction,
   deleteScheduledTransaction,
   enterScheduledTransaction,
@@ -16,6 +18,8 @@ import {
 
 export const scheduledRouter = createRouter()
   .openapi(listScheduledTransactions, listScheduledTransactionsHandler)
+  // Before the `{scheduledTransactionId}` routes, so "bulk" isn't read as an id.
+  .openapi(bulkUpdateScheduledTransactions, bulkUpdateScheduledTransactionsHandler)
   .openapi(createScheduledTransaction, createScheduledTransactionHandler)
   .openapi(updateScheduledTransaction, updateScheduledTransactionHandler)
   .openapi(deleteScheduledTransaction, deleteScheduledTransactionHandler)

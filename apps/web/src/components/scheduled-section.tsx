@@ -1,5 +1,6 @@
 import { formatDate, money, SCHEDULE_FREQUENCY_LABELS, usesCategory } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { Checkbox } from "@everycent/ui/components/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,8 @@ export function ScheduledSection({
   onRenameFlags,
   today,
   onChanged,
+  selected,
+  onSelect,
 }: {
   rows: readonly ScheduledTransaction[];
   columns: readonly ColumnId[];
@@ -70,6 +73,9 @@ export function ScheduledSection({
   today: string;
   /** Refetch what a change touches (registers, balances, the plan). */
   onChanged: () => Promise<void>;
+  /** Ticked rows, for the action bar (by row id). */
+  selected: ReadonlySet<string>;
+  onSelect: (id: string, on: boolean, shift: boolean) => void;
 }) {
   const { budget, formatAmount } = useBudget();
   const history = useUndo();
@@ -262,6 +268,20 @@ export function ScheduledSection({
   function display(row: ScheduledTransaction, id: ColumnId) {
     const amount = BigInt(row.amount);
     switch (id) {
+      case "select":
+        return (
+          <Checkbox
+            aria-label={`Select scheduled ${row.payeeName ?? "transaction"} on ${formatDate(
+              row.dateNext,
+              budget.dateFormat,
+            )}`}
+            checked={selected.has(row.id)}
+            onClick={(e) => {
+              e.preventDefault();
+              onSelect(row.id, !selected.has(row.id), e.shiftKey);
+            }}
+          />
+        );
       case "flag":
         return row.kind === "splitTransfer" ? null : (
           <FlagMenu
@@ -399,7 +419,8 @@ export function ScheduledSection({
                 row.dateNext,
                 budget.dateFormat,
               )}`}
-              className="bg-muted/40"
+              data-selected={selected.has(row.id) || undefined}
+              className="bg-muted/40 data-selected:bg-primary/10"
             >
               {columns.map((id) => {
                 const spec = COLUMN_SPECS[id];

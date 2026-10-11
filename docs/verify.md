@@ -70,6 +70,26 @@ web app and through the API, reading `date_next` after each Enter Now (EVERYCENT
 - **Closed accounts** (help center): schedules stop occurring and new ones can't be added; Enter
   Now still works. Whether missed dates catch up on reopening is EVERYCENT-115.
 
+## Duplicate, Enter Now and Make Repeating (EVERYCENT-40) (settled 2026-10-11)
+
+Checked in "Onboarding Check" (S10 Sav, S10 Cash2, R9 Chk A, All Accounts; memos `x-dupc`,
+`x-dupx`), read back through the API. All built:
+
+- **Which actions show:** Enter Now only when every selected row is scheduled; Make Repeating only
+  for exactly one plain transaction; Duplicate for any selection. A mixed selection gets the
+  transaction actions (Flag, Memo, Move, Delete, Categorize), applied to the scheduled rows too.
+- **Duplicate** copies each row (same date, payee, category, memo, amount, flag, cleared state;
+  reconciled becomes cleared) as approved, and selects the copies. A transfer gets a new pair (one,
+  even when both sides are selected); a split with a transfer line gets a new split and
+  counterpart; a split's transfer side copies the whole split. A scheduled row copies its schedule
+  from its next date (either side of a scheduled transfer); a scheduled split's transfer line in
+  the other account isn't copied.
+- **Enter Now** on several scheduled rows enters each as the single Enter Now does and selects
+  the entered transactions.
+- **Make Repeating** (the row menu, the action bar, a plain row's date picker) opens a new row on
+  top prefilled from the transaction, a month later, Repeat: Monthly, with the date picker open;
+  the original stays.
+
 ## Bulk edit (phase 5f) (settled 2026-10-11)
 
 Checked in "Onboarding Check" (accounts R9 Chk A / R9 Chk B, memos x-split1, x-split2, x-tr-rec,

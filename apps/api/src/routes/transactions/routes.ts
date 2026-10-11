@@ -383,6 +383,7 @@ const BulkActionSchema = z
     z.strictObject({ type: z.literal("memo"), memo: Memo.min(1) }),
     z.strictObject({ type: z.literal("move"), accountId: z.string() }),
     z.strictObject({ type: z.literal("delete") }),
+    z.strictObject({ type: z.literal("duplicate") }),
   ])
   .openapi("BulkAction");
 
@@ -453,8 +454,11 @@ export const bulkUpdateTransactions = createRoute({
     "single edit (a transfer keeps its other side, which then points at the new account) and " +
     "skips rows already there, transfers into their own other account and splits with a " +
     "transfer line to it. `delete` deletes transfers' other sides too and skips the other " +
-    "sides of splits' transfer lines (they go with the split). All of it happens in one " +
-    "database transaction.",
+    "sides of splits' transfer lines (they go with the split). `duplicate` copies each row as " +
+    "YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, " +
+    "a transfer with a new other side; a split's transfer side copies its whole split, and a " +
+    "transfer selected from both sides is copied once. Rows in (or transferring to) closed " +
+    "accounts are skipped. All of it happens in one database transaction.",
   request: {
     params: BudgetParams,
     body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
@@ -468,6 +472,9 @@ export const bulkUpdateTransactions = createRoute({
           before: z
             .array(TransactionSchema)
             .describe("Pre-edit rows for the caller's local undo history"),
+          created: z
+            .array(z.string())
+            .describe("`duplicate`: the new transactions' ids (empty for other actions)"),
         })
         .openapi("BulkUpdateResult"),
     ),

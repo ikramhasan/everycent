@@ -621,4 +621,130 @@ describe("scheduled transactions", () => {
     expect((await send("DELETE", `${ctx.base}/accounts/${spare.id}`, ctx.cookie)).status).toBe(204);
     expect((await ctx.list()).map((r) => r.payeeName)).toEqual(["Rent"]);
   });
+
+  describe("bulk actions", () => {
+    async function bulkSetup() {
+      const ctx = await setup();
+      const checking = await ctx.addAccount("Checking", "checking");
+      const savings = await ctx.addAccount("Savings", "savings");
+      const bulk = async (ids: string[], action: Record<string, unknown>) => {
+        const res = await send("POST", `${ctx.base}/scheduled-transactions/bulk`, ctx.cookie, {
+          ids,
+          action,
+          today: TODAY,
+        });
+        expect(res.status, await res.clone().text()).toBe(200);
+        return json<{ updated: number; before: Scheduled[]; entered: string[]; created: string[] }>(
+          res,
+        );
+      };
+      const { scheduledTransaction: gym } = await ctx.schedule({
+        accountId: checking.id,
+        frequency: "monthly",
+        date: "2026-10-31",
+        amount: "-2000",
+        payeeName: "Gym",
+        categoryId: ctx.rent.id,
+      });
+      const { scheduledTransaction: xfer } = await ctx.schedule({
+        accountId: checking.id,
+        frequency: "weekly",
+        date: "2026-10-20",
+        amount: "-5000",
+        transferAccountId: savings.id,
+      });
+      const { scheduledTransaction: split } = await ctx.schedule({
+        accountId: checking.id,
+        date: "2026-10-25",
+        amount: "-300",
+        payeeName: "Split",
+        subtransactions: [
+          { amount: "-100", categoryId: ctx.rent.id },
+          { amount: "-200", transferAccountId: savings.id },
+        ],
+      });
+      if (!gym || !xfer || !split) throw new Error("setup");
+      return { ...ctx, checking, savings, bulk, gym, xfer, split };
+    }
+
+    it("enters each now, once per schedule, a split's transfer line entering its split", async () => {
+      const ctx = await bulkSetup();
+      const rows = await ctx.list(`accountId=${ctx.savings.id}`);
+      const lineRow = rows.find((r) => r.kind === "splitTransfer");
+      const result = await ctx.bulk(
+        [ctx.gym.id, ctx.xfer.id, `${ctx.xfer.id}~${ctx.savings.id}`, lineRow?.id ?? ""],
+        { type: "enterNow" },
+      );
+      expect(result.updated).toBe(3);
+      expect(result.entered).toHaveLength(3);
+      expect((await ctx.register(ctx.checking.id)).map((t) => t.date)).toEqual([
+        TODAY,
+        TODAY,
+        TODAY,
+      ]);
+      expect((await ctx.list()).find((r) => r.id === ctx.gym.id)?.dateNext).toBe("2026-11-30");
+      // The one-off split is done.
+      expect((await ctx.list()).some((r) => r.id === ctx.split.id)).toBe(false);
+    });
+
+    it("duplicates schedules from their next date, skipping a split's transfer line", async () => {
+      const ctx = await bulkSetup();
+      await ctx.enterNow(ctx.gym.id); // next 11/30, first date still 10/31
+      const rows = await ctx.list(`accountId=${ctx.savings.id}`);
+      const lineRow = rows.find((r) => r.kind === "splitTransfer");
+      const result = await ctx.bulk(
+        [ctx.gym.id, `${ctx.xfer.id}~${ctx.savings.id}`, lineRow?.id ?? ""],
+        { type: "duplicate" },
+      );
+      expect(result.created).toHaveLength(2);
+      const copies = (await ctx.list()).filter((r) => result.created.includes(r.id));
+      expect(copies.map((c) => [c.payeeName, c.frequency, c.dateFirst, c.dateNext])).toEqual(
+        expect.arrayContaining([
+          ["Gym", "monthly", "2026-11-30", "2026-11-30"],
+          ["Transfer : Savings", "weekly", "2026-10-20", "2026-10-20"],
+        ]),
+      );
+    });
+
+    it("flags, writes memos, categorizes, moves and deletes like the transaction actions", async () => {
+      const ctx = await bulkSetup();
+      const ids = [ctx.gym.id, ctx.split.id];
+      await ctx.bulk(ids, { type: "flag", flag: "purple" });
+      await ctx.bulk(ids, { type: "memo", memo: "x-bulk" });
+      let rows = await ctx.list();
+      expect(rows.find((r) => r.id === ctx.gym.id)).toMatchObject({
+        flag: "purple",
+        memo: "x-bulk",
+      });
+
+      const categorized = await ctx.bulk([...ids, ctx.xfer.id], {
+        type: "categorize",
+        categoryId: ctx.groceries.id,
+      });
+      // The in-budget transfer takes no category; the split keeps its transfer line.
+      expect(categorized.updated).toBe(2);
+      rows = await ctx.list();
+      expect(rows.find((r) => r.id === ctx.gym.id)?.categoryId).toBe(ctx.groceries.id);
+      expect(
+        rows.find((r) => r.id === ctx.split.id)?.subtransactions.map((l) => l.categoryId),
+      ).toEqual([ctx.groceries.id, null]);
+
+      const moved = await ctx.bulk([ctx.gym.id, ctx.xfer.id], {
+        type: "move",
+        accountId: ctx.savings.id,
+      });
+      // The transfer into Savings can't move there.
+      expect(moved.updated).toBe(1);
+      expect((await ctx.list(`accountId=${ctx.savings.id}`)).map((r) => r.payeeName)).toContain(
+        "Gym",
+      );
+
+      const deleted = await ctx.bulk([ctx.gym.id, ctx.split.id], { type: "delete" });
+      expect(deleted.before.map((r) => r.id).sort()).toEqual([ctx.gym.id, ctx.split.id].sort());
+      expect((await ctx.list()).map((r) => r.scheduledTransactionId)).toEqual([
+        ctx.xfer.id,
+        ctx.xfer.id,
+      ]);
+    });
+  });
 });

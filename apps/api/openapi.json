@@ -2358,11 +2358,19 @@
               "$ref": "#/components/schemas/Transaction"
             },
             "description": "Pre-edit rows for the caller's local undo history"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`duplicate`: the new transactions' ids (empty for other actions)"
           }
         },
         "required": [
           "updated",
-          "before"
+          "before",
+          "created"
         ]
       },
       "BulkAction": {
@@ -2488,6 +2496,21 @@
                 "type": "string",
                 "enum": [
                   "delete"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "duplicate"
                 ]
               }
             },
@@ -3100,6 +3123,207 @@
           "categoryName",
           "memo",
           "transferAccountId"
+        ]
+      },
+      "ScheduledBulkResult": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "description": "Schedules the action applied to"
+          },
+          "before": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledTransaction"
+            },
+            "description": "Those schedules before, as their own account shows them (for undo)"
+          },
+          "entered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`enterNow`: the new transactions' ids"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`duplicate`: the new schedules' ids"
+          }
+        },
+        "required": [
+          "updated",
+          "before",
+          "entered",
+          "created"
+        ]
+      },
+      "ScheduledBulkUpdate": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "action": {
+            "$ref": "#/components/schemas/ScheduledBulkAction"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "ids",
+          "action"
+        ]
+      },
+      "ScheduledBulkAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "enterNow"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "duplicate"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "flag"
+                ]
+              },
+              "flag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "red",
+                  "orange",
+                  "yellow",
+                  "green",
+                  "blue",
+                  "purple",
+                  null
+                ],
+                "description": "One of YNAB's six flag colors, or null"
+              }
+            },
+            "required": [
+              "type",
+              "flag"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memo"
+                ]
+              },
+              "memo": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "type",
+              "memo"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "categorize"
+                ]
+              },
+              "categoryId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "categoryId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "move"
+                ]
+              },
+              "accountId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "accountId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "delete"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
         ]
       },
       "ScheduledTransactionWrite": {
@@ -7061,7 +7285,7 @@
           }
         ],
         "summary": "Apply one action to every selected transaction it applies to",
-        "description": "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.",
+        "description": "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.",
         "parameters": [
           {
             "schema": {
@@ -7580,6 +7804,93 @@
           },
           "409": {
             "description": "`fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/scheduled-transactions/bulk": {
+      "post": {
+        "operationId": "bulkUpdateScheduledTransactions",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Apply one action to every selected scheduled row it applies to",
+        "description": "The register's action bar on scheduled rows (by row `id`; a transfer's other side acts on its schedule, once). `enterNow` enters each as Enter Now does (a split's transfer line enters its split). `duplicate` copies each schedule, starting at its next date. `flag`, `memo`, `categorize`, `move` and `delete` work as on transactions. A scheduled split's transfer line in the other account is skipped by everything but `enterNow`, as YNAB does. One database transaction.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledBulkUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBulkResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a category schedules can't use, or a closed account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
             "content": {
               "application/json": {
                 "schema": {

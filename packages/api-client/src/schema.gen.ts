@@ -409,7 +409,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to every selected transaction it applies to
-         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.
+         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
          */
         post: operations["bulkUpdateTransactions"];
         delete?: never;
@@ -477,6 +477,26 @@ export interface paths {
          * @description Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. `fromTransactionId` replaces that transaction (and its transfer's other side) with the schedule, as YNAB does when a transaction's date is moved into the future.
          */
         post: operations["createScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one action to every selected scheduled row it applies to
+         * @description The register's action bar on scheduled rows (by row `id`; a transfer's other side acts on its schedule, once). `enterNow` enters each as Enter Now does (a split's transfer line enters its split). `duplicate` copies each schedule, starting at its next date. `flag`, `memo`, `categorize`, `move` and `delete` work as on transactions. A scheduled split's transfer line in the other account is skipped by everything but `enterNow`, as YNAB does. One database transaction.
+         */
+        post: operations["bulkUpdateScheduledTransactions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1198,6 +1218,8 @@ export interface components {
             updated: number;
             /** @description Pre-edit rows for the caller's local undo history */
             before: components["schemas"]["Transaction"][];
+            /** @description `duplicate`: the new transactions' ids (empty for other actions) */
+            created: string[];
         };
         BulkAction: {
             /** @enum {string} */
@@ -1227,6 +1249,9 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "delete";
+        } | {
+            /** @enum {string} */
+            type: "duplicate";
         };
         CreateTransaction: {
             accountId: string;
@@ -1364,6 +1389,55 @@ export interface components {
             memo: string;
             /** @description Transfer lines: the other account */
             transferAccountId: string | null;
+        };
+        ScheduledBulkResult: {
+            /** @description Schedules the action applied to */
+            updated: number;
+            /** @description Those schedules before, as their own account shows them (for undo) */
+            before: components["schemas"]["ScheduledTransaction"][];
+            /** @description `enterNow`: the new transactions' ids */
+            entered: string[];
+            /** @description `duplicate`: the new schedules' ids */
+            created: string[];
+        };
+        ScheduledBulkUpdate: {
+            ids: string[];
+            action: components["schemas"]["ScheduledBulkAction"];
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        ScheduledBulkAction: {
+            /** @enum {string} */
+            type: "enterNow";
+        } | {
+            /** @enum {string} */
+            type: "duplicate";
+        } | {
+            /** @enum {string} */
+            type: "flag";
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+        } | {
+            /** @enum {string} */
+            type: "memo";
+            memo: string;
+        } | {
+            /** @enum {string} */
+            type: "categorize";
+            categoryId: string;
+        } | {
+            /** @enum {string} */
+            type: "move";
+            accountId: string;
+        } | {
+            /** @enum {string} */
+            type: "delete";
         };
         ScheduledTransactionWrite: {
             scheduledTransaction: components["schemas"]["ScheduledTransaction"] & (Record<string, never> | null);
@@ -3890,6 +3964,68 @@ export interface operations {
             };
             /** @description `fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    bulkUpdateScheduledTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledBulkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledBulkResult"];
+                };
+            };
+            /** @description Invalid input, a category schedules can't use, or a closed account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

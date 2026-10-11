@@ -55,6 +55,7 @@ import {
   MoreHorizontal,
   Plus,
   ReceiptText,
+  Repeat,
   Split,
   Trash2,
 } from "lucide-react";
@@ -90,10 +91,12 @@ import {
 } from "@/lib/register-view";
 import {
   isScheduled,
+  makeRepeatingDraft,
   rescheduleBody,
   type ScheduledTransaction,
   scheduleCreateBody,
   scheduledQueryPrefix,
+  scheduleRestoreBody,
 } from "@/lib/scheduled";
 import {
   isEmpty,
@@ -121,7 +124,7 @@ import {
   transactionsQueryPrefix,
   updateBody,
 } from "@/lib/transactions";
-import { useUndo } from "@/lib/undo";
+import { type UndoCommand, useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
@@ -147,6 +150,20 @@ const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
 const features = tableFeatures({});
 const column = createColumnHelper<typeof features, Transaction>();
 const EMPTY: Transaction[] = [];
+const NO_ROWS: ReadonlySet<string> = new Set();
+/** The transactions' part of the bar when only scheduled rows are selected. */
+const NO_SUMMARY = {
+  count: 0,
+  total: "0",
+  uncleared: 0,
+  cleared: 0,
+  reconciled: 0,
+  reconciledTransfers: 0,
+  categorizable: 0,
+  splits: 0,
+  splitsWithTransfers: 0,
+  deletable: 0,
+};
 const ROW_HEIGHT = 41;
 
 interface EditingCell {
@@ -276,6 +293,9 @@ export function Register({
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const [adding, setAdding] = useState(false);
+  // What the new-transaction row starts with: empty, or Make Repeating's copy.
+  const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
+  const [addingKey, setAddingKey] = useState(0);
   const [newError, setNewError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
@@ -290,12 +310,24 @@ export function Register({
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
   const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk");
+  const scheduledBulk = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/scheduled-transactions/bulk",
+  );
+  const updateScheduled = $api.useMutation(
+    "patch",
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
+  );
+  // Ticked scheduled rows (by row id); they join the action bar's selection.
+  const [scheduledSelection, setScheduledSelection] = useState<ReadonlySet<string>>(NO_ROWS);
+  const scheduledAnchor = useRef<string | null>(null);
   // A new search or filter is a new set of rows, so the selection starts over.
   const queryKey = JSON.stringify(query);
   const [selectionKey, setSelectionKey] = useState(queryKey);
   if (selectionKey !== queryKey) {
     setSelectionKey(queryKey);
     setSelection(NOTHING);
+    setScheduledSelection(NO_ROWS);
     anchor.current = null;
   }
 
@@ -403,39 +435,210 @@ export function Register({
     { enabled: !isEmpty(selection) },
   );
 
+  // The bar's figures: the selected transactions (none when only scheduled rows are ticked) plus
+  // the selected scheduled rows.
+  const selectionSummary = isEmpty(selection) ? NO_SUMMARY : summary.data;
+  const scheduledTotal = scheduledRows
+    .filter((row) => scheduledSelection.has(row.id))
+    .reduce((sum, row) => sum + BigInt(row.amount), 0n);
+  // Make Repeating is offered for exactly one plain transaction.
+  const single =
+    selection.mode === "some" && selection.ids.size === 1 && scheduledSelection.size === 0
+      ? loaded.find((t) => selection.ids.has(t.id))
+      : undefined;
+  const repeatable = single && !single.transferFromSplit ? single : undefined;
+
   function toggleRow(id: string, on: boolean, shift: boolean) {
     const ids = shift ? rangeTo(loadedIds, anchor.current, id) : [id];
     anchor.current = id;
     setSelection((s) => setSelected(s, ids, on));
   }
 
+  function toggleScheduled(id: string, on: boolean, shift: boolean) {
+    const order = scheduledRows.map((row) => row.id);
+    const ids = shift ? rangeTo(order, scheduledAnchor.current, id) : [id];
+    scheduledAnchor.current = id;
+    setScheduledSelection((current) => {
+      const next = new Set(current);
+      for (const rowId of ids) on ? next.add(rowId) : next.delete(rowId);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelection(NOTHING);
+    setScheduledSelection(NO_ROWS);
+  }
+
   /** Bulk actions; deleting reconciled transactions (or their transfers) asks first. */
   function requestBulk(action: BulkAction) {
-    const found = action.type === "delete" && summary.data ? deleteWarning(summary.data) : null;
+    const found =
+      action.type === "delete" && summary.data && !isEmpty(selection)
+        ? deleteWarning(summary.data)
+        : null;
     if (found) setWarning({ warning: found, proceed: () => void applyBulk(action) });
     else void applyBulk(action);
   }
 
+  /**
+   * One action on the selected transactions and scheduled rows, undone as one. Duplicate selects
+   * the copies and Enter Now the entered transactions, as YNAB does.
+   */
   async function applyBulk(action: BulkAction) {
     try {
-      const result = await bulk.mutateAsync({
-        params: { path: { budgetId: budget.id } },
-        body: { selection: selectionBody(selection, selectionFilter), action },
-      });
-      if (result.updated > 0) recordBulk(action, result.before);
+      const commands: Omit<UndoCommand, "label">[] = [];
+      let count = 0;
+      let nextSelection: Selection = NOTHING;
+      let nextScheduled: ReadonlySet<string> = NO_ROWS;
+      if (!isEmpty(selection) && action.type !== "enterNow") {
+        const run = () =>
+          bulk.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: { selection: selectionBody(selection, selectionFilter), action },
+          });
+        const result = await run();
+        count += result.updated;
+        if (action.type === "duplicate") {
+          commands.push(duplicateCommand(async () => (await run()).created, result.created));
+          nextSelection = { mode: "some", ids: new Set(result.created) };
+        } else if (result.updated > 0) {
+          commands.push(bulkCommand(action, result.before));
+        }
+      }
+      if (scheduledSelection.size > 0 && action.type !== "cleared") {
+        const ids = [...scheduledSelection];
+        const result = await scheduledBulk.mutateAsync({
+          params: { path: { budgetId: budget.id } },
+          body: { ids, action, today },
+        });
+        count += result.updated;
+        if (result.updated > 0) commands.push(scheduledCommand(action, ids, result));
+        if (action.type === "duplicate") nextScheduled = new Set(result.created);
+        if (action.type === "enterNow") {
+          nextSelection = { mode: "some", ids: new Set(result.entered) };
+        }
+      }
+      if (commands.length > 0) {
+        history.record({
+          label: `${action.type} ${count} transaction${count === 1 ? "" : "s"}`,
+          // The ticked rows may be gone (copies, entered transactions), so the selection clears.
+          undo: async () => {
+            for (const command of [...commands].reverse()) await command.undo();
+            clearSelection();
+            await refresh();
+          },
+          redo: async () => {
+            for (const command of commands) await command.redo();
+            clearSelection();
+            await refresh();
+          },
+        });
+      }
       await refresh();
-      setSelection(NOTHING);
-      const n = `${result.updated} transaction${result.updated === 1 ? "" : "s"}`;
+      setSelection(nextSelection);
+      setScheduledSelection(nextScheduled);
+      const n = `${count} transaction${count === 1 ? "" : "s"}`;
       toast.success(
         action.type === "delete"
           ? `Deleted ${n}`
           : action.type === "move"
             ? `Moved ${n}`
-            : `Updated ${n}`,
+            : action.type === "duplicate"
+              ? `Duplicated ${n}`
+              : action.type === "enterNow"
+                ? `Entered ${n}`
+                : `Updated ${n}`,
       );
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't update the selected transactions."));
     }
+  }
+
+  /** Undo for duplicated transactions: delete the copies; redo copies the originals again. */
+  function duplicateCommand(rerun: () => Promise<string[]>, created: string[]) {
+    let current = created;
+    return {
+      undo: async () => {
+        for (const transactionId of current) {
+          await remove.mutateAsync({ params: { path: { budgetId: budget.id, transactionId } } });
+        }
+      },
+      redo: async () => {
+        current = await rerun();
+      },
+    };
+  }
+
+  /**
+   * Undo for a bulk action on scheduled rows: schedules are put back exactly (first date
+   * included) from `before`; copies and entered transactions are deleted.
+   */
+  function scheduledCommand(
+    action: Exclude<BulkAction, { type: "cleared" }>,
+    ids: string[],
+    result: { before: ScheduledTransaction[]; entered: string[]; created: string[] },
+  ) {
+    const path = { budgetId: budget.id };
+    let entered = result.entered;
+    let created = result.created;
+    // Schedules as they are now: deleted (or finished one-off) ones are gone.
+    let current: (string | null)[] = result.before.map((b) =>
+      action.type === "delete" || (action.type === "enterNow" && b.frequency === "never")
+        ? null
+        : b.id,
+    );
+    let redoIds = ids;
+    return {
+      undo: async () => {
+        const restored: (string | null)[] = [];
+        for (const [index, before] of result.before.entries()) {
+          const body = { ...scheduleRestoreBody(before), today };
+          const id = current[index];
+          if (action.type === "duplicate") {
+            restored.push(id ?? null);
+            continue;
+          }
+          if (id) {
+            await updateScheduled.mutateAsync({
+              params: { path: { ...path, scheduledTransactionId: id } },
+              body,
+            });
+            restored.push(id);
+          } else {
+            const again = await createScheduled.mutateAsync({ params: { path }, body });
+            restored.push(again.scheduledTransaction?.id ?? null);
+          }
+        }
+        current = restored;
+        for (const transactionId of entered) {
+          await remove.mutateAsync({ params: { path: { ...path, transactionId } } });
+        }
+        for (const scheduledTransactionId of created) {
+          await removeScheduled.mutateAsync({
+            params: { path: { ...path, scheduledTransactionId } },
+          });
+        }
+        // Recreated schedules have new ids; the redo acts on what's there now.
+        if (action.type === "delete" || action.type === "enterNow") {
+          redoIds = current.filter((id): id is string => id !== null);
+        }
+      },
+      redo: async () => {
+        if (redoIds.length === 0) return;
+        const again = await scheduledBulk.mutateAsync({
+          params: { path },
+          body: { ids: redoIds, action, today },
+        });
+        entered = again.entered;
+        created = again.created;
+        if (action.type === "delete") current = current.map(() => null);
+        if (action.type === "enterNow") {
+          current = result.before.map((b, i) =>
+            b.frequency === "never" ? null : (current[i] ?? null),
+          );
+        }
+      },
+    };
   }
 
   // Item offsets count from the top of the Scheduled section (`scrollMargin`); the total doesn't.
@@ -459,51 +662,47 @@ export function Register({
     ]);
   }
 
-  function recordBulk(action: BulkAction, before: Transaction[]) {
+  /** Undo for a bulk action on transactions, from their state before it. */
+  function bulkCommand(action: Exclude<BulkAction, { type: "enterNow" }>, before: Transaction[]) {
     let current = before;
-    const restore = async () => {
-      if (action.type === "delete") {
-        const restored: Transaction[] = [];
-        for (const transaction of before) {
-          restored.push(
-            await create.mutateAsync({
-              params: { path: { budgetId: budget.id } },
-              body: createBodyFromTransaction(transaction),
-            }),
-          );
+    return {
+      undo: async () => {
+        if (action.type === "delete") {
+          const restored: Transaction[] = [];
+          for (const transaction of before) {
+            restored.push(
+              await create.mutateAsync({
+                params: { path: { budgetId: budget.id } },
+                body: createBodyFromTransaction(transaction),
+              }),
+            );
+          }
+          current = restored;
+        } else {
+          for (const transaction of before) {
+            await update.mutateAsync({
+              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+              body: updateBodyFromTransaction(transaction),
+            });
+          }
+          current = before;
         }
-        current = restored;
-      } else {
-        for (const transaction of before) {
-          await update.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: transaction.id } },
-            body: updateBodyFromTransaction(transaction),
+      },
+      redo: async () => {
+        if (action.type === "delete") {
+          for (const transaction of current) {
+            await remove.mutateAsync({
+              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+            });
+          }
+        } else if (action.type !== "duplicate") {
+          await bulk.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: { selection: { ids: current.map((transaction) => transaction.id) }, action },
           });
         }
-        current = before;
-      }
-      await refresh();
+      },
     };
-    const reapply = async () => {
-      if (action.type === "delete") {
-        for (const transaction of current) {
-          await remove.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: transaction.id } },
-          });
-        }
-      } else {
-        await bulk.mutateAsync({
-          params: { path: { budgetId: budget.id } },
-          body: { selection: { ids: current.map((transaction) => transaction.id) }, action },
-        });
-      }
-      await refresh();
-    };
-    history.record({
-      label: `${action.type} ${before.length} transaction${before.length === 1 ? "" : "s"}`,
-      undo: restore,
-      redo: reapply,
-    });
   }
 
   function recordUpdate(label: string, before: Transaction, after: Transaction) {
@@ -601,11 +800,23 @@ export function Register({
     });
   }
 
-  function startAdding() {
+  /** Opens the new-transaction row: empty, or with a draft (Make Repeating's). */
+  function startAdding(draft: Draft | null = null) {
     setEditing(null);
     setEditingSplit(null);
     setNewError(null);
+    setAddingDraft(draft);
+    setAddingKey((k) => k + 1);
     setAdding(true);
+  }
+
+  /**
+   * YNAB's Make Repeating: a new scheduled row prefilled from `t`, a month later and repeating
+   * monthly; saving it creates the schedule and leaves `t` as it is.
+   */
+  function makeRepeating(t: Transaction) {
+    clearSelection();
+    startAdding(makeRepeatingDraft(t, budget));
   }
 
   async function saveNew(draft: Draft) {
@@ -993,6 +1204,11 @@ export function Register({
                   <Split /> Split
                 </DropdownMenuItem>
               )}
+              {!t.transferFromSplit && (
+                <DropdownMenuItem onSelect={() => makeRepeating(t)}>
+                  <Repeat /> Make Repeating
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 variant="destructive"
                 disabled={t.transferFromSplit}
@@ -1038,7 +1254,7 @@ export function Register({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={startAdding} disabled={!canAdd || adding}>
+        <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
           <Plus /> Add transaction
         </Button>
         {!canAdd && account?.closed && (
@@ -1064,19 +1280,24 @@ export function Register({
           />
         </div>
       </div>
-      {!isEmpty(selection) && (
+      {(!isEmpty(selection) || scheduledSelection.size > 0) && (
         <SelectionBar
-          summary={summary.data}
-          total={summary.data ? show(BigInt(summary.data.total)) : null}
+          summary={selectionSummary}
+          total={selectionSummary ? show(BigInt(selectionSummary.total) + scheduledTotal) : null}
           allMatching={selection.mode === "all"}
-          canSelectAll={Boolean(hasNextPage) || loaded.length > (summary.data?.count ?? 0)}
+          canSelectAll={
+            !isEmpty(selection) &&
+            (Boolean(hasNextPage) || loaded.length > (summary.data?.count ?? 0))
+          }
           onSelectAll={() => setSelection({ mode: "all", except: new Set() })}
-          onClear={() => setSelection(NOTHING)}
+          onClear={clearSelection}
           flags={flags}
           categories={options}
           moveTargets={openAccounts.filter((a) => a.id !== accountId)}
-          pending={bulk.isPending}
+          pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
+          scheduledCount={scheduledSelection.size}
+          onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}
 
@@ -1161,14 +1382,16 @@ export function Register({
                         checked={
                           selection.mode === "all"
                             ? selection.except.size === 0 || "indeterminate"
-                            : selection.ids.size > 0 && "indeterminate"
+                            : (selection.ids.size > 0 || scheduledSelection.size > 0) &&
+                              "indeterminate"
                         }
-                        disabled={loaded.length === 0}
-                        onCheckedChange={() =>
-                          setSelection(
-                            selection.mode === "all" ? NOTHING : { mode: "all", except: new Set() },
-                          )
-                        }
+                        disabled={loaded.length === 0 && scheduledRows.length === 0}
+                        onCheckedChange={() => {
+                          // Select all takes the scheduled rows along, as YNAB's does.
+                          if (selection.mode === "all") return clearSelection();
+                          setSelection({ mode: "all", except: new Set() });
+                          setScheduledSelection(new Set(scheduledRows.map((row) => row.id)));
+                        }}
                       />
                     ) : id === "balance" ? (
                       <BalanceHeader
@@ -1204,7 +1427,9 @@ export function Register({
         <TableBody ref={measureScheduled}>
           {adding && defaultAccountId && (
             <TransactionEditor
-              initial={emptyDraft(defaultAccountId, today)}
+              key={addingKey}
+              initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
+              openDatePicker={addingDraft !== null}
               repeat
               columns={columnIds}
               accounts={openAccounts}
@@ -1222,6 +1447,8 @@ export function Register({
           )}
           <ScheduledSection
             rows={scheduledRows}
+            selected={scheduledSelection}
+            onSelect={toggleScheduled}
             columns={columnIds}
             collapsed={view.scheduledCollapsed}
             onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
@@ -1323,6 +1550,7 @@ export function Register({
                               ? () => openSplit(t, true)
                               : undefined
                           }
+                          onMakeRepeating={t.transferFromSplit ? undefined : () => makeRepeating(t)}
                           onCommit={(value, exit, transferAccountId) =>
                             void commitCell(t, editing.column, value, exit, transferAccountId)
                           }

@@ -196,8 +196,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   intentionally clears that history so partners never share an undo stack.
 - YNAB's Categorize menu is category groups with their categories as submenus; ours is the
   category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
-- YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,
-  enter now and make repeating (EVERYCENT-40), and Export (no phase yet).
+- Duplicate, Enter Now and Make Repeating are built (EVERYCENT-40); approve/reject and match wait
+  for phase 13, Export has no phase yet.
 - Changing the search or filters clears the selection.
 
 ## Scheduled transactions (phase 10a follow-ups)
@@ -210,8 +210,10 @@ before starting a roadmap phase** and remove an entry once it's done.
   no approve/unapproved styling yet (EVERYCENT-65).
 - Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
   what YNAB does is EVERYCENT-115.
-- Scheduled rows can't be selected for bulk actions; YNAB's Duplicate, Enter Now and Make
-  Repeating (and the date picker's Make Repeating on a plain transaction) are EVERYCENT-40.
+- Duplicating a transfer selected from both sides (All Accounts) selects the copy's own side
+  only; YNAB selects both sides of the copy.
+- Bulk Categorize's un-split warning counts selected transactions only; selected scheduled splits
+  are un-split (or keep their transfer lines) without it.
 - The calendar pill on a category's Available, Underfunded funding scheduled outflows, and fresh
   start carrying schedules over are 10b (EVERYCENT-5). A fresh start doesn't copy schedules yet.
 - The transactions API still accepts future dates (the web never sends them; YNAB's API refuses

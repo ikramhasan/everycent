@@ -1,5 +1,12 @@
 import { sql } from "@everycent/db";
-import { category, type FlagColor, payee, subTransaction, transaction } from "@everycent/db/schema";
+import {
+  type ClearedState,
+  category,
+  type FlagColor,
+  payee,
+  subTransaction,
+  transaction,
+} from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -62,61 +69,74 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
-  assertOnePayee(body);
-  const id = await db.transaction(async (tx) => {
-    const account = await findAccount(tx, budgetId, body.accountId);
-    assertOpen(account);
-    let transferTo: AccountRow | null = null;
-    if (body.transferAccountId !== undefined) {
-      transferTo = await findAccount(tx, budgetId, body.transferAccountId);
-      assertNotSelf(account, transferTo);
-      assertOpen(transferTo);
-    }
-    const amount = BigInt(body.amount);
-    const split = body.subtransactions;
-    if (split) {
-      if (transferTo) notSplittable();
-      if (body.categoryId !== null) categoryOnSplit();
-      assertSplitAllowed(account);
-      assertLinesAddUp(split, amount);
-    }
-    const id = await insertTransaction(tx, {
-      budgetId,
-      accountId: account.id,
-      date: body.date,
-      amount,
-      currency: account.currency,
-      payeeId: transferTo
-        ? await transferPayeeId(tx, transferTo)
-        : body.payeeName
-          ? await findOrCreatePayee(tx, budgetId, body.payeeName)
-          : null,
-      categoryId: split
-        ? null
-        : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
-      memo: body.memo,
-      cleared: body.cleared,
-      flag: body.flag,
-    });
-    if (split) {
-      await syncLines(
-        tx,
-        { budgetId, parentId: id, date: body.date, account, moved: false },
-        split,
-      );
-    }
-    if (transferTo) {
-      await insertOtherSide(
-        tx,
-        { id, budgetId, date: body.date, amount, memo: body.memo },
-        account,
-        transferTo,
-      );
-    }
-    return id;
-  });
+  const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };
+
+/** What `createTransaction` takes. */
+export interface CreateBody {
+  accountId: string;
+  date: string;
+  amount: string;
+  payeeName: string | null;
+  transferAccountId?: string;
+  categoryId: string | null;
+  memo: string;
+  subtransactions?: LineInput[];
+  cleared: ClearedState;
+  flag: FlagColor | null;
+}
+
+/** A new transaction (with its transfer's other side and its split's lines); returns its id. */
+export async function insertNewTransaction(tx: Db, budgetId: string, body: CreateBody) {
+  assertOnePayee(body);
+  const account = await findAccount(tx, budgetId, body.accountId);
+  assertOpen(account);
+  let transferTo: AccountRow | null = null;
+  if (body.transferAccountId !== undefined) {
+    transferTo = await findAccount(tx, budgetId, body.transferAccountId);
+    assertNotSelf(account, transferTo);
+    assertOpen(transferTo);
+  }
+  const amount = BigInt(body.amount);
+  const split = body.subtransactions;
+  if (split) {
+    if (transferTo) notSplittable();
+    if (body.categoryId !== null) categoryOnSplit();
+    assertSplitAllowed(account);
+    assertLinesAddUp(split, amount);
+  }
+  const id = await insertTransaction(tx, {
+    budgetId,
+    accountId: account.id,
+    date: body.date,
+    amount,
+    currency: account.currency,
+    payeeId: transferTo
+      ? await transferPayeeId(tx, transferTo)
+      : body.payeeName
+        ? await findOrCreatePayee(tx, budgetId, body.payeeName)
+        : null,
+    categoryId: split
+      ? null
+      : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
+    memo: body.memo,
+    cleared: body.cleared,
+    flag: body.flag,
+  });
+  if (split) {
+    await syncLines(tx, { budgetId, parentId: id, date: body.date, account, moved: false }, split);
+  }
+  if (transferTo) {
+    await insertOtherSide(
+      tx,
+      { id, budgetId, date: body.date, amount, memo: body.memo },
+      account,
+      transferTo,
+    );
+  }
+  return id;
+}
 
 export const updateTransactionHandler: RouteHandler<typeof updateTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");

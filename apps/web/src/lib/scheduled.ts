@@ -1,7 +1,8 @@
 import type { components } from "@everycent/api-client";
+import { addMonths, format, parseISO } from "date-fns";
 import type { MoneySettings } from "./money-input";
 import { toMoneyInput } from "./money-input";
-import { createBody, type Draft, type Transaction } from "./transactions";
+import { createBody, type Draft, draftFrom, emptyLine, type Transaction } from "./transactions";
 
 export type ScheduledTransaction = components["schemas"]["ScheduledTransaction"];
 type CreateBody = components["schemas"]["CreateScheduledTransaction"];
@@ -155,4 +156,19 @@ export function rescheduleBody(
   const result = scheduleCreateBody(draft, settings, today);
   if (!result.ok) return result;
   return { ok: true, body: { ...result.body, fromTransactionId: t.id } };
+}
+
+/**
+ * YNAB's Make Repeating: a new scheduled row prefilled from `t`, a month after its date (the
+ * last day of a shorter month), repeating monthly. The transaction itself stays as it is.
+ */
+export function makeRepeatingDraft(t: Transaction, settings: MoneySettings): Draft {
+  const draft = draftFrom(t, settings);
+  return {
+    ...draft,
+    date: format(addMonths(parseISO(t.date), 1), "yyyy-MM-dd"),
+    frequency: "monthly",
+    cleared: "uncleared",
+    lines: draft.lines?.map(({ id: _, key: __, ...line }) => emptyLine(line)) ?? null,
+  };
 }
