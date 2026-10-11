@@ -1,4 +1,4 @@
-import { ACCOUNT_TYPES, type CurrencyCode } from "@everycent/engine";
+import { ACCOUNT_TYPES, type CurrencyCode, SCHEDULE_FREQUENCIES } from "@everycent/engine";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -192,5 +192,66 @@ export const subTransaction = pgTable(
   (t) => [
     index("sub_transaction_transaction_id_idx").on(t.transactionId),
     index("sub_transaction_category_id_idx").on(t.categoryId),
+  ],
+);
+
+/**
+ * A scheduled transaction: a future one-off (frequency "never") or a repeating one. YNAB keeps one
+ * row per schedule showing its next occurrence; due occurrences become transactions (see
+ * `enterDueScheduled` in the API). A transfer's payee is the other account's transfer payee, as on
+ * transactions; there's no second row, the other account shows this one with the amount negated.
+ */
+export const scheduledTransaction = pgTable(
+  "scheduled_transaction",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    accountId: text()
+      .notNull()
+      .references(() => budgetAccount.id, { onDelete: "cascade" }),
+    frequency: text({ enum: SCHEDULE_FREQUENCIES }).notNull(),
+    /** Where the repeats are counted from (YYYY-MM-DD); editing the date restarts it there. */
+    dateFirst: date({ mode: "string" }).notNull(),
+    /** The next occurrence, the one the register shows (YYYY-MM-DD). */
+    dateNext: date({ mode: "string" }).notNull(),
+    /** Minor units; negative is an outflow. */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    payeeId: text().references(() => payee.id, { onDelete: "set null" }),
+    /** Same rules as a transaction's (no action: see `transaction.categoryId`); null on splits. */
+    categoryId: text().references(() => category.id),
+    memo: text().notNull().default(""),
+    flag: text({ enum: FLAG_COLORS }),
+    ...timestamps,
+  },
+  (t) => [
+    index("scheduled_transaction_budget_next_idx").on(t.budgetId, t.dateNext),
+    index("scheduled_transaction_account_id_idx").on(t.accountId),
+    index("scheduled_transaction_category_id_idx").on(t.categoryId),
+    index("scheduled_transaction_payee_id_idx").on(t.payeeId),
+  ],
+);
+
+/** The lines of a scheduled split; same rules as `subTransaction`. */
+export const scheduledSubTransaction = pgTable(
+  "scheduled_sub_transaction",
+  {
+    id: text().primaryKey(),
+    scheduledTransactionId: text()
+      .notNull()
+      .references(() => scheduledTransaction.id, { onDelete: "cascade" }),
+    sortOrder: integer().notNull(),
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    payeeId: text().references(() => payee.id, { onDelete: "set null" }),
+    categoryId: text().references(() => category.id),
+    memo: text().notNull().default(""),
+    ...timestamps,
+  },
+  (t) => [
+    index("scheduled_sub_transaction_parent_idx").on(t.scheduledTransactionId),
+    index("scheduled_sub_transaction_category_id_idx").on(t.categoryId),
   ],
 );

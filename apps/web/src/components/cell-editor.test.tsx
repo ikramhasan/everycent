@@ -28,6 +28,7 @@ const txn: Transaction = {
   transferAccountId: null,
   transferTransactionId: null,
   flag: null,
+  approved: true,
   transferFromSplit: false,
   transferReconciled: false,
   subtransactions: [],

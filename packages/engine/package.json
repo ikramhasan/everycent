@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "date-fns": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -114,6 +114,14 @@ export {
   type SearchTerm,
 } from "./register-search";
 export { divideRounded, type RoundingMode } from "./rounding";
+export {
+  firstOccurrenceAfter,
+  nextOccurrence,
+  SCHEDULE_FREQUENCIES,
+  SCHEDULE_FREQUENCY_LABELS,
+  type ScheduleFrequency,
+  zScheduleFrequency,
+} from "./schedule";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,

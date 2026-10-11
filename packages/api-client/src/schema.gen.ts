@@ -459,6 +459,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/scheduled-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The register's Scheduled Transactions section, newest first
+         * @description One row per schedule (its next occurrence), plus the other account's view of scheduled transfers and of scheduled splits' transfer lines. Due occurrences are entered first. The search and dates work as in `listTransactions` (scheduled rows count as uncleared).
+         */
+        get: operations["listScheduledTransactions"];
+        put?: never;
+        /**
+         * Schedule a transaction (a future one-off or a repeating one)
+         * @description Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. `fromTransactionId` replaces that transaction (and its transfer's other side) with the schedule, as YNAB does when a transaction's date is moved into the future.
+         */
+        post: operations["createScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a scheduled transaction and all of its future occurrences */
+        delete: operations["deleteScheduledTransaction"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a scheduled transaction (it and all of its future occurrences)
+         * @description Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. A new `date` restarts the repeats there (YNAB resets the first date); a new `frequency` counts from the date shown. Setting `payeeName` turns a transfer into a normal one, `subtransactions` replace a split's lines and a `categoryId` un-splits it.
+         */
+        patch: operations["updateScheduledTransaction"];
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}/enter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enter Now: the next occurrence, dated today
+         * @description As YNAB's Enter Now: the transaction is dated `today` and approved (uncleared, or cleared in a cash account), and the schedule moves to its following date; a one-off is done. Works in a closed account too.
+         */
+        post: operations["enterScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/flags": {
         parameters: {
             query?: never;
@@ -1051,6 +1116,8 @@ export interface components {
              * @enum {string|null}
              */
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description False for a scheduled transaction entered on its date, until it's approved */
+            approved: boolean;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
             /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
@@ -1235,6 +1302,174 @@ export interface components {
             name: string;
             /** @description Category of the payee's latest categorized transaction, suggested for the next */
             lastCategoryId: string | null;
+        };
+        ScheduledTransactionList: {
+            scheduledTransactions: components["schemas"]["ScheduledTransaction"][];
+        };
+        ScheduledTransaction: {
+            /** @description The row's id: the schedule's own, or for the other side of a transfer a derived one */
+            id: string;
+            /** @description The schedule this row shows */
+            scheduledTransactionId: string;
+            /**
+             * @description `schedule`: the schedule in its own account. `transfer`: a scheduled transfer as the other account shows it (amount negated). `splitTransfer`: a scheduled split's transfer line in that line's account; it's edited and deleted through the split
+             * @enum {string}
+             */
+            kind: "schedule" | "transfer" | "splitTransfer";
+            accountId: string;
+            accountName: string;
+            /** @enum {string} */
+            frequency: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description Where the repeats are counted from
+             */
+            dateFirst: string;
+            /**
+             * Format: date
+             * @description The next occurrence (the date the register shows)
+             */
+            dateNext: string;
+            /** @description Negative is an outflow, in this row's account */
+            amount: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            payeeId: string | null;
+            payeeName: string | null;
+            /** @description Null on splits and where no category applies */
+            categoryId: string | null;
+            categoryName: string | null;
+            memo: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description Transfers: the other account */
+            transferAccountId: string | null;
+            /** @description A split's lines, in order (only on the `schedule` row) */
+            subtransactions: components["schemas"]["ScheduledSubTransaction"][];
+        };
+        ScheduledSubTransaction: {
+            id: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            payeeId: string | null;
+            payeeName: string | null;
+            categoryId: string | null;
+            categoryName: string | null;
+            memo: string;
+            /** @description Transfer lines: the other account */
+            transferAccountId: string | null;
+        };
+        ScheduledTransactionWrite: {
+            scheduledTransaction: components["schemas"]["ScheduledTransaction"] & (Record<string, never> | null);
+            /** @description The transaction entered because the date was on or before `today` */
+            enteredTransactionId: string | null;
+        };
+        CreateScheduledTransaction: {
+            accountId: string;
+            /**
+             * @description YNAB's "Repeat:" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later.
+             * @default never
+             * @enum {string}
+             */
+            frequency: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description The first occurrence
+             */
+            date: string;
+            /**
+             * Format: date
+             * @description Count repeats from this earlier date instead (restoring a schedule, as an undo does)
+             */
+            dateFirst?: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            /** @default null */
+            payeeName: string | null;
+            /** @description Make it a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
+            /** @default null */
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @default null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            subtransactions?: components["schemas"]["ScheduledSubTransactionInput"][];
+            fromTransactionId?: string;
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        ScheduledSubTransactionInput: {
+            /** @description Negative is an outflow */
+            amount: string;
+            /** @default null */
+            payeeName: string | null;
+            /** @description Make this line a transfer */
+            transferAccountId?: string;
+            /** @default null */
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
+        };
+        UpdateScheduledTransaction: {
+            accountId?: string;
+            /**
+             * @description YNAB's "Repeat:" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later.
+             * @enum {string}
+             */
+            frequency?: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            dateFirst?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount?: string;
+            payeeName?: string | null;
+            /** @description Make it a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
+            categoryId?: string | null;
+            memo?: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            subtransactions?: components["schemas"]["ScheduledSubTransactionInput"][];
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        EnteredScheduledTransaction: {
+            transaction: components["schemas"]["Transaction"] & unknown;
+            scheduledTransaction: components["schemas"]["ScheduledTransaction"] & (Record<string, never> | null);
+        };
+        EnterScheduledTransaction: {
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
         };
         FlagList: {
             /** @description All six colors, in YNAB's order */
@@ -3142,6 +3377,8 @@ export interface operations {
                 dir?: "asc" | "desc";
                 limit?: number;
                 cursor?: string;
+                /** @description The user's today: scheduled transactions due by then are entered first */
+                today?: string;
             };
             header?: never;
             path: {
@@ -3530,6 +3767,293 @@ export interface operations {
                 };
             };
             /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listScheduledTransactions: {
+        parameters: {
+            query?: {
+                /** @description Leave out for all accounts */
+                accountId?: string;
+                /** @description The register's search (see `listTransactions`) */
+                q?: string;
+                /** @description Next occurrence on or after this date */
+                from?: string;
+                /** @description Next occurrence on or before this date */
+                to?: string;
+                /** @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scheduled transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionWrite"];
+                };
+            };
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionWrite"];
+                };
+            };
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    enterScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnterScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Entered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnteredScheduledTransaction"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -61,6 +61,9 @@ export const TransactionSchema = z
     memo: z.string(),
     cleared: z.enum(CLEARED_STATES),
     flag: Flag,
+    approved: z
+      .boolean()
+      .describe("False for a scheduled transaction entered on its date, until it's approved"),
     transferAccountId: z
       .string()
       .nullable()
@@ -197,6 +200,9 @@ export const listTransactions = createRoute({
       dir: z.enum(["asc", "desc"]).default("desc"),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       cursor: z.string().optional(),
+      today: IsoDate.optional().describe(
+        "The user's today: scheduled transactions due by then are entered first",
+      ),
     }),
   },
   responses: {
