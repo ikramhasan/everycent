@@ -16,6 +16,7 @@ const transaction: Transaction = {
   memo: "weekly",
   cleared: "cleared",
   flag: "blue",
+  approved: true,
   transferAccountId: null,
   transferTransactionId: null,
   transferFromSplit: false,

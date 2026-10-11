@@ -36,6 +36,7 @@ export function CellEditor({
   transfers,
   categories,
   onSplit,
+  onMakeRepeating,
   onCommit,
   onCancel,
 }: {
@@ -50,6 +51,8 @@ export function CellEditor({
   categories: readonly CategoryOption[];
   /** Offers "Split" in the category list; the register then opens the whole-split editor. */
   onSplit?: () => void;
+  /** Offers "Make Repeating" in the date picker; the register then opens a new scheduled row. */
+  onMakeRepeating?: () => void;
   /** `transferAccountId` is set when the payee cell now holds a transfer. */
   onCommit: (value: string | null, exit: CellExit, transferAccountId: string | null) => void;
   onCancel: () => void;
@@ -119,6 +122,15 @@ export function CellEditor({
             onPick={(date) => finish("stay", date)}
             format={dateFormat}
             autoFocus
+            onMakeRepeating={
+              onMakeRepeating
+                ? () => {
+                    done.current = true;
+                    onCancel();
+                    onMakeRepeating();
+                  }
+                : undefined
+            }
           />
         );
       case "payee":

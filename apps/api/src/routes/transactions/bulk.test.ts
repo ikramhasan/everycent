@@ -10,6 +10,8 @@ afterAll(close);
 type Txn = {
   id: string;
   accountId: string;
+  amount: string;
+  approved: boolean;
   cleared: string;
   flag: string | null;
   categoryId: string | null;
@@ -403,5 +405,50 @@ describe("bulk edit", () => {
     expect((await json<ErrorBody>(res)).error.code).toBe("CATEGORY_NOT_ALLOWED");
     expect((await bulk({ ids: [a.id] }, { type: "archive" })).status).toBe(400);
     expect((await bulk({ ids: [] }, { type: "flag", flag: "red" })).status).toBe(400);
+  });
+
+  it("duplicates as YNAB does: approved, cleared kept, transfers and splits whole", async () => {
+    const { add, bulk, all, addAccount, groceries, household } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const plain = await add({
+      payeeName: "Shop",
+      categoryId: groceries.id,
+      memo: "m",
+      flag: "green",
+      cleared: "reconciled",
+    });
+    const transfer = await add({ transferAccountId: savings.id, amount: "-500" });
+    await add({
+      payeeName: "Split",
+      amount: "-300",
+      subtransactions: [
+        { amount: "-100", categoryId: household.id },
+        { amount: "-200", transferAccountId: savings.id },
+      ],
+    });
+    const splitSide = (await all(savings.id)).find((t) => t.amount === "200");
+    if (!splitSide || !transfer.transferTransactionId) throw new Error("setup");
+    const res = await bulk(
+      // The transfer from both sides and the split's transfer side: each copied once.
+      { ids: [plain.id, transfer.id, transfer.transferTransactionId, splitSide.id] },
+      { type: "duplicate" },
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    const result = await json<{ updated: number; created: string[] }>(res);
+    expect(result.updated).toBe(3);
+    const rows = await all();
+    const copy = rows.find((t) => result.created.includes(t.id) && t.payeeName === "Shop");
+    expect(copy).toMatchObject({
+      categoryId: groceries.id,
+      memo: "m",
+      flag: "green",
+      cleared: "cleared",
+      approved: true,
+    });
+    expect(rows.filter((t) => t.transferAccountId === savings.id)).toHaveLength(2);
+    expect(rows.filter((t) => t.payeeName === "Split")).toHaveLength(2);
+    // Each transfer and transfer line copy has its own other side.
+    const savingsRows = await all(savings.id);
+    expect(savingsRows.filter((t) => t.payeeName !== "Starting Balance")).toHaveLength(4);
   });
 });

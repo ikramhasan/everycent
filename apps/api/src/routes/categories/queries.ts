@@ -4,6 +4,8 @@ import {
   categoryAssignment,
   categoryGroup,
   categoryTarget,
+  scheduledSubTransaction,
+  scheduledTransaction,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
@@ -186,7 +188,7 @@ export function managedError(message: string) {
   return new AppError(409, "MANAGED_CATEGORY", message);
 }
 
-/** Whether any transaction uses one of these categories. */
+/** Whether any transaction (scheduled ones included) uses one of these categories. */
 export async function hasHistory(db: Db, categoryIds: readonly string[]) {
   if (categoryIds.length === 0) return false;
   const [row] = await db
@@ -199,7 +201,17 @@ export async function hasHistory(db: Db, categoryIds: readonly string[]) {
     .from(subTransaction)
     .where(inArray(subTransaction.categoryId, [...categoryIds]))
     .limit(1);
-  return Boolean(row ?? line);
+  const [scheduled] = await db
+    .select({ id: scheduledTransaction.id })
+    .from(scheduledTransaction)
+    .where(inArray(scheduledTransaction.categoryId, [...categoryIds]))
+    .limit(1);
+  const [scheduledLine] = await db
+    .select({ id: scheduledSubTransaction.id })
+    .from(scheduledSubTransaction)
+    .where(inArray(scheduledSubTransaction.categoryId, [...categoryIds]))
+    .limit(1);
+  return Boolean(row ?? line ?? scheduled ?? scheduledLine);
 }
 
 /**
@@ -254,4 +266,12 @@ export async function reassignHistory(
     .update(subTransaction)
     .set({ categoryId: target.id })
     .where(inArray(subTransaction.categoryId, [...categoryIds]));
+  await db
+    .update(scheduledTransaction)
+    .set({ categoryId: target.id })
+    .where(inArray(scheduledTransaction.categoryId, [...categoryIds]));
+  await db
+    .update(scheduledSubTransaction)
+    .set({ categoryId: target.id })
+    .where(inArray(scheduledSubTransaction.categoryId, [...categoryIds]));
 }

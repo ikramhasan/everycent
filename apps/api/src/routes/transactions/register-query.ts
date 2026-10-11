@@ -67,6 +67,7 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         memo: transaction.memo,
         cleared: transaction.cleared,
         flag: transaction.flag,
+        approved: transaction.approved,
         transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
         // A split line's transfer points at the split itself.
         transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
@@ -363,6 +364,7 @@ function columns(r: Register) {
     memo: r.memo,
     cleared: r.cleared,
     flag: r.flag,
+    approved: r.approved,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,

@@ -129,6 +129,8 @@ export interface NewTransaction {
   cleared: ClearedState;
   memo?: string;
   flag?: FlagColor | null;
+  /** False for scheduled transactions entered on their date (YNAB asks to approve those). */
+  approved?: boolean;
   transferTransactionId?: string | null;
   transferSubTransactionId?: string | null;
 }

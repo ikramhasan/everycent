@@ -32,6 +32,64 @@ Checked in "ihni7's Plan" and "Onboarding Check" (EVERYCENT-12, EVERYCENT-13):
 - YNAB also offers `Income:` ("Enter month like 'Income: October 2026'"), still listed in
   `docs/deferred.md`.
 
+## Scheduled transactions (phase 10a) (settled 2026-10-11)
+
+Checked in "Onboarding Check" (accounts S10 Chk, S10 Sav, S10 Cash, S10 Cash2, memos `x-*`) in the
+web app and through the API, reading `date_next` after each Enter Now (EVERYCENT-4). All built:
+
+- **Repeat options** (the date picker's "Repeat:"): Never, Daily, Weekly, Every other week, Twice
+  a month, Every 4 weeks, Monthly, Every other month, Every 3 months, Every 4 months, Twice a year,
+  Yearly, Every other year.
+- **Month-based repeats** count from the first date and fall on its day or a shorter month's last
+  day: 10/31 → 11/30 → 12/31 → 1/31 → 2/28; 11/30 every 3 months → 2/28 → 5/30 → 8/30.
+  **Yearly** ones step from the previous date, so Feb 29 drifts (2028-02-29 → 2029-02-28 → … →
+  2032-02-28). **Twice a month** pairs a day up to the 15th with day + 15 in the same month, a
+  later day with day − 15 in the next month (20th ↔ 5th, 31st ↔ 16th); the later day lands on a
+  short month's last day and comes back (1/31 → 2/16 → 2/28 → 3/16 → 3/31). The help center's
+  "15 days later" is approximate (10/20 → 11/05).
+- **Due occurrences** are entered by themselves, every missed one (daily from 10/05 entered
+  10/05…10/11), dated their own date, **unapproved**, uncleared; in a cash account cleared. The
+  flag comes along. A due transfer enters both sides unapproved, each side cleared by its own
+  account's rule; a transfer into a closed account is still entered.
+- **Enter Now** dates it today, approved (cleared in a cash account), and the schedule moves to
+  its next date; a "Never" one is done. It works from the other side of a scheduled transfer and
+  from a split's transfer line (the whole split is entered).
+- **There's no Skip** in the web app: the help center's way is to change the date.
+- **Saving a date on or before today** (a new repeating transaction, or an edited schedule)
+  enters that one occurrence unapproved and starts the schedule at its first date after today
+  (monthly from 9/01 added on 10/11: 9/01 entered, next 11/01). A new date resets the first date;
+  so does a new frequency (twice a month → monthly re-anchored at the shown 12/16); a memo-only
+  edit keeps it.
+- **A plain transaction's date moved into the future** makes it a scheduled one (Repeat: Never).
+- **Register:** a collapsible "Scheduled Transactions" section on top, newest first, one row per
+  schedule, with a repeat icon; the new-transaction row sits above it. Its collapse is remembered
+  per account. Search and the View date range filter scheduled rows (by next date), which count
+  as uncleared (`Is: Uncleared` keeps them, `Is: Cleared` hides the section). A scheduled transfer
+  shows in the other account (amount negated) and can be edited there; a scheduled split's
+  transfer line shows in its account with no repeat icon and can't be deleted there.
+- **Closed accounts** (help center): schedules stop occurring and new ones can't be added; Enter
+  Now still works. Whether missed dates catch up on reopening is EVERYCENT-115.
+
+## Duplicate, Enter Now and Make Repeating (EVERYCENT-40) (settled 2026-10-11)
+
+Checked in "Onboarding Check" (S10 Sav, S10 Cash2, R9 Chk A, All Accounts; memos `x-dupc`,
+`x-dupx`), read back through the API. All built:
+
+- **Which actions show:** Enter Now only when every selected row is scheduled; Make Repeating only
+  for exactly one plain transaction; Duplicate for any selection. A mixed selection gets the
+  transaction actions (Flag, Memo, Move, Delete, Categorize), applied to the scheduled rows too.
+- **Duplicate** copies each row (same date, payee, category, memo, amount, flag, cleared state;
+  reconciled becomes cleared) as approved, and selects the copies. A transfer gets a new pair (one,
+  even when both sides are selected); a split with a transfer line gets a new split and
+  counterpart; a split's transfer side copies the whole split. A scheduled row copies its schedule
+  from its next date (either side of a scheduled transfer); a scheduled split's transfer line in
+  the other account isn't copied.
+- **Enter Now** on several scheduled rows enters each as the single Enter Now does and selects
+  the entered transactions.
+- **Make Repeating** (the row menu, the action bar, a plain row's date picker) opens a new row on
+  top prefilled from the transaction, a month later, Repeat: Monthly, with the date picker open;
+  the original stays.
+
 ## Bulk edit (phase 5f) (settled 2026-10-11)
 
 Checked in "Onboarding Check" (accounts R9 Chk A / R9 Chk B, memos x-split1, x-split2, x-tr-rec,

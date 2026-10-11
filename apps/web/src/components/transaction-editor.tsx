@@ -40,6 +40,9 @@ export function TransactionEditor({
   flags,
   onRenameFlags,
   label = "New transaction",
+  repeat = false,
+  scheduled = false,
+  openDatePicker = false,
   pending,
   error,
   onSave,
@@ -57,6 +60,12 @@ export function TransactionEditor({
   onRenameFlags: (changes: Flag[]) => Promise<void>;
   /** Names the editor's row for screen readers. */
   label?: string;
+  /** Offer YNAB's "Repeat:" in the date picker (new and scheduled transactions). */
+  repeat?: boolean;
+  /** A scheduled transaction: it has no cleared state until it's entered. */
+  scheduled?: boolean;
+  /** Open the date picker first (Make Repeating, as YNAB does). */
+  openDatePicker?: boolean;
   pending: boolean;
   error: string | null;
   onSave: (draft: Draft) => void;
@@ -139,6 +148,12 @@ export function TransactionEditor({
             onChange={(date) => set({ date })}
             format={dateFormat}
             autoFocus={!columns.includes("account")}
+            defaultOpen={openDatePicker}
+            repeat={
+              repeat
+                ? { value: draft.frequency ?? "never", onChange: (frequency) => set({ frequency }) }
+                : undefined
+            }
           />
         );
       case "payee":
@@ -214,6 +229,7 @@ export function TransactionEditor({
           />
         );
       case "cleared":
+        if (scheduled) return null;
         return (
           <Button
             type="button"

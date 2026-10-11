@@ -34,10 +34,13 @@ import { cn } from "@everycent/ui/lib/utils";
 import {
   ArrowRightLeft,
   Bookmark,
+  CalendarClock,
   Circle,
   CircleCheck,
+  Copy,
   MoreHorizontal,
   NotebookPen,
+  Repeat,
   Tag,
   Trash2,
   X,
@@ -53,7 +56,10 @@ export type BulkAction =
   | { type: "categorize"; categoryId: string }
   | { type: "memo"; memo: string }
   | { type: "move"; accountId: string }
-  | { type: "delete" };
+  | { type: "delete" }
+  | { type: "duplicate" }
+  /** Scheduled rows only. */
+  | { type: "enterNow" };
 
 type Summary = components["schemas"]["SelectionSummary"];
 
@@ -62,6 +68,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 /**
  * Shown while transactions are selected, like YNAB's action bar: how many and their total, then
  * Categorize, Flag, Clear and More, each offered only when it applies to the selection.
+ * Scheduled rows count too: Enter Now shows when only scheduled rows are selected, and Make
+ * Repeating when one plain transaction is (both as YNAB offers them).
  */
 export function SelectionBar({
   summary,
@@ -75,8 +83,10 @@ export function SelectionBar({
   moveTargets,
   pending,
   onAction,
+  scheduledCount = 0,
+  onMakeRepeating,
 }: {
-  /** Undefined while it loads. */
+  /** The selected transactions' summary; undefined while it loads. */
   summary: Summary | undefined;
   total: string | null;
   allMatching: boolean;
@@ -90,6 +100,10 @@ export function SelectionBar({
   moveTargets: readonly { id: string; name: string }[];
   pending: boolean;
   onAction: (action: BulkAction) => void;
+  /** Selected scheduled rows. */
+  scheduledCount?: number;
+  /** Set when exactly one plain transaction is selected. */
+  onMakeRepeating?: () => void;
 }) {
   const [flagOpen, setFlagOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -98,11 +112,14 @@ export function SelectionBar({
   // Set while More opens the memo dialog, so the closing menu leaves the focus to the dialog.
   const openingDialog = useRef(false);
 
-  const count = summary?.count ?? null;
+  const count = summary ? summary.count + scheduledCount : null;
   const s = summary;
+  const onlyScheduled = s?.count === 0 && scheduledCount > 0;
   // YNAB's Clear shows when every selected row is uncleared (checked 2026-10-11); otherwise the
-  // states that apply ("Mark as Cleared", "Mark as Uncleared") are in More.
-  const toggle = s && s.count > 0 && s.uncleared === s.count ? "cleared" : null;
+  // states that apply ("Mark as Cleared", "Mark as Uncleared") are in More. Scheduled rows have
+  // no cleared state.
+  const toggle =
+    s && s.count > 0 && scheduledCount === 0 && s.uncleared === s.count ? "cleared" : null;
   const markCleared = !toggle && s ? s.uncleared > 0 : false;
   const markUncleared = !toggle && s ? s.cleared > 0 : false;
   // Splits without a transfer line get un-split; YNAB asks first.
@@ -140,7 +157,18 @@ export function SelectionBar({
         </Button>
       )}
       <div className="flex flex-wrap items-center gap-1 border-l pl-2">
-        {s && s.categorizable > 0 && (
+        {onlyScheduled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={pending}
+            onClick={() => onAction({ type: "enterNow" })}
+          >
+            <CalendarClock /> Enter Now
+          </Button>
+        )}
+        {s && (s.categorizable > 0 || scheduledCount > 0) && (
           <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
             <PopoverTrigger asChild>
               <Button type="button" variant="ghost" size="sm" disabled={pending}>
@@ -235,6 +263,14 @@ export function SelectionBar({
               </DropdownMenuItem>
             )}
             {(markCleared || markUncleared) && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={() => onAction({ type: "duplicate" })}>
+              <Copy /> Duplicate
+            </DropdownMenuItem>
+            {onMakeRepeating && (
+              <DropdownMenuItem onSelect={onMakeRepeating}>
+                <Repeat /> Make Repeating
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => {
                 openingDialog.current = true;
@@ -260,7 +296,7 @@ export function SelectionBar({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
-            {s && s.deletable > 0 && (
+            {s && (s.deletable > 0 || scheduledCount > 0) && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

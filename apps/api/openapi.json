@@ -2080,6 +2080,10 @@
             ],
             "description": "One of YNAB's six flag colors; null clears it"
           },
+          "approved": {
+            "type": "boolean",
+            "description": "False for a scheduled transaction entered on its date, until it's approved"
+          },
           "transferAccountId": {
             "type": [
               "string",
@@ -2139,6 +2143,7 @@
           "memo",
           "cleared",
           "flag",
+          "approved",
           "transferAccountId",
           "transferTransactionId",
           "transferFromSplit",
@@ -2353,11 +2358,19 @@
               "$ref": "#/components/schemas/Transaction"
             },
             "description": "Pre-edit rows for the caller's local undo history"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`duplicate`: the new transactions' ids (empty for other actions)"
           }
         },
         "required": [
           "updated",
-          "before"
+          "before",
+          "created"
         ]
       },
       "BulkAction": {
@@ -2483,6 +2496,21 @@
                 "type": "string",
                 "enum": [
                   "delete"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "duplicate"
                 ]
               }
             },
@@ -2723,6 +2751,890 @@
           "name",
           "lastCategoryId"
         ]
+      },
+      "ScheduledTransactionList": {
+        "type": "object",
+        "properties": {
+          "scheduledTransactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledTransaction"
+            }
+          }
+        },
+        "required": [
+          "scheduledTransactions"
+        ]
+      },
+      "ScheduledTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The row's id: the schedule's own, or for the other side of a transfer a derived one"
+          },
+          "scheduledTransactionId": {
+            "type": "string",
+            "description": "The schedule this row shows"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "schedule",
+              "transfer",
+              "splitTransfer"
+            ],
+            "description": "`schedule`: the schedule in its own account. `transfer`: a scheduled transfer as the other account shows it (amount negated). `splitTransfer`: a scheduled split's transfer line in that line's account; it's edited and deleted through the split"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "never",
+              "daily",
+              "weekly",
+              "everyOtherWeek",
+              "twiceAMonth",
+              "every4Weeks",
+              "monthly",
+              "everyOtherMonth",
+              "every3Months",
+              "every4Months",
+              "twiceAYear",
+              "yearly",
+              "everyOtherYear"
+            ]
+          },
+          "dateFirst": {
+            "type": "string",
+            "format": "date",
+            "description": "Where the repeats are counted from"
+          },
+          "dateNext": {
+            "type": "string",
+            "format": "date",
+            "description": "The next occurrence (the date the register shows)"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow, in this row's account"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "ISO 4217 currency code"
+          },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null on splits. A transfer's one category belongs to its budget side: the `schedule` row carries it even when that's the other account; a `transfer` row only on that side"
+          },
+          "categoryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string"
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors, or null"
+          },
+          "transferAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Transfers: the other account"
+          },
+          "subtransactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledSubTransaction"
+            },
+            "description": "A split's lines, in order (only on the `schedule` row)"
+          }
+        },
+        "required": [
+          "id",
+          "scheduledTransactionId",
+          "kind",
+          "accountId",
+          "accountName",
+          "frequency",
+          "dateFirst",
+          "dateNext",
+          "amount",
+          "currency",
+          "payeeId",
+          "payeeName",
+          "categoryId",
+          "categoryName",
+          "memo",
+          "flag",
+          "transferAccountId",
+          "subtransactions"
+        ]
+      },
+      "ScheduledSubTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow"
+          },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string"
+          },
+          "transferAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Transfer lines: the other account"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "payeeId",
+          "payeeName",
+          "categoryId",
+          "categoryName",
+          "memo",
+          "transferAccountId"
+        ]
+      },
+      "ScheduledBulkResult": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "description": "Schedules the action applied to"
+          },
+          "before": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledTransaction"
+            },
+            "description": "Those schedules before, as their own account shows them (for undo)"
+          },
+          "entered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`enterNow`: the new transactions' ids"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`duplicate`: the new schedules' ids"
+          }
+        },
+        "required": [
+          "updated",
+          "before",
+          "entered",
+          "created"
+        ]
+      },
+      "ScheduledBulkUpdate": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "action": {
+            "$ref": "#/components/schemas/ScheduledBulkAction"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "ids",
+          "action"
+        ]
+      },
+      "ScheduledBulkAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "enterNow"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "duplicate"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "flag"
+                ]
+              },
+              "flag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "red",
+                  "orange",
+                  "yellow",
+                  "green",
+                  "blue",
+                  "purple",
+                  null
+                ],
+                "description": "One of YNAB's six flag colors, or null"
+              }
+            },
+            "required": [
+              "type",
+              "flag"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memo"
+                ]
+              },
+              "memo": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "type",
+              "memo"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "categorize"
+                ]
+              },
+              "categoryId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "categoryId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "move"
+                ]
+              },
+              "accountId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "accountId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "delete"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ScheduledTransactionWrite": {
+        "type": "object",
+        "properties": {
+          "scheduledTransaction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScheduledTransaction"
+              },
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "The schedule's row in its account; null when a past-dated one-off was entered and is done"
+              }
+            ]
+          },
+          "enteredTransactionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The transaction entered because the date was on or before `today`"
+          }
+        },
+        "required": [
+          "scheduledTransaction",
+          "enteredTransactionId"
+        ]
+      },
+      "CreateScheduledTransaction": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "never",
+              "daily",
+              "weekly",
+              "everyOtherWeek",
+              "twiceAMonth",
+              "every4Weeks",
+              "monthly",
+              "everyOtherMonth",
+              "every3Months",
+              "every4Months",
+              "twiceAYear",
+              "yearly",
+              "everyOtherYear"
+            ],
+            "default": "never",
+            "description": "YNAB's \"Repeat:\" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The first occurrence"
+          },
+          "dateFirst": {
+            "type": "string",
+            "format": "date",
+            "description": "Count repeats from this earlier date instead (restoring a schedule, as an undo does)"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200,
+            "default": null
+          },
+          "transferAccountId": {
+            "type": "string",
+            "description": "Make it a transfer to or from that account; leave `payeeName` out"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "default": null,
+            "description": "One of YNAB's six flag colors, or null"
+          },
+          "subtransactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledSubTransactionInput"
+            },
+            "minItems": 2
+          },
+          "fromTransactionId": {
+            "type": "string"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          }
+        },
+        "required": [
+          "accountId",
+          "date",
+          "amount"
+        ],
+        "additionalProperties": false
+      },
+      "ScheduledSubTransactionInput": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Negative is an outflow"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200,
+            "default": null
+          },
+          "transferAccountId": {
+            "type": "string",
+            "description": "Make this line a transfer"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "UpdateScheduledTransaction": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "never",
+              "daily",
+              "weekly",
+              "everyOtherWeek",
+              "twiceAMonth",
+              "every4Weeks",
+              "monthly",
+              "everyOtherMonth",
+              "every3Months",
+              "every4Months",
+              "twiceAYear",
+              "yearly",
+              "everyOtherYear"
+            ],
+            "description": "YNAB's \"Repeat:\" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "dateFirst": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "transferAccountId": {
+            "type": "string",
+            "description": "Make it a transfer to or from that account; leave `payeeName` out"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors, or null"
+          },
+          "subtransactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledSubTransactionInput"
+            },
+            "minItems": 2
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnteredScheduledTransaction": {
+        "type": "object",
+        "properties": {
+          "transaction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Transaction"
+              },
+              {
+                "description": "The new transaction, in the schedule's account"
+              }
+            ]
+          },
+          "scheduledTransaction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScheduledTransaction"
+              },
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "The schedule after moving on; null when it was a one-off"
+              }
+            ]
+          }
+        },
+        "required": [
+          "transaction",
+          "scheduledTransaction"
+        ]
+      },
+      "EnterScheduledTransaction": {
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          }
+        }
       },
       "FlagList": {
         "type": "object",
@@ -6128,6 +7040,17 @@
             "required": false,
             "name": "cursor",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: scheduled transactions due by then are entered first"
+            },
+            "required": false,
+            "description": "The user's today: scheduled transactions due by then are entered first",
+            "name": "today",
+            "in": "query"
           }
         ],
         "responses": {
@@ -6362,7 +7285,7 @@
           }
         ],
         "summary": "Apply one action to every selected transaction it applies to",
-        "description": "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.",
+        "description": "Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.",
         "parameters": [
           {
             "schema": {
@@ -6675,6 +7598,544 @@
           },
           "404": {
             "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/scheduled-transactions": {
+      "get": {
+        "operationId": "listScheduledTransactions",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The register's Scheduled Transactions section, newest first",
+        "description": "One row per schedule (its next occurrence), plus the other account's view of scheduled transfers and of scheduled splits' transfer lines. Due occurrences are entered first. The search and dates work as in `listTransactions` (scheduled rows count as uncleared).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Leave out for all accounts"
+            },
+            "required": false,
+            "description": "Leave out for all accounts",
+            "name": "accountId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "The register's search (see `listTransactions`)"
+            },
+            "required": false,
+            "description": "The register's search (see `listTransactions`)",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Next occurrence on or after this date"
+            },
+            "required": false,
+            "description": "Next occurrence on or after this date",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Next occurrence on or before this date"
+            },
+            "required": false,
+            "description": "Next occurrence on or before this date",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scheduled transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTransactionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createScheduledTransaction",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Schedule a transaction (a future one-off or a repeating one)",
+        "description": "Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. `fromTransactionId` replaces that transaction (and its transfer's other side) with the schedule, as YNAB does when a transaction's date is moved into the future.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduledTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTransactionWrite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/scheduled-transactions/bulk": {
+      "post": {
+        "operationId": "bulkUpdateScheduledTransactions",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Apply one action to every selected scheduled row it applies to",
+        "description": "The register's action bar on scheduled rows (by row `id`; a transfer's other side acts on its schedule, once). `enterNow` enters each as Enter Now does (a split's transfer line enters its split). `duplicate` copies each schedule, starting at its next date. `flag`, `memo`, `categorize`, `move` and `delete` work as on transactions. A scheduled split's transfer line in the other account is skipped by everything but `enterNow`, as YNAB does. One database transaction.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledBulkUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBulkResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a category schedules can't use, or a closed account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}": {
+      "patch": {
+        "operationId": "updateScheduledTransaction",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Edit a scheduled transaction (it and all of its future occurrences)",
+        "description": "Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. A new `date` restarts the repeats there (YNAB resets the first date); a new `frequency` counts from the date shown. Setting `payeeName` turns a transfer into a normal one, `subtransactions` replace a split's lines and a `categoryId` un-splits it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "scheduledTransactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduledTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTransactionWrite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteScheduledTransaction",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a scheduled transaction and all of its future occurrences",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "scheduledTransactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}/enter": {
+      "post": {
+        "operationId": "enterScheduledTransaction",
+        "tags": [
+          "Scheduled transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Enter Now: the next occurrence, dated today",
+        "description": "As YNAB's Enter Now: the transaction is dated `today` and approved (uncleared, or cleared in a cash account), and the schedule moves to its following date; a one-off is done. Works in a closed account too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "scheduledTransactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterScheduledTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnteredScheduledTransaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or scheduled transaction, or not a member",
             "content": {
               "application/json": {
                 "schema": {

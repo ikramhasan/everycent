@@ -1,8 +1,14 @@
 import { newId } from "@everycent/db";
-import { budgetAccount, category, payee, transaction } from "@everycent/db/schema";
+import {
+  budgetAccount,
+  category,
+  payee,
+  scheduledTransaction,
+  transaction,
+} from "@everycent/db/schema";
 import { accountFamily, hasPaymentCategory, isOnBudget } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, max, ne, or, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -20,6 +26,7 @@ import {
   ZERO_BALANCES,
 } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
+import { enterDueScheduled } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -132,8 +139,10 @@ const optionalBigInt = (v: string | null | undefined) =>
 
 export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { today = serverToday() } = c.req.valid("query");
+  const query = c.req.valid("query");
+  const today = query.today ?? serverToday();
   await loadBudgetAccess(c, budgetId);
+  if (query.today) await enterDueScheduled(c.var.deps.db, budgetId, query.today);
   return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
 };
 
@@ -428,7 +437,18 @@ export const deleteAccountHandler: RouteHandler<typeof deleteAccount, Env> = asy
       "This account has transactions beyond its starting balance. Close it instead.",
     );
   }
-  // Transactions and the payment category cascade.
-  await db.delete(budgetAccount).where(eq(budgetAccount.id, accountId));
+  await db.transaction(async (tx) => {
+    // Schedules that transfer to it would turn into payments to nobody, so they go too.
+    // Transactions, its own schedules and the payment category cascade.
+    await tx
+      .delete(scheduledTransaction)
+      .where(
+        inArray(
+          scheduledTransaction.payeeId,
+          tx.select({ id: payee.id }).from(payee).where(eq(payee.transferAccountId, accountId)),
+        ),
+      );
+    await tx.delete(budgetAccount).where(eq(budgetAccount.id, accountId));
+  });
   return c.body(null, 204);
 };
