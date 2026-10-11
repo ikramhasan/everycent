@@ -180,6 +180,13 @@ const MonthSchema = z
     readyToAssign: zMinorUnits.describe(
       "Money without a job in this month; negative when more was assigned than there is",
     ),
+    overdraft: z
+      .boolean()
+      .describe(
+        "A negative Ready to Assign that taking back every category's cash wouldn't cover " +
+          '(YNAB\'s "Overdraft?"); false when categories could cover it ("You assigned more ' +
+          "than you have\", Fix This) and when Ready to Assign isn't negative",
+      ),
     assignedInFuture: zMinorUnits.describe("Money assigned in the months after this one"),
     futureMonths: z
       .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))

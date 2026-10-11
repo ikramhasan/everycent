@@ -5,6 +5,7 @@ import {
   budgetMonthRange,
   categoryMonth,
   categoryOverspending,
+  isOverdraft,
   monthBounds,
   monthOf,
   readyToAssign,
@@ -349,5 +350,31 @@ describe("autoAssignAmounts", () => {
     // Available is 2,400 with 500 assigned this month: Assigned goes to -1,900.
     expect(autoAssignAmounts(history, "2026-10").resetAvailable).toBe(-1900n);
     expect(autoAssignAmounts([m("2026-10", 500n, -900n)], "2026-10").resetAvailable).toBe(900n);
+  });
+});
+
+describe("isOverdraft", () => {
+  const cat = (available: bigint, creditOverspent = 0n) => ({ available, creditOverspent });
+
+  // YNAB plan "C4 Clean", 2026-10-11: $1,000 of income, $800 assigned to Rent in October, a
+  // September overspend of $999 (Ready to Assign −$799.00).
+  it("is money assigned beyond what there is while categories could cover it", () => {
+    expect(isOverdraft(-799_00n, [cat(800_00n)])).toBe(false);
+  });
+
+  it("is an overdraft once even their cash wouldn't (exactly zero isn't)", () => {
+    expect(isOverdraft(-800_00n, [cat(800_00n)])).toBe(false);
+    expect(isOverdraft(-800_01n, [cat(800_00n)])).toBe(true);
+  });
+
+  it("counts cash overspending against it, but not credit overspending", () => {
+    expect(isOverdraft(-799_00n, [cat(800_00n), cat(-5_00n)])).toBe(true);
+    expect(isOverdraft(-799_00n, [cat(800_00n), cat(-5_00n, -5_00n)])).toBe(false);
+    expect(isOverdraft(-799_00n, [cat(800_00n), cat(-5_00n, -3_00n)])).toBe(true);
+  });
+
+  it("never applies to a Ready to Assign that isn't negative", () => {
+    expect(isOverdraft(0n, [cat(-5_00n)])).toBe(false);
+    expect(isOverdraft(1n, [])).toBe(false);
   });
 });

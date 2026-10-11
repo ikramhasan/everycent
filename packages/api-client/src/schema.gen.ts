@@ -1572,6 +1572,8 @@ export interface components {
             lastMonth: string;
             /** @description Money without a job in this month; negative when more was assigned than there is */
             readyToAssign: string;
+            /** @description A negative Ready to Assign that taking back every category's cash wouldn't cover (YNAB's "Overdraft?"); false when categories could cover it ("You assigned more than you have", Fix This) and when Ready to Assign isn't negative */
+            overdraft: boolean;
             /** @description Money assigned in the months after this one */
             assignedInFuture: string;
             /** @description The later months with money assigned, in order */

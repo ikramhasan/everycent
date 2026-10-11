@@ -1,4 +1,4 @@
-import { addMonths, type BudgetMonth } from "@everycent/engine";
+import { addMonths } from "@everycent/engine";
 import { cn } from "@everycent/ui/lib/utils";
 import { CircleCheck } from "lucide-react";
 import type { ReactNode } from "react";
@@ -6,26 +6,25 @@ import { type BudgetMonthData, monthName } from "@/lib/months";
 
 /**
  * YNAB's Ready to Assign banner: green with money to assign, grey once it's all assigned, red when
- * more was assigned than there is.
+ * it's negative: "You assigned more than you have" (with Fix This) while categories could cover it,
+ * "Overdraft? We can help with that!" once even their cash couldn't (the API's `overdraft`).
  */
 export function ReadyToAssignBanner({
-  month,
-  current,
   amount,
+  overdraft,
   format,
   action,
 }: {
-  month: BudgetMonth;
-  current: BudgetMonth;
   amount: string;
+  overdraft: boolean;
   format: (minorUnits: string) => string;
-  /** A button for the negative state (YNAB's "Fix This"). */
+  /** A button for money assigned beyond what there is (YNAB's "Fix This"). */
   action?: ReactNode;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
-  // YNAB's wording for a negative month differs between a past month and the current one; which
-  // rule decides it is open in docs/verify.md.
-  const negativeLabel = month < current ? "Overdraft?" : "You assigned more than you have";
+  const negativeLabel = overdraft
+    ? "Overdraft? We can help with that!"
+    : "You assigned more than you have";
   return (
     <output
       aria-live="polite"
@@ -43,7 +42,7 @@ export function ReadyToAssignBanner({
         </span>
       </span>
       {sign === 0 && <CircleCheck className="size-6" aria-hidden />}
-      {sign < 0 && action}
+      {sign < 0 && !overdraft && action}
     </output>
   );
 }

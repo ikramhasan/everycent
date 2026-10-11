@@ -22,6 +22,7 @@ type Month = {
   firstMonth: string;
   lastMonth: string;
   readyToAssign: string;
+  overdraft: boolean;
   assignedInFuture: string;
   futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
@@ -930,6 +931,21 @@ describe("budget months", () => {
 
     // Future months carry what's left.
     expect((await month("2026-11")).byCategory(rent.id)).toMatchObject(t("0", "0", "8000"));
+  });
+
+  it("tells an overdraft from money assigned beyond what there is (YNAB plan C4 Clean)", async () => {
+    const { month, assign, spend, rent, groceries } = await setup();
+    await assign(rent.id, "2026-10", 80000n);
+    expect((await month("2026-10")).overdraft).toBe(false);
+    // $1,000 of income, $800 assigned, $999 overspent in September: −$799.00, which Rent's $800
+    // could still cover.
+    await spend({ date: "2026-09-15", amount: "-99900", categoryId: groceries.id });
+    const oct = await month("2026-10");
+    expect(oct.readyToAssign).toBe("-79900");
+    expect(oct.overdraft).toBe(false);
+    // $5 of cash overspending in October leaves the categories $4 short.
+    await spend({ date: "2026-10-02", amount: "-500", categoryId: groceries.id });
+    expect((await month("2026-10")).overdraft).toBe(true);
   });
 
   it("keeps hidden categories out of their group's totals", async () => {

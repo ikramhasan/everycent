@@ -85,6 +85,7 @@ export {
   categoryOverspending,
   type HistoryAutoAssignOption,
   isBudgetMonth,
+  isOverdraft,
   type MonthAmount,
   type MonthFigures,
   monthBounds,

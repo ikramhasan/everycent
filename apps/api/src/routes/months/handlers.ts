@@ -34,6 +34,7 @@ import {
   fundedCardSpending,
   fundUnderfunded,
   isOnBudget,
+  isOverdraft,
   type MonthAmount,
   type MonthFigures,
   monthBounds,
@@ -739,6 +740,10 @@ export async function budgetMonthJson(
     firstMonth: range.first,
     lastMonth: range.last,
     readyToAssign: rta.readyToAssign.toString(),
+    overdraft: isOverdraft(
+      rta.readyToAssign,
+      listed.map((l) => l.figures),
+    ),
     assignedInFuture: rta.assignedInFuture.toString(),
     futureMonths: [...future]
       .filter(([, amount]) => amount !== 0n)

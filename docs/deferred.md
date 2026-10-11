@@ -15,7 +15,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 - All overspending counts as cash overspending (it comes out of the next month's Ready to Assign).
   Phase 7 must treat spending on a credit card as credit overspending (new debt, yellow).
-- Past months' negative banner ("Overdraft?") has no "Next Steps" link (a YNAB help page).
+- The overdraft banner ("Overdraft? We can help with that!") has no "Next Steps" button: YNAB's
+  opens its help article "Getting Out of Overdraft with YNAB", and everycent has no help center
+  (EVERYCENT-117).
 - The current month doesn't warn when a later month is negative (YNAB's future-months panel:
   "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
 - Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
@@ -124,8 +126,8 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Onboarding and fresh start
 
-- The setup flow (`/budgets/$id/setup`) covers YNAB's "Personalize plan" and "Add accounts". Its
-  third step, "Fund categories" (assign money), needs the phase 6 budget screen.
+- The setup flow (`/budgets/$id/setup`) follows YNAB's new-plan checklist: "Personalize plan",
+  "Add accounts" and "Fund categories" (which opens the budget to assign, as YNAB's does).
 - Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories (with their
   targets, which start in the fresh start's month), payees and accounts. When these exist, it must
   copy them too: scheduled transactions (phase 10), payee rules (phase 12).

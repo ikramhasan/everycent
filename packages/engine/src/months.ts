@@ -237,6 +237,25 @@ export function readyToAssign(input: {
   return { readyToAssign: base - taken, assignedInFuture };
 }
 
+/**
+ * Whether a negative Ready to Assign is an overdraft (YNAB's "Overdraft? We can help with that!")
+ * rather than money assigned beyond what there is ("You assigned more than you have" with Fix
+ * This): even taking back every category's cash wouldn't bring it to zero. A category's cash is its
+ * Available with credit overspending left out (cash overspending counts against it; overspent
+ * amounts are negative, so it's `available - creditOverspent`); every category counts, payment
+ * and hidden ones included, but not Uncategorized. Checked in YNAB on 2026-10-11 (docs/verify.md):
+ * the month on screen doesn't matter, and exactly zero isn't one.
+ */
+export function isOverdraft(
+  readyToAssign: bigint,
+  categories: readonly Pick<CategoryMonth, "available" | "creditOverspent">[],
+): boolean {
+  if (readyToAssign >= 0n) return false;
+  let cash = readyToAssign;
+  for (const c of categories) cash += c.available - c.creditOverspent;
+  return cash < 0n;
+}
+
 /** YNAB's Auto-Assign options, in its order. */
 export const AUTO_ASSIGN_OPTIONS = [
   "underfunded",

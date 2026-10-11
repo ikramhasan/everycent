@@ -34,6 +34,7 @@ const month: BudgetMonthData = {
   firstMonth: "2026-09",
   lastMonth: "2026-11",
   readyToAssign: "0",
+  overdraft: false,
   assignedInFuture: "0",
   futureMonths: [],
   targets: { month: "0", nextMonth: "0", expectedIncome: null },

@@ -189,31 +189,32 @@ Checked in YNAB's web app on 2026-10-02 and built as found (numbers from the tes
 - Assigning replaces the amount; the field takes math. YNAB has no separate "income for next
   month" any more: the category list offers only "Inflow: Ready to Assign".
 
-### The wording of a negative Ready to Assign
+### Negative Ready to Assign, "Assigned in Future Months" and setup's funding step (settled 2026-10-11)
 
-- **Found:** November (after the current month) said "You assigned more than you have" with a
-  "Fix This" button; September (before it, negative from August's overspending, with or without
-  money assigned in it) said "Overdraft? We can help with that!" with "Next Steps" (a help page).
-- **Question:** what decides the wording: past month vs current/future, or where the shortfall
-  comes from? What does the current month say when it's negative?
-- **Built so far (before this rule):** months before the current one say "Overdraft?", the rest
-  "You assigned more than you have". The buttons aren't built (Fix This moves money: phase 6c).
+Checked in YNAB plans "Onboarding Check" (categories V6b A/B, memo `x-v6b-over`) and a new
+card-free plan "C4 Clean" (Rent $800 assigned in October, `x-c4-*` transactions), and on
+support.ynab.com:
 
-### Where "Assigned in Future Months" shows
-
-- **Found:** the panel (total, then each later month; the next month at $0.00 when nothing is
-  assigned) showed in October, the current month. It wasn't in September's or November's sidebar.
-- **Question:** is it only ever shown in the current month, or in any month with money assigned
-  after it?
-- **Built so far (before this rule):** the current month only.
-
-### The setup flow's "Fund categories" step
-
-- **Found:** "Create New Plan" in an existing YNAB account opens the plan straight away, with no
-  onboarding; the guided setup only runs for a new account, so it couldn't be checked.
-- **Question:** what does YNAB's onboarding ask in its funding step (assign to each chosen
-  category, a suggested split, or just a pointer to the budget screen)?
-- **Skipped:** the setup flow still ends after "Add accounts".
+- **The wording follows the cause, not the month.** "Overdraft? We can help with that!" with
+  "Next Steps" when Ready to Assign plus the cash in every category is still below zero (taking
+  back all assigned money couldn't fix it); otherwise "You assigned more than you have" with Fix
+  This, in past, current and future months alike. A category's cash is its Available, with cash
+  overspending counted against it and credit overspending left out; payment and hidden
+  categories count, Uncategorized doesn't. C4 Clean (income $1,000, Rent $800): a September
+  overspend of $999 → −$799.00 "assigned more"; $1,000 → −$800.00 still "assigned more" (zero
+  isn't an overdraft); $1,000.01 → "Overdraft?". With $999: +$5 uncategorized or a $5 credit
+  overspend kept "assigned more"; a $5 cash overspend on Utilities made it "Overdraft?"; $10 of
+  card spending from Rent (moving $10 to the payment category) and hiding Rent changed nothing.
+  Built as `isOverdraft` (engine) and the month's `overdraft` flag.
+- **Next Steps** opens YNAB's help article "Getting Out of Overdraft with YNAB" in a new tab.
+  Not built: everycent has no help center (docs/deferred.md).
+- **"Assigned in Future Months"** shows in the current month only: September and November didn't
+  show it with money assigned in October–December. As built.
+- **Setup's funding step:** YNAB's new-plan checklist is "Personalize plan", "Add accounts" and
+  "Fund categories", which "opens Assign mode so you can assign your money" (support.ynab.com,
+  "Creating a New Plan"); first-plan onboarding says to assign the money you have right now until
+  Ready to Assign reaches zero ("Getting Started with YNAB"). Built: setup's third step points to
+  the budget with that advice.
 
 ## Overspending and moving money (phase 6c)
 

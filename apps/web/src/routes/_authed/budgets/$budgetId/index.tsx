@@ -295,13 +295,11 @@ function BudgetPage() {
         </div>
         {listFigures && (
           <ReadyToAssignBanner
-            month={month}
-            current={today}
             amount={listFigures.month.readyToAssign}
+            overdraft={listFigures.month.overdraft}
             format={listFigures.format}
             action={
-              // Past months get YNAB's "Overdraft?" instead, whose help link isn't built.
-              month >= today &&
+              // An overdraft's "Next Steps" (a YNAB help page) isn't built.
               listFigures.move && (
                 <FixThisButton
                   readyToAssign={listFigures.month.readyToAssign}
