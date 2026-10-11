@@ -12,6 +12,8 @@ const cat = (id: string, groupId: string, name: string) => ({
   hidden: false,
   linkedAccountId: null,
   hasTransactions: false,
+  transactionCount: 0,
+  hasAssignedMoney: false,
   target: null,
 });
 

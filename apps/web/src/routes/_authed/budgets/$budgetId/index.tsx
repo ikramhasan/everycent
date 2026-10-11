@@ -42,6 +42,7 @@ import {
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { useFixThisMonths } from "@/lib/fix-this";
 import { parseMoneyInput, toMoneyInput } from "@/lib/money-input";
 import {
   type BudgetMonthData,
@@ -157,7 +158,9 @@ function BudgetPage() {
     ) {
       try {
         const updated = await work();
-        queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+        if (updated.month === onScreen) {
+          queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+        }
         history.record({
           label,
           undo: () => saveHistory(inverse),
@@ -172,7 +175,9 @@ function BudgetPage() {
 
     async function saveHistory(work: () => Promise<BudgetMonthData>) {
       const updated = await work();
-      queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+      if (updated.month === onScreen) {
+        queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+      }
       await refreshBudget();
     }
 
@@ -243,26 +248,30 @@ function BudgetPage() {
         readyToAssignId: categories.data.readyToAssignCategoryId,
         parse,
         toInput,
-        move: (fromCategoryId, toCategoryId, amount) => {
-          const mutate = (from: string, to: string) =>
-            moveMutation.mutateAsync({
-              params: { path: { budgetId: budget.id, month: data.month } },
-              body: {
-                fromCategoryId: from,
-                toCategoryId: to,
-                amount: amount.toString(),
-                today: todayIso(),
-              },
-            });
-          return save(
-            () => mutate(fromCategoryId, toCategoryId),
-            () => mutate(toCategoryId, fromCategoryId),
-            "money move",
-            "Couldn't move the money.",
-          );
-        },
+        move: (fromCategoryId, toCategoryId, amount) =>
+          moveIn(data.month, fromCategoryId, toCategoryId, amount),
+        moveIn,
       },
     };
+
+    function moveIn(m: BudgetMonth, fromCategoryId: string, toCategoryId: string, amount: bigint) {
+      const mutate = (from: string, to: string) =>
+        moveMutation.mutateAsync({
+          params: { path: { budgetId: budget.id, month: m } },
+          body: {
+            fromCategoryId: from,
+            toCategoryId: to,
+            amount: amount.toString(),
+            today: todayIso(),
+          },
+        });
+      return save(
+        () => mutate(fromCategoryId, toCategoryId),
+        () => mutate(toCategoryId, fromCategoryId),
+        "money move",
+        "Couldn't move the money.",
+      );
+    }
     // mutateAsync is stable; the mutation objects themselves change every render.
   }, [
     figures.data,
@@ -279,6 +288,18 @@ function BudgetPage() {
     today,
     progressBars,
   ]);
+
+  const fixThisMonths = useFixThisMonths({
+    budgetId: budget.id,
+    month,
+    current: today,
+    data: figures.data,
+    categories: categories.data,
+    unassign: async (m, categoryId, amount) => {
+      const move = listFigures?.move;
+      if (move) await move.moveIn(m, categoryId, move.readyToAssignId, amount);
+    },
+  });
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
@@ -305,6 +326,7 @@ function BudgetPage() {
                   readyToAssign={listFigures.month.readyToAssign}
                   format={listFigures.format}
                   actions={listFigures.move}
+                  months={fixThisMonths}
                 />
               )
             }

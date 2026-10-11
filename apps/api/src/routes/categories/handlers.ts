@@ -13,10 +13,10 @@ import {
   findCategory,
   findGroup,
   findTarget,
-  hasHistory,
   insertCategory,
   insertGroup,
   listCategoryTree,
+  loadCategoryJson,
   managedError,
   reassignHistory,
   toCategoryJson,
@@ -99,6 +99,7 @@ export const deleteCategoryGroupHandler: RouteHandler<typeof deleteCategoryGroup
       budgetId,
       members.map((m) => m.id),
       reassignToCategoryId,
+      c.var.user.id,
     );
     // Its categories cascade.
     await tx.delete(categoryGroup).where(eq(categoryGroup.id, groupId));
@@ -171,10 +172,7 @@ export const updateCategoryHandler: RouteHandler<typeof updateCategory, Env> = a
       .returning();
     if (updated) row = updated;
   }
-  return c.json(
-    toCategoryJson(row, await hasHistory(db, [row.id]), await findTarget(db, row.id)),
-    200,
-  );
+  return c.json(await loadCategoryJson(db, budgetId, row, await findTarget(db, row.id)), 200);
 };
 
 export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = async (c) => {
@@ -187,7 +185,7 @@ export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = a
     throw managedError("Payment categories can be hidden, but not deleted");
   }
   await db.transaction(async (tx) => {
-    await reassignHistory(tx, budgetId, [categoryId], reassignToCategoryId);
+    await reassignHistory(tx, budgetId, [categoryId], reassignToCategoryId, c.var.user.id);
     await tx.delete(category).where(eq(category.id, categoryId));
   });
   return c.body(null, 204);
@@ -301,7 +299,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
         .insert(categoryTarget)
         .values({ id: newId(), budgetId, categoryId, ...values, startMonth })
         .returning();
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };
 
 export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarget, Env> = async (
@@ -312,7 +310,7 @@ export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarg
   await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
   await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
+  return c.json(await loadCategoryJson(db, budgetId, row, null), 200);
 };
 
 export const snoozeCategoryTargetHandler: RouteHandler<typeof snoozeCategoryTarget, Env> = async (
@@ -340,5 +338,5 @@ export const snoozeCategoryTargetHandler: RouteHandler<typeof snoozeCategoryTarg
     .set({ snoozedMonth: snoozed ? `${month}-01` : null })
     .where(eq(categoryTarget.id, existing.id))
     .returning();
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };

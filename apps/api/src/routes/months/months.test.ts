@@ -1,5 +1,5 @@
 import { newId } from "@everycent/db";
-import { categoryAssignment } from "@everycent/db/schema";
+import { categoryAssignment, moneyMove } from "@everycent/db/schema";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
 
@@ -1100,6 +1100,9 @@ describe("budget months", () => {
       kind: string;
       fromCategoryId: string | null;
       toCategoryId: string | null;
+      fromDeletedCategory: string | null;
+      toDeletedCategory: string | null;
+      deletion: boolean;
       month: string;
       amount: string;
       userName: string | null;
@@ -1165,6 +1168,75 @@ describe("budget months", () => {
           userName: "Test User",
         },
       ]);
+    });
+
+    it("keeps a deleted category's moves and logs the delete (YNAB: V6c A–C)", async () => {
+      const { cookie, base, put, move, moves, spend, rent, phone, groceries, needs } =
+        await moveSetup();
+      const del = (id: string, to?: string) =>
+        send(
+          "DELETE",
+          `${base}/categories/${id}${to ? `?reassignToCategoryId=${to}` : ""}`,
+          cookie,
+        );
+      // Money only: it goes back to Ready to Assign ("Removed $20.00 from deleted category").
+      await put(rent.id, "2026-10", "2000");
+      expect((await del(rent.id)).status).toBe(204);
+      expect(await moves()).toMatchObject([
+        {
+          kind: "removed",
+          fromCategoryId: null,
+          fromDeletedCategory: rent.name,
+          toCategoryId: null,
+          deletion: true,
+          amount: "2000",
+        },
+        { kind: "assigned", toCategoryId: null, toDeletedCategory: rent.name, deletion: false },
+      ]);
+      // Negative assigned money: "Moved $5.00 from Ready to Assign to deleted category".
+      await put(phone.id, "2026-10", "1000");
+      await move(phone.id, groceries.id, "1500");
+      await spend({ date: "2026-10-01", amount: "-100", categoryId: groceries.id });
+      expect((await del(phone.id)).status).toBe(204);
+      expect((await moves())[0]).toMatchObject({
+        kind: "moved",
+        fromCategoryId: null,
+        fromDeletedCategory: null,
+        toDeletedCategory: phone.name,
+        deletion: true,
+        amount: "500",
+      });
+      // With transactions, to the category picked: "Moved $15.00 from deleted category … to …".
+      const other = needs.categories.find((c) => c.id !== groceries.id);
+      if (!other) throw new Error("starter data missing");
+      expect((await del(groceries.id, other.id)).status).toBe(204);
+      expect((await moves())[0]).toMatchObject({
+        kind: "moved",
+        fromDeletedCategory: groceries.name,
+        toCategoryId: other.id,
+        deletion: true,
+        amount: "1500",
+      });
+    });
+
+    it("lists the last 34 days of moves, as YNAB's Recent Moves", async () => {
+      const { base, put, moves, rent, readyToAssignCategoryId } = await moveSetup();
+      await put(rent.id, "2026-10", "2000");
+      const budgetId = base.split("/").at(-1) ?? "";
+      const old = (days: number) =>
+        db.insert(moneyMove).values({
+          id: newId(),
+          budgetId,
+          fromCategoryId: readyToAssignCategoryId,
+          toCategoryId: rent.id,
+          month: "2026-10-01",
+          amount: BigInt(days),
+          currency: "USD",
+          createdAt: new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+        });
+      await old(33);
+      await old(35);
+      expect((await moves()).map((m) => m.amount)).toEqual(["2000", "33"]);
     });
 
     it("refuses bad moves", async () => {

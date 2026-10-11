@@ -168,6 +168,19 @@ export function breakdown(totals: MonthTotals): Breakdown {
  * The inspector's month summary over the given categories (`UNCATEGORIZED` included), as YNAB adds
  * up the rows in view: every category, hidden ones too, under All.
  */
+/** A {@link Breakdown} back in the API's shape, for a row's totals. */
+export function toTotals(b: Breakdown): MonthTotals {
+  return {
+    assigned: b.assigned.toString(),
+    activity: b.activity.toString(),
+    cashActivity: b.cashActivity.toString(),
+    creditActivity: b.creditActivity.toString(),
+    available: b.available.toString(),
+    cashOverspent: b.cashOverspent.toString(),
+    creditOverspent: b.creditOverspent.toString(),
+  };
+}
+
 export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakdown {
   const byId = new Map(month.categories.map((c) => [c.categoryId, c]));
   const sum: Breakdown = {

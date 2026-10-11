@@ -132,12 +132,17 @@ export const moneyMove = pgTable(
       .references(() => budget.id, { onDelete: "cascade" }),
     /** Who moved the money; kept when they leave the budget. */
     userId: text().references(() => user.id, { onDelete: "set null" }),
-    fromCategoryId: text()
-      .notNull()
-      .references(() => category.id, { onDelete: "cascade" }),
-    toCategoryId: text()
-      .notNull()
-      .references(() => category.id, { onDelete: "cascade" }),
+    /** Null once the category is deleted; its name is kept in `fromCategoryName`. */
+    fromCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    toCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * The name of a deleted category on either side (YNAB keeps such moves as "deleted category
+     * <name>"); null while the category exists.
+     */
+    fromCategoryName: text(),
+    toCategoryName: text(),
+    /** Logged by deleting a category (YNAB shows these with a trash icon, under "Moved"). */
+    deletion: boolean().notNull().default(false),
     /** First day of the month the money moved in, YYYY-MM-01. */
     month: date({ mode: "string" }).notNull(),
     /** Minor units, always positive. */

@@ -26,8 +26,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   plus single and bulk transaction create/edit/delete. A later partner edit to the same row can
   still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
   real-time collaboration or phase 19 audit history).
-- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
-  (docs/verify.md). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up (Auto and
+  Manually tabs, docs/verify.md) isn't built (EVERYCENT-24). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
 - YNAB marks a category's Available with a calendar pill when a scheduled transaction is coming.
   Scheduled transactions exist since 10a; the pill is 10b (EVERYCENT-5).
@@ -100,7 +100,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   outside the current month). A fresh start doesn't copy the expected income yet (not seen in
   YNAB, docs/verify.md).
 - Target edits aren't in the undo history (docs/verify.md).
-- A category's history is reassigned on delete, but its target is deleted with it.
+- A category's history is reassigned on delete, but its target is deleted with it (YNAB does the same, checked 2026-10-11).
 
 ## Credit lifecycle and loans (phase 7e–7g)
 

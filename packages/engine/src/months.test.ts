@@ -336,7 +336,21 @@ describe("autoAssignAmounts", () => {
     });
   });
 
-  it("looks back at most 12 months and rounds half-even", () => {
+  // YNAB, ihni7's Plan R6e A–C (2026-10-11): money assigned in August only.
+  it("rounds averages half away from zero, as YNAB", () => {
+    const avg = (amount: bigint, month: string) =>
+      autoAssignAmounts([m("2026-08", amount, 0n)], month).averageAssigned;
+    expect([
+      avg(5n, "2026-10"),
+      avg(7n, "2026-10"),
+      avg(1n, "2026-10"),
+      avg(-5n, "2026-10"),
+    ]).toEqual([3n, 4n, 1n, -3n]);
+    expect([avg(5n, "2026-11"), avg(7n, "2026-11"), avg(1n, "2026-11")]).toEqual([2n, 2n, 0n]);
+    expect(autoAssignAmounts([m("2026-08", 0n, -5n)], "2026-10").averageSpent).toBe(3n);
+  });
+
+  it("looks back at most 12 months", () => {
     const history = [m("2025-01", 99900n, 0n), m("2025-10", 100n, 0n), m("2025-11", 0n, -1n)];
     // October 2025 to September 2026: 12 months, 100 / 12 rounds to 8.
     expect(autoAssignAmounts(history, "2026-10")).toMatchObject({

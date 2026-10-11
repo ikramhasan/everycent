@@ -27,7 +27,13 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { isCaution, targetMark, UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
+import {
+  isCaution,
+  summarize,
+  targetMark,
+  toTotals,
+  UNCATEGORIZED as UNCATEGORIZED_ID,
+} from "@/lib/budget-view";
 import {
   type Category,
   type CategoryGroup,
@@ -72,6 +78,7 @@ type PendingDelete = {
   /** Categories that disappear with it. */
   deletedIds: string[];
   hasTransactions: boolean;
+  transactionCount: number;
 } | null;
 
 /** A month's numbers for the list, with the budget's amount formatting. */
@@ -215,13 +222,20 @@ export function CategoryList({
   function requestDelete(kind: "group" | "category", id: string, name: string) {
     const deleted =
       kind === "group" ? (groupsById.get(id)?.categories ?? []) : [categoriesById.get(id)];
+    const hasTransactions = deleted.some((c) => c?.hasTransactions);
+    // YNAB deletes a category with neither transactions nor assigned money straight away.
+    if (kind === "category" && !hasTransactions && !deleted[0]?.hasAssignedMoney) {
+      void actions.deleteCategory(id);
+      return;
+    }
     setReassignTo("");
     setPendingDelete({
       kind,
       id,
       name,
       deletedIds: deleted.flatMap((c) => (c ? [c.id] : [])),
-      hasTransactions: deleted.some((c) => c?.hasTransactions),
+      hasTransactions,
+      transactionCount: deleted.reduce((n, c) => n + (c?.transactionCount ?? 0), 0),
     });
   }
 
@@ -398,7 +412,12 @@ export function CategoryList({
                   group={group}
                   index={groupIndex}
                   actions={actions}
-                  totals={groupFigures.get(groupId)}
+                  totals={
+                    // Under a view a group totals only its categories in view (YNAB, 2026-10-11).
+                    shown && figures
+                      ? toTotals(summarize(figures.month, itemsOf(groupId)))
+                      : groupFigures.get(groupId)
+                  }
                   figures={figures}
                   reorderable={!shown}
                   onToggleSelection={selection && (() => toggleGroupSelection(groupId))}
@@ -477,18 +496,43 @@ export function CategoryList({
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{pendingDelete?.name}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.kind === "group"
-                ? "The group and all of its categories will be deleted."
-                : "The category will be deleted."}{" "}
-              If you might need it later, hide it instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+          {pendingDelete?.kind === "category" ? (
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Category</AlertDialogTitle>
+              {/* YNAB's wording (checked 2026-10-11, docs/verify.md). */}
+              <AlertDialogDescription className="grid gap-2">
+                {pendingDelete.hasTransactions ? (
+                  <span>
+                    Before you can delete the category <strong>{pendingDelete.name}</strong>, you'll
+                    need to reassign your past activity to a new category.
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      There is money currently assigned to <strong>{pendingDelete.name}</strong>.
+                    </span>
+                    <span>
+                      When you delete this category, all assigned amounts will be moved to{" "}
+                      <strong>Ready to Assign</strong>.
+                    </span>
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          ) : (
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete “{pendingDelete?.name}”?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The group and all of its categories will be deleted. If you might need it later,
+                hide it instead.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          )}
           {pendingDelete?.hasTransactions && (
             <div className="grid gap-2">
-              <Label htmlFor="reassign-to">Move its transactions to</Label>
+              <Label htmlFor="reassign-to">
+                {pendingDelete.kind === "category" ? "Select category" : "Move its transactions to"}
+              </Label>
               <NativeSelect
                 id="reassign-to"
                 value={reassignTo}
@@ -507,6 +551,16 @@ export function CategoryList({
                   </optgroup>
                 ))}
               </NativeSelect>
+              {pendingDelete.kind === "category" && (
+                <div className="grid gap-1 text-sm">
+                  <p className="font-medium">Here's what will be reassigned to the new category:</p>
+                  <ul className="list-disc ps-5 text-muted-foreground">
+                    <li>All transactions [{pendingDelete.transactionCount}]</li>
+                    <li>All assigned amounts</li>
+                    <li>Any remaining available amount</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           <AlertDialogFooter>

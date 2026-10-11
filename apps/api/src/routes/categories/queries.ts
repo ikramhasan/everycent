@@ -4,13 +4,14 @@ import {
   categoryAssignment,
   categoryGroup,
   categoryTarget,
+  moneyMove,
   scheduledSubTransaction,
   scheduledTransaction,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
 import { monthOf } from "@everycent/engine";
-import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
+import { type AnyColumn, and, asc, count, eq, inArray, isNull, max, ne } from "drizzle-orm";
 import { adjustAssigned } from "../../lib/assignments";
 import { AppError } from "../../lib/errors";
 import { type Db, internalCategoryId } from "../../lib/ledger";
@@ -33,10 +34,18 @@ export function toTargetJson(t: TargetRow) {
   };
 }
 
+export interface CategoryUsage {
+  /** Transactions and split lines in the category (YNAB's delete dialog: "All transactions [n]"). */
+  transactionCount: number;
+  /** Money assigned in any month (YNAB asks before deleting it). */
+  hasAssignedMoney: boolean;
+}
+
 export function toCategoryJson(
   c: CategoryRow,
   hasTransactions = false,
   target: TargetRow | null = null,
+  usage: CategoryUsage = { transactionCount: 0, hasAssignedMoney: false },
 ) {
   return {
     id: c.id,
@@ -46,8 +55,20 @@ export function toCategoryJson(
     hidden: c.hidden,
     linkedAccountId: c.linkedAccountId,
     hasTransactions,
+    ...usage,
     target: target && toTargetJson(target),
   };
+}
+
+/** One category as the API returns it, its history and usage looked up. */
+export async function loadCategoryJson(
+  db: Db,
+  budgetId: string,
+  row: CategoryRow,
+  target: TargetRow | null | undefined,
+) {
+  const usage = await categoryUsage(db, budgetId, [row.id]);
+  return toCategoryJson(row, await hasHistory(db, [row.id]), target ?? null, usage.get(row.id));
 }
 
 export function toGroupJson(
@@ -55,13 +76,16 @@ export function toGroupJson(
   categories: CategoryRow[],
   used: ReadonlySet<string> = new Set(),
   targets: ReadonlyMap<string, TargetRow> = new Map(),
+  usage: ReadonlyMap<string, CategoryUsage> = new Map(),
 ) {
   return {
     id: g.id,
     name: g.name,
     hidden: g.hidden,
     kind: g.kind,
-    categories: categories.map((c) => toCategoryJson(c, used.has(c.id), targets.get(c.id))),
+    categories: categories.map((c) =>
+      toCategoryJson(c, used.has(c.id), targets.get(c.id), usage.get(c.id)),
+    ),
   };
 }
 
@@ -82,16 +106,8 @@ export async function listCategoryTree(db: Db, budgetId: string) {
     .from(category)
     .where(and(eq(category.budgetId, budgetId), isNull(category.internalKind)))
     .orderBy(asc(category.sortOrder), asc(category.id));
-  const usedRows = await db
-    .selectDistinct({ id: transaction.categoryId })
-    .from(transaction)
-    .where(eq(transaction.budgetId, budgetId));
-  const usedLines = await db
-    .selectDistinct({ id: subTransaction.categoryId })
-    .from(subTransaction)
-    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
-    .where(eq(transaction.budgetId, budgetId));
-  const used = new Set([...usedRows, ...usedLines].flatMap((u) => (u.id ? [u.id] : [])));
+  const usage = await categoryUsage(db, budgetId);
+  const used = new Set([...usage].filter(([, u]) => u.transactionCount > 0).map(([id]) => id));
   const targetRows = await db
     .select()
     .from(categoryTarget)
@@ -105,6 +121,7 @@ export async function listCategoryTree(db: Db, budgetId: string) {
         categories.filter((c) => c.groupId === g.id),
         used,
         targets,
+        usage,
       ),
     ),
   };
@@ -217,30 +234,45 @@ export async function hasHistory(db: Db, categoryIds: readonly string[]) {
 /**
  * Moves the history of categories that are about to be deleted to `targetId`, which must be
  * another category of the budget (Ready to Assign and Uncategorized included, payment categories
- * not). Without a target, deleting a category with history is refused.
+ * not). Without a target, deleting a category with history is refused; one with only assigned
+ * money gives it back to Ready to Assign. Either way Recent Moves keeps the categories' moves.
  */
 export async function reassignHistory(
   db: Db,
   budgetId: string,
   categoryIds: readonly string[],
   targetId: string | undefined,
+  userId: string,
 ) {
-  if (!targetId && !(await hasHistory(db, categoryIds))) return;
-  if (!targetId) {
+  if (!targetId && (await hasHistory(db, categoryIds))) {
     throw new AppError(
       409,
       "CATEGORY_HAS_HISTORY",
       "This category has transactions. Choose a category to move them to.",
     );
   }
-  const [target] = await db
-    .select()
-    .from(category)
-    .where(and(eq(category.id, targetId), eq(category.budgetId, budgetId)));
-  if (!target) throw new AppError(404, "NOT_FOUND", "The category to move history to wasn't found");
-  if (categoryIds.includes(target.id) || target.linkedAccountId) {
+  const [target] = targetId
+    ? await db
+        .select()
+        .from(category)
+        .where(and(eq(category.id, targetId), eq(category.budgetId, budgetId)))
+    : [];
+  if (targetId && !target) {
+    throw new AppError(404, "NOT_FOUND", "The category to move history to wasn't found");
+  }
+  if (target && (categoryIds.includes(target.id) || target.linkedAccountId)) {
     throw new AppError(400, "BAD_REQUEST", "History can't be moved to that category");
   }
+  await recordDeletion(
+    db,
+    budgetId,
+    categoryIds,
+    target && !target.internalKind
+      ? target.id
+      : await internalCategoryId(db, budgetId, "ready_to_assign"),
+    userId,
+  );
+  if (!target) return;
   // As in YNAB, the assigned money goes along (and with it what's available). Moved to Ready to
   // Assign or Uncategorized, it just returns to Ready to Assign with the deleted rows.
   const assignments = target.internalKind
@@ -274,4 +306,95 @@ export async function reassignHistory(
     .update(scheduledSubTransaction)
     .set({ categoryId: target.id })
     .where(inArray(scheduledSubTransaction.categoryId, [...categoryIds]));
+}
+
+/**
+ * Recent Moves for categories about to be deleted, as YNAB keeps them (checked 2026-10-11): their
+ * earlier moves stay, naming the "deleted category", and the delete itself is logged, each month's
+ * assigned money going to `destinationId` (the category picked, or Ready to Assign). A negative
+ * amount moves the other way ("Moved $5.00 from Ready to Assign to deleted category V6c A").
+ */
+async function recordDeletion(
+  db: Db,
+  budgetId: string,
+  categoryIds: readonly string[],
+  destinationId: string,
+  userId: string,
+) {
+  if (categoryIds.length === 0) return;
+  const rows = await db
+    .select({ id: category.id, name: category.name })
+    .from(category)
+    .where(inArray(category.id, [...categoryIds]));
+  const names = new Map(rows.map((r) => [r.id, r.name]));
+  for (const { id, name } of rows) {
+    await db
+      .update(moneyMove)
+      .set({ fromCategoryName: name })
+      .where(eq(moneyMove.fromCategoryId, id));
+    await db.update(moneyMove).set({ toCategoryName: name }).where(eq(moneyMove.toCategoryId, id));
+  }
+  const assignments = await db
+    .select()
+    .from(categoryAssignment)
+    .where(
+      and(
+        inArray(categoryAssignment.categoryId, [...categoryIds]),
+        ne(categoryAssignment.amount, 0n),
+      ),
+    )
+    .orderBy(asc(categoryAssignment.month));
+  for (const a of assignments) {
+    const name = names.get(a.categoryId) ?? null;
+    const out = a.amount > 0n;
+    await db.insert(moneyMove).values({
+      id: newId(),
+      budgetId,
+      userId,
+      fromCategoryId: out ? a.categoryId : destinationId,
+      toCategoryId: out ? destinationId : a.categoryId,
+      fromCategoryName: out ? name : null,
+      toCategoryName: out ? null : name,
+      deletion: true,
+      month: a.month,
+      amount: out ? a.amount : -a.amount,
+      currency: a.currency,
+    });
+  }
+}
+
+/** Each category's {@link CategoryUsage}, for the whole budget or just `categoryIds`. */
+export async function categoryUsage(db: Db, budgetId: string, categoryIds?: readonly string[]) {
+  const only = <T extends AnyColumn>(column: T) =>
+    categoryIds ? inArray(column, [...categoryIds]) : undefined;
+  const rows = await db
+    .select({ id: transaction.categoryId, n: count() })
+    .from(transaction)
+    .where(and(eq(transaction.budgetId, budgetId), only(transaction.categoryId)))
+    .groupBy(transaction.categoryId);
+  const lines = await db
+    .select({ id: subTransaction.categoryId, n: count() })
+    .from(subTransaction)
+    .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+    .where(and(eq(transaction.budgetId, budgetId), only(subTransaction.categoryId)))
+    .groupBy(subTransaction.categoryId);
+  const funded = await db
+    .selectDistinct({ id: categoryAssignment.categoryId })
+    .from(categoryAssignment)
+    .where(
+      and(
+        eq(categoryAssignment.budgetId, budgetId),
+        ne(categoryAssignment.amount, 0n),
+        only(categoryAssignment.categoryId),
+      ),
+    );
+  const usage = new Map<string, CategoryUsage>();
+  const entry = (id: string) => {
+    const found = usage.get(id) ?? { transactionCount: 0, hasAssignedMoney: false };
+    usage.set(id, found);
+    return found;
+  };
+  for (const r of [...rows, ...lines]) if (r.id) entry(r.id).transactionCount += r.n;
+  for (const f of funded) entry(f.id).hasAssignedMoney = true;
+  return usage;
 }

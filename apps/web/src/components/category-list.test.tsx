@@ -23,6 +23,8 @@ const data: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
         {
@@ -33,6 +35,8 @@ const data: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
         {
@@ -43,6 +47,8 @@ const data: CategoryListData = {
           hidden: true,
           linkedAccountId: null,
           hasTransactions: false,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
       ],
@@ -68,6 +74,8 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: "acct",
           hasTransactions: false,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
       ],
@@ -86,6 +94,8 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: true,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
         {
@@ -96,6 +106,8 @@ const withCards: CategoryListData = {
           hidden: false,
           linkedAccountId: null,
           hasTransactions: false,
+          transactionCount: 0,
+          hasAssignedMoney: false,
           target: null,
         },
       ],
@@ -332,15 +344,31 @@ describe("CategoryList", () => {
     expect(screen.getByRole("button", { name: "Hide" })).toBeInTheDocument();
   });
 
-  it("asks where to move a category's transactions before deleting it", async () => {
-    const actions = renderList(withCards);
+  // YNAB's delete dialogs, checked 2026-10-11 (docs/verify.md).
+  const withUsage = (
+    id: string,
+    usage: { transactionCount?: number; hasAssignedMoney?: boolean },
+  ) => ({
+    ...withCards,
+    groups: withCards.groups.map((g) => ({
+      ...g,
+      categories: g.categories.map((c) => (c.id === id ? { ...c, ...usage } : c)),
+    })),
+  });
+
+  it("asks where to reassign a category's past activity before deleting it", async () => {
+    const actions = renderList(withUsage("c1", { transactionCount: 2 }));
     await userEvent.click(screen.getByRole("button", { name: "Rent" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(
+      "Before you can delete the category Rent, you'll need to reassign your past activity",
+    );
+    expect(dialog).toHaveTextContent("All transactions [2]");
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toBeDisabled();
 
-    const select = within(dialog).getByLabelText("Move its transactions to");
+    const select = within(dialog).getByLabelText("Select category");
     const options = within(select)
       .getAllByRole("option")
       .map((o) => o.textContent);
@@ -351,14 +379,26 @@ describe("CategoryList", () => {
     expect(actions.deleteCategory).toHaveBeenCalledWith("c1", "c2");
   });
 
-  it("deletes a category without history straight away", async () => {
-    const actions = renderList(withCards);
+  it("says assigned money goes back to Ready to Assign", async () => {
+    const actions = renderList(withUsage("c2", { hasAssignedMoney: true }));
     await userEvent.click(screen.getByRole("button", { name: "Water" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).queryByLabelText("Move its transactions to")).toBeNull();
+    expect(dialog).toHaveTextContent("There is money currently assigned to Water.");
+    expect(dialog).toHaveTextContent(
+      "When you delete this category, all assigned amounts will be moved to Ready to Assign.",
+    );
+    expect(within(dialog).queryByLabelText("Select category")).toBeNull();
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(actions.deleteCategory).toHaveBeenCalledWith("c2", undefined);
+  });
+
+  it("deletes an unused category straight away", async () => {
+    const actions = renderList(withCards);
+    await userEvent.click(screen.getByRole("button", { name: "Water" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(actions.deleteCategory).toHaveBeenCalledWith("c2");
   });
 
   describe("selecting and views", () => {
@@ -414,6 +454,14 @@ describe("CategoryList", () => {
       ).toBeInTheDocument();
       // A view can't be reordered.
       expect(screen.queryByRole("button", { name: "Reorder Electric" })).not.toBeInTheDocument();
+    });
+
+    it("totals a group over its categories in view (YNAB, 2026-10-11)", () => {
+      renderSelectable(new Set(["c2"]));
+      const bills = screen.getByRole("region", { name: "Bills" });
+      // The whole group is A100 / A-35 / A65; Electric alone is A0 / A-5 / A-5.
+      expect(within(bills).queryByText("A65")).not.toBeInTheDocument();
+      expect(within(bills).getAllByText("A-5").length).toBeGreaterThanOrEqual(2);
     });
 
     it("says so when a view keeps nothing", async () => {

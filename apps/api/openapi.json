@@ -720,6 +720,14 @@
             "type": "boolean",
             "description": "Deleting it requires reassignToCategoryId"
           },
+          "transactionCount": {
+            "type": "integer",
+            "description": "Its transactions, split lines counted one by one (what a delete reassigns)"
+          },
+          "hasAssignedMoney": {
+            "type": "boolean",
+            "description": "Money assigned to it in some month (a delete returns it to Ready to Assign)"
+          },
           "target": {
             "$ref": "#/components/schemas/CategoryTarget"
           }
@@ -732,6 +740,8 @@
           "hidden",
           "linkedAccountId",
           "hasTransactions",
+          "transactionCount",
+          "hasAssignedMoney",
           "target"
         ]
       },
@@ -4577,21 +4587,39 @@
               "moved",
               "removed"
             ],
-            "description": "assigned: from Ready to Assign; removed: back to it; moved: between categories"
+            "description": "assigned: from Ready to Assign; removed: back to it; moved: between categories (and, for a deletion, from Ready to Assign to the deleted category, as YNAB words it)"
           },
           "fromCategoryId": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Null for Ready to Assign"
+            "description": "Null for Ready to Assign and for a deleted category"
           },
           "toCategoryId": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Null for Ready to Assign"
+            "description": "Null for Ready to Assign and for a deleted category"
+          },
+          "fromDeletedCategory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of the deleted category the money came from; null otherwise"
+          },
+          "toDeletedCategory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of the deleted category the money went to; null otherwise"
+          },
+          "deletion": {
+            "type": "boolean",
+            "description": "Logged by deleting a category: its assigned money going to the category picked"
           },
           "month": {
             "type": "string",
@@ -4620,6 +4648,9 @@
           "kind",
           "fromCategoryId",
           "toCategoryId",
+          "fromDeletedCategory",
+          "toDeletedCategory",
+          "deletion",
           "month",
           "amount",
           "movedAt",
@@ -8826,6 +8857,7 @@
           }
         ],
         "summary": "Recent changes to assigned money, newest first",
+        "description": "Every change of the last 34 days, as YNAB's Recent Moves (\"Previous 34 days of assigning and moving money\").",
         "parameters": [
           {
             "schema": {
@@ -8838,7 +8870,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The latest moves",
+            "description": "The last 34 days' moves",
             "content": {
               "application/json": {
                 "schema": {

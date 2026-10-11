@@ -685,7 +685,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recent changes to assigned money, newest first */
+        /**
+         * Recent changes to assigned money, newest first
+         * @description Every change of the last 34 days, as YNAB's Recent Moves ("Previous 34 days of assigning and moving money").
+         */
         get: operations["listMoves"];
         put?: never;
         post?: never;
@@ -862,6 +865,10 @@ export interface components {
             linkedAccountId: string | null;
             /** @description Deleting it requires reassignToCategoryId */
             hasTransactions: boolean;
+            /** @description Its transactions, split lines counted one by one (what a delete reassigns) */
+            transactionCount: number;
+            /** @description Money assigned to it in some month (a delete returns it to Ready to Assign) */
+            hasAssignedMoney: boolean;
             target: components["schemas"]["CategoryTarget"];
         };
         CategoryTarget: {
@@ -1787,14 +1794,20 @@ export interface components {
         MoneyMove: {
             id: string;
             /**
-             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories
+             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories (and, for a deletion, from Ready to Assign to the deleted category, as YNAB words it)
              * @enum {string}
              */
             kind: "assigned" | "moved" | "removed";
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             fromCategoryId: string | null;
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             toCategoryId: string | null;
+            /** @description The name of the deleted category the money came from; null otherwise */
+            fromDeletedCategory: string | null;
+            /** @description The name of the deleted category the money went to; null otherwise */
+            toDeletedCategory: string | null;
+            /** @description Logged by deleting a category: its assigned money going to the category picked */
+            deletion: boolean;
             /** @description A month, YYYY-MM */
             month: string;
             /** @description Positive */
@@ -4620,7 +4633,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The latest moves */
+            /** @description The last 34 days' moves */
             200: {
                 headers: {
                     [name: string]: unknown;

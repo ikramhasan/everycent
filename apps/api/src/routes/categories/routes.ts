@@ -147,6 +147,13 @@ export const CategorySchema = z
       .nullable()
       .describe("Set on a credit account's payment category, which is named after the account"),
     hasTransactions: z.boolean().describe("Deleting it requires reassignToCategoryId"),
+    transactionCount: z
+      .number()
+      .int()
+      .describe("Its transactions, split lines counted one by one (what a delete reassigns)"),
+    hasAssignedMoney: z
+      .boolean()
+      .describe("Money assigned to it in some month (a delete returns it to Ready to Assign)"),
     target: TargetSchema.nullable(),
   })
   .openapi("Category");

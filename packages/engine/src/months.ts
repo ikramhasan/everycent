@@ -289,7 +289,8 @@ const AVERAGE_MONTHS = 12;
  *   Ready to Assign, and an overspent category is covered from it (YNAB: Utilities, $25.00
  *   overspent, went to $25.00 assigned).
  * - Reset Assigned: zero.
- * Averages are rounded half-even to the minor unit.
+ * Averages are rounded to the minor unit, halves away from zero (YNAB, checked 2026-10-11:
+ * $0.05 over two months is $0.03, −$0.05 is −$0.03, $0.07 over three is $0.02).
  */
 export function autoAssignAmounts(
   history: readonly MonthFigures[],
@@ -320,8 +321,8 @@ export function autoAssignAmounts(
       assigned += byMonth.get(m)?.assigned ?? 0n;
       activity += byMonth.get(m)?.activity ?? 0n;
     }
-    averageAssigned = divideRounded(assigned, count, "half-even");
-    averageSpent = divideRounded(spent(activity), count, "half-even");
+    averageAssigned = divideRounded(assigned, count, "half-up");
+    averageSpent = divideRounded(spent(activity), count, "half-up");
   }
 
   const current = categoryMonth(history, month);

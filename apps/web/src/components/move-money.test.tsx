@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AvailableButton, FixThisButton, type MoveActions } from "./move-money";
@@ -17,6 +17,7 @@ function makeActions(): MoveActions & { move: ReturnType<typeof vi.fn> } {
     parse: (text) => (/^\d+$/.test(text) ? BigInt(text) * 100n : "Enter an amount"),
     toInput: (a) => String(Number(a) / 100),
     move: vi.fn().mockResolvedValue(undefined),
+    moveIn: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -74,5 +75,42 @@ describe("FixThisButton", () => {
     await userEvent.click(await screen.findByRole("option", { name: /Rent/ }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(actions.move).toHaveBeenCalledWith("rent", "rta", 1200n);
+  });
+
+  // YNAB, 2026-10-11: from the current month to the last with money assigned; later months offer
+  // what's assigned in them.
+  it("un-assigns from another month YNAB offers", async () => {
+    const actions = makeActions();
+    const unassign = vi.fn().mockResolvedValue(undefined);
+    render(
+      <FixThisButton
+        readyToAssign="-1200"
+        format={format}
+        actions={actions}
+        months={{
+          months: [
+            { month: "2026-10", disabled: false },
+            { month: "2026-11", disabled: false },
+            { month: "2026-12", disabled: true },
+          ],
+          initial: "2026-11",
+          optionsFor: (m) =>
+            m === "2026-11"
+              ? [{ id: "phone", name: "Phone", group: "Bills", available: "800" }]
+              : actions.options,
+          unassign,
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Fix This" }));
+    const month = await screen.findByLabelText("Month");
+    expect(month).toHaveValue("2026-11");
+    expect(within(month).getByText("Dec 2026")).toBeDisabled();
+    await userEvent.click(screen.getByRole("combobox", { name: "Un-assign money from" }));
+    // As much as November holds: $8.00 of the $12.00 shortfall.
+    await userEvent.click(await screen.findByRole("option", { name: /Phone/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(unassign).toHaveBeenCalledWith("2026-11", "phone", 800n);
+    expect(actions.move).not.toHaveBeenCalled();
   });
 });

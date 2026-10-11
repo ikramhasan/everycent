@@ -235,34 +235,39 @@ Checked in YNAB's web app on 2026-10-02 and built as found:
   (covers too), each with the month; filters All / Moved / Assigned. Undone changes drop out.
 - Cash overspending comes out of the next month's Ready to Assign (see phase 6b).
 
-### Moving more than a category has
+### Moving limits, deleting categories, Recent Moves and Fix This's month (settled 2026-10-11)
 
-- **Question:** can the Move field take more than the category has available (leaving it
-  negative), or is it capped or refused?
-- **Built so far (before this rule):** any positive amount moves; the category can go negative.
+Checked in YNAB plan "Onboarding Check" (group `Cycle 4`, categories V6c A–E, memo
+`x-v6c-target`) and ihni7's Plan:
 
-### Deleting a category that has assigned money but no transactions
-
-- **Found (help center):** deleting a category reassigns its transactions, assigned amounts and
-  available money to the category you pick.
-- **Question:** is the reassign question also asked when the category has money but no
-  transactions? If not, where does the money go?
-- **Built so far (before this rule):** only categories with transactions ask; the money of one
-  without transactions returns to Ready to Assign.
-
-### How far back Recent Moves goes, and whose moves it shows
-
-- **Question:** how many moves (or days) does Recent Moves keep, and on a shared budget does it
-  show who made each move?
-- **Built so far (before this rule):** the latest 100 moves; the API returns who moved it, the
-  list doesn't show it.
-
-### The month in "Fix This"
-
-- **Found:** the first time it opened, "Un-assign money from" had a month picker ("Nov 2026")
-  next to the label; later it didn't.
-- **Question:** when does Fix This offer another month, and which months?
-- **Built so far (before this rule):** money is un-assigned in the month on screen.
+- **Moving more than a category has** is allowed: $15 out of V6c A's $10 left it at −$5.00
+  (Assigned −$5.00). As built.
+- **Deleting a category** with nothing assigned and no transactions (V6c E) happens at once, with
+  no dialog. With money assigned but no transactions (V6c B $20; also V6c A at −$5): "Delete
+  Category" / "There is money currently assigned to V6c B." / "When you delete this category, all
+  assigned amounts will be moved to Ready to Assign." (Cancel / Delete; Ready to Assign +$20).
+  With transactions (V6c C): "Before you can delete the category V6c C, you'll need to reassign
+  your past activity to a new category." / Select category / "Here's what will be reassigned to
+  the new category:" All transactions [1], All assigned amounts, Any remaining available amount.
+  Built as found.
+- **A deleted category's target** isn't moved: V6c D got V6c C's money and transaction but no
+  target. As built.
+- **Recent Moves keeps deleted categories:** older moves read "to deleted category V6c C", and the
+  delete itself is logged with a trash icon under the Moved filter: "Removed $20.00 from deleted
+  category V6c B", "Moved $30.00 from deleted category V6c C to V6c D" (its assigned money), and
+  for a negative amount "Moved $5.00 from Ready to Assign to deleted category V6c A". Built
+  (`money_move` keeps the name; `deletion` marks these).
+- **How far back:** the button's tooltip says "Previous 34 days of assigning and moving money"
+  (both plans); ihni7's Plan listed all 77 of its moves back to its first. Built as a 34-day window
+  (was the latest 100). The test account is too new to see an older move drop off.
+- **Who moved it** on a shared plan needs a second member in the YNAB plan (EVERYCENT-118).
+- **Fix This's month:** in a past month (September) there's no picker, just the categories with
+  Available. In the current or a later month a picker lists the current month through the last
+  month with money assigned, or the month on screen if later (from November: Oct, Nov, Dec
+  greyed out with nothing assigned, Jan; from February with nothing assigned: Oct–Feb, Feb
+  selected). The month on screen is selected. The current month offers each category's Available;
+  later months what's assigned in them (November: "V6b B $5,000.00" only, not V6c D's $44.00
+  Available). Built as found.
 
 ## Category inspector, activity and views (phase 6d)
 
@@ -290,18 +295,16 @@ Checked in YNAB's web app on 2026-10-03 and built as found:
 
 - In the browser, per plan (`{plan}_active_budget_view` in localStorage). As built.
 
-### Group totals in a view
+### Group totals in a view and tracking balances in Activity (settled 2026-10-11)
 
-- **Question:** under Overspent, does a group's row total the whole group or only the categories
-  in view? (The test plan's groups had one category each in view, so the numbers matched.)
-- **Built so far (before this rule):** the whole group's totals.
-
-### A tracking account's starting balance in a group's Activity
-
-- **Found:** Bills' Activity was −$25.00, but its popover also listed "House, Starting Balance,
-  +$500.00" (a tracking account, "Category not needed"), which the total doesn't count.
-- **Question:** is that a YNAB bug, or does the group popover list something we don't model?
-- **Built so far (before this rule):** the popover lists exactly what the Activity adds up.
+- **Group totals in a view** cover only the categories in view: "Onboarding Check", group Cycle 4
+  was $45.00 / −$3.00 / $42.00 under All and $0.00 / −$2.00 / −$2.00 under Overspent (only V6b A,
+  memo `x-v6d-over`). Built (the list sums the categories in view).
+- **A tracking account in a group's Activity popover:** ihni7's Plan's House starting balance
+  carries a stale category in YNAB's data (the API reports ⚡️ Utilities), so YNAB's popover,
+  which filters by category, lists it while Activity, which counts on-budget accounts only,
+  doesn't. everycent never stores a category on a tracking-account transaction, so it can't
+  happen. As built.
 
 ## Auto-Assign (phase 6e)
 
@@ -324,23 +327,18 @@ as found:
   a view with none says "This view has no categories. View All Categories". Labels go singular when
   one category is covered. Uncategorized has no Auto-Assign.
 
-### Rounding of averages
+### Rounding, Reset Assigned and the banner's Assign menu (settled 2026-10-11)
 
-- **Question:** how does YNAB round an average that doesn't come out to the cent ($1.00 over 3
-  months)?
-- **Built so far (before this rule):** half-even to the minor unit.
-
-### The banner's Assign menu
-
-- **Found (help center):** the Ready to Assign banner's "Assign" button opens a pop-up with the
-  same options under an "Auto" tab.
-- **Skipped:** not built; the inspector has every option. Its other tabs weren't checked.
-
-### Reset Assigned on the whole plan
-
-- **Found (help center):** with nothing selected, "there's a prompt to confirm that decision".
-- **Built so far (before this rule):** the same preview every option gets, which needs a click on
-  "Update Assigned Amounts".
+- **Averages round half away from zero to the cent:** ihni7's Plan, R6e A–C with money assigned
+  in August only. October (two months): $0.05 → $0.03, $0.07 → $0.04, $0.01 → $0.01, −$0.05 →
+  −$0.03; November (three months): $0.05 → $0.02, $0.07 → $0.02, $0.01 → $0.00. Applying Average
+  Assigned stored 30 milliunits, not 25. Built (was half-even).
+- **Reset Assigned on the whole plan** opens the same "Auto-Assign Preview: Reset Assigned
+  Amounts" with "Update Assigned Amounts". As built.
+- **The banner's Assign pop-up** (while Ready to Assign is positive) has two tabs: **Auto**, the
+  inspector's Auto-Assign list with amounts, and **Manually**: "Assign:" prefilled with all of
+  Ready to Assign (selected), "To:" a category picker, Cancel / Assign. Not built yet
+  (EVERYCENT-24).
 
 ## Cash and credit spending (phase 7a)
 

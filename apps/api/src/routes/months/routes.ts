@@ -442,9 +442,29 @@ const MoneyMoveSchema = z
     id: z.string(),
     kind: z
       .enum(["assigned", "moved", "removed"])
-      .describe("assigned: from Ready to Assign; removed: back to it; moved: between categories"),
-    fromCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
-    toCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
+      .describe(
+        "assigned: from Ready to Assign; removed: back to it; moved: between categories (and, " +
+          "for a deletion, from Ready to Assign to the deleted category, as YNAB words it)",
+      ),
+    fromCategoryId: z
+      .string()
+      .nullable()
+      .describe("Null for Ready to Assign and for a deleted category"),
+    toCategoryId: z
+      .string()
+      .nullable()
+      .describe("Null for Ready to Assign and for a deleted category"),
+    fromDeletedCategory: z
+      .string()
+      .nullable()
+      .describe("The name of the deleted category the money came from; null otherwise"),
+    toDeletedCategory: z
+      .string()
+      .nullable()
+      .describe("The name of the deleted category the money went to; null otherwise"),
+    deletion: z
+      .boolean()
+      .describe("Logged by deleting a category: its assigned money going to the category picked"),
     month: zBudgetMonth,
     amount: zMinorUnits.describe("Positive"),
     movedAt: z.iso.datetime(),
@@ -460,6 +480,9 @@ export const listMoves = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Recent changes to assigned money, newest first",
+  description:
+    "Every change of the last 34 days, as YNAB's Recent Moves (\"Previous 34 days of assigning " +
+    'and moving money").',
   request: {
     params: z.object({
       budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
@@ -467,7 +490,7 @@ export const listMoves = createRoute({
   },
   responses: {
     200: {
-      description: "The latest moves",
+      description: "The last 34 days' moves",
       content: {
         "application/json": {
           schema: z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList"),
