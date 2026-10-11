@@ -112,10 +112,11 @@ describe("fresh start", () => {
     const accounts = (
       await json<{ accounts: Account[] }>(await send("GET", `${freshBase}/accounts`, owner.cookie))
     ).accounts;
+    // YNAB starts unlinked accounts at $0 for the user to update ("C4 Order FS", 2026-10-12).
     expect(accounts.map((a) => [a.name, a.type, a.closed, a.balances.working])).toEqual([
       ["Checking", "checking", true, "0"],
-      ["Visa", "credit_card", false, "-38500"],
-      ["Mortgage", "mortgage", false, "-100000"],
+      ["Visa", "credit_card", false, "0"],
+      ["Mortgage", "mortgage", false, "0"],
     ]);
     const newVisa = accounts.find((a) => a.name === "Visa");
     const visaTxns = (
@@ -124,7 +125,7 @@ describe("fresh start", () => {
       )
     ).transactions;
     expect(visaTxns).toEqual([
-      expect.objectContaining({ amount: "-38500", payeeName: "Starting Balance", date: TODAY }),
+      expect.objectContaining({ amount: "0", payeeName: "Starting Balance", date: TODAY }),
     ]);
     // Payees come along; with no transactions yet there's no category to suggest.
     const payees = await json<{ payees: unknown[] }>(

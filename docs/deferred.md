@@ -136,9 +136,10 @@ before starting a roadmap phase** and remove an entry once it's done.
   targets, which start in the fresh start's month), payees, accounts and scheduled transactions
   (10b; future-dated transactions are schedules since 10a). When they exist, it must copy payee
   rules too (phase 12). It doesn't copy the expected income yet (EVERYCENT-20).
-- By decision, a fresh start drops all transactions, uncleared ones included; each account starts
-  from its working balance on the fresh-start date as a single cleared Starting Balance. YNAB
-  starts unlinked accounts at $0 (EVERYCENT-119, to confirm with the user).
+- A fresh start drops all transactions, uncleared ones included, and every account starts at $0
+  (a $0 Starting Balance on the fresh-start date) for the user to update, as YNAB starts unlinked
+  accounts (EVERYCENT-119). When bank linking arrives (phase 14), linked accounts should start
+  from today's balance instead.
 
 ## Transactions and register (phase 5)
 

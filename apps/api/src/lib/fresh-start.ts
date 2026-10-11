@@ -13,20 +13,16 @@ import {
 } from "@everycent/db/schema";
 import { formatDate, monthOf } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
-import {
-  accountBalances,
-  insertStartingBalance,
-  internalCategoryId,
-  type Tx,
-  transferPayeeId,
-} from "./ledger";
+import { insertStartingBalance, internalCategoryId, type Tx, transferPayeeId } from "./ledger";
 
 type BudgetRow = typeof budget.$inferSelect;
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
  * category groups and categories (order, hidden flags, notes, targets), payees, flag names, and
- * accounts (with their transfer payees), each starting from its working balance on `date`, and
+ * accounts (with their transfer payees), each starting at $0 with a $0 Starting Balance on `date`
+ * for the user to update (YNAB: "Unlinked accounts will start with a $0 balance for you to update
+ * with today's balance"; "C4 Order FS", 2026-10-12; everycent has no linked accounts), and
  * scheduled transactions, unchanged (YNAB, checked 2026-10-12: "C4 Order" → "C4 Order FS" kept
  * each schedule's dates, frequency, amount, category, memo and account; the old budget keeps them
  * too). No transactions come along. Then archives the old budget.
@@ -59,7 +55,6 @@ export async function copyIntoFreshStart(
     .from(budgetAccount)
     .where(eq(budgetAccount.budgetId, old.id))
     .orderBy(asc(budgetAccount.sortOrder), asc(budgetAccount.id));
-  const balances = await accountBalances(tx, old.id, date);
   const accountIds = new Map<string, string>();
   /** Old transfer payee → the new account's. */
   const payeeIds = new Map<string, string>();
@@ -94,7 +89,7 @@ export async function copyIntoFreshStart(
       budgetId: newBudgetId,
       accountId: id,
       type: a.type,
-      amount: balances.get(a.id)?.working ?? 0n,
+      amount: 0n,
       currency: a.currency,
       date,
     });
