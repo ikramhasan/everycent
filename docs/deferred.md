@@ -27,9 +27,8 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
   (docs/verify.md). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
-- YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
-  transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
-  so there's no pill yet.
+- YNAB marks a category's Available with a calendar pill when a scheduled transaction is coming.
+  Scheduled transactions exist since 10a; the pill is 10b (EVERYCENT-5).
 - YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
   yet.
 - The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
@@ -198,8 +197,31 @@ before starting a roadmap phase** and remove an entry once it's done.
 - YNAB's Categorize menu is category groups with their categories as submenus; ours is the
   category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
 - YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,
-  enter now and make repeating (10), and Export (no phase yet).
+  enter now and make repeating (EVERYCENT-40), and Export (no phase yet).
 - Changing the search or filters clears the selection.
+
+## Scheduled transactions (phase 10a follow-ups)
+
+- Due occurrences are entered when a read arrives with the user's `today` (register, accounts,
+  month, activity); there's no background job yet, and nothing is entered without a `today`
+  (the server's UTC date could be a day early). The periodic job and the budget's time zone are
+  10b (EVERYCENT-5).
+- Entered-on-their-date transactions are stored unapproved, as YNAB does, but the register has
+  no approve/unapproved styling yet (EVERYCENT-65).
+- Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
+  what YNAB does is EVERYCENT-115.
+- Scheduled rows can't be selected for bulk actions; YNAB's Duplicate, Enter Now and Make
+  Repeating (and the date picker's Make Repeating on a plain transaction) are EVERYCENT-40.
+- The calendar pill on a category's Available, Underfunded funding scheduled outflows, and fresh
+  start carrying schedules over are 10b (EVERYCENT-5). A fresh start doesn't copy schedules yet.
+- The transactions API still accepts future dates (the web never sends them; YNAB's API refuses
+  them). Those rows stay out of balances until their date. Rejecting them would need the client's
+  `today` on every create and edit.
+- The migration that turned existing future-dated transactions into one-off schedules keeps one
+  schedule per transfer (from its outflow side); the other side's memo, flag and cleared state
+  aren't kept.
+- Undoing a reschedule (or a delete) of a transfer to an account closed since can't bring the
+  transaction back (new transfers to closed accounts are refused); the schedule stays.
 
 ## Flags (phase 5d follow-ups)
 

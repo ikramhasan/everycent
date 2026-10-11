@@ -58,7 +58,7 @@ import {
   Split,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api, apiClient } from "@/lib/api";
@@ -81,7 +81,20 @@ import {
   type SortColumn,
   searchText,
 } from "@/lib/register-filters";
-import { addMonths, savedSearch, saveSearch, useRegisterView } from "@/lib/register-view";
+import {
+  addMonths,
+  rangeDates,
+  savedSearch,
+  saveSearch,
+  useRegisterView,
+} from "@/lib/register-view";
+import {
+  isScheduled,
+  rescheduleBody,
+  type ScheduledTransaction,
+  scheduleCreateBody,
+  scheduledQueryPrefix,
+} from "@/lib/scheduled";
 import {
   isEmpty,
   isSelected,
@@ -114,6 +127,7 @@ import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
+import { ScheduledSection } from "./scheduled-section";
 import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
@@ -183,6 +197,7 @@ export function Register({
     if (saved) onSearchChange({ q: saved }, true);
   }, [budget.id, accountId]);
   const query = registerQuery(accountId, search, view);
+  const today = todayIso();
   const transactions = useInfiniteQuery({
     queryKey: [...transactionsQueryPrefix, budget.id, query],
     queryFn: async ({ pageParam, signal }) => {
@@ -192,6 +207,8 @@ export function Register({
           path: { budgetId: budget.id },
           query: {
             ...query,
+            // Entering what's come due first keeps the register current.
+            today,
             limit: REGISTER_PAGE_SIZE,
             ...(pageParam ? { cursor: pageParam } : {}),
           },
@@ -206,6 +223,41 @@ export function Register({
     // Keeps the old rows on screen while a new search or filter loads.
     placeholderData: keepPreviousData,
   });
+  // The Scheduled Transactions section: the same search and date range, by next date.
+  const scheduledFilter = {
+    ...(accountId ? { accountId } : {}),
+    ...(query.q ? { q: query.q } : {}),
+    ...rangeDates(view),
+  };
+  const scheduled = useQuery({
+    queryKey: [...scheduledQueryPrefix, budget.id, scheduledFilter],
+    queryFn: async ({ signal }) => {
+      const { data, error } = await apiClient.GET("/v1/budgets/{budgetId}/scheduled-transactions", {
+        params: { path: { budgetId: budget.id }, query: { ...scheduledFilter, today } },
+        signal,
+      });
+      if (error) throw error;
+      return data.scheduledTransactions;
+    },
+    placeholderData: keepPreviousData,
+  });
+  const scheduledRows: readonly ScheduledTransaction[] = scheduled.data ?? [];
+  const createScheduled = $api.useMutation("post", "/v1/budgets/{budgetId}/scheduled-transactions");
+  const removeScheduled = $api.useMutation(
+    "delete",
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
+  );
+  // The section sits above the virtualized rows, so their offsets start below it.
+  const [scheduledHeight, setScheduledHeight] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const measureScheduled = useCallback((node: HTMLTableSectionElement | null) => {
+    observer.current?.disconnect();
+    if (!node) return;
+    setScheduledHeight(node.offsetHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    observer.current = new ResizeObserver(() => setScheduledHeight(node.offsetHeight));
+    observer.current.observe(node);
+  }, []);
   const loaded = useMemo(
     () => transactions.data?.pages.flatMap((p) => p.transactions) ?? EMPTY,
     [transactions.data],
@@ -255,7 +307,6 @@ export function Register({
       ),
     [allAccounts, view.showRunningBalance, view.showFlags],
   );
-  const today = todayIso();
   const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
 
   const accountList = accounts.data?.accounts ?? [];
@@ -307,6 +358,7 @@ export function Register({
     estimateSize: () => ROW_HEIGHT,
     getItemKey: (index) => flat[index]?.key ?? index,
     overscan: 12,
+    scrollMargin: scheduledHeight,
     // Lets jsdom (no layout) render the first screen of rows.
     initialRect: { width: 1280, height: 800 },
   });
@@ -386,12 +438,16 @@ export function Register({
     }
   }
 
-  const paddingTop = items[0]?.start ?? 0;
-  const paddingBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
+  // Item offsets count from the top of the Scheduled section (`scrollMargin`); the total doesn't.
+  const lastEnd = items.at(-1)?.end;
+  const paddingTop = (items[0]?.start ?? scheduledHeight) - scheduledHeight;
+  const paddingBottom =
+    lastEnd === undefined ? 0 : virtualizer.getTotalSize() + scheduledHeight - lastEnd;
 
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
+      queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
@@ -504,6 +560,10 @@ export function Register({
     if (!draft.date) return setSplitError("Enter a date.");
     const result = updateBody(t, draft, budget);
     if (!result.ok) return setSplitError(result.error);
+    if (draft.date > today) {
+      if (await reschedule(t, draft)) setEditingSplit(null);
+      return;
+    }
     const found = confirmed ? null : editWarning(t, result.body, accountName);
     if (found) {
       setWarning({ warning: found, proceed: () => void saveSplit(t, draft, true) });
@@ -550,6 +610,7 @@ export function Register({
 
   async function saveNew(draft: Draft) {
     if (!draft.date) return setNewError("Enter a date.");
+    if (isScheduled(draft, today)) return saveNewScheduled(draft);
     const result = createBody(draft, budget);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -581,6 +642,106 @@ export function Register({
     }
   }
 
+  /**
+   * A new transaction that repeats or is dated ahead is a scheduled one (YNAB). A past date with
+   * a repeat enters that one transaction and starts the schedule after today.
+   */
+  async function saveNewScheduled(draft: Draft) {
+    const result = scheduleCreateBody(draft, budget, today);
+    if (!result.ok) return setNewError(result.error);
+    try {
+      const body = result.body;
+      let written = await createScheduled.mutateAsync({
+        params: { path: { budgetId: budget.id } },
+        body,
+      });
+      history.record({
+        label: "new scheduled transaction",
+        undo: async () => {
+          if (written.scheduledTransaction) {
+            await removeScheduled.mutateAsync({
+              params: {
+                path: {
+                  budgetId: budget.id,
+                  scheduledTransactionId: written.scheduledTransaction.id,
+                },
+              },
+            });
+          }
+          if (written.enteredTransactionId) {
+            await remove.mutateAsync({
+              params: {
+                path: { budgetId: budget.id, transactionId: written.enteredTransactionId },
+              },
+            });
+          }
+          await refresh();
+        },
+        redo: async () => {
+          written = await createScheduled.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body,
+          });
+          await refresh();
+        },
+      });
+      setAdding(false);
+      await refresh();
+    } catch (e) {
+      setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
+    }
+  }
+
+  /**
+   * Moving a transaction's date into the future makes it a scheduled transaction (YNAB), its
+   * transfer's other side included. Undo brings the transaction back.
+   */
+  async function reschedule(t: Transaction, draft: Draft) {
+    const result = rescheduleBody(t, draft, budget, today);
+    if (!result.ok) {
+      toast.error(result.error);
+      return false;
+    }
+    try {
+      let written = await createScheduled.mutateAsync({
+        params: { path: { budgetId: budget.id } },
+        body: result.body,
+      });
+      let restored: Transaction | null = null;
+      history.record({
+        label: "scheduled transaction",
+        undo: async () => {
+          // The transaction first: if it can't come back, the schedule stays.
+          restored = await create.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: createBodyFromTransaction(t),
+          });
+          const id = written.scheduledTransaction?.id;
+          if (id) {
+            await removeScheduled.mutateAsync({
+              params: { path: { budgetId: budget.id, scheduledTransactionId: id } },
+            });
+          }
+          await refresh();
+        },
+        redo: async () => {
+          if (!restored) return;
+          written = await createScheduled.mutateAsync({
+            params: { path: { budgetId: budget.id } },
+            body: { ...result.body, fromTransactionId: restored.id },
+          });
+          await refresh();
+        },
+      });
+      await refresh();
+      toast.success("Moved to Scheduled Transactions");
+      return true;
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't schedule the transaction."));
+      return false;
+    }
+  }
+
   async function commitCell(
     t: Transaction,
     cell: CellColumn,
@@ -592,6 +753,11 @@ export function Register({
     if (!result.ok) {
       toast.error(result.error);
       setEditing({ id: t.id, column: cell });
+      return;
+    }
+    if (result.body.date && result.body.date > today) {
+      setEditing(null);
+      await reschedule(t, { ...draftFrom(t, budget), date: result.body.date });
       return;
     }
     const order = editableColumns(t);
@@ -1035,10 +1201,11 @@ export function Register({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody ref={measureScheduled}>
           {adding && defaultAccountId && (
             <TransactionEditor
               initial={emptyDraft(defaultAccountId, today)}
+              repeat
               columns={columnIds}
               accounts={openAccounts}
               payees={payeeList}
@@ -1047,12 +1214,27 @@ export function Register({
               settings={budget}
               flags={flags}
               onRenameFlags={renameFlags}
-              pending={create.isPending}
+              pending={create.isPending || createScheduled.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
               onCancel={() => setAdding(false)}
             />
           )}
+          <ScheduledSection
+            rows={scheduledRows}
+            columns={columnIds}
+            collapsed={view.scheduledCollapsed}
+            onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
+            accounts={accountList}
+            payees={payeeList}
+            categories={options}
+            flags={flags}
+            onRenameFlags={renameFlags}
+            today={today}
+            onChanged={refresh}
+          />
+        </TableBody>
+        <TableBody>
           {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
           {items.map((item) => {
             const row = flat[item.index];
@@ -1212,7 +1394,7 @@ export function Register({
           </Button>
         </div>
       )}
-      {rows.length === 0 && !adding && !someHidden && (
+      {rows.length === 0 && scheduledRows.length === 0 && !adding && !someHidden && (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">

@@ -243,14 +243,14 @@ async function scheduleCategory(
 
 /**
  * Checks `input` with the rules transactions follow and writes it, as a new schedule or over
- * `id`. New transfers need both accounts open; editing one that already points at a closed
- * account keeps it.
+ * `existing.id`. New transfers need both accounts open; one that already points at a closed
+ * account (an edited schedule, or a transaction being rescheduled) keeps it.
  */
 export async function writeSchedule(
   tx: Db,
   budgetId: string,
   input: ScheduleInput,
-  existing?: { id: string; transferAccountId: string | null; accountId: string },
+  existing?: { id?: string; transferAccountId: string | null; accountId: string },
 ) {
   const account = await findAccount(tx, budgetId, input.accountId);
   if (!existing || existing.accountId !== account.id) assertOpen(account);
@@ -304,7 +304,7 @@ export async function writeSchedule(
     flag: input.flag,
   };
   const id = existing?.id ?? newId();
-  if (existing) {
+  if (existing?.id) {
     await tx.update(scheduledTransaction).set(values).where(eq(scheduledTransaction.id, id));
     await tx
       .delete(scheduledSubTransaction)
@@ -412,8 +412,6 @@ export async function scheduledRows(db: Db, budgetId: string, accountId?: string
       flag: s.flag,
     };
     const other = row.transferAccountId ? accounts.get(row.transferAccountId) : undefined;
-    const ownCategoryShown =
-      !other || usesAccountCategory(row.accountType, other.type) ? s.categoryId : null;
     out.push({
       ...base,
       id: s.id,
@@ -423,8 +421,9 @@ export async function scheduledRows(db: Db, budgetId: string, accountId?: string
       amount: s.amount,
       payeeId: s.payeeId,
       payeeName: row.payeeName,
-      categoryId: ownCategoryShown,
-      categoryName: ownCategoryShown ? row.categoryName : null,
+      // The stored category, even when it belongs on the other side of a transfer.
+      categoryId: s.categoryId,
+      categoryName: row.categoryName,
       memo: s.memo,
       transferAccountId: row.transferAccountId,
       subtransactions: own.map(({ scheduledTransactionId: _, ...l }) => ({

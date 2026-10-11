@@ -2982,7 +2982,7 @@
               "string",
               "null"
             ],
-            "description": "Null on splits and where no category applies"
+            "description": "Null on splits. A transfer's one category belongs to its budget side: the `schedule` row carries it even when that's the other account; a `transfer` row only on that side"
           },
           "categoryName": {
             "type": [

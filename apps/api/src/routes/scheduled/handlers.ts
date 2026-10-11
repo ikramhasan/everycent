@@ -88,26 +88,37 @@ export const createScheduledTransactionHandler: RouteHandler<
   assertOnePayee(body);
   const today = body.today ?? serverToday();
   const result = await db.transaction(async (tx) => {
+    // A rescheduled transaction keeps its account and transfer even if they're closed now.
+    let from: { accountId: string; transferAccountId: string | null } | undefined;
     if (body.fromTransactionId) {
       const existing = await lockTransaction(tx, budgetId, body.fromTransactionId);
       if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
       if (existing.transferSubTransactionId) transferInSplit();
+      const other = existing.transferTransactionId
+        ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
+        : undefined;
+      from = { accountId: existing.accountId, transferAccountId: other?.accountId ?? null };
       await deleteWithTransfers(tx, existing);
     }
-    const id = await writeSchedule(tx, budgetId, {
-      accountId: body.accountId,
-      frequency: body.frequency,
-      date: body.date,
-      dateFirst: body.dateFirst ?? body.date,
-      amount: BigInt(body.amount),
-      payee: body.transferAccountId
-        ? { transferAccountId: body.transferAccountId }
-        : { name: body.payeeName },
-      categoryId: body.categoryId,
-      memo: body.memo,
-      flag: body.flag,
-      lines: body.subtransactions ?? null,
-    });
+    const id = await writeSchedule(
+      tx,
+      budgetId,
+      {
+        accountId: body.accountId,
+        frequency: body.frequency,
+        date: body.date,
+        dateFirst: body.dateFirst ?? body.date,
+        amount: BigInt(body.amount),
+        payee: body.transferAccountId
+          ? { transferAccountId: body.transferAccountId }
+          : { name: body.payeeName },
+        categoryId: body.categoryId,
+        memo: body.memo,
+        flag: body.flag,
+        lines: body.subtransactions ?? null,
+      },
+      from,
+    );
     return { id, entered: await enterIfPast(tx, id, today) };
   });
   return c.json(

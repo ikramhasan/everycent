@@ -328,7 +328,8 @@ describe("scheduled transactions", () => {
       transferAccountId: checking.id,
       categoryId: ctx.rent.id,
     });
-    expect(s?.categoryId).toBeNull();
+    // Stored on the schedule; the tracking account's register doesn't show it.
+    expect(s?.categoryId).toBe(ctx.rent.id);
     const [mirror] = await ctx.list(`accountId=${checking.id}`);
     expect(mirror?.categoryId).toBe(ctx.rent.id);
     await ctx.enterNow(s?.id ?? "");
@@ -499,6 +500,53 @@ describe("scheduled transactions", () => {
     expect(scheduledTransaction?.dateNext).toBe("2026-10-20");
     expect(await ctx.register(checking.id)).toEqual([]);
     expect(await ctx.register(savings.id)).toEqual([]);
+  });
+
+  it("reschedules a transfer whose other account has since been closed", async () => {
+    const ctx = await setup();
+    const checking = await ctx.addAccount("Checking", "checking");
+    const old = await ctx.addAccount("Old", "savings", "0");
+    const created = await json<Txn>(
+      await send("POST", `${ctx.base}/transactions`, ctx.cookie, {
+        accountId: checking.id,
+        date: "2026-10-03",
+        amount: "-1000",
+        transferAccountId: old.id,
+        categoryId: null,
+      }),
+    );
+    // Back to zero, then closed.
+    await send("POST", `${ctx.base}/transactions`, ctx.cookie, {
+      accountId: old.id,
+      date: "2026-10-04",
+      amount: "-1000",
+      payeeName: "Out",
+      categoryId: null,
+    });
+    const closed = await send("POST", `${ctx.base}/accounts/${old.id}/close`, ctx.cookie, {
+      date: START,
+    });
+    expect(closed.status).toBe(200);
+    const { scheduledTransaction } = await ctx.schedule({
+      accountId: checking.id,
+      date: "2026-10-25",
+      amount: "-1000",
+      transferAccountId: old.id,
+      fromTransactionId: created.id,
+    });
+    expect(scheduledTransaction).toMatchObject({
+      transferAccountId: old.id,
+      dateNext: "2026-10-25",
+    });
+    // A new one to the closed account is still refused.
+    const res = await send("POST", `${ctx.base}/scheduled-transactions`, ctx.cookie, {
+      accountId: checking.id,
+      date: "2026-10-26",
+      amount: "-1000",
+      transferAccountId: old.id,
+      today: TODAY,
+    });
+    expect((await json<ErrorBody>(res)).error.code).toBe("ACCOUNT_CLOSED");
   });
 
   it("searches and filters scheduled rows like the register (they count as uncleared)", async () => {

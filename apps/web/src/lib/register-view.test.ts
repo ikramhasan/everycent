@@ -23,6 +23,7 @@ describe("register view", () => {
       showReconciled: false,
       showRunningBalance: false,
       showFlags: true,
+      scheduledCollapsed: false,
     });
   });
 });

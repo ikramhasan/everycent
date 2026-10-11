@@ -1,0 +1,472 @@
+import { formatDate, money, SCHEDULE_FREQUENCY_LABELS, usesCategory } from "@everycent/engine";
+import { Button } from "@everycent/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@everycent/ui/components/dropdown-menu";
+import { TableCell, TableRow } from "@everycent/ui/components/table";
+import { cn } from "@everycent/ui/lib/utils";
+import {
+  ArrowLeftRight,
+  CalendarClock,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Repeat,
+  Split,
+  Trash2,
+} from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
+import type { Account } from "@/lib/accounts";
+import { $api, apiClient } from "@/lib/api";
+import { useBudget } from "@/lib/budget-context";
+import { apiErrorMessage } from "@/lib/budgets";
+import type { Flag, FlagColor } from "@/lib/flags";
+import {
+  draftFromScheduled,
+  type ScheduledTransaction,
+  scheduleRestoreBody,
+  scheduleUpdateBody,
+} from "@/lib/scheduled";
+import type { CategoryOption, Draft, Payee } from "@/lib/transactions";
+import { useUndo } from "@/lib/undo";
+import { FlagMenu } from "./flag-menu";
+import { COLUMN_SPECS, type ColumnId, isEditable } from "./register-columns";
+import { TransactionEditor } from "./transaction-editor";
+
+/**
+ * YNAB's "Scheduled Transactions" section at the top of a register: one row per schedule (its
+ * next occurrence), newest first, plus the other account's side of scheduled transfers. It
+ * collapses (remembered per register), and each row can be edited (it and every later
+ * occurrence), entered now or deleted. A split's transfer line in the other account is only
+ * entered from there; it's edited and deleted through its split, as YNAB does.
+ */
+export function ScheduledSection({
+  rows,
+  columns,
+  collapsed,
+  onToggle,
+  accounts,
+  payees,
+  categories,
+  flags,
+  onRenameFlags,
+  today,
+  onChanged,
+}: {
+  rows: readonly ScheduledTransaction[];
+  columns: readonly ColumnId[];
+  collapsed: boolean;
+  onToggle: () => void;
+  accounts: readonly Account[];
+  payees: readonly Payee[];
+  categories: readonly CategoryOption[];
+  flags: readonly Flag[];
+  onRenameFlags: (changes: Flag[]) => Promise<void>;
+  today: string;
+  /** Refetch what a change touches (registers, balances, the plan). */
+  onChanged: () => Promise<void>;
+}) {
+  const { budget, formatAmount } = useBudget();
+  const history = useUndo();
+  const [editing, setEditing] = useState<{ id: string; draft: Draft } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const update = $api.useMutation(
+    "patch",
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
+  );
+  const create = $api.useMutation("post", "/v1/budgets/{budgetId}/scheduled-transactions");
+  const remove = $api.useMutation(
+    "delete",
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
+  );
+  const enter = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}/enter",
+  );
+  const removeTransaction = $api.useMutation(
+    "delete",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}",
+  );
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
+  const path = (scheduledTransactionId: string) => ({
+    params: { path: { budgetId: budget.id, scheduledTransactionId } },
+  });
+
+  if (rows.length === 0) return null;
+
+  /** Whether `row`'s side takes a category (not tracking accounts, nor in-budget transfers). */
+  function categorized(row: ScheduledTransaction) {
+    const type = accountById.get(row.accountId)?.type ?? "checking";
+    const to = row.transferAccountId ? accountById.get(row.transferAccountId)?.type : null;
+    return usesCategory(type, to);
+  }
+
+  /** The schedule as its own account has it (undo restores from this). */
+  async function ownRow(row: ScheduledTransaction) {
+    if (row.kind === "schedule") return row;
+    const { data, error } = await apiClient.GET("/v1/budgets/{budgetId}/scheduled-transactions", {
+      params: { path: { budgetId: budget.id } },
+    });
+    if (error) throw error;
+    const own = data.scheduledTransactions.find((r) => r.id === row.scheduledTransactionId);
+    if (!own) throw new Error("Scheduled transaction not found");
+    return own;
+  }
+
+  /** Puts a schedule back as it was; returns its (possibly new) id. */
+  async function restore(before: ScheduledTransaction, currentId: string | null) {
+    const body = { ...scheduleRestoreBody(before), today };
+    if (currentId) {
+      await update.mutateAsync({ ...path(currentId), body });
+      return currentId;
+    }
+    const created = await create.mutateAsync({
+      params: { path: { budgetId: budget.id } },
+      body,
+    });
+    return created.scheduledTransaction?.id ?? null;
+  }
+
+  async function save(row: ScheduledTransaction, draft: Draft) {
+    if (!draft.date) return setError("Enter a date.");
+    const result = scheduleUpdateBody(row, draft, budget, today, categorized(row));
+    if (!result.ok) return setError(result.error);
+    try {
+      const before = await ownRow(row);
+      const after = await update.mutateAsync({
+        ...path(row.scheduledTransactionId),
+        body: result.body,
+      });
+      let entered = after.enteredTransactionId;
+      let current = after.scheduledTransaction ? before.id : null;
+      history.record({
+        label: "scheduled transaction edit",
+        undo: async () => {
+          // The schedule first: if it can't come back, the entered transaction stays.
+          current = await restore(before, current);
+          if (entered) {
+            await removeTransaction.mutateAsync({
+              params: { path: { budgetId: budget.id, transactionId: entered } },
+            });
+          }
+          await onChanged();
+        },
+        redo: async () => {
+          if (!current) return;
+          const again = await update.mutateAsync({ ...path(current), body: result.body });
+          entered = again.enteredTransactionId;
+          if (!again.scheduledTransaction) current = null;
+          await onChanged();
+        },
+      });
+      setEditing(null);
+      await onChanged();
+    } catch (e) {
+      setError(apiErrorMessage(e, "Couldn't save the scheduled transaction."));
+    }
+  }
+
+  async function enterNow(row: ScheduledTransaction) {
+    try {
+      const before = await ownRow(row);
+      const result = await enter.mutateAsync({
+        ...path(row.scheduledTransactionId),
+        body: { today },
+      });
+      let enteredId = result.transaction.id;
+      let current = result.scheduledTransaction ? before.id : null;
+      history.record({
+        label: "enter scheduled transaction",
+        undo: async () => {
+          current = await restore(before, current);
+          await removeTransaction.mutateAsync({
+            params: { path: { budgetId: budget.id, transactionId: enteredId } },
+          });
+          await onChanged();
+        },
+        redo: async () => {
+          if (!current) return;
+          const again = await enter.mutateAsync({ ...path(current), body: { today } });
+          enteredId = again.transaction.id;
+          if (!again.scheduledTransaction) current = null;
+          await onChanged();
+        },
+      });
+      await onChanged();
+      toast.success("Transaction entered");
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't enter the transaction."));
+    }
+  }
+
+  async function deleteSchedule(row: ScheduledTransaction) {
+    try {
+      const before = await ownRow(row);
+      await remove.mutateAsync(path(before.id));
+      let current: string | null = null;
+      history.record({
+        label: "deleted scheduled transaction",
+        undo: async () => {
+          current = await restore(before, null);
+          await onChanged();
+        },
+        redo: async () => {
+          if (!current) return;
+          await remove.mutateAsync(path(current));
+          current = null;
+          await onChanged();
+        },
+      });
+      await onChanged();
+      toast.success("Scheduled transaction deleted");
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't delete the scheduled transaction."));
+    }
+  }
+
+  async function setFlag(row: ScheduledTransaction, flag: FlagColor | null) {
+    const old = row.flag;
+    const send = (value: FlagColor | null) =>
+      update.mutateAsync({ ...path(row.scheduledTransactionId), body: { flag: value, today } });
+    try {
+      await send(flag);
+      history.record({
+        label: "scheduled transaction flag",
+        undo: async () => {
+          await send(old);
+          await onChanged();
+        },
+        redo: async () => {
+          await send(flag);
+          await onChanged();
+        },
+      });
+      await onChanged();
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't change the flag."));
+    }
+  }
+
+  function open(row: ScheduledTransaction) {
+    if (row.kind === "splitTransfer") return;
+    setError(null);
+    setEditing({ id: row.id, draft: draftFromScheduled(row, budget) });
+  }
+
+  function display(row: ScheduledTransaction, id: ColumnId) {
+    const amount = BigInt(row.amount);
+    switch (id) {
+      case "flag":
+        return row.kind === "splitTransfer" ? null : (
+          <FlagMenu
+            value={row.flag}
+            flags={flags}
+            onChange={(flag) => void setFlag(row, flag)}
+            onRename={onRenameFlags}
+          />
+        );
+      case "account":
+        return row.accountName;
+      case "date": {
+        const repeats = row.frequency !== "never" && row.kind !== "splitTransfer";
+        return (
+          <span className="flex items-center justify-between gap-1">
+            {formatDate(row.dateNext, budget.dateFormat)}
+            {repeats && (
+              <Repeat
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-label={`Repeats: ${SCHEDULE_FREQUENCY_LABELS[row.frequency]}`}
+              >
+                <title>{SCHEDULE_FREQUENCY_LABELS[row.frequency]}</title>
+              </Repeat>
+            )}
+          </span>
+        );
+      }
+      case "payee":
+        return row.transferAccountId ? (
+          <span className="flex min-w-0 items-center gap-1">
+            <ArrowLeftRight className="size-3.5 shrink-0" aria-label="Transfer" />
+            <span className="truncate">{row.payeeName}</span>
+          </span>
+        ) : (
+          row.payeeName
+        );
+      case "category":
+        if (row.subtransactions.length > 0) {
+          const count = new Set(row.subtransactions.map((l) => l.categoryId ?? l.transferAccountId))
+            .size;
+          return (
+            <span className="flex items-center gap-1.5">
+              <Split className="size-4 shrink-0" />
+              <span className="truncate">
+                Split ({count} {count === 1 ? "category" : "categories"})
+              </span>
+            </span>
+          );
+        }
+        return categorized(row) ? row.categoryName : "";
+      case "memo":
+        return row.memo;
+      case "outflow":
+        return amount < 0n ? show(-amount) : "";
+      case "inflow":
+        return amount > 0n ? show(amount) : "";
+      case "actions":
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Scheduled transaction actions">
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => void enterNow(row)}>
+                <CalendarClock /> Enter Now
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={row.kind === "splitTransfer"}
+                onSelect={() => void deleteSchedule(row)}
+              >
+                <Trash2 /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      default:
+        return null;
+    }
+  }
+
+  const span = columns.length;
+  return (
+    <>
+      <TableRow className="bg-muted hover:bg-muted">
+        <TableCell colSpan={span} className="py-1.5">
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            onClick={onToggle}
+            className="ml-8 inline-flex items-center gap-1.5 font-medium text-sm"
+          >
+            <CalendarDays className="size-4 text-muted-foreground" />
+            Scheduled Transactions
+            {collapsed ? (
+              <ChevronRight className="size-4" aria-hidden />
+            ) : (
+              <ChevronDown className="size-4" aria-hidden />
+            )}
+          </button>
+        </TableCell>
+      </TableRow>
+      {!collapsed &&
+        rows.map((row) => {
+          if (editing?.id === row.id) {
+            return (
+              <TransactionEditor
+                key={row.id}
+                initial={editing.draft}
+                label="Edit scheduled transaction"
+                columns={columns}
+                accounts={accounts.filter((a) => !a.closed || a.id === row.accountId)}
+                payees={payees}
+                categories={categories}
+                dateFormat={budget.dateFormat}
+                settings={budget}
+                flags={flags}
+                onRenameFlags={onRenameFlags}
+                repeat
+                scheduled
+                pending={update.isPending}
+                error={error}
+                onSave={(draft) => void save(row, draft)}
+                onCancel={() => setEditing(null)}
+              />
+            );
+          }
+          const readOnly = row.kind === "splitTransfer";
+          return [
+            <TableRow
+              key={row.id}
+              aria-label={`Scheduled: ${row.payeeName ?? "transaction"} on ${formatDate(
+                row.dateNext,
+                budget.dateFormat,
+              )}`}
+              className="bg-muted/40"
+            >
+              {columns.map((id) => {
+                const spec = COLUMN_SPECS[id];
+                const editable = !readOnly && isEditable(id);
+                return (
+                  <TableCell
+                    key={id}
+                    className={cn(
+                      "truncate",
+                      spec.align === "right" && "text-right tabular-nums",
+                      spec.align === "center" && "py-1 text-center",
+                      id === "flag" && "px-1",
+                      id === "actions" && "py-1",
+                      (id === "category" || id === "memo") && "text-muted-foreground",
+                      editable && "cursor-text",
+                    )}
+                    onClick={editable ? () => open(row) : undefined}
+                  >
+                    {display(row, id)}
+                  </TableCell>
+                );
+              })}
+            </TableRow>,
+            ...row.subtransactions.map((line) => {
+              const lineAmount = BigInt(line.amount);
+              const type = accountById.get(row.accountId)?.type ?? "checking";
+              const to = line.transferAccountId
+                ? accountById.get(line.transferAccountId)?.type
+                : null;
+              const cells: Partial<Record<ColumnId, ReactNode>> = {
+                payee: (
+                  <span className="flex min-w-0 items-center gap-1 pl-4">
+                    {line.transferAccountId && (
+                      <ArrowLeftRight className="size-3.5 shrink-0" aria-label="Transfer" />
+                    )}
+                    <span className="truncate">{line.payeeName}</span>
+                  </span>
+                ),
+                category: usesCategory(type, to) ? line.categoryName : "",
+                memo: line.memo,
+                outflow: lineAmount < 0n ? show(-lineAmount) : "",
+                inflow: lineAmount > 0n ? show(lineAmount) : "",
+              };
+              return (
+                <TableRow
+                  key={`${row.id}:${line.id}`}
+                  aria-label={`Split line of ${row.payeeName ?? "scheduled transaction"}`}
+                  className="bg-muted/40 text-muted-foreground text-xs"
+                >
+                  {columns.map((id) => (
+                    <TableCell
+                      key={id}
+                      className={cn(
+                        "truncate py-1.5",
+                        COLUMN_SPECS[id].align === "right" && "text-right tabular-nums",
+                        isEditable(id) && "cursor-text",
+                      )}
+                      onClick={isEditable(id) ? () => open(row) : undefined}
+                    >
+                      {cells[id] ?? null}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            }),
+          ];
+        })}
+    </>
+  );
+}

@@ -1,4 +1,10 @@
-import { type DateFormat, formatDate } from "@everycent/engine";
+import {
+  type DateFormat,
+  formatDate,
+  SCHEDULE_FREQUENCIES,
+  SCHEDULE_FREQUENCY_LABELS,
+  type ScheduleFrequency,
+} from "@everycent/engine";
 import {
   Autocomplete,
   AutocompleteCollection,
@@ -27,9 +33,11 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@everycent/ui/components/input-group";
+import { Label } from "@everycent/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import { type CategoryOption, categoryLabel, type Payee, transferLabel } from "@/lib/transactions";
 
@@ -55,13 +63,17 @@ export function isInsidePopup(node: EventTarget | null) {
   );
 }
 
-/** A date typed in the budget's format ("10/5" works too), with a calendar to pick from. */
+/**
+ * A date typed in the budget's format ("10/5" works too), with a calendar to pick from. With
+ * `repeat`, the calendar has YNAB's "Repeat:" select under it (new and scheduled transactions).
+ */
 export function DateField({
   value,
   onChange,
   onPick,
   format,
   autoFocus,
+  repeat,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -69,11 +81,13 @@ export function DateField({
   onPick?: (iso: string) => void;
   format: DateFormat;
   autoFocus?: boolean;
+  repeat?: { value: ScheduleFrequency; onChange: (frequency: ScheduleFrequency) => void };
 }) {
   const display = (iso: string) => formatDate(iso, format);
   const [text, setText] = useState(() => display(value));
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const repeatId = useId();
 
   return (
     <InputGroup className="h-8">
@@ -113,6 +127,25 @@ export function DateField({
                 onPick?.(iso);
               }}
             />
+            {repeat && (
+              <div className="grid gap-1.5 border-t p-3">
+                <Label htmlFor={repeatId} className="text-xs">
+                  Repeat:
+                </Label>
+                <NativeSelect
+                  id={repeatId}
+                  value={repeat.value}
+                  onChange={(e) => repeat.onChange(e.target.value as ScheduleFrequency)}
+                  className="h-8 w-full"
+                >
+                  {SCHEDULE_FREQUENCIES.map((f) => (
+                    <NativeSelectOption key={f} value={f}>
+                      {SCHEDULE_FREQUENCY_LABELS[f]}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       </InputGroupAddon>

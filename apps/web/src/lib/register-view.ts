@@ -14,6 +14,8 @@ export interface RegisterView {
   /** Account registers only; All Accounts has no running balance. */
   showRunningBalance: boolean;
   showFlags: boolean;
+  /** The Scheduled Transactions section folded away (YNAB remembers it per register). */
+  scheduledCollapsed: boolean;
 }
 
 export const DATE_RANGES = [
@@ -41,6 +43,7 @@ export const DEFAULT_VIEW: RegisterView = {
   showReconciled: false,
   showRunningBalance: false,
   showFlags: true,
+  scheduledCollapsed: false,
 };
 
 /** "2026-10" → the first day, and the last day, of that month. */

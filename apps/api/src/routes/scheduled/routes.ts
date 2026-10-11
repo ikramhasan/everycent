@@ -57,7 +57,13 @@ export const ScheduledTransactionSchema = z
     currency: zCurrencyCode,
     payeeId: z.string().nullable(),
     payeeName: z.string().nullable(),
-    categoryId: z.string().nullable().describe("Null on splits and where no category applies"),
+    categoryId: z
+      .string()
+      .nullable()
+      .describe(
+        "Null on splits. A transfer's one category belongs to its budget side: the `schedule` " +
+          "row carries it even when that's the other account; a `transfer` row only on that side",
+      ),
     categoryName: z.string().nullable(),
     memo: z.string(),
     flag: Flag,
