@@ -23,6 +23,7 @@
     "@tanstack/react-virtual": "catalog:",
     "better-auth": "catalog:",
     "date-fns": "catalog:",
+    "dayjs": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

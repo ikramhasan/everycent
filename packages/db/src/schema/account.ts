@@ -11,6 +11,7 @@ import {
   numeric,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { budget } from "./budget";
@@ -40,13 +41,19 @@ export const budgetAccount = pgTable(
     minimumPayment: bigint({ mode: "bigint" }),
     /** Loan accounts: monthly escrow, in `currency` minor units. */
     escrowAmount: bigint({ mode: "bigint" }),
+    /** When the account was last reconciled (YNAB's "Reconciled 9 days ago"); null if never. */
+    lastReconciledAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },
   (t) => [index("budget_account_budget_id_idx").on(t.budgetId)],
 );
 
 /** Payees YNAB creates itself and people can't rename or merge. */
-export const INTERNAL_PAYEE_KINDS = ["starting_balance", "manual_balance_adjustment"] as const;
+export const INTERNAL_PAYEE_KINDS = [
+  "starting_balance",
+  "manual_balance_adjustment",
+  "reconciliation_balance_adjustment",
+] as const;
 export type InternalPayeeKind = (typeof INTERNAL_PAYEE_KINDS)[number];
 
 export const payee = pgTable(

@@ -100,14 +100,9 @@ export function SelectionBar({
 
   const count = summary?.count ?? null;
   const s = summary;
-  // YNAB's Clear toggles a selection that's all one state; mixed (or with reconciled rows), the
-  // states that apply move into More.
-  const toggle =
-    s && s.count > 0 && s.reconciled === 0 && (s.uncleared === 0 || s.cleared === 0)
-      ? s.uncleared > 0
-        ? "cleared"
-        : "uncleared"
-      : null;
+  // YNAB's Clear shows when every selected row is uncleared (checked 2026-10-11); otherwise the
+  // states that apply ("Mark as Cleared", "Mark as Uncleared") are in More.
+  const toggle = s && s.count > 0 && s.uncleared === s.count ? "cleared" : null;
   const markCleared = !toggle && s ? s.uncleared > 0 : false;
   const markUncleared = !toggle && s ? s.cleared > 0 : false;
   // Splits without a transfer line get un-split; YNAB asks first.
@@ -207,10 +202,10 @@ export function SelectionBar({
             variant="ghost"
             size="sm"
             disabled={pending}
-            title={toggle === "cleared" ? "Mark as cleared" : "Mark as uncleared"}
+            title="Mark as cleared"
             onClick={() => onAction({ type: "cleared", cleared: toggle })}
           >
-            {toggle === "cleared" ? <CircleCheck /> : <Circle />} Clear
+            <CircleCheck /> Clear
           </Button>
         )}
         <DropdownMenu>

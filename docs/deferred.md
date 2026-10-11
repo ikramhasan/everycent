@@ -114,10 +114,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   Account" memo; a zero-balance account closes without a dialog. Edit account offers Close, or
   Delete while an account has only its starting balance; a closed account offers Re-open and
   Delete (disabled with YNAB's tooltip while it has history).
-- **Edit account has no Working Balance field.** YNAB's Edit Account dialog lets you type a new
-  working balance and creates an adjustment for the difference ("An adjustment transaction will be
-  created automatically if you change this amount."). Not built; it shares reconciliation's
-  adjustment (phase 9).
+- **Working Balance** in Edit account adds a cleared Manual Balance Adjustment (EVERYCENT-113);
+  loans don't have it until 7f decides what a loan's edit dialog holds.
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
@@ -158,8 +156,10 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
   account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
   so it only matters to other API clients.
-- Reconciled transactions show a lock and can't be unlocked from the register yet; the API
-  accepts `cleared` on them. Phase 9 adds the reconcile flow and the "unlock?" warning.
+- Reconciled transactions keep their lock for good (YNAB can't unreconcile); edits that can put
+  a reconciliation out of balance ask first (phase 9, docs/verify.md "Reconciliation").
+- The Reconcile popover leaves out YNAB's "How do I find my account balance?" link and the
+  difference step's help-doc box: everycent has no help center yet.
 - Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
   stay in the autocomplete.
 - shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
@@ -169,8 +169,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Transfers (phase 5b follow-ups)
 
-- A transfer whose other side is reconciled can't change date or amount, be re-pointed or be
-  deleted (409 `TRANSFER_RECONCILED`). Phase 9's "unlock?" flow should offer to unlock it instead.
+- A transfer whose other side is reconciled can be changed or deleted after YNAB's warning; the
+  other side follows and stays reconciled (phase 9). Undoing a deleted transfer brings its other
+  side back uncleared.
 - Transfers to and from a credit card carry no category. Phase 7 must treat a payment from a
   budget account as moving money out of the card's payment category, and spending on the card as
   moving available money into it.
@@ -185,8 +186,6 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The transaction a split's transfer line keeps in the other account only takes memo, cleared and
   category there (409 `TRANSFER_IN_SPLIT` otherwise); date, amount and deletion go through the
   split. The register hides those cells and the delete action.
-- A split with a reconciled transfer side can't drop or re-point that line (409
-  `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
 
 ## Bulk edit (phase 5f follow-ups)
 

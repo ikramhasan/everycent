@@ -6,7 +6,7 @@ import {
   isDebtAccount,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Textarea } from "@everycent/ui/components/textarea";
@@ -219,18 +219,24 @@ export interface AccountEdit {
   interestRate: string | null;
   minimumPayment: string | null;
   escrowAmount: string | null;
+  /** Minor units; set only when changed (an adjustment makes up the difference). */
+  workingBalance?: string;
 }
 
 export function EditAccountForm({
   settings,
   initial,
+  workingBalance,
   onSubmit,
 }: {
   settings: MoneySettings;
   initial: AccountEdit;
+  /** The account's working balance; null hides the field (closed accounts and loans, as YNAB). */
+  workingBalance: bigint | null;
   onSubmit: (values: AccountEdit) => Promise<string | null>;
 }) {
   const [name, setName] = useState(initial.name);
+  const [balance, setBalance] = useState(toMoneyInput(workingBalance, settings));
   const [note, setNote] = useState(initial.note);
   const [type, setType] = useState(initial.type);
   const [loan, setLoan] = useState<LoanValues>({
@@ -249,6 +255,9 @@ export function EditAccountForm({
       ? parseLoan(loan, settings)
       : ({ ok: true, interestRate: null, minimumPayment: null, escrowAmount: null } as const);
     if (!loanValues.ok) return setError(loanValues.error);
+    // YNAB takes the working balance as typed (signed): a card's "70" is $70 in credit.
+    const newBalance = workingBalance === null ? null : parseMoneyInput(balance || "0", settings);
+    if (typeof newBalance === "string") return setError(newBalance);
     setPending(true);
     setError(null);
     const message = await onSubmit({
@@ -258,6 +267,9 @@ export function EditAccountForm({
       interestRate: loanValues.interestRate,
       minimumPayment: loanValues.minimumPayment,
       escrowAmount: loanValues.escrowAmount,
+      ...(newBalance !== null && newBalance !== workingBalance
+        ? { workingBalance: newBalance.toString() }
+        : {}),
     });
     setPending(false);
     setError(message);
@@ -299,6 +311,20 @@ export function EditAccountForm({
         />
       </Field>
       {isLoan && <LoanFields values={loan} onChange={setLoan} />}
+      {workingBalance !== null && (
+        <Field>
+          <FieldLabel htmlFor="edit-account-balance">Working Balance</FieldLabel>
+          <Input
+            id="edit-account-balance"
+            inputMode="decimal"
+            value={balance}
+            onChange={(e) => setBalance(e.target.value)}
+          />
+          <FieldDescription>
+            An adjustment transaction will be created automatically if you change this amount.
+          </FieldDescription>
+        </Field>
+      )}
     </FormShell>
   );
 }

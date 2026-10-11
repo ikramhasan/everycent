@@ -1,0 +1,1 @@
+ALTER TABLE "budget_account" ADD COLUMN "last_reconciled_at" timestamp with time zone;

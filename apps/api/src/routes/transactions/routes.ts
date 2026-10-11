@@ -21,6 +21,8 @@ const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
 /** People toggle between these two; reconciling is its own flow. */
 const SettableCleared = z.enum(["uncleared", "cleared"]);
+/** A new transaction can start reconciled (restoring a deleted one, as an undo does). */
+const NewCleared = z.enum(CLEARED_STATES);
 const Flag = z
   .enum(FLAG_COLORS)
   .nullable()
@@ -40,6 +42,7 @@ const SubTransactionSchema = z
       .string()
       .nullable()
       .describe("Transfer lines: the transaction they keep in the other account"),
+    transferReconciled: z.boolean().describe("Transfer lines: the other side is reconciled"),
   })
   .openapi("SubTransaction");
 
@@ -74,6 +77,12 @@ export const TransactionSchema = z
       .describe(
         "The other side is a line of a split, which owns this transfer's date, amount and " +
           "account; only memo, cleared and category change here",
+      ),
+    transferReconciled: z
+      .boolean()
+      .describe(
+        "Transfers: the other side is reconciled (it follows changes to date, amount and " +
+          "account, and stays reconciled; YNAB warns before an amount or account change)",
       ),
     subtransactions: z
       .array(SubTransactionSchema)
@@ -124,9 +133,9 @@ function ok<T extends z.ZodType>(description: string, schema: T) {
 }
 const notFound = jsonError("No such budget, account or transaction, or the caller isn't a member");
 const forbidden = jsonError("The caller's role can't change transactions");
-const reconciled = jsonError(
-  "The other side of the transfer is reconciled, so its date and amount can't change; or this " +
-    "is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`)",
+const locked = jsonError(
+  "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state " +
+    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
 );
 
 const categoryRules =
@@ -220,7 +229,7 @@ export const createTransaction = createRoute({
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
-          cleared: SettableCleared.default("uncleared"),
+          cleared: NewCleared.default("uncleared"),
           flag: Flag.default(null),
         })
         .openapi("CreateTransaction"),
@@ -249,9 +258,10 @@ export const updateTransaction = createRoute({
   description:
     `${categoryRules} ${transferRules} On a transfer, date and amount changes apply to both ` +
     "sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back " +
-    "into a normal transaction and deletes the other side. Setting `cleared` on a reconciled " +
-    "transaction unlocks it. Moving it to an account that can't use its category resets the " +
-    "category. " +
+    "into a normal transaction and deletes the other side. A reconciled other side follows " +
+    "and stays reconciled. A reconciled transaction can be edited but stays reconciled, so " +
+    "`cleared` can't be set on it. Moving it to an account that can't use its category resets " +
+    "the category. " +
     `${splitRules} Sending \`subtransactions\` replaces a split's lines (matched by \`id\`); ` +
     "changing a split's amount needs new lines too. Giving a split a `categoryId` (or making " +
     "it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
@@ -283,7 +293,7 @@ export const updateTransaction = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: reconciled,
+    409: locked,
   },
 });
 
@@ -296,15 +306,16 @@ export const deleteTransaction = createRoute({
   middleware: [requireAuth] as const,
   summary: "Delete a transaction",
   description:
-    "Deleting either side of a transfer deletes both. Deleting a split deletes its transfer " +
-    "lines' other sides; those can't be deleted on their own.",
+    "Deleting either side of a transfer deletes both, reconciled or not. Deleting a split " +
+    "deletes its transfer lines' other sides; those can't be deleted on their own " +
+    "(`TRANSFER_IN_SPLIT`).",
   request: { params: TransactionParams },
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: reconciled,
+    409: jsonError("A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)"),
   },
 });
 
@@ -388,6 +399,13 @@ export const summarizeSelection = createRoute({
           uncleared: z.number().int(),
           cleared: z.number().int(),
           reconciled: z.number().int(),
+          reconciledTransfers: z
+            .number()
+            .int()
+            .describe(
+              "Transactions whose transfer's other side (or a split line's) is reconciled; " +
+                "deleting them changes another account's reconciliation",
+            ),
           categorizable: z
             .number()
             .int()
@@ -451,9 +469,5 @@ export const bulkUpdateTransactions = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: jsonError(
-      "Moving or deleting would change a transfer whose other side is reconciled " +
-        "(TRANSFER_RECONCILED); nothing changed",
-    ),
   },
 });

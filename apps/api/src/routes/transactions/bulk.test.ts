@@ -174,6 +174,7 @@ describe("bulk edit", () => {
       uncleared: 4,
       cleared: 1,
       reconciled: 0,
+      reconciledTransfers: 0,
       categorizable: 3,
       splits: 2,
       splitsWithTransfers: 1,
@@ -234,6 +235,47 @@ describe("bulk edit", () => {
     const rows = await all();
     expect(rows.find((t) => t.id === a.id)?.cleared).toBe("reconciled");
     expect(rows.find((t) => t.id === b.id)?.cleared).toBe("cleared");
+  });
+
+  it("moves and deletes transfers whose other side is reconciled, as YNAB does", async () => {
+    // YNAB 2026-10-11 (x-tr-rec, x-split-rec): Move re-points the reconciled side with no
+    // prompt; Delete asks first ("Delete Reconciled Transfer?") and then deletes both sides.
+    const { addAccount, add, bulk, summary, all, updated, groceries } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const wallet = await addAccount("Wallet", "cash");
+    const transfer = await add({ transferAccountId: savings.id });
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
+    const plain = await add({ payeeName: "Plain" });
+    const sides = [
+      transfer.transferTransactionId ?? "",
+      split.subtransactions[1]?.transferTransactionId ?? "",
+    ];
+    for (const id of sides) {
+      await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, id));
+    }
+    expect(await summary({ ids: [transfer.id, split.id, plain.id] })).toMatchObject({
+      reconciled: 0,
+      reconciledTransfers: 2,
+    });
+
+    expect(
+      await updated(await bulk({ ids: [transfer.id] }, { type: "move", accountId: wallet.id })),
+    ).toBe(1);
+    const moved = (await all(wallet.id)).find((t) => t.id === transfer.id);
+    expect(moved?.transferAccountId).toBe(savings.id);
+    expect((await all(savings.id)).find((t) => t.id === sides[0])).toMatchObject({
+      cleared: "reconciled",
+      transferAccountId: wallet.id,
+    });
+
+    expect(await updated(await bulk({ ids: [transfer.id, split.id] }, { type: "delete" }))).toBe(2);
+    expect((await all(savings.id)).map((t) => t.id)).not.toContain(sides[0]);
+    expect((await all(savings.id)).map((t) => t.id)).not.toContain(sides[1]);
   });
 
   it("replaces the memo of every selected transaction", async () => {

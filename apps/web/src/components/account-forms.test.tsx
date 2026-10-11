@@ -92,6 +92,7 @@ describe("EditAccountForm", () => {
           minimumPayment: null,
           escrowAmount: null,
         }}
+        workingBalance={-6400n}
         onSubmit={vi.fn()}
       />,
     );
@@ -99,5 +100,34 @@ describe("EditAccountForm", () => {
       .getAllByRole("option")
       .map((o) => o.textContent);
     expect(options).toEqual(["Credit Card", "Line of Credit"]);
+  });
+
+  it("sends a changed working balance only", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    const user = userEvent.setup();
+    render(
+      <EditAccountForm
+        settings={usd}
+        initial={{
+          name: "Visa",
+          note: "",
+          type: "credit_card",
+          interestRate: null,
+          minimumPayment: null,
+          escrowAmount: null,
+        }}
+        workingBalance={-6400n}
+        onSubmit={onSubmit}
+      />,
+    );
+    const field = screen.getByLabelText("Working Balance");
+    expect(field).toHaveValue("-64.00");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSubmit.mock.lastCall?.[0]).not.toHaveProperty("workingBalance");
+    // Taken as typed, as YNAB does: a card's "70" is a positive balance.
+    await user.clear(field);
+    await user.type(field, "70");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSubmit.mock.lastCall?.[0]).toMatchObject({ workingBalance: "7000" });
   });
 });

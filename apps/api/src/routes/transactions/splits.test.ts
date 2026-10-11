@@ -257,7 +257,7 @@ describe("split transactions", () => {
     expect(await working(savings.id)).toBe("0");
   });
 
-  it("removes a transfer line's other side when the line goes, unless it's reconciled", async () => {
+  it("removes a transfer line's other side when the line goes, reconciled or not", async () => {
     const { addAccount, post, patch, find, groceries } = await setup();
     const checking = await addAccount("Checking", "checking", "100000");
     const savings = await addAccount("Savings", "savings");
@@ -273,12 +273,36 @@ describe("split transactions", () => {
     );
     const otherId = split.subtransactions[1]?.transferTransactionId ?? "";
     await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, otherId));
-    expect(await code(await patch(split.id, { categoryId: groceries.id }))).toBe(
-      "TRANSFER_RECONCILED",
-    );
-    await db.update(transaction).set({ cleared: "cleared" }).where(eq(transaction.id, otherId));
     expect((await patch(split.id, { categoryId: groceries.id })).status).toBe(200);
     expect(await find(otherId)).toBeUndefined();
+  });
+
+  it("changes a transfer line whose other side is reconciled, which stays reconciled", async () => {
+    // YNAB 2026-10-11 (x-split-rec): no warning for a split; the other side follows.
+    const { addAccount, post, patch, find, groceries } = await setup();
+    const checking = await addAccount("Checking", "checking", "100000");
+    const savings = await addAccount("Savings", "savings");
+    const split = await json<Txn>(
+      await post({
+        accountId: checking.id,
+        amount: "-1300",
+        subtransactions: [
+          { amount: "-600", transferAccountId: savings.id },
+          { amount: "-700", categoryId: groceries.id },
+        ],
+      }),
+    );
+    const [line, rest] = split.subtransactions;
+    const otherId = line?.transferTransactionId ?? "";
+    await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, otherId));
+    const res = await patch(split.id, {
+      subtransactions: [
+        { id: line?.id, amount: "-800", transferAccountId: savings.id },
+        { id: rest?.id, amount: "-500", categoryId: groceries.id },
+      ],
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(await find(otherId)).toMatchObject({ amount: "800", cleared: "reconciled" });
   });
 
   it("moves with its account and stays in budget accounts", async () => {

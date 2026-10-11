@@ -23,7 +23,7 @@ import {
   findAccount,
   insertOtherSide,
   lockTransaction,
-  reconciledOtherSide,
+  reconciledStays,
   resolveCategory,
   transferInSplit,
   usesCategory,
@@ -148,6 +148,7 @@ export async function applyUpdate(
 ) {
   const existing = await lockTransaction(tx, budgetId, transactionId);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  if (existing.cleared === "reconciled" && body.cleared !== undefined) reconciledStays();
   if (existing.transferSubTransactionId) {
     return updateSplitTransferSide(tx, budgetId, existing, body);
   }
@@ -174,10 +175,8 @@ export async function applyUpdate(
   }
 
   const amount = body.amount === undefined ? existing.amount : BigInt(body.amount);
-  if (other?.cleared === "reconciled") {
-    const dateChanges = body.date !== undefined && body.date !== other.date;
-    if (retargeted || dateChanges || amount !== -other.amount) reconciledOtherSide();
-  }
+  // A reconciled other side follows the edit and stays reconciled, as in YNAB (2026-10-11): the
+  // warning before saving is the client's.
 
   // A split stays one until it gets a category (or becomes a transfer); see `syncLines`.
   const existingLines = await splitLines(tx, transactionId);
@@ -282,24 +281,16 @@ export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, En
     const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
     if (existing.transferSubTransactionId) transferInSplit();
-    await deleteWithTransfers(tx, budgetId, existing);
+    await deleteWithTransfers(tx, existing);
   });
   return c.body(null, 204);
 };
 
 /** Deletes a transaction with its transfer's other side, or a split with its lines' ones. */
-export async function deleteWithTransfers(
-  tx: Db,
-  budgetId: string,
-  existing: typeof transaction.$inferSelect,
-) {
+export async function deleteWithTransfers(tx: Db, existing: typeof transaction.$inferSelect) {
   await deleteLineTransfers(tx, existing.id);
   const ids = [existing.id];
-  if (existing.transferTransactionId) {
-    const other = await lockTransaction(tx, budgetId, existing.transferTransactionId);
-    if (other?.cleared === "reconciled") reconciledOtherSide();
-    ids.push(existing.transferTransactionId);
-  }
+  if (existing.transferTransactionId) ids.push(existing.transferTransactionId);
   await tx.delete(transaction).where(inArray(transaction.id, ids));
 }
 

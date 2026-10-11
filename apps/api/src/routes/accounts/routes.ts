@@ -34,6 +34,10 @@ export const AccountSchema = z
       .boolean()
       .describe("Has transactions besides its starting balance (so it can be closed, not deleted)"),
     balances: BalancesSchema,
+    lastReconciledAt: z.iso
+      .datetime()
+      .nullable()
+      .describe("When the account was last reconciled; null if never"),
   })
   .openapi("Account");
 
@@ -126,7 +130,11 @@ export const updateAccount = createRoute({
   tags: ["Accounts"],
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  summary: "Rename an account, edit its note, type or loan details",
+  summary: "Rename an account, edit its note, type or loan details, or set its working balance",
+  description:
+    "A `workingBalance` different from the account's adds a Manual Balance Adjustment for the " +
+    "difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it " +
+    "from Ready to Assign). Not for loans or closed accounts.",
   request: {
     params: AccountParams,
     body: json(
@@ -140,6 +148,13 @@ export const updateAccount = createRoute({
           interestRate: InterestRate.nullable().optional(),
           minimumPayment: zMinorUnits.nullable().optional(),
           escrowAmount: zMinorUnits.nullable().optional(),
+          workingBalance: zMinorUnits
+            .optional()
+            .describe("The balance the account should have; negative for money owed"),
+          date: IsoDate.optional().describe(
+            "The user's today: the adjustment's date, and the day the working balance is read " +
+              "at. Defaults to the server's UTC date.",
+          ),
         })
         .openapi("UpdateAccount"),
     ),
@@ -149,6 +164,41 @@ export const updateAccount = createRoute({
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't manage accounts"),
+    404: notFound,
+  },
+});
+
+export const reconcileAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/reconcile",
+  operationId: "reconcileAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Reconcile an account against the bank's balance",
+  description:
+    "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and " +
+    "records when. If `balance` differs from the cleared balance, a Reconciliation Balance " +
+    "Adjustment for the difference comes first, dated `date` (budget accounts take it from " +
+    "Ready to Assign; tracking accounts have no category). Loans aren't reconciled.",
+  request: {
+    params: AccountParams,
+    body: json(
+      z
+        .object({
+          balance: zMinorUnits.describe(
+            "The bank's current cleared balance, signed like the account's (negative for money owed)",
+          ),
+          date: IsoDate.describe("The user's today"),
+        })
+        .openapi("ReconcileAccount"),
+    ),
+  },
+  responses: {
+    200: ok("Reconciled", AccountSchema),
+    400: jsonError("Invalid input, or a loan account"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't change transactions"),
     404: notFound,
   },
 });

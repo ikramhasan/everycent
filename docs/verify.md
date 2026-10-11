@@ -46,42 +46,71 @@ so it has one. Change it if YNAB differs.
   the current month?
 - **Built so far (before this rule):** the current month to ten years on.
 
-## Bulk edit (phase 5f)
+## Bulk edit (phase 5f) (settled 2026-10-11)
 
-### Un-split dialog when every selected split has a transfer line
+Checked in "Onboarding Check" (accounts R9 Chk A / R9 Chk B, memos x-split1, x-split2, x-tr-rec,
+x-clr1, x-clr2; EVERYCENT-14):
 
-- **Found:** YNAB asks before un-splitting ("Un-split and Categorize Split Transaction(s)?"). One
-  split with a transfer line alone got no dialog (its other lines were categorized silently).
-- **Question:** with two or more splits selected that all have transfer lines (nothing to
-  un-split), is there a dialog?
-- **Built so far (before this rule):** no dialog unless some selected split will be un-split.
+- **Two splits that both have transfer lines:** Categorize applies with no dialog; their other
+  lines take the category and both stay split. As built.
+- **Move a split into the account its transfer line points at** (selected with a plain row): the
+  plain row moved, the split was skipped. As built.
+- **Move with a reconciled other side:** moves with no prompt; the reconciled side stays
+  reconciled and points at the new account. A reconciled row moves with no prompt too. Built
+  (no more 409 `TRANSFER_RECONCILED`).
+- **Delete with a reconciled other side:** asks first ("Delete Reconciled Transfer?", or
+  "Delete N Transactions?") and then deletes both sides. A plain transfer deletes with no dialog.
+  Built; the wording is in "Reconciliation (phase 9)" below.
+- **"Move to Account" in All Accounts:** every open account, the selected row's own included; no
+  closed ones. As built.
+- **Clear:** shows only when every selected row is uncleared. Only cleared rows: no Clear, More
+  has "Mark as Uncleared". Built (Clear used to toggle cleared rows back).
 
-### Moving a split into an account one of its transfer lines goes to
+## Reconciliation (phase 9) (settled 2026-10-11)
 
-- **Question:** bulk Move to Account with a split whose transfer line points at the target account
-  (the line would transfer to its own account). Does YNAB skip the split, drop the line's
-  transfer, or refuse?
-- **Built so far (before this rule):** skipped, like a transfer moved into its own other account.
+Checked in "Onboarding Check" (R9 Chk A, R9 Chk B, R9 Card, R9 Track, R9 Liab, Card K) and the
+help center ("Can I unreconcile a transaction?", "Reconciling Accounts", "Balance Adjustments").
+Built in EVERYCENT-3 and EVERYCENT-113.
 
-### Move or delete when a transfer's other side is reconciled
-
-- **Question:** bulk Move or Delete with a transfer whose other side is reconciled. Skip, unlock,
-  or refuse?
-- **Built so far (before this rule):** the whole action is refused (409 `TRANSFER_RECONCILED`), as
-  a single edit is.
-
-### "Move to Account" in All Accounts
-
-- **Found:** in an account's register the submenu lists the budget's other accounts.
-- **Question:** what does it list in All Accounts (every account? closed ones?)
-- **Built so far (before this rule):** every open account.
-
-### The Clear button when every selected row is cleared
-
-- **Found:** a selection of uncleared rows shows "Clear"; mixed states move "Mark as Cleared" /
-  "Mark as Uncleared" into More.
-- **Question:** with only cleared rows selected, does "Clear" mark them uncleared?
-- **Built so far (before this rule):** yes, it toggles them to uncleared.
+- **No unlocking.** "Once a transaction has been reconciled, it can't be unreconciled." The lock
+  can't be clicked; changes go through after a warning and the transaction stays reconciled.
+- **Reconcile** (button, Shift+E; closed accounts too, not loans): "Is your current balance
+  $491.00?" (the cleared balance) No / Yes. Yes reconciles. No: "Current balance at your bank",
+  Next; then "-$11.00 Difference" (bank − cleared) with an explanation and "Don't Show Again"
+  (kept in the browser: `.skipDifferenceExplanation` in localStorage, for every plan); then a
+  banner over the register that follows the cleared balance live: "This account's cleared
+  balance in YNAB is **$11.00** higher / lower than your actual account." (Cancel, "Create
+  Adjustment & Finish"), at zero "…is **the same** as…" ("Finish Reconciliation"). Cancel changes
+  nothing.
+- **Debt accounts** (card, liability): the amount typed is what's owed; "57" and "-60" both meant
+  a negative balance.
+- **Finishing** locks every cleared transaction and adds, for a difference, a "Reconciliation
+  Balance Adjustment" dated today, reconciled, memo "Entered automatically by YNAB" (ours says
+  everycent), in Inflow: Ready to Assign on budget accounts (a card's −$7 didn't move Ready to
+  Assign), no category on tracking accounts.
+- **Header:** "Not Yet Reconciled", "Reconciled a few seconds ago", "Reconciled 4 minutes ago",
+  "Reconciled 9 days ago" (moment-style relative time from `last_reconciled_at`).
+- **Edit warnings** (single edits only; bulk actions have none except Delete):
+  - reconciled row, amount: "Save Changes to Reconciled Transaction" / "Saving your changes to
+    this reconciled transaction may bring your reconciliation out of balance." (Save);
+  - reconciled row, account: "Move Reconciled Transaction" / "Moving this reconciled transaction
+    to another account will bring the reconciliation out of balance." (Move);
+  - transfer with a reconciled other side, amount, payee or account: "Save Changes to Reconciled
+    Transfer" / "This transfer has already been reconciled in R9 Chk B." + "Any changes to this
+    transaction will automatically modify the matching, reconciled transaction in R9 Chk B and may
+    bring the reconciliation out of balance." (Save, or Move for an account change). The other
+    side follows (re-pointed, it moved with the same id) and stays reconciled;
+  - memo, date and category: no warning; a split's transfer lines: no warning, the other side
+    follows and stays reconciled.
+- **Delete warnings:** "Delete Reconciled Transaction?" / "Deleting a reconciled transaction will
+  bring the reconciliation out of balance."; a transfer (or split) with a reconciled other side:
+  "Delete Reconciled Transfer?" / "Deleting a transfer transaction will delete the transfer in
+  both accounts." + "Some matching transfers in other accounts have been reconciled. Deleting
+  these transactions could bring those account's reconciliations out of balance."; several rows:
+  "Delete N Transactions?" with the transfer wording when any applies.
+- **Edit Account → Working Balance** (open, non-loan accounts; a closed account's dialog has
+  none): changing it adds a cleared "Manual Balance Adjustment", dated today, no memo, Inflow:
+  Ready to Assign on budget accounts. Taken as typed: a card's "70" made it +$70.
 
 ## Budget screen (phase 6a)
 
