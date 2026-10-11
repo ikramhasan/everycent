@@ -26,6 +26,7 @@ import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronsUpDown, Landmark, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
+import { lastViewedMonth } from "@/lib/months";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
 import { ModeToggle } from "./mode-toggle";
@@ -80,7 +81,9 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       <Link
                         to="/budgets/$budgetId"
                         params={{ budgetId }}
-                        activeOptions={{ exact: true }}
+                        // Back to the month last viewed, as YNAB's Plan link does.
+                        search={{ month: lastViewedMonth(budgetId) }}
+                        activeOptions={{ exact: true, includeSearch: false }}
                         activeProps={{ "data-active": true }}
                       >
                         <Wallet />

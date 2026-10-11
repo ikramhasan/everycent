@@ -5,6 +5,7 @@ import {
   deleteAccountHandler,
   listAccountsHandler,
   moveAccountHandler,
+  reconcileAccountHandler,
   reopenAccountHandler,
   updateAccountHandler,
 } from "./handlers";
@@ -14,6 +15,7 @@ import {
   deleteAccount,
   listAccounts,
   moveAccount,
+  reconcileAccount,
   reopenAccount,
   updateAccount,
 } from "./routes";
@@ -23,6 +25,7 @@ export const accountsRouter = createRouter()
   .openapi(createAccount, createAccountHandler)
   .openapi(updateAccount, updateAccountHandler)
   .openapi(moveAccount, moveAccountHandler)
+  .openapi(reconcileAccount, reconcileAccountHandler)
   .openapi(closeAccount, closeAccountHandler)
   .openapi(reopenAccount, reopenAccountHandler)
   .openapi(deleteAccount, deleteAccountHandler);

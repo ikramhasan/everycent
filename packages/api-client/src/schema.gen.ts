@@ -276,7 +276,10 @@ export interface paths {
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
-        /** Rename an account, edit its note, type or loan details */
+        /**
+         * Rename an account, edit its note, type or loan details, or set its working balance
+         * @description A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for loans or closed accounts.
+         */
         patch: operations["updateAccount"];
         trace?: never;
     };
@@ -291,6 +294,26 @@ export interface paths {
         put?: never;
         /** Move an account before another one, or to the end */
         post: operations["moveAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile an account against the bank's balance
+         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). Loans aren't reconciled.
+         */
+        post: operations["reconcileAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -407,14 +430,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a transaction
-         * @description Deleting either side of a transfer deletes both. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own.
+         * @description Deleting either side of a transfer deletes both, reconciled or not. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own (`TRANSFER_IN_SPLIT`).
          */
         delete: operations["deleteTransaction"];
         options?: never;
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -559,7 +582,7 @@ export interface paths {
         };
         /**
          * The transactions behind a category's, a group's or Uncategorized's Activity
-         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.
+         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first. A payment category lists its card's transactions (all but the starting balance).
          */
         get: operations["listMonthActivity"];
         put?: never;
@@ -909,6 +932,11 @@ export interface components {
             /** @description Has transactions besides its starting balance (so it can be closed, not deleted) */
             hasHistory: boolean;
             balances: components["schemas"]["AccountBalances"];
+            /**
+             * Format: date-time
+             * @description When the account was last reconciled; null if never
+             */
+            lastReconciledAt: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
@@ -959,10 +987,26 @@ export interface components {
             minimumPayment?: string | null;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             escrowAmount?: string | null;
+            /** @description The balance the account should have; negative for money owed */
+            workingBalance?: string;
+            /**
+             * Format: date
+             * @description The user's today: the adjustment's date, and the day the working balance is read at. Defaults to the server's UTC date.
+             */
+            date?: string;
         };
         MoveAccount: {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
+        };
+        ReconcileAccount: {
+            /** @description The bank's current cleared balance, signed like the account's (negative for money owed) */
+            balance: string;
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            date: string;
         };
         CloseAccount: {
             /**
@@ -1013,6 +1057,8 @@ export interface components {
             transferTransactionId: string | null;
             /** @description The other side is a line of a split, which owns this transfer's date, amount and account; only memo, cleared and category change here */
             transferFromSplit: boolean;
+            /** @description Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change) */
+            transferReconciled: boolean;
             /** @description A split's lines, in order (empty when not split); the split has no category */
             subtransactions: components["schemas"]["SubTransaction"][];
             /** @description The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest) */
@@ -1033,6 +1079,8 @@ export interface components {
             transferAccountId: string | null;
             /** @description Transfer lines: the transaction they keep in the other account */
             transferTransactionId: string | null;
+            /** @description Transfer lines: the other side is reconciled */
+            transferReconciled: boolean;
         };
         SelectionSummary: {
             count: number;
@@ -1041,6 +1089,8 @@ export interface components {
             uncleared: number;
             cleared: number;
             reconciled: number;
+            /** @description Transactions whose transfer's other side (or a split line's) is reconciled; deleting them changes another account's reconciliation */
+            reconciledTransfers: number;
             /** @description Transactions that take a category (not transfers within the budget, nor tracking accounts) */
             categorizable: number;
             splits: number;
@@ -1132,7 +1182,7 @@ export interface components {
              * @default uncleared
              * @enum {string}
              */
-            cleared: "uncleared" | "cleared";
+            cleared: "uncleared" | "cleared" | "reconciled";
             /**
              * @description One of YNAB's six flag colors; null clears it
              * @default null
@@ -1414,6 +1464,8 @@ export interface components {
             date: string;
             payeeName: string | null;
             categoryId: string | null;
+            /** @description "Group: Category" (internal categories by their own name); a card's transfers show its payment category */
+            categoryName: string | null;
             memo: string;
             /** @description Negative is an outflow */
             amount: string;
@@ -2897,6 +2949,69 @@ export interface operations {
             };
         };
     };
+    reconcileAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileAccount"];
+            };
+        };
+        responses: {
+            /** @description Reconciled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Invalid input, or a loan account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     closeAccount: {
         parameters: {
             query?: never;
@@ -3254,15 +3369,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Moving or deleting would change a transfer whose other side is reconciled (TRANSFER_RECONCILED); nothing changed */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
         };
     };
     deleteTransaction: {
@@ -3311,7 +3417,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3383,7 +3489,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

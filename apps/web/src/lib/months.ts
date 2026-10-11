@@ -25,6 +25,23 @@ export function invalidateMonths(queryClient: QueryClient) {
 
 export const currentMonth = (now = new Date()) => monthOf(todayIso(now));
 
+/**
+ * The month last shown on each budget's screen. YNAB reopens it when you come back to Plan, but a
+ * reload (or another device) starts on the current month again (checked 2026-10-11), so it lives
+ * in memory only.
+ */
+const lastViewed = new Map<string, BudgetMonth>();
+
+export function rememberMonth(budgetId: string, month: BudgetMonth) {
+  lastViewed.set(budgetId, month);
+}
+
+/** The month to reopen the budget screen on; undefined means the current month. */
+export function lastViewedMonth(budgetId: string): BudgetMonth | undefined {
+  const month = lastViewed.get(budgetId);
+  return month === currentMonth() ? undefined : month;
+}
+
 /** "Oct 2026", as YNAB labels the month. */
 export function monthLabel(month: BudgetMonth) {
   return format(parse(month, "yyyy-MM", new Date()), "MMM yyyy");
@@ -48,8 +65,8 @@ function readCollapsed(key: string): string[] {
 }
 
 /**
- * Collapsed category groups. YNAB keeps them collapsed across reloads and months; where it keeps
- * them (account or browser) is open in docs/verify.md, so this browser it is for now.
+ * Collapsed category groups. YNAB keeps them collapsed across reloads and months, in the browser
+ * (`.collapsedCategories` in localStorage, checked 2026-10-11).
  */
 export function useCollapsedGroups(budgetId: string) {
   const key = `everycent:collapsed-groups:${budgetId}`;

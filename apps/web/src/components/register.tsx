@@ -1,4 +1,14 @@
 import { money, usesCategory } from "@everycent/engine";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
 import { Checkbox } from "@everycent/ui/components/checkbox";
 import {
@@ -57,7 +67,13 @@ import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
-import { invalidateMonths } from "@/lib/months";
+import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
+import {
+  deleteWarning,
+  editWarning,
+  type ReconciledWarning,
+  rowDeleteScope,
+} from "@/lib/reconciled-warnings";
 import {
   nextSort,
   type RegisterSearch,
@@ -65,7 +81,7 @@ import {
   type SortColumn,
   searchText,
 } from "@/lib/register-filters";
-import { useRegisterView } from "@/lib/register-view";
+import { addMonths, savedSearch, saveSearch, useRegisterView } from "@/lib/register-view";
 import {
   isEmpty,
   isSelected,
@@ -158,6 +174,14 @@ export function Register({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [view, setView] = useRegisterView(budget.id, accountId ?? "all");
+  // Coming back to a register brings back its last search, unless we came to show one
+  // transaction (the other side of a transfer opens unfiltered).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the register opens
+  useEffect(() => {
+    if (search.q !== undefined || focusId) return;
+    const saved = savedSearch(budget.id, accountId ?? "all");
+    if (saved) onSearchChange({ q: saved }, true);
+  }, [budget.id, accountId]);
   const query = registerQuery(accountId, search, view);
   const transactions = useInfiniteQuery({
     queryKey: [...transactionsQueryPrefix, budget.id, query],
@@ -189,6 +213,9 @@ export function Register({
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
   const dateOrder = query.sort === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
+  // The budget starts the month before its oldest transaction (or before this month).
+  const monthData = useQuery(monthQueryOptions(budget.id, currentMonth()));
+  const oldestMonth = monthData.data ? addMonths(monthData.data.firstMonth, 1) : undefined;
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const payees = useQuery(payeesQueryOptions(budget.id));
   const flagList = useQuery(flagsQueryOptions(budget.id));
@@ -202,6 +229,13 @@ export function Register({
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(NOTHING);
+  /** A change waiting on YNAB's reconciled-transaction warning. */
+  const [warning, setWarning] = useState<{
+    warning: ReconciledWarning;
+    proceed: () => void;
+    cancel?: () => void;
+  } | null>(null);
+  const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
   const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk");
   // A new search or filter is a new set of rows, so the selection starts over.
@@ -321,6 +355,13 @@ export function Register({
     const ids = shift ? rangeTo(loadedIds, anchor.current, id) : [id];
     anchor.current = id;
     setSelection((s) => setSelected(s, ids, on));
+  }
+
+  /** Bulk actions; deleting reconciled transactions (or their transfers) asks first. */
+  function requestBulk(action: BulkAction) {
+    const found = action.type === "delete" && summary.data ? deleteWarning(summary.data) : null;
+    if (found) setWarning({ warning: found, proceed: () => void applyBulk(action) });
+    else void applyBulk(action);
   }
 
   async function applyBulk(action: BulkAction) {
@@ -459,10 +500,15 @@ export function Register({
     setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft });
   }
 
-  async function saveSplit(t: Transaction, draft: Draft) {
+  async function saveSplit(t: Transaction, draft: Draft, confirmed = false) {
     if (!draft.date) return setSplitError("Enter a date.");
     const result = updateBody(t, draft, budget);
     if (!result.ok) return setSplitError(result.error);
+    const found = confirmed ? null : editWarning(t, result.body, accountName);
+    if (found) {
+      setWarning({ warning: found, proceed: () => void saveSplit(t, draft, true) });
+      return;
+    }
     try {
       if (Object.keys(result.body).length > 0) {
         const after = await update.mutateAsync({
@@ -552,16 +598,31 @@ export function Register({
     const next = order[order.indexOf(cell) + (exit === "next" ? 1 : -1)];
     setEditing(exit !== "stay" && next ? { id: t.id, column: next } : null);
     if (Object.keys(result.body).length === 0) return;
-    try {
-      const after = await update.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
-        body: result.body,
-      });
-      recordUpdate("transaction edit", t, after);
-      await refresh();
-    } catch (e) {
-      toast.error(apiErrorMessage(e, "Couldn't save the change."));
-    }
+    const save = async () => {
+      try {
+        const after = await update.mutateAsync({
+          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          body: result.body,
+        });
+        recordUpdate("transaction edit", t, after);
+        await refresh();
+      } catch (e) {
+        toast.error(apiErrorMessage(e, "Couldn't save the change."));
+      }
+    };
+    const found = editWarning(t, result.body, accountName);
+    if (!found) return save();
+    setEditing(null);
+    setWarning({
+      warning: found,
+      proceed: () => void save(),
+      // Back to the cell, as YNAB leaves the row open on Cancel.
+      cancel: () => setEditing({ id: t.id, column: cell }),
+    });
+  }
+
+  function accountName(id: string) {
+    return accountById.get(id)?.name ?? "the other account";
   }
 
   async function setFlag(t: Transaction, flag: FlagColor | null) {
@@ -607,7 +668,13 @@ export function Register({
     }
   }
 
-  async function handleDelete(t: Transaction) {
+  function handleDelete(t: Transaction) {
+    const found = deleteWarning(rowDeleteScope(t));
+    if (found) setWarning({ warning: found, proceed: () => void deleteRow(t) });
+    else void deleteRow(t);
+  }
+
+  async function deleteRow(t: Transaction) {
     try {
       await remove.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
@@ -763,7 +830,7 @@ export function Register({
               <DropdownMenuItem
                 variant="destructive"
                 disabled={t.transferFromSplit}
-                onSelect={() => void handleDelete(t)}
+                onSelect={() => handleDelete(t)}
               >
                 <Trash2 /> Delete
               </DropdownMenuItem>
@@ -813,10 +880,19 @@ export function Register({
         )}
         <div className="ml-auto flex items-center gap-1">
           <UndoRedoButtons />
-          <RegisterViewMenu view={view} onChange={setView} runningBalance={!allAccounts} />
+          <RegisterViewMenu
+            view={view}
+            onChange={setView}
+            runningBalance={!allAccounts}
+            oldestMonth={oldestMonth}
+          />
           <RegisterSearchBox
             value={search.q ?? ""}
-            onCommit={(text) => onSearchChange({ q: text.trim() ? text : undefined })}
+            onCommit={(text) => {
+              const q = text.trim() ? text : undefined;
+              saveSearch(budget.id, accountId ?? "all", q);
+              onSearchChange({ q });
+            }}
             placeholder={allAccounts ? "Search All Accounts" : `Search ${account?.name ?? ""}`}
             sources={searchSources}
           />
@@ -834,9 +910,49 @@ export function Register({
           categories={options}
           moveTargets={openAccounts.filter((a) => a.id !== accountId)}
           pending={bulk.isPending}
-          onAction={(action) => void applyBulk(action)}
+          onAction={requestBulk}
         />
       )}
+
+      <AlertDialog
+        open={warning !== null}
+        onOpenChange={(open) => {
+          // Closing after Save/Delete is not a cancel (this runs after the action's onClick).
+          if (open || !warning || proceeding.current) return;
+          warning.cancel?.();
+          setWarning(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{warning?.warning.title}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="grid gap-2">
+                {warning?.warning.paragraphs.map((text) => (
+                  <p key={text}>{text}</p>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={warning?.warning.confirm === "Delete" ? "destructive" : "default"}
+              onClick={() => {
+                const proceed = warning?.proceed;
+                proceeding.current = true;
+                setWarning(null);
+                proceed?.();
+                queueMicrotask(() => {
+                  proceeding.current = false;
+                });
+              }}
+            >
+              {warning?.warning.confirm}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Table
         containerRef={scrollRef}

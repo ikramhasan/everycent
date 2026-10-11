@@ -1423,6 +1423,14 @@
           },
           "balances": {
             "$ref": "#/components/schemas/AccountBalances"
+          },
+          "lastReconciledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the account was last reconciled; null if never"
           }
         },
         "required": [
@@ -1437,7 +1445,8 @@
           "escrowAmount",
           "paymentCategoryId",
           "hasHistory",
-          "balances"
+          "balances",
+          "lastReconciledAt"
         ]
       },
       "AccountBalances": {
@@ -1743,6 +1752,16 @@
             ],
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "workingBalance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The balance the account should have; negative for money owed"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today: the adjustment's date, and the day the working balance is read at. Defaults to the server's UTC date."
           }
         },
         "additionalProperties": false
@@ -1760,6 +1779,25 @@
         },
         "required": [
           "beforeAccountId"
+        ]
+      },
+      "ReconcileAccount": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The bank's current cleared balance, signed like the account's (negative for money owed)"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today"
+          }
+        },
+        "required": [
+          "balance",
+          "date"
         ]
       },
       "CloseAccount": {
@@ -2060,6 +2098,10 @@
             "type": "boolean",
             "description": "The other side is a line of a split, which owns this transfer's date, amount and account; only memo, cleared and category change here"
           },
+          "transferReconciled": {
+            "type": "boolean",
+            "description": "Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change)"
+          },
           "subtransactions": {
             "type": "array",
             "items": {
@@ -2100,6 +2142,7 @@
           "transferAccountId",
           "transferTransactionId",
           "transferFromSplit",
+          "transferReconciled",
           "subtransactions",
           "runningBalance",
           "matchingLineIds"
@@ -2156,6 +2199,10 @@
               "null"
             ],
             "description": "Transfer lines: the transaction they keep in the other account"
+          },
+          "transferReconciled": {
+            "type": "boolean",
+            "description": "Transfer lines: the other side is reconciled"
           }
         },
         "required": [
@@ -2167,7 +2214,8 @@
           "categoryName",
           "memo",
           "transferAccountId",
-          "transferTransactionId"
+          "transferTransactionId",
+          "transferReconciled"
         ]
       },
       "SelectionSummary": {
@@ -2189,6 +2237,10 @@
           },
           "reconciled": {
             "type": "integer"
+          },
+          "reconciledTransfers": {
+            "type": "integer",
+            "description": "Transactions whose transfer's other side (or a split line's) is reconciled; deleting them changes another account's reconciliation"
           },
           "categorizable": {
             "type": "integer",
@@ -2212,6 +2264,7 @@
           "uncleared",
           "cleared",
           "reconciled",
+          "reconciledTransfers",
           "categorizable",
           "splits",
           "splitsWithTransfers",
@@ -2491,7 +2544,8 @@
             "type": "string",
             "enum": [
               "uncleared",
-              "cleared"
+              "cleared",
+              "reconciled"
             ],
             "default": "uncleared"
           },
@@ -3550,6 +3604,13 @@
               "null"
             ]
           },
+          "categoryName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "\"Group: Category\" (internal categories by their own name); a card's transfers show its payment category"
+          },
           "memo": {
             "type": "string"
           },
@@ -3567,6 +3628,7 @@
           "date",
           "payeeName",
           "categoryId",
+          "categoryName",
           "memo",
           "amount"
         ]
@@ -5425,7 +5487,8 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Rename an account, edit its note, type or loan details",
+        "summary": "Rename an account, edit its note, type or loan details, or set its working balance",
+        "description": "A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for loans or closed accounts.",
         "parameters": [
           {
             "schema": {
@@ -5656,6 +5719,101 @@
           },
           "403": {
             "description": "The caller's role can't manage accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
+      "post": {
+        "operationId": "reconcileAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Reconcile an account against the bank's balance",
+        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). Loans aren't reconciled.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a loan account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions",
             "content": {
               "application/json": {
                 "schema": {
@@ -6287,16 +6445,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Moving or deleting would change a transfer whose other side is reconciled (TRANSFER_RECONCILED); nothing changed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
@@ -6313,7 +6461,7 @@
           }
         ],
         "summary": "Edit a transaction, move it to another account, or toggle cleared",
-        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
+        "description": "On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
         "parameters": [
           {
             "schema": {
@@ -6394,7 +6542,7 @@
             }
           },
           "409": {
-            "description": "The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`)",
+            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6416,7 +6564,7 @@
           }
         ],
         "summary": "Delete a transaction",
-        "description": "Deleting either side of a transfer deletes both. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own.",
+        "description": "Deleting either side of a transfer deletes both, reconciled or not. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own (`TRANSFER_IN_SPLIT`).",
         "parameters": [
           {
             "schema": {
@@ -6470,7 +6618,7 @@
             }
           },
           "409": {
-            "description": "The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`)",
+            "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7099,7 +7247,7 @@
           }
         ],
         "summary": "The transactions behind a category's, a group's or Uncategorized's Activity",
-        "description": "Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.",
+        "description": "Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first. A payment category lists its card's transactions (all but the starting balance).",
         "parameters": [
           {
             "schema": {

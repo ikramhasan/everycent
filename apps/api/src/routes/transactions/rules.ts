@@ -117,11 +117,12 @@ export async function lockTransaction(tx: Db, budgetId: string, id: string) {
   return row;
 }
 
-export function reconciledOtherSide(): never {
+/** YNAB can't unreconcile a transaction; its cleared state is fixed once reconciled. */
+export function reconciledStays(): never {
   throw new AppError(
     409,
-    "TRANSFER_RECONCILED",
-    "The other side of this transfer is reconciled. Its date and amount can't change.",
+    "TRANSACTION_RECONCILED",
+    "This transaction is reconciled, and reconciled transactions stay reconciled.",
   );
 }
 

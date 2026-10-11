@@ -66,6 +66,17 @@ function selectedRows(db: Db, where: SQL) {
       accountType: budgetAccount.type,
       transferAccountType: transferAccount.type,
       fromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`,
+      // The other side of its transfer, or of one of its split lines' transfers, is reconciled.
+      reconciledTransfer: sql<boolean>`exists (
+        select 1 from ${transaction} other_side
+        where other_side.cleared = 'reconciled' and (
+          other_side.id = ${transaction.transferTransactionId}
+          or other_side.transfer_sub_transaction_id in (
+            select ${subTransaction.id} from ${subTransaction}
+            where ${subTransaction.transactionId} = ${transaction.id}
+          )
+        )
+      )`,
       isSplit: sql<boolean>`${exists(
         db
           .select({ one: sql`1` })
@@ -116,6 +127,7 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
       uncleared: count((r) => r.cleared === "uncleared"),
       cleared: count((r) => r.cleared === "cleared"),
       reconciled: count((r) => r.cleared === "reconciled"),
+      reconciledTransfers: count((r) => r.reconciledTransfer && !r.fromSplit),
       categorizable: count(categorizable),
       splits: count((r) => r.isSplit),
       splitsWithTransfers: count((r) => r.isSplit && r.hasTransferLine),
@@ -328,7 +340,7 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
     // Gone already when it was the other side of a transfer deleted earlier in this loop.
     const row = await lockTransaction(tx, budgetId, id);
     if (!row || row.transferSubTransactionId) continue;
-    await deleteWithTransfers(tx, budgetId, row);
+    await deleteWithTransfers(tx, row);
     deleted.push(id);
   }
   return deleted;

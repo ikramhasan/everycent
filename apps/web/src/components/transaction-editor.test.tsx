@@ -26,6 +26,7 @@ const account = (id: string, type: Account["type"]): Account => ({
   escrowAmount: null,
   paymentCategoryId: null,
   hasHistory: false,
+  lastReconciledAt: null,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 

@@ -179,6 +179,25 @@ describe("PaymentInspector", () => {
     }
   });
 
+  it("folds Current Balance and Available for Payment, and remembers it", async () => {
+    const user = userEvent.setup();
+    localStorage.clear();
+    show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n, priorBalance: -100n });
+    expect(screen.getByText("Prior Balance")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Current Balance" }));
+    expect(screen.queryByText("Prior Balance")).not.toBeInTheDocument();
+    // The total stays in the folded header.
+    expect(screen.getByRole("button", { name: "Current Balance" }).nextSibling).toHaveTextContent(
+      "A-2900",
+    );
+    cleanup();
+    show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n });
+    expect(screen.queryByText("Prior Balance")).not.toBeInTheDocument();
+    expect(screen.getByText("Funded Spending")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Current Balance" }));
+    expect(screen.getByText("Prior Balance")).toBeVisible();
+  });
+
   it("asks for the rest of the balance without overspending", () => {
     show({ balance: -2900n, underfunded: 2900n, overspentCategories: 0n });
     expect(screen.getByText(/You need to assign A2900 more/)).toBeInTheDocument();

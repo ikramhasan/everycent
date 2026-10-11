@@ -46,14 +46,14 @@ before starting a roadmap phase** and remove an entry once it's done.
   "Credit lifecycle and loans" below). Uncategorized card spending counts as credit overspending,
   except its cash part on a positive card, as YNAB's "Uncategorized cash transactions … $2.00
   will be deducted" note suggests (cash part only).
-- A payment category's Activity opens the card's register for the month with YNAB's Spending /
-  Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
-  transactions with their categories; ours uses the same columns as other categories (Account,
-  Date, Payee, Memo, Amount). "Cover Overspent Categories" switches to the Overspent view and past
-  months hide the alert and Current Balance, as YNAB does; the Current Balance and Available for
-  Payment lines aren't collapsible as YNAB's are (EVERYCENT-22). Auto-Assign on payment categories has Underfunded and Reduce
-  Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
-  Average Paid when only payment categories are covered).
+- A payment category's Activity lists the card's transactions for the month (its splits line by
+  line) with YNAB's Spending / Returns / Funded Spending / Payments & Returns summary and Date,
+  Payee, Category, Memo, Amount columns ("Group: Category"; payments show "Credit Card Payments:
+  <card>"). "Cover Overspent Categories" switches to the Overspent view and past months hide the
+  alert and Current Balance, as YNAB does; Current Balance and Available for Payment fold, and the
+  folding is remembered in the browser (EVERYCENT-22). Auto-Assign reads Paid Last Month and
+  Average Paid for one payment category and the spending labels when several are selected, as
+  YNAB does.
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
   cash and credit, as YNAB's is; only the Available pill and the inspector change colour.
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
@@ -114,10 +114,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   Account" memo; a zero-balance account closes without a dialog. Edit account offers Close, or
   Delete while an account has only its starting balance; a closed account offers Re-open and
   Delete (disabled with YNAB's tooltip while it has history).
-- **Edit account has no Working Balance field.** YNAB's Edit Account dialog lets you type a new
-  working balance and creates an adjustment for the difference ("An adjustment transaction will be
-  created automatically if you change this amount."). Not built; it shares reconciliation's
-  adjustment (phase 9).
+- **Working Balance** in Edit account adds a cleared Manual Balance Adjustment (EVERYCENT-113);
+  loans don't have it until 7f decides what a loan's edit dialog holds.
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
@@ -146,7 +144,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   and run the window over the page only, or cache balances.
 - Search follows YNAB's syntax (`parseSearch` in `@everycent/engine`) and uses `ilike` (no
   index; fine at the sizes above). A `pg_trgm` index would help much bigger budgets.
-- Search terms YNAB has that wait for their phases: `Income:` (income for future months, phase 6)
+- Search terms YNAB has that aren't built: `Income:` ("Income: October 2026", EVERYCENT-114)
   and `Is:` Matched, Approved, Unapproved, Needs Category, Unapproved or Needs Category (phase
   13). Typed, they're searched as free text for now.
 - Like YNAB, a term can't contain a comma (commas separate terms), so amounts with a thousands
@@ -158,8 +156,10 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
   account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
   so it only matters to other API clients.
-- Reconciled transactions show a lock and can't be unlocked from the register yet; the API
-  accepts `cleared` on them. Phase 9 adds the reconcile flow and the "unlock?" warning.
+- Reconciled transactions keep their lock for good (YNAB can't unreconcile); edits that can put
+  a reconciliation out of balance ask first (phase 9, docs/verify.md "Reconciliation").
+- The Reconcile popover leaves out YNAB's "How do I find my account balance?" link and the
+  difference step's help-doc box: everycent has no help center yet.
 - Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
   stay in the autocomplete.
 - shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
@@ -169,8 +169,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Transfers (phase 5b follow-ups)
 
-- A transfer whose other side is reconciled can't change date or amount, be re-pointed or be
-  deleted (409 `TRANSFER_RECONCILED`). Phase 9's "unlock?" flow should offer to unlock it instead.
+- A transfer whose other side is reconciled can be changed or deleted after YNAB's warning; the
+  other side follows and stays reconciled (phase 9). Undoing a deleted transfer brings its other
+  side back uncleared.
 - Transfers to and from a credit card carry no category. Phase 7 must treat a payment from a
   budget account as moving money out of the card's payment category, and spending on the card as
   moving available money into it.
@@ -185,8 +186,6 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The transaction a split's transfer line keeps in the other account only takes memo, cleared and
   category there (409 `TRANSFER_IN_SPLIT` otherwise); date, amount and deletion go through the
   split. The register hides those cells and the delete action.
-- A split with a reconciled transfer side can't drop or re-point that line (409
-  `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
 
 ## Bulk edit (phase 5f follow-ups)
 

@@ -1,9 +1,14 @@
 import { addMonths } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@everycent/ui/components/collapsible";
 import { Input } from "@everycent/ui/components/input";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
-import { SquarePen } from "lucide-react";
+import { ChevronDown, ChevronRight, SquarePen } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import type { Breakdown } from "@/lib/budget-view";
 import { monthName } from "@/lib/months";
@@ -365,25 +370,90 @@ export function PaymentInspector({
       {target ??
         (!past && <PaymentAlert {...{ name, totals, payment, format, warn, onCoverOverspent }} />)}
       {!past && (
-        <dl className="grid gap-2">
-          <Line label="Current Balance" value={payment.balance} format={format} />
+        <FoldingSection
+          storageKey="current-balance"
+          title="Current Balance"
+          value={<span className="tabular-nums">{format(payment.balance.toString())}</span>}
+        >
           <Line label="Prior Balance" value={payment.priorBalance} format={format} />
+          <ActivityHeading />
           <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
           <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
-        </dl>
+        </FoldingSection>
       )}
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">Available for Payment</span>
-        {available}
-      </div>
-      <dl className="grid gap-2">
+      <FoldingSection
+        storageKey="available-for-payment"
+        title="Available for Payment"
+        value={available}
+      >
         <Line label="Cash Left Over From Last Month" value={totals.carried} format={format} />
+        <ActivityHeading />
         <Line label="Assigned" value={totals.assigned} format={format} />
         <Line label="Funded Spending" value={payment.fundedSpending} format={format} />
         <Line label="Payments Made" value={payment.paymentsMade} format={format} />
-      </dl>
+      </FoldingSection>
       <NoteField key={name} note={note} onChange={onNoteChange} />
     </Panel>
+  );
+}
+
+function ActivityHeading() {
+  return <dt className="pt-1 font-medium text-sm">Activity This Month</dt>;
+}
+
+/** YNAB keeps the payment inspector's folded sections in the browser, for every plan. */
+const FOLD_PREFIX = "everycent:inspector-folded:";
+
+function readFolded(key: string) {
+  try {
+    return localStorage.getItem(FOLD_PREFIX + key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A payment inspector section that folds to its title and total, as YNAB's Current Balance and
+ * Available for Payment do (checked 2026-10-11; YNAB remembers it in localStorage).
+ */
+function FoldingSection({
+  storageKey,
+  title,
+  value,
+  children,
+}: {
+  storageKey: string;
+  title: string;
+  value: ReactNode;
+  children: ReactNode;
+}) {
+  const [folded, setFolded] = useState(() => readFolded(storageKey));
+  function toggle(open: boolean) {
+    setFolded(!open);
+    try {
+      if (open) localStorage.removeItem(FOLD_PREFIX + storageKey);
+      else localStorage.setItem(FOLD_PREFIX + storageKey, "true");
+    } catch {
+      // Blocked storage: it folds until the page closes.
+    }
+  }
+  return (
+    <Collapsible open={!folded} onOpenChange={toggle} className="grid gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex items-center gap-1 whitespace-nowrap rounded-sm text-left font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {title}
+          {folded ? (
+            <ChevronRight className="size-4" aria-hidden />
+          ) : (
+            <ChevronDown className="size-4" aria-hidden />
+          )}
+        </CollapsibleTrigger>
+        {value}
+      </div>
+      <CollapsibleContent asChild>
+        <dl className="grid gap-2">{children}</dl>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

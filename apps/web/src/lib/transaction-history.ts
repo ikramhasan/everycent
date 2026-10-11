@@ -15,7 +15,8 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
       : { payeeName: transaction.payeeName }),
     categoryId: transaction.subtransactions.length > 0 ? null : transaction.categoryId,
     memo: transaction.memo,
-    cleared: transaction.cleared === "uncleared" ? "uncleared" : "cleared",
+    // Restoring a deleted reconciled transaction brings it back reconciled.
+    cleared: transaction.cleared,
     flag: transaction.flag,
     ...(transaction.subtransactions.length > 0
       ? {
@@ -43,7 +44,8 @@ export function updateBodyFromTransaction(transaction: Transaction): UpdateTrans
       : { payeeName: transaction.payeeName }),
     categoryId: transaction.subtransactions.length > 0 ? undefined : transaction.categoryId,
     memo: transaction.memo,
-    cleared: transaction.cleared === "uncleared" ? "uncleared" : "cleared",
+    // A reconciled transaction stays reconciled; its cleared state can't be set.
+    ...(transaction.cleared === "reconciled" ? {} : { cleared: transaction.cleared }),
     flag: transaction.flag,
     ...(transaction.subtransactions.length > 0
       ? {

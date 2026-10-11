@@ -38,19 +38,24 @@ export function RegisterViewMenu({
   view,
   onChange,
   runningBalance,
+  oldestMonth,
 }: {
   view: RegisterView;
   onChange: (patch: Partial<RegisterView>) => void;
   /** Offer "Show Running Balance" (account registers; All Accounts has none). */
   runningBalance: boolean;
+  /** The month of the budget's oldest transaction (YYYY-MM), where All Dates starts. */
+  oldestMonth?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(view);
   const id = useId();
   const thisMonth = todayIso().slice(0, 7);
-  // All dates shows this month to ten years on, as YNAB's pickers do.
+  // All Dates runs from the month of the budget's oldest transaction (any account) to ten years
+  // past this month, as YNAB's pickers do (checked 2026-10-11: August 2026 in a plan whose oldest
+  // transaction is 08/15, in every account).
   const months = rangeMonths(draft);
-  const from = months.from ?? thisMonth;
+  const from = months.from ?? oldestMonth ?? thisMonth;
   const to = months.to ?? addMonths(thisMonth, 120);
   const thisYear = Number(thisMonth.slice(0, 4));
   const years = Array.from({ length: 26 }, (_, i) => thisYear - 15 + i);

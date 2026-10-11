@@ -8,7 +8,6 @@ import {
   assertNotSelf,
   assertOpen,
   findAccount,
-  reconciledOtherSide,
   resolveCategory,
   usesCategory,
 } from "./rules";
@@ -125,7 +124,6 @@ export async function syncLines(
   for (const line of existing) {
     if (kept.has(line.id)) continue;
     const other = otherOf.get(line.id);
-    if (other?.cleared === "reconciled") reconciledOtherSide();
     if (other) await tx.delete(transaction).where(eq(transaction.id, other.id));
     await tx.delete(subTransaction).where(eq(subTransaction.id, line.id));
   }
@@ -142,12 +140,6 @@ export async function syncLines(
     }
     const retargeted = (transferTo?.id ?? null) !== (other?.accountId ?? null);
     if (transferTo && retargeted) assertOpen(transferTo);
-    if (
-      other?.cleared === "reconciled" &&
-      (retargeted || other.amount !== -spec.amount || other.date !== date)
-    ) {
-      reconciledOtherSide();
-    }
 
     let categoryId = spec.categoryId;
     if (spec.explicitCategory) {
@@ -223,7 +215,6 @@ export async function deleteLineTransfers(tx: Db, parentId: string) {
     tx,
     lines.map((l) => l.id),
   );
-  if (counterparts.some((c) => c.cleared === "reconciled")) reconciledOtherSide();
   if (counterparts.length > 0) {
     await tx.delete(transaction).where(
       inArray(

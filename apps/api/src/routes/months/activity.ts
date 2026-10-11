@@ -28,7 +28,7 @@ async function categoryIds(
   db: Db,
   budgetId: string,
   query: { categoryId?: string; groupId?: string; uncategorized?: boolean },
-): Promise<{ ids: string[]; cardAccountId?: string }> {
+): Promise<{ ids: string[]; cardAccountId?: string; cardCategoryId?: string }> {
   const asked = [query.categoryId, query.groupId, query.uncategorized || undefined].filter(
     (v) => v !== undefined,
   );
@@ -47,7 +47,11 @@ async function categoryIds(
       .from(category)
       .where(and(eq(category.id, query.categoryId), eq(category.budgetId, budgetId)));
     if (!row || row.internalKind) throw new AppError(404, "NOT_FOUND", "Category not found");
-    return { ids: [row.id], cardAccountId: row.linkedAccountId ?? undefined };
+    return {
+      ids: [row.id],
+      cardAccountId: row.linkedAccountId ?? undefined,
+      cardCategoryId: row.linkedAccountId ? row.id : undefined,
+    };
   }
   const groupId = query.groupId ?? "";
   const [group] = await db
@@ -74,7 +78,7 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
 
-  const { ids, cardAccountId } = await categoryIds(db, budgetId, query);
+  const { ids, cardAccountId, cardCategoryId } = await categoryIds(db, budgetId, query);
   const startingBalance = await internalPayeeId(db, budgetId, "starting_balance");
   const { start, end } = monthBounds(month);
   const cutoff = end < today ? end : today;
@@ -113,6 +117,18 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
           )
         : and(dated, isNotNull(transaction.categoryId), inArray(transaction.categoryId, inIds)),
     );
+  // A card's splits are listed line by line (YNAB's Card T5 window, 2026-10-11).
+  const cardSplits = cardAccountId
+    ? new Set(
+        (
+          await db
+            .selectDistinct({ id: subTransaction.transactionId })
+            .from(subTransaction)
+            .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
+            .where(and(dated, eq(transaction.accountId, cardAccountId)))
+        ).map((r) => r.id),
+      )
+    : new Set<string>();
 
   // A split line shows its own payee, or the split's when it has none.
   const splitPayee = alias(payee, "split_payee");
@@ -136,8 +152,7 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
     .leftJoin(splitPayee, eq(splitPayee.id, transaction.payeeId))
     .where(
       cardAccountId
-        ? // The card's own splits are listed whole above.
-          sql`false`
+        ? and(dated, eq(transaction.accountId, cardAccountId))
         : and(
             dated,
             isNotNull(subTransaction.categoryId),
@@ -146,12 +161,13 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
     );
 
   // Newest first, as the register lists them.
-  const rows = [...whole, ...lines].sort(
+  const rows = [...whole.filter((r) => !cardSplits.has(r.id)), ...lines].sort(
     (a, b) =>
       b.date.localeCompare(a.date) ||
       b.createdAt.getTime() - a.createdAt.getTime() ||
       a.id.localeCompare(b.id),
   );
+  const labels = await categoryLabels(db, budgetId);
   return c.json(
     {
       transactions: rows.map((r) => ({
@@ -162,6 +178,8 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
         date: r.date,
         payeeName: r.payeeName,
         categoryId: r.categoryId,
+        // A card's payments and other transfers show its payment category, as in YNAB.
+        categoryName: labels.get(r.categoryId ?? cardCategoryId ?? "") ?? null,
         memo: r.memo,
         amount: r.amount.toString(),
       })),
@@ -169,3 +187,20 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
     200,
   );
 };
+
+/** "Group: Category" for each category, as YNAB labels them; internal ones by their own name. */
+async function categoryLabels(db: Db, budgetId: string) {
+  const rows = await db
+    .select({
+      id: category.id,
+      name: category.name,
+      internalKind: category.internalKind,
+      groupName: categoryGroup.name,
+    })
+    .from(category)
+    .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
+    .where(eq(category.budgetId, budgetId));
+  return new Map(
+    rows.map((r) => [r.id, r.internalKind ? r.name : `${r.groupName}: ${r.name}`] as const),
+  );
+}
