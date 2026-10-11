@@ -720,6 +720,14 @@
             "type": "boolean",
             "description": "Deleting it requires reassignToCategoryId"
           },
+          "transactionCount": {
+            "type": "integer",
+            "description": "Its transactions, split lines counted one by one (what a delete reassigns)"
+          },
+          "hasAssignedMoney": {
+            "type": "boolean",
+            "description": "Money assigned to it in some month (a delete returns it to Ready to Assign)"
+          },
           "target": {
             "$ref": "#/components/schemas/CategoryTarget"
           }
@@ -732,6 +740,8 @@
           "hidden",
           "linkedAccountId",
           "hasTransactions",
+          "transactionCount",
+          "hasAssignedMoney",
           "target"
         ]
       },
@@ -3873,6 +3883,10 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Money without a job in this month; negative when more was assigned than there is"
           },
+          "overdraft": {
+            "type": "boolean",
+            "description": "A negative Ready to Assign that taking back every category's cash wouldn't cover (YNAB's \"Overdraft?\"); false when categories could cover it (\"You assigned more than you have\", Fix This) and when Ready to Assign isn't negative"
+          },
           "assignedInFuture": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
@@ -3982,6 +3996,7 @@
           "firstMonth",
           "lastMonth",
           "readyToAssign",
+          "overdraft",
           "assignedInFuture",
           "futureMonths",
           "categories",
@@ -4020,6 +4035,9 @@
                   "$ref": "#/components/schemas/FundingPart"
                 },
                 "description": "What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned)"
+              },
+              "upcoming": {
+                "$ref": "#/components/schemas/CategoryUpcoming"
               }
             },
             "required": [
@@ -4028,7 +4046,8 @@
               "target",
               "autoAssign",
               "bar",
-              "underfundedParts"
+              "underfundedParts",
+              "upcoming"
             ]
           }
         ]
@@ -4288,6 +4307,69 @@
           "step",
           "date"
         ]
+      },
+      "CategoryUpcoming": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Their net amount for the category; negative when more goes out than comes in"
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduleId": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "accountName": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "payeeName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "memo": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "What it does to this category"
+                }
+              },
+              "required": [
+                "scheduleId",
+                "accountId",
+                "accountName",
+                "date",
+                "payeeName",
+                "memo",
+                "amount"
+              ]
+            },
+            "description": "Latest first"
+          }
+        },
+        "required": [
+          "amount",
+          "transactions"
+        ],
+        "description": "Scheduled transactions still to come in the month (YNAB's \"Upcoming Transactions\"): after the user's today, none in past months; null when there are none"
       },
       "MonthTotals": {
         "type": "object",
@@ -4572,21 +4654,39 @@
               "moved",
               "removed"
             ],
-            "description": "assigned: from Ready to Assign; removed: back to it; moved: between categories"
+            "description": "assigned: from Ready to Assign; removed: back to it; moved: between categories (and, for a deletion, from Ready to Assign to the deleted category, as YNAB words it)"
           },
           "fromCategoryId": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Null for Ready to Assign"
+            "description": "Null for Ready to Assign and for a deleted category"
           },
           "toCategoryId": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Null for Ready to Assign"
+            "description": "Null for Ready to Assign and for a deleted category"
+          },
+          "fromDeletedCategory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of the deleted category the money came from; null otherwise"
+          },
+          "toDeletedCategory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of the deleted category the money went to; null otherwise"
+          },
+          "deletion": {
+            "type": "boolean",
+            "description": "Logged by deleting a category: its assigned money going to the category picked"
           },
           "month": {
             "type": "string",
@@ -4615,6 +4715,9 @@
           "kind",
           "fromCategoryId",
           "toCategoryId",
+          "fromDeletedCategory",
+          "toDeletedCategory",
+          "deletion",
           "month",
           "amount",
           "movedAt",
@@ -5017,7 +5120,7 @@
           }
         ],
         "summary": "Fresh start: archive this budget and continue in a copy without transactions",
-        "description": "Owner only. The new budget keeps the name, settings, partners, categories, payees and accounts (each starting from its balance on `date`). The old one is renamed '(Archived <date>)'.",
+        "description": "Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.",
         "parameters": [
           {
             "schema": {
@@ -8821,6 +8924,7 @@
           }
         ],
         "summary": "Recent changes to assigned money, newest first",
+        "description": "Every change of the last 34 days, as YNAB's Recent Moves (\"Previous 34 days of assigning and moving money\").",
         "parameters": [
           {
             "schema": {
@@ -8833,7 +8937,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The latest moves",
+            "description": "The last 34 days' moves",
             "content": {
               "application/json": {
                 "schema": {

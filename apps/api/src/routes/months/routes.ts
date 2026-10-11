@@ -160,6 +160,31 @@ const MonthCategorySchema = Totals.extend({
       "What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short " +
         "(they add up to `autoAssign.underfunded` less Assigned)",
     ),
+  upcoming: z
+    .object({
+      amount: zMinorUnits.describe(
+        "Their net amount for the category; negative when more goes out than comes in",
+      ),
+      transactions: z
+        .array(
+          z.object({
+            scheduleId: z.string(),
+            accountId: z.string(),
+            accountName: z.string(),
+            date: z.iso.date(),
+            payeeName: z.string().nullable(),
+            memo: z.string(),
+            amount: zMinorUnits.describe("What it does to this category"),
+          }),
+        )
+        .describe("Latest first"),
+    })
+    .nullable()
+    .describe(
+      'Scheduled transactions still to come in the month (YNAB\'s "Upcoming Transactions"): ' +
+        "after the user's today, none in past months; null when there are none",
+    )
+    .openapi("CategoryUpcoming"),
 }).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");
 
@@ -180,6 +205,13 @@ const MonthSchema = z
     readyToAssign: zMinorUnits.describe(
       "Money without a job in this month; negative when more was assigned than there is",
     ),
+    overdraft: z
+      .boolean()
+      .describe(
+        "A negative Ready to Assign that taking back every category's cash wouldn't cover " +
+          '(YNAB\'s "Overdraft?"); false when categories could cover it ("You assigned more ' +
+          "than you have\", Fix This) and when Ready to Assign isn't negative",
+      ),
     assignedInFuture: zMinorUnits.describe("Money assigned in the months after this one"),
     futureMonths: z
       .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
@@ -435,9 +467,29 @@ const MoneyMoveSchema = z
     id: z.string(),
     kind: z
       .enum(["assigned", "moved", "removed"])
-      .describe("assigned: from Ready to Assign; removed: back to it; moved: between categories"),
-    fromCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
-    toCategoryId: z.string().nullable().describe("Null for Ready to Assign"),
+      .describe(
+        "assigned: from Ready to Assign; removed: back to it; moved: between categories (and, " +
+          "for a deletion, from Ready to Assign to the deleted category, as YNAB words it)",
+      ),
+    fromCategoryId: z
+      .string()
+      .nullable()
+      .describe("Null for Ready to Assign and for a deleted category"),
+    toCategoryId: z
+      .string()
+      .nullable()
+      .describe("Null for Ready to Assign and for a deleted category"),
+    fromDeletedCategory: z
+      .string()
+      .nullable()
+      .describe("The name of the deleted category the money came from; null otherwise"),
+    toDeletedCategory: z
+      .string()
+      .nullable()
+      .describe("The name of the deleted category the money went to; null otherwise"),
+    deletion: z
+      .boolean()
+      .describe("Logged by deleting a category: its assigned money going to the category picked"),
     month: zBudgetMonth,
     amount: zMinorUnits.describe("Positive"),
     movedAt: z.iso.datetime(),
@@ -453,6 +505,9 @@ export const listMoves = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Recent changes to assigned money, newest first",
+  description:
+    "Every change of the last 34 days, as YNAB's Recent Moves (\"Previous 34 days of assigning " +
+    'and moving money").',
   request: {
     params: z.object({
       budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
@@ -460,7 +515,7 @@ export const listMoves = createRoute({
   },
   responses: {
     200: {
-      description: "The latest moves",
+      description: "The last 34 days' moves",
       content: {
         "application/json": {
           schema: z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList"),

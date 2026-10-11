@@ -34,6 +34,7 @@ import {
   fundedCardSpending,
   fundUnderfunded,
   isOnBudget,
+  isOverdraft,
   type MonthAmount,
   type MonthFigures,
   monthBounds,
@@ -47,13 +48,27 @@ import {
   targetNeed,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, exists, gt, inArray, isNotNull, lte, max, min, not, or } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  max,
+  min,
+  not,
+  or,
+} from "drizzle-orm";
 import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
-import { enterDueScheduled } from "../../lib/scheduled";
+import { type CategoryUpcoming, enterDueScheduled, upcomingByCategory } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -555,6 +570,7 @@ async function monthState(
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
   const { history, paymentAccounts, creditOverspent } = await budgetHistory(db, budgetId, cutoff);
+  const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts);
 
   const range = await monthRange(db, budgetId, today);
 
@@ -636,6 +652,7 @@ async function monthState(
     bar: ProgressBar | null;
     payment: ReturnType<typeof paymentOf>;
     funding: CategoryFunding;
+    upcoming: CategoryUpcoming | null;
     hidden: boolean;
   }[] = [];
   const groups = new Map<string, CategoryMonth>();
@@ -670,9 +687,10 @@ async function monthState(
     const need = target && targetNeed(entries, target, month, monthOf(today), owed);
     // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
     const snoozed = !payment && snoozedNow.has(cat.id);
+    const coming = upcoming.get(cat.id) ?? null;
     const funding = payment
-      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need)
-      : spendingFunding(month, figures.available, target, need, snoozed);
+      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need, coming)
+      : spendingFunding(month, figures.available, target, need, snoozed, coming);
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
@@ -691,6 +709,7 @@ async function monthState(
       bar: payment ? null : progressBar(figures, target, need, snoozed, month),
       payment,
       funding,
+      upcoming: coming,
       hidden: isHidden,
     });
     if (isHidden) {
@@ -739,6 +758,10 @@ export async function budgetMonthJson(
     firstMonth: range.first,
     lastMonth: range.last,
     readyToAssign: rta.readyToAssign.toString(),
+    overdraft: isOverdraft(
+      rta.readyToAssign,
+      listed.map((l) => l.figures),
+    ),
     assignedInFuture: rta.assignedInFuture.toString(),
     futureMonths: [...future]
       .filter(([, amount]) => amount !== 0n)
@@ -782,6 +805,18 @@ export async function budgetMonthJson(
           step: p.step,
           date: p.date,
         })),
+        upcoming: l.upcoming && {
+          amount: l.upcoming.amount.toString(),
+          transactions: l.upcoming.transactions.map((t) => ({
+            scheduleId: t.scheduleId,
+            accountId: t.accountId,
+            accountName: t.accountName,
+            date: t.date,
+            payeeName: t.payeeName,
+            memo: t.memo,
+            amount: t.amount.toString(),
+          })),
+        },
       };
     }),
     groups: groupRows.map((g) => ({ groupId: g.id, ...totalsJson(groups.get(g.id) ?? ZERO) })),
@@ -918,11 +953,15 @@ export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) =
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
   const readyToAssignId = await internalCategoryId(db, budgetId, "ready_to_assign");
+  const since = new Date(Date.now() - RECENT_MOVES_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: moneyMove.id,
       fromCategoryId: moneyMove.fromCategoryId,
       toCategoryId: moneyMove.toCategoryId,
+      fromCategoryName: moneyMove.fromCategoryName,
+      toCategoryName: moneyMove.toCategoryName,
+      deletion: moneyMove.deletion,
       month: moneyMove.month,
       amount: moneyMove.amount,
       createdAt: moneyMove.createdAt,
@@ -930,33 +969,38 @@ export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) =
     })
     .from(moneyMove)
     .leftJoin(user, eq(user.id, moneyMove.userId))
-    .where(eq(moneyMove.budgetId, budgetId))
-    .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id))
-    .limit(RECENT_MOVES);
+    .where(and(eq(moneyMove.budgetId, budgetId), gte(moneyMove.createdAt, since)))
+    .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id));
   return c.json(
     {
-      moves: rows.map((m) => ({
-        id: m.id,
-        kind:
-          m.fromCategoryId === readyToAssignId
-            ? ("assigned" as const)
-            : m.toCategoryId === readyToAssignId
-              ? ("removed" as const)
+      moves: rows.map((m) => {
+        const fromReady = m.fromCategoryId === readyToAssignId;
+        const toReady = m.toCategoryId === readyToAssignId;
+        return {
+          id: m.id,
+          kind: toReady
+            ? ("removed" as const)
+            : fromReady && !m.deletion
+              ? ("assigned" as const)
               : ("moved" as const),
-        fromCategoryId: m.fromCategoryId === readyToAssignId ? null : m.fromCategoryId,
-        toCategoryId: m.toCategoryId === readyToAssignId ? null : m.toCategoryId,
-        month: monthOf(m.month),
-        amount: m.amount.toString(),
-        movedAt: m.createdAt.toISOString(),
-        userName: m.userName,
-      })),
+          fromCategoryId: fromReady ? null : m.fromCategoryId,
+          toCategoryId: toReady ? null : m.toCategoryId,
+          fromDeletedCategory: m.fromCategoryId ? null : m.fromCategoryName,
+          toDeletedCategory: m.toCategoryId ? null : m.toCategoryName,
+          deletion: m.deletion,
+          month: monthOf(m.month),
+          amount: m.amount.toString(),
+          movedAt: m.createdAt.toISOString(),
+          userName: m.userName,
+        };
+      }),
     },
     200,
   );
 };
 
-/** How many moves "Recent Moves" lists (YNAB's limit is open in docs/verify.md). */
-const RECENT_MOVES = 100;
+/** YNAB's Recent Moves: "Previous 34 days of assigning and moving money" (checked 2026-10-11). */
+const RECENT_MOVES_DAYS = 34;
 
 export const setExpectedIncomeHandler: RouteHandler<typeof setExpectedIncome, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");

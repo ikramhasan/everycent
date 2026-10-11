@@ -56,6 +56,8 @@ export {
   fundUnderfunded,
   paymentFunding,
   spendingFunding,
+  type Upcoming,
+  upcomingShort,
 } from "./funding";
 export { convert } from "./fx";
 export {
@@ -85,6 +87,7 @@ export {
   categoryOverspending,
   type HistoryAutoAssignOption,
   isBudgetMonth,
+  isOverdraft,
   type MonthAmount,
   type MonthFigures,
   monthBounds,
@@ -117,6 +120,7 @@ export { divideRounded, type RoundingMode } from "./rounding";
 export {
   firstOccurrenceAfter,
   nextOccurrence,
+  occurrencesBetween,
   SCHEDULE_FREQUENCIES,
   SCHEDULE_FREQUENCY_LABELS,
   type ScheduleFrequency,

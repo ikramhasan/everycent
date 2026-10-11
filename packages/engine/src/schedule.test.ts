@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { firstOccurrenceAfter, nextOccurrence, type ScheduleFrequency } from "./schedule";
+import {
+  firstOccurrenceAfter,
+  nextOccurrence,
+  occurrencesBetween,
+  type ScheduleFrequency,
+} from "./schedule";
 
 /** `count` dates of a schedule, starting with `dateFirst`. */
 function sequence(frequency: ScheduleFrequency, dateFirst: string, count: number) {
@@ -200,5 +205,26 @@ describe("firstOccurrenceAfter", () => {
   it("keeps a later first date, and ends a past one-off", () => {
     expect(firstOccurrenceAfter("monthly", "2026-12-31", "2026-10-11")).toBe("2026-12-31");
     expect(firstOccurrenceAfter("never", "2026-10-05", "2026-10-11")).toBeNull();
+  });
+});
+
+describe("occurrencesBetween", () => {
+  // YNAB, 2026-10-12: a weekly $10 from 10/14 is 3 upcoming in October, 4 in November (U10 F).
+  const weekly = { frequency: "weekly" as const, dateFirst: "2026-10-14", dateNext: "2026-10-14" };
+
+  it("lists the occurrences after a date up to another, from the pending one", () => {
+    expect(occurrencesBetween(weekly, "2026-10-12", "2026-10-31")).toEqual([
+      "2026-10-14",
+      "2026-10-21",
+      "2026-10-28",
+    ]);
+    expect(occurrencesBetween(weekly, "2026-10-31", "2026-11-30")).toHaveLength(4);
+  });
+
+  it("stops after a one-off and skips what's not after the start", () => {
+    const once = { frequency: "never" as const, dateFirst: "2026-10-20", dateNext: "2026-10-20" };
+    expect(occurrencesBetween(once, "2026-10-12", "2026-12-31")).toEqual(["2026-10-20"]);
+    expect(occurrencesBetween(once, "2026-10-20", "2026-12-31")).toEqual([]);
+    expect(occurrencesBetween(weekly, "2026-10-12", "2026-10-13")).toEqual([]);
   });
 });

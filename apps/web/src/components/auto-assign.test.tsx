@@ -25,6 +25,7 @@ const categories = [
     },
     bar: null,
     underfundedParts: [],
+    upcoming: null,
   },
   {
     categoryId: "food",
@@ -40,6 +41,7 @@ const categories = [
     autoAssign: { ...NO_AUTO_ASSIGN, assignedLastMonth: "0" },
     bar: null,
     underfundedParts: [],
+    upcoming: null,
   },
 ];
 const names = new Map([

@@ -261,6 +261,7 @@ export function CategoryInspector({
   onNoteChange,
   uncategorized = false,
   target,
+  upcoming,
 }: {
   name: string;
   totals: Breakdown;
@@ -272,6 +273,8 @@ export function CategoryInspector({
   uncategorized?: boolean;
   /** The Target section. */
   target?: ReactNode;
+  /** The month's upcoming scheduled transactions, under the breakdown (YNAB). */
+  upcoming?: ReactNode;
 }) {
   const overspent = totals.available < 0n;
   const shortfall = format((-totals.available).toString());
@@ -297,6 +300,7 @@ export function CategoryInspector({
         <Line label="Cash Spending" value={totals.cashActivity} format={format} />
         <Line label="Credit Spending" value={totals.creditActivity} format={format} />
       </dl>
+      {upcoming}
       {overspent && (
         <OverspentMessage
           totals={totals}
@@ -347,6 +351,7 @@ export function PaymentInspector({
   past = false,
   target,
   onCoverOverspent,
+  upcoming,
 }: {
   name: string;
   totals: Breakdown;
@@ -363,6 +368,8 @@ export function PaymentInspector({
   onCoverOverspent?: () => void;
   /** The Target section, which shows the alert itself when no target applies. */
   target?: ReactNode;
+  /** Scheduled payments still to come, in Available for Payment (YNAB, 2026-10-12: Card W). */
+  upcoming?: ReactNode;
 }) {
   return (
     <Panel label={`${name} inspector`}>
@@ -391,6 +398,7 @@ export function PaymentInspector({
         <Line label="Assigned" value={totals.assigned} format={format} />
         <Line label="Funded Spending" value={payment.fundedSpending} format={format} />
         <Line label="Payments Made" value={payment.paymentsMade} format={format} />
+        {upcoming}
       </FoldingSection>
       <NoteField key={name} note={note} onChange={onNoteChange} />
     </Panel>

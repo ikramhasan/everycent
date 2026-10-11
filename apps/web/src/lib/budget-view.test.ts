@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import {
+  availableMark,
   breakdown,
   filteredIds,
   isCaution,
@@ -26,6 +27,7 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   autoAssign: NO_AUTO_ASSIGN,
   bar: null,
   underfundedParts: [],
+  upcoming: null,
 });
 
 const month: BudgetMonthData = {
@@ -34,6 +36,7 @@ const month: BudgetMonthData = {
   firstMonth: "2026-09",
   lastMonth: "2026-11",
   readyToAssign: "0",
+  overdraft: false,
   assignedInFuture: "0",
   futureMonths: [],
   targets: { month: "0", nextMonth: "0", expectedIncome: null },
@@ -185,5 +188,33 @@ describe("isCaution", () => {
     expect(isCaution(payment("200"), "2026-11", "2026-10")).toBe(true);
     expect(isCaution(payment("200"), "2026-09", "2026-10")).toBe(false);
     expect(isCaution(payment("0"), "2026-10", "2026-10")).toBe(false);
+  });
+});
+
+// YNAB, 2026-10-12 ("Onboarding Check", U10 A–I).
+describe("upcoming scheduled transactions on the pill", () => {
+  const row = (available: string, upcoming: string | null, target?: Record<string, unknown>) => ({
+    available,
+    cashOverspent: "0",
+    upcoming: upcoming === null ? null : { amount: upcoming },
+    target: (target ?? null) as never,
+  });
+  const met = { needed: "4000", funded: "4000", underfunded: "0", snoozed: false };
+  const unmet = { needed: "4000", funded: "0", underfunded: "4000", snoozed: false };
+
+  it("shows a yellow calendar while Available doesn't cover them", () => {
+    expect(isCaution(row("1000", "-3000"), "2026-10", "2026-10")).toBe(true); // U10 B
+    expect(availableMark(row("1000", "-3000"))).toEqual({ kind: "upcoming" });
+    expect(isCaution(row("5000", "-3000"), "2026-10", "2026-10")).toBe(false); // U10 H
+    expect(availableMark(row("5000", "-3000"))).toBeUndefined();
+    expect(availableMark(row("0", "2500"))).toBeUndefined(); // U10 G, an inflow
+  });
+
+  it("puts the calendar over a target's mark, but not over a snooze", () => {
+    expect(availableMark(row("4000", "-6000", met))).toEqual({ kind: "upcoming" }); // U10 I
+    expect(availableMark(row("0", "-3000", unmet))).toEqual({ kind: "upcoming" }); // U10 D
+    const snoozed = { ...unmet, snoozed: true };
+    expect(availableMark(row("0", "-3000", snoozed))).toEqual({ kind: "snoozed" });
+    expect(isCaution(row("0", "-3000", snoozed), "2026-10", "2026-10")).toBe(true);
   });
 });

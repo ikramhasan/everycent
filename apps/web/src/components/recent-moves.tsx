@@ -2,9 +2,10 @@ import { Button } from "@everycent/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Spinner } from "@everycent/ui/components/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/components/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import { format as formatDay } from "date-fns";
-import { ArrowLeftRight, History, MinusCircle, PlusCircle } from "lucide-react";
+import { ArrowLeftRight, History, MinusCircle, PlusCircle, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { $api } from "@/lib/api";
 import type { CategoryList } from "@/lib/categories";
@@ -17,8 +18,9 @@ export const movesQueryOptions = (budgetId: string) =>
 type Filter = "all" | "moved" | "assigned";
 
 /**
- * YNAB's "Recent Moves": every change to assigned money, newest first, by day. "Assigned" lists
- * money assigned and removed; "Moved" money moved between categories.
+ * YNAB's "Recent Moves": every change to assigned money of the last 34 days, newest first, by day.
+ * "Assigned" lists money assigned and removed; "Moved" money moved between categories and what
+ * deleting a category moved (with a trash icon). A deleted category keeps its name.
  */
 export function RecentMoves({
   budgetId,
@@ -42,28 +44,37 @@ export function RecentMoves({
   const days = useMemo(() => {
     const byDay = new Map<string, NonNullable<typeof moves.data>["moves"]>();
     for (const m of moves.data?.moves ?? []) {
-      if (filter === "moved" && m.kind !== "moved") continue;
-      if (filter === "assigned" && m.kind === "moved") continue;
+      const moved = m.kind === "moved" || m.deletion;
+      if (filter === "moved" && !moved) continue;
+      if (filter === "assigned" && moved) continue;
       const day = formatDay(new Date(m.movedAt), "yyyy-MM-dd");
       byDay.set(day, [...(byDay.get(day) ?? []), m]);
     }
     return [...byDay];
   }, [moves.data, filter]);
 
-  const category = (id: string | null, month: string) => (
-    <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
-      {id ? (names.get(id) ?? "Deleted category") : "Ready to Assign"}
-      <span className="text-[0.65rem] text-muted-foreground uppercase">{monthLabel(month)}</span>
-    </span>
+  const category = (id: string | null, deleted: string | null, month: string) => (
+    <>
+      {deleted && "deleted category "}
+      <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
+        {deleted ?? (id ? (names.get(id) ?? "Deleted category") : "Ready to Assign")}
+        <span className="text-[0.65rem] text-muted-foreground uppercase">{monthLabel(month)}</span>
+      </span>
+    </>
   );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <History /> Recent Moves
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <History /> Recent Moves
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Previous 34 days of assigning and moving money</TooltipContent>
+      </Tooltip>
       <PopoverContent align="start" className="w-96 p-0">
         <div className="flex items-center justify-between gap-2 border-b p-3">
           <h2 className="font-semibold">Recent Moves</h2>
@@ -93,7 +104,9 @@ export function RecentMoves({
                 </h3>
                 {list.map((m) => (
                   <div key={m.id} className="flex gap-2 rounded-md border p-2 text-sm">
-                    {m.kind === "moved" ? (
+                    {m.deletion ? (
+                      <Trash2 className="mt-0.5 size-4 shrink-0" />
+                    ) : m.kind === "moved" ? (
                       <ArrowLeftRight className="mt-0.5 size-4 shrink-0" />
                     ) : m.kind === "assigned" ? (
                       <PlusCircle className="mt-0.5 size-4 shrink-0" />
@@ -111,12 +124,12 @@ export function RecentMoves({
                       </span>
                       {m.kind !== "assigned" && (
                         <span className="text-muted-foreground">
-                          from {category(m.fromCategoryId, m.month)}
+                          from {category(m.fromCategoryId, m.fromDeletedCategory, m.month)}
                         </span>
                       )}
                       {m.kind !== "removed" && (
                         <span className="text-muted-foreground">
-                          to {category(m.toCategoryId, m.month)}
+                          to {category(m.toCategoryId, m.toDeletedCategory, m.month)}
                         </span>
                       )}
                     </div>

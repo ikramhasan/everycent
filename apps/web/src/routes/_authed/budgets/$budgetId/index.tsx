@@ -2,7 +2,7 @@ import { type BudgetMonth, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,17 +24,18 @@ import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-as
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
 import { TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
+import { UpcomingTransactions } from "@/components/upcoming-transactions";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import {
+  availableMark,
   breakdown,
   EMPTY_VIEW,
   filteredIds,
   isCaution,
   overspentCount,
   summarize,
-  targetMark,
   UNCATEGORIZED,
   useBudgetFilter,
   useProgressBars,
@@ -42,6 +43,7 @@ import {
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { useFixThisMonths } from "@/lib/fix-this";
 import { parseMoneyInput, toMoneyInput } from "@/lib/money-input";
 import {
   type BudgetMonthData,
@@ -157,7 +159,9 @@ function BudgetPage() {
     ) {
       try {
         const updated = await work();
-        queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+        if (updated.month === onScreen) {
+          queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+        }
         history.record({
           label,
           undo: () => saveHistory(inverse),
@@ -172,7 +176,9 @@ function BudgetPage() {
 
     async function saveHistory(work: () => Promise<BudgetMonthData>) {
       const updated = await work();
-      queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+      if (updated.month === onScreen) {
+        queryClient.setQueryData(monthQueryOptions(budget.id, onScreen).queryKey, updated);
+      }
       await refreshBudget();
     }
 
@@ -243,26 +249,30 @@ function BudgetPage() {
         readyToAssignId: categories.data.readyToAssignCategoryId,
         parse,
         toInput,
-        move: (fromCategoryId, toCategoryId, amount) => {
-          const mutate = (from: string, to: string) =>
-            moveMutation.mutateAsync({
-              params: { path: { budgetId: budget.id, month: data.month } },
-              body: {
-                fromCategoryId: from,
-                toCategoryId: to,
-                amount: amount.toString(),
-                today: todayIso(),
-              },
-            });
-          return save(
-            () => mutate(fromCategoryId, toCategoryId),
-            () => mutate(toCategoryId, fromCategoryId),
-            "money move",
-            "Couldn't move the money.",
-          );
-        },
+        move: (fromCategoryId, toCategoryId, amount) =>
+          moveIn(data.month, fromCategoryId, toCategoryId, amount),
+        moveIn,
       },
     };
+
+    function moveIn(m: BudgetMonth, fromCategoryId: string, toCategoryId: string, amount: bigint) {
+      const mutate = (from: string, to: string) =>
+        moveMutation.mutateAsync({
+          params: { path: { budgetId: budget.id, month: m } },
+          body: {
+            fromCategoryId: from,
+            toCategoryId: to,
+            amount: amount.toString(),
+            today: todayIso(),
+          },
+        });
+      return save(
+        () => mutate(fromCategoryId, toCategoryId),
+        () => mutate(toCategoryId, fromCategoryId),
+        "money move",
+        "Couldn't move the money.",
+      );
+    }
     // mutateAsync is stable; the mutation objects themselves change every render.
   }, [
     figures.data,
@@ -280,6 +290,18 @@ function BudgetPage() {
     progressBars,
   ]);
 
+  const fixThisMonths = useFixThisMonths({
+    budgetId: budget.id,
+    month,
+    current: today,
+    data: figures.data,
+    categories: categories.data,
+    unassign: async (m, categoryId, amount) => {
+      const move = listFigures?.move;
+      if (move) await move.moveIn(m, categoryId, move.readyToAssignId, amount);
+    },
+  });
+
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -295,18 +317,17 @@ function BudgetPage() {
         </div>
         {listFigures && (
           <ReadyToAssignBanner
-            month={month}
-            current={today}
             amount={listFigures.month.readyToAssign}
+            overdraft={listFigures.month.overdraft}
             format={listFigures.format}
             action={
-              // Past months get YNAB's "Overdraft?" instead, whose help link isn't built.
-              month >= today &&
+              // An overdraft's "Next Steps" (a YNAB help page) isn't built.
               listFigures.move && (
                 <FixThisButton
                   readyToAssign={listFigures.month.readyToAssign}
                   format={listFigures.format}
                   actions={listFigures.move}
+                  months={fixThisMonths}
                 />
               )
             }
@@ -535,7 +556,8 @@ function Inspector({
   targetActions: ReturnType<typeof useTargetActions>;
   onShowOverspent: () => void;
 }) {
-  const { budget } = useBudget();
+  const { budget, formatDate } = useBudget();
+  const navigate = useNavigate();
   const history = useUndo();
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
@@ -564,14 +586,30 @@ function Inspector({
         format={format}
         actions={figures.move}
         caution={caution}
-        target={targetMark(totals.target)}
+        target={availableMark(totals)}
       />
     ) : (
       <AvailablePill
         amount={totals.available}
         format={format}
         caution={caution}
-        target={targetMark(totals.target)}
+        target={availableMark(totals)}
+      />
+    );
+    const upcoming = totals.upcoming && (
+      <UpcomingTransactions
+        name={category.name}
+        available={BigInt(totals.available)}
+        upcoming={totals.upcoming}
+        format={format}
+        formatDate={formatDate}
+        onOpen={(accountId, scheduleId) =>
+          void navigate({
+            to: "/budgets/$budgetId/accounts/$accountId",
+            params: { budgetId: budget.id, accountId },
+            search: { transaction: scheduleId },
+          })
+        }
       />
     );
     if (totals.payment) {
@@ -590,6 +628,7 @@ function Inspector({
           {...alertProps}
           past={past}
           available={available}
+          upcoming={upcoming}
           note={category.note}
           onNoteChange={(note) => onNoteChange(only, note)}
           target={
@@ -632,6 +671,7 @@ function Inspector({
         totals={breakdown(totals)}
         format={format}
         available={available}
+        upcoming={upcoming}
         note={category.note}
         onNoteChange={(note) => onNoteChange(only, note)}
         target={

@@ -86,7 +86,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees and accounts (each starting from its balance on `date`). The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -685,7 +685,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recent changes to assigned money, newest first */
+        /**
+         * Recent changes to assigned money, newest first
+         * @description Every change of the last 34 days, as YNAB's Recent Moves ("Previous 34 days of assigning and moving money").
+         */
         get: operations["listMoves"];
         put?: never;
         post?: never;
@@ -862,6 +865,10 @@ export interface components {
             linkedAccountId: string | null;
             /** @description Deleting it requires reassignToCategoryId */
             hasTransactions: boolean;
+            /** @description Its transactions, split lines counted one by one (what a delete reassigns) */
+            transactionCount: number;
+            /** @description Money assigned to it in some month (a delete returns it to Ready to Assign) */
+            hasAssignedMoney: boolean;
             target: components["schemas"]["CategoryTarget"];
         };
         CategoryTarget: {
@@ -1572,6 +1579,8 @@ export interface components {
             lastMonth: string;
             /** @description Money without a job in this month; negative when more was assigned than there is */
             readyToAssign: string;
+            /** @description A negative Ready to Assign that taking back every category's cash wouldn't cover (YNAB's "Overdraft?"); false when categories could cover it ("You assigned more than you have", Fix This) and when Ready to Assign isn't negative */
+            overdraft: boolean;
             /** @description Money assigned in the months after this one */
             assignedInFuture: string;
             /** @description The later months with money assigned, in order */
@@ -1611,6 +1620,7 @@ export interface components {
             bar: components["schemas"]["ProgressBar"];
             /** @description What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned) */
             underfundedParts: components["schemas"]["FundingPart"][];
+            upcoming: components["schemas"]["CategoryUpcoming"];
         };
         /** @description Set on a credit account's payment category */
         PaymentDetails: {
@@ -1697,6 +1707,23 @@ export interface components {
             /** @description YYYY-MM-DD it's due; empty when the step isn't ordered by date */
             date: string;
         };
+        /** @description Scheduled transactions still to come in the month (YNAB's "Upcoming Transactions"): after the user's today, none in past months; null when there are none */
+        CategoryUpcoming: {
+            /** @description Their net amount for the category; negative when more goes out than comes in */
+            amount: string;
+            /** @description Latest first */
+            transactions: {
+                scheduleId: string;
+                accountId: string;
+                accountName: string;
+                /** Format: date */
+                date: string;
+                payeeName: string | null;
+                memo: string;
+                /** @description What it does to this category */
+                amount: string;
+            }[];
+        } | null;
         MonthTotals: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             assigned: string;
@@ -1785,14 +1812,20 @@ export interface components {
         MoneyMove: {
             id: string;
             /**
-             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories
+             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories (and, for a deletion, from Ready to Assign to the deleted category, as YNAB words it)
              * @enum {string}
              */
             kind: "assigned" | "moved" | "removed";
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             fromCategoryId: string | null;
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             toCategoryId: string | null;
+            /** @description The name of the deleted category the money came from; null otherwise */
+            fromDeletedCategory: string | null;
+            /** @description The name of the deleted category the money went to; null otherwise */
+            toDeletedCategory: string | null;
+            /** @description Logged by deleting a category: its assigned money going to the category picked */
+            deletion: boolean;
             /** @description A month, YYYY-MM */
             month: string;
             /** @description Positive */
@@ -4618,7 +4651,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The latest moves */
+            /** @description The last 34 days' moves */
             200: {
                 headers: {
                     [name: string]: unknown;

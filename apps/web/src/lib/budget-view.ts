@@ -88,36 +88,75 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
  * payment's Underfunded alert only from the current month on; earlier months stay green
  * (support.ynab.com, docs/verify.md phase 7c).
  */
+/**
+ * What a category's upcoming scheduled transactions need beyond Available (YNAB's negative
+ * "Available After Upcoming"); zero when it covers them or nothing is coming.
+ */
+export function upcomingShortfall(totals: {
+  available: string;
+  upcoming?: { amount: string } | null;
+}): bigint {
+  if (!totals.upcoming) return 0n;
+  const after = BigInt(totals.available) + BigInt(totals.upcoming.amount);
+  return after < 0n && BigInt(totals.upcoming.amount) < 0n ? -after : 0n;
+}
+
 export function isCaution(
   totals: Pick<MonthTotals, "available" | "cashOverspent"> & {
     payment?: { underfunded: string } | null;
     target?: { underfunded: string; snoozed?: boolean } | null;
+    upcoming?: { amount: string } | null;
   },
   month: string,
   current: string,
 ) {
+  // Not enough for what's scheduled later in the month is yellow, snoozed or not
+  // (support.ynab.com "Colors and Icons"; YNAB, 2026-10-12: U10 A–D, F, I).
+  const scheduledShort = !totals.available.startsWith("-") && upcomingShortfall(totals) > 0n;
   if (totals.payment) {
     // Paying more than was set aside is red (docs/verify.md, phase 7d).
     if (totals.available.startsWith("-")) return false;
+    if (scheduledShort) return true;
     // With a target, its own status decides, as for any target (YNAB, 2026-10-08: Card E1 on
     // track was green with a part-filled pie, underfunded yellow).
     if (totals.target) return totals.target.underfunded !== "0";
     return totals.payment.underfunded !== "0" && month >= current;
   }
   if (totals.available.startsWith("-")) return totals.cashOverspent === "0";
+  if (scheduledShort) return true;
   // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a), unless
   // it's snoozed: then green or grey (support.ynab.com "Snooze a Target").
   return Boolean(totals.target && totals.target.underfunded !== "0" && !totals.target.snoozed);
 }
 
 /**
- * What a category's target shows on its Available pill: a pie filled to the funded percentage while
- * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets"), Zz when snoozed.
+ * The icon on a category's Available pill: a target's pie filled to the funded percentage while
+ * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets"), Zz when snoozed, and a
+ * calendar when scheduled transactions later in the month aren't covered.
  */
 export type TargetMark =
   | { kind: "met" }
   | { kind: "underfunded"; percent: number }
-  | { kind: "snoozed" };
+  | { kind: "snoozed" }
+  | { kind: "upcoming" };
+
+/**
+ * The icon a category's Available pill shows: the calendar when its upcoming scheduled
+ * transactions aren't covered, over its target's pie or check (YNAB, 2026-10-12: U10 D's unmet
+ * target and U10 I's met one showed the calendar); a snoozed target keeps its Zz
+ * (support.ynab.com "Colors and Icons"). Payment categories keep their target's mark.
+ */
+export function availableMark(totals: {
+  available: string;
+  target?: TargetNeed | null;
+  payment?: unknown;
+  upcoming?: { amount: string } | null;
+}): TargetMark | undefined {
+  if (!totals.payment && !totals.target?.snoozed && upcomingShortfall(totals) > 0n) {
+    return { kind: "upcoming" };
+  }
+  return targetMark(totals.target);
+}
 
 /** The mark a category's target puts on its Available pill, if it has one this month. */
 export function targetMark(target: TargetNeed | null | undefined): TargetMark | undefined {
@@ -168,6 +207,19 @@ export function breakdown(totals: MonthTotals): Breakdown {
  * The inspector's month summary over the given categories (`UNCATEGORIZED` included), as YNAB adds
  * up the rows in view: every category, hidden ones too, under All.
  */
+/** A {@link Breakdown} back in the API's shape, for a row's totals. */
+export function toTotals(b: Breakdown): MonthTotals {
+  return {
+    assigned: b.assigned.toString(),
+    activity: b.activity.toString(),
+    cashActivity: b.cashActivity.toString(),
+    creditActivity: b.creditActivity.toString(),
+    available: b.available.toString(),
+    cashOverspent: b.cashOverspent.toString(),
+    creditOverspent: b.creditOverspent.toString(),
+  };
+}
+
 export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakdown {
   const byId = new Map(month.categories.map((c) => [c.categoryId, c]));
   const sum: Breakdown = {

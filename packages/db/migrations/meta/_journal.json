@@ -120,6 +120,13 @@
       "when": 1791730515772,
       "tag": "0016_curved_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791740723053,
+      "tag": "0017_sour_shockwave",
+      "breakpoints": true
     }
   ]
 }

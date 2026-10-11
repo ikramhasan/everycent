@@ -15,6 +15,8 @@ const c = (id: string, groupId: string, hidden = false) => ({
   hidden,
   linkedAccountId: null,
   hasTransactions: false,
+  transactionCount: 0,
+  hasAssignedMoney: false,
   target: null,
 });
 
