@@ -147,6 +147,102 @@ describe("fresh start", () => {
     expect(visa.id).not.toBe(newVisa?.id);
   });
 
+  // YNAB, 2026-10-12: "C4 Order" → "C4 Order FS" kept every schedule, and the old plan kept them.
+  it("copies scheduled transactions onto the new accounts, categories and payees", async () => {
+    const { owner, budget, base, addAccount } = await setup();
+    const checking = await addAccount({ name: "Checking", type: "checking", balance: "250000" });
+    const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "-37500" });
+    const [rent, utilities] = (
+      await json<{ groups: Group[] }>(await send("GET", `${base}/categories`, owner.cookie))
+    ).groups.flatMap((g) => (g.kind ? [] : g.categories));
+    const schedule = async (input: Record<string, unknown>) => {
+      const res = await send("POST", `${base}/scheduled-transactions`, owner.cookie, {
+        accountId: checking.id,
+        today: TODAY,
+        ...input,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    await schedule({
+      date: "2026-10-24",
+      frequency: "monthly",
+      amount: "-6000",
+      payeeName: "Landlord",
+      categoryId: rent?.id,
+      memo: "x-order2",
+      flag: "red",
+    });
+    await schedule({ date: "2026-10-21", amount: "-5000", transferAccountId: visa.id });
+    await schedule({
+      date: "2026-10-15",
+      amount: "-900",
+      payeeName: "Shop",
+      subtransactions: [
+        { amount: "-400", categoryId: rent?.id },
+        { amount: "-500", categoryId: utilities?.id },
+      ],
+    });
+
+    const fresh = await json<Budget>(await freshStart(budget.id, owner.cookie));
+    const freshBase = `/v1/budgets/${fresh.id}`;
+    type Row = {
+      kind: string;
+      accountId: string;
+      frequency: string;
+      dateFirst: string;
+      dateNext: string;
+      amount: string;
+      payeeName: string | null;
+      categoryId: string | null;
+      memo: string;
+      flag: string | null;
+      transferAccountId: string | null;
+      subtransactions: { amount: string; categoryId: string | null }[];
+    };
+    const list = async (b: string) =>
+      (
+        await json<{ scheduledTransactions: Row[] }>(
+          await send("GET", `${b}/scheduled-transactions`, owner.cookie),
+        )
+      ).scheduledTransactions.filter((r) => r.kind === "schedule");
+    const accounts = (
+      await json<{ accounts: Account[] }>(await send("GET", `${freshBase}/accounts`, owner.cookie))
+    ).accounts;
+    const newChecking = accounts.find((a) => a.name === "Checking");
+    const newVisa = accounts.find((a) => a.name === "Visa");
+    const [newRent, newUtilities] = (
+      await json<{ groups: Group[] }>(await send("GET", `${freshBase}/categories`, owner.cookie))
+    ).groups.flatMap((g) => (g.kind ? [] : g.categories));
+
+    const copied = await list(freshBase);
+    expect(copied).toHaveLength(3);
+    expect(copied).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: newChecking?.id,
+          frequency: "monthly",
+          dateFirst: "2026-10-24",
+          dateNext: "2026-10-24",
+          amount: "-6000",
+          payeeName: "Landlord",
+          categoryId: newRent?.id,
+          memo: "x-order2",
+          flag: "red",
+        }),
+        expect.objectContaining({ amount: "-5000", transferAccountId: newVisa?.id }),
+        expect.objectContaining({
+          amount: "-900",
+          subtransactions: [
+            expect.objectContaining({ amount: "-400", categoryId: newRent?.id }),
+            expect.objectContaining({ amount: "-500", categoryId: newUtilities?.id }),
+          ],
+        }),
+      ]),
+    );
+    // The archived budget keeps its own.
+    expect(await list(base)).toHaveLength(3);
+  });
+
   it("brings partners along with their roles", async () => {
     const { owner, budget } = await setup();
     const partner = await signUp(app);

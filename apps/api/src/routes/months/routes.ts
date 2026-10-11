@@ -160,6 +160,31 @@ const MonthCategorySchema = Totals.extend({
       "What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short " +
         "(they add up to `autoAssign.underfunded` less Assigned)",
     ),
+  upcoming: z
+    .object({
+      amount: zMinorUnits.describe(
+        "Their net amount for the category; negative when more goes out than comes in",
+      ),
+      transactions: z
+        .array(
+          z.object({
+            scheduleId: z.string(),
+            accountId: z.string(),
+            accountName: z.string(),
+            date: z.iso.date(),
+            payeeName: z.string().nullable(),
+            memo: z.string(),
+            amount: zMinorUnits.describe("What it does to this category"),
+          }),
+        )
+        .describe("Latest first"),
+    })
+    .nullable()
+    .describe(
+      'Scheduled transactions still to come in the month (YNAB\'s "Upcoming Transactions"): ' +
+        "after the user's today, none in past months; null when there are none",
+    )
+    .openapi("CategoryUpcoming"),
 }).openapi("MonthCategory");
 const MonthGroupSchema = Totals.extend({ groupId: z.string() }).openapi("MonthGroup");
 

@@ -40,6 +40,10 @@ type Month = {
     > | null;
     autoAssign: Record<string, string>;
     underfundedParts: { amount: string; step: number; date: string }[];
+    upcoming: {
+      amount: string;
+      transactions: { date: string; accountName: string; memo: string; amount: string }[];
+    } | null;
   })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
@@ -175,6 +179,91 @@ async function cards(visaDebt = 0n) {
   };
   return { ...ctx, visa, amex, credit, create };
 }
+
+// YNAB, checked 2026-10-12 in "Onboarding Check" (U10 A–J) and "C4 Order".
+describe("upcoming scheduled transactions", () => {
+  async function scheduled() {
+    const ctx = await cards();
+    const schedule = async (input: Record<string, unknown>) => {
+      const res = await send("POST", `${ctx.base}/scheduled-transactions`, ctx.cookie, {
+        accountId: ctx.account.id,
+        today: TODAY,
+        ...input,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    return { ...ctx, schedule };
+  }
+
+  it("counts the month's occurrences after today, inflows netted, and funds what's short", async () => {
+    const { schedule, month, assign, rent, phone, groceries } = await scheduled();
+    await schedule({ date: "2026-10-20", amount: "-3000", categoryId: rent.id, memo: "x-a" });
+    await schedule({ date: "2026-10-22", amount: "2500", categoryId: rent.id });
+    await schedule({
+      date: "2026-10-07",
+      frequency: "weekly",
+      amount: "-1000",
+      categoryId: groceries.id,
+    });
+    await assign(phone.id, "2026-10", 5000n);
+    await schedule({ date: "2026-10-20", amount: "-3000", categoryId: phone.id });
+
+    const oct = await month("2026-10");
+    // U10 A: −$30.00 and +$25.00 → −$5.00, the earliest date first in Underfunded's order.
+    expect(oct.byCategory(rent.id)).toMatchObject({
+      upcoming: { amount: "-500" },
+      autoAssign: { underfunded: "500" },
+      underfundedParts: [{ amount: "500", step: 2, date: "2026-10-20" }],
+    });
+    expect(oct.byCategory(rent.id)?.upcoming?.transactions.map((t) => t.date)).toEqual([
+      "2026-10-22",
+      "2026-10-20",
+    ]);
+    // U10 F: weekly from 10/07, four in October, four in November.
+    expect(oct.byCategory(groceries.id)?.upcoming).toMatchObject({ amount: "-4000" });
+    expect((await month("2026-11")).byCategory(groceries.id)?.upcoming?.amount).toBe("-4000");
+    // U10 H: covered by Available, nothing to fund.
+    expect(oct.byCategory(phone.id)).toMatchObject({
+      upcoming: { amount: "-3000" },
+      autoAssign: { underfunded: "5000" },
+    });
+    // Nothing upcoming in a past month.
+    expect((await month("2026-09")).byCategory(rent.id)?.upcoming).toBeNull();
+  });
+
+  it("counts split lines, card spending and card payments where they land", async () => {
+    const { schedule, month, rent, phone, groceries, visa } = await scheduled();
+    await schedule({
+      date: "2026-10-23",
+      amount: "-900",
+      subtransactions: [
+        { amount: "-400", categoryId: rent.id },
+        { amount: "-500", categoryId: phone.id },
+      ],
+    });
+    await schedule({
+      accountId: visa.id,
+      date: "2026-10-21",
+      amount: "-700",
+      categoryId: groceries.id,
+    });
+    await schedule({ date: "2026-10-21", amount: "-500", transferAccountId: visa.id });
+
+    const oct = await month("2026-10");
+    expect(oct.byCategory(rent.id)?.upcoming?.amount).toBe("-400");
+    expect(oct.byCategory(phone.id)?.upcoming?.amount).toBe("-500");
+    // U10 J: spending on a card counts in its category, not the card's payment category.
+    expect(oct.byCategory(groceries.id)).toMatchObject({
+      upcoming: { amount: "-700" },
+      autoAssign: { underfunded: "700" },
+    });
+    // Card W: the scheduled payment comes out of the payment category.
+    expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({
+      upcoming: { amount: "-500", transactions: [{ date: "2026-10-21" }] },
+      underfundedParts: [{ amount: "500", step: 5, date: "2026-10-21" }],
+    });
+  });
+});
 
 describe("budget months", () => {
   it("adds up each category's activity in the month, split lines one by one", async () => {

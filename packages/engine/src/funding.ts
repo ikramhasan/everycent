@@ -25,6 +25,23 @@ export interface FundingPart {
   date: string;
 }
 
+/**
+ * A category's scheduled transactions still to come in the month (YNAB's "Upcoming
+ * Transactions"): their net amount (negative when more goes out than comes in) and the earliest
+ * one's date.
+ */
+export interface Upcoming {
+  amount: bigint;
+  date: string;
+}
+
+/** What the upcoming transactions need beyond Available (YNAB's "Available After Upcoming"). */
+export function upcomingShort(available: bigint, upcoming: Upcoming | null | undefined): bigint {
+  if (!upcoming || upcoming.amount >= 0n) return 0n;
+  const short = -upcoming.amount - available;
+  return short > 0n ? short : 0n;
+}
+
 export interface CategoryFunding {
   /** What Underfunded adds to the category's Assigned when it can fund it in full. */
   underfunded: bigint;
@@ -62,6 +79,11 @@ function weekdayDates(month: BudgetMonth, weekday: number) {
  * - Reduce Overfunding takes back what the target says is over (`TargetNeed.overfunded`).
  * - A snoozed target asks for nothing, but its overspending is still covered and what's over can
  *   still be taken back (YNAB, 2026-10-07: snoozed O11 asked $30.00, snoozed O9 gave back $50.00).
+ * - Upcoming scheduled transactions ask for what Available doesn't cover, or the target's need if
+ *   that's more (YNAB, 2026-10-12: U10 D, a $40.00 target and $30.00 scheduled, asked $40.00; U10
+ *   I, target met at $40.00 with $60.00 scheduled, $20.00), snoozed or not (support.ynab.com). The
+ *   whole amount is funded at the earliest upcoming date ("C4 Order FS": X10's $10.00 target and
+ *   $6.00 on 10/16 went before $6.00 due 10/20).
  */
 export function spendingFunding(
   month: BudgetMonth,
@@ -69,19 +91,29 @@ export function spendingFunding(
   target: Pick<CategoryTarget, "cadence" | "dueDay"> | null,
   need: TargetNeed | null,
   snoozed = false,
+  upcoming: Upcoming | null = null,
 ): CategoryFunding {
   const overspent = available < 0n ? -available : 0n;
   const short = snoozed ? 0n : (need?.underfunded ?? 0n);
-  const underfunded = short > overspent ? short : overspent;
+  const scheduled = upcomingShort(available, upcoming);
+  const underfunded = [short, overspent, scheduled].reduce((a, b) => (b > a ? b : a));
   const overfunded = need?.overfunded ?? 0n;
   if (underfunded === 0n) return { ...NONE, overfunded };
-  if (overspent > 0n || !target || !need) {
+  if (overspent > 0n || ((!target || !need) && scheduled === 0n)) {
     return {
       underfunded,
       overfunded,
       parts: [{ amount: underfunded, step: FUNDING_STEPS.overspent, date: "" }],
     };
   }
+  if (scheduled > 0n && upcoming) {
+    return {
+      underfunded,
+      overfunded,
+      parts: [{ amount: underfunded, step: FUNDING_STEPS.dueThisMonth, date: upcoming.date }],
+    };
+  }
+  if (!target || !need) return { ...NONE, overfunded };
   return { underfunded, overfunded, parts: targetParts(month, target, need) };
 }
 
@@ -136,12 +168,17 @@ function targetParts(
  * 2026-10-08): Card E3 ($30.00 a month, $5.00 credit overspending) asked $30.00; Card E1 (pay off
  * by date) asked its share, $20.84; Card E2, red at −$10.00, still asked its $33.34 share (the
  * overspending, if more, is covered too). Assigning $50.00 gave back $20.00 (E3) and $29.16 (E1).
+ *
+ * A scheduled payment asks for what Available doesn't cover, or the above if more (YNAB,
+ * 2026-10-12: Card W owed $10.00 with a $5.00 payment scheduled, still $10.00), and puts the card
+ * first among card payments (support.ynab.com: those with a scheduled payment come first).
  */
 export function paymentFunding(
   available: bigint,
   owed: bigint,
   creditOverspending: bigint,
   need: TargetNeed | null = null,
+  upcoming: Upcoming | null = null,
 ): CategoryFunding {
   let underfunded: bigint;
   let overfunded: bigint;
@@ -155,16 +192,20 @@ export function paymentFunding(
     underfunded = short > 0n ? short : 0n;
     overfunded = extra > 0n ? extra : 0n;
   }
+  const scheduled = upcomingShort(available, upcoming);
+  if (scheduled > underfunded) underfunded = scheduled;
+  const date = upcoming && upcoming.amount < 0n ? upcoming.date : "";
   return {
     underfunded,
     overfunded,
-    parts: underfunded ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date: "" }] : [],
+    parts: underfunded ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date }] : [],
   };
 }
 
 /**
  * Underfunded over many categories with only `readyToAssign` to give: each part in YNAB's order
- * (step, then date, then the categories' order as listed) gets what's left until nothing is.
+ * (step, then date, undated parts last, then the categories' order as listed) gets what's left
+ * until nothing is.
  * Returns what each category gets. Categories come in list order.
  */
 export function fundUnderfunded(
@@ -178,9 +219,9 @@ export function fundUnderfunded(
     a.step !== b.step
       ? a.step - b.step
       : a.date !== b.date
-        ? a.date < b.date
-          ? -1
-          : 1
+        ? a.date === "" || (b.date !== "" && a.date > b.date)
+          ? 1
+          : -1
         : a.index - b.index,
   );
   const given = new Map<string, bigint>();

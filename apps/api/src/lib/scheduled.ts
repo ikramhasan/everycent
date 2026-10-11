@@ -9,14 +9,20 @@ import {
   scheduledTransaction,
 } from "@everycent/db/schema";
 import {
+  accountFamily,
+  type BudgetMonth,
   firstOccurrenceAfter,
+  isOnBudget,
+  monthBounds,
+  monthOf,
   nextOccurrence,
+  occurrencesBetween,
   type ScheduleFrequency,
   type SearchSettings,
   type SearchTerm,
   usesCategory as usesAccountCategory,
 } from "@everycent/engine";
-import { and, asc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
 import {
   type AccountRow,
   assertNotSelf,
@@ -571,3 +577,154 @@ export function scheduledRowMatches(
 }
 
 export type { SearchSettings };
+
+/** One upcoming scheduled transaction as a category's Activity popover lists it. */
+export interface UpcomingTransaction {
+  scheduleId: string;
+  accountId: string;
+  accountName: string;
+  date: string;
+  payeeName: string | null;
+  memo: string;
+  /** What it does to the category (a split's line, a payment's effect on the card's category). */
+  amount: bigint;
+}
+
+/** A category's upcoming scheduled transactions in a month (YNAB's "Upcoming Transactions"). */
+export interface CategoryUpcoming {
+  /** Net amount; negative when more goes out than comes in. */
+  amount: bigint;
+  /** The earliest one's date, YYYY-MM-DD. */
+  date: string;
+  /** Latest first, as YNAB lists them. */
+  transactions: UpcomingTransaction[];
+}
+
+/**
+ * Each category's scheduled transactions still to come in `month`, as of the user's `today`
+ * (YNAB, checked 2026-10-12): occurrences after today in the month, earlier months counting
+ * nothing; inflows net against outflows; a split counts line by line; spending on a card counts
+ * in its category; a payment from a budget account counts against the card's payment category
+ * (`paymentCategoryByAccount`); Ready to Assign and Uncategorized don't count. Schedules in closed
+ * accounts don't occur.
+ */
+export async function upcomingByCategory(
+  db: Db,
+  budgetId: string,
+  month: BudgetMonth,
+  today: string,
+  paymentCategoryByAccount: ReadonlyMap<string, string>,
+): Promise<Map<string, CategoryUpcoming>> {
+  const upcoming = new Map<string, CategoryUpcoming>();
+  if (month < monthOf(today)) return upcoming;
+  const { end } = monthBounds(month);
+  const schedules = await db
+    .select({
+      schedule: scheduledTransaction,
+      accountName: budgetAccount.name,
+      accountType: budgetAccount.type,
+      payeeName: payee.name,
+      transferAccountId: payee.transferAccountId,
+    })
+    .from(scheduledTransaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, scheduledTransaction.accountId))
+    .leftJoin(payee, eq(payee.id, scheduledTransaction.payeeId))
+    .where(
+      and(
+        eq(scheduledTransaction.budgetId, budgetId),
+        eq(budgetAccount.closed, false),
+        lte(scheduledTransaction.dateNext, end),
+      ),
+    );
+  if (schedules.length === 0) return upcoming;
+  const lines = await scheduleLines(
+    db,
+    schedules.map((r) => r.schedule.id),
+  );
+  const accountTypes = new Map(
+    (
+      await db
+        .select({ id: budgetAccount.id, type: budgetAccount.type })
+        .from(budgetAccount)
+        .where(eq(budgetAccount.budgetId, budgetId))
+    ).map((a) => [a.id, a.type]),
+  );
+  const counted = new Set(
+    (
+      await db
+        .select({ id: category.id })
+        .from(category)
+        .where(and(eq(category.budgetId, budgetId), isNull(category.internalKind)))
+    ).map((c) => c.id),
+  );
+  const isCard = (accountId: string | null) => {
+    const type = accountId && accountTypes.get(accountId);
+    return Boolean(type && accountFamily(type) === "credit");
+  };
+  const isBudgetCash = (accountId: string) => {
+    const type = accountTypes.get(accountId);
+    return Boolean(type && isOnBudget(type) && accountFamily(type) !== "credit");
+  };
+  // A card payment from a budget account takes money out of the card's payment category.
+  const paymentFlow = (fromAccountId: string, toAccountId: string | null, amount: bigint) => {
+    if (toAccountId && isCard(toAccountId) && isBudgetCash(fromAccountId)) {
+      const paymentId = paymentCategoryByAccount.get(toAccountId);
+      return paymentId ? { categoryId: paymentId, amount } : null;
+    }
+    if (toAccountId && isCard(fromAccountId) && isBudgetCash(toAccountId)) {
+      const paymentId = paymentCategoryByAccount.get(fromAccountId);
+      return paymentId ? { categoryId: paymentId, amount: -amount } : null;
+    }
+    return null;
+  };
+
+  for (const row of schedules) {
+    const s = row.schedule;
+    if (!isOnBudget(row.accountType)) continue;
+    const own = lines.filter((l) => l.scheduledTransactionId === s.id);
+    const flows: { categoryId: string; amount: bigint }[] = [];
+    if (own.length > 0) {
+      for (const line of own) {
+        const flow = line.transferAccountId
+          ? paymentFlow(s.accountId, line.transferAccountId, line.amount)
+          : line.categoryId
+            ? { categoryId: line.categoryId, amount: line.amount }
+            : null;
+        if (flow) flows.push(flow);
+      }
+    } else if (row.transferAccountId && !s.categoryId) {
+      const flow = paymentFlow(s.accountId, row.transferAccountId, s.amount);
+      if (flow) flows.push(flow);
+    } else if (s.categoryId) {
+      flows.push({ categoryId: s.categoryId, amount: s.amount });
+    }
+    const relevant = flows.filter((f) => counted.has(f.categoryId));
+    if (relevant.length === 0) continue;
+    const dates = occurrencesBetween(s, today, end).filter((d) => monthOf(d) === month);
+    for (const date of dates) {
+      const byCategory = new Map<string, bigint>();
+      for (const f of relevant) {
+        byCategory.set(f.categoryId, (byCategory.get(f.categoryId) ?? 0n) + f.amount);
+      }
+      for (const [categoryId, amount] of byCategory) {
+        const entry = upcoming.get(categoryId) ?? { amount: 0n, date, transactions: [] };
+        entry.amount += amount;
+        if (date < entry.date) entry.date = date;
+        entry.transactions.push({
+          scheduleId: s.id,
+          accountId: s.accountId,
+          accountName: row.accountName,
+          date,
+          payeeName: row.payeeName,
+          memo: s.memo,
+          amount,
+        });
+        upcoming.set(categoryId, entry);
+      }
+    }
+  }
+  for (const entry of upcoming.values()) {
+    entry.transactions.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
+  }
+  return upcoming;
+}

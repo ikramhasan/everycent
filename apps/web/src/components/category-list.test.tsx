@@ -151,6 +151,7 @@ const totals = (assigned: string, activity: string, available: string) => ({
   autoAssign: NO_AUTO_ASSIGN,
   bar: null,
   underfundedParts: [],
+  upcoming: null,
 });
 
 const month: BudgetMonthData = {
@@ -170,6 +171,7 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      upcoming: null,
     },
     {
       categoryId: "c2",
@@ -177,6 +179,7 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      upcoming: null,
     },
     {
       categoryId: "c3",
@@ -184,6 +187,7 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      upcoming: null,
     },
   ],
   groups: [{ groupId: "g1", ...totals("100", "-35", "65") }],

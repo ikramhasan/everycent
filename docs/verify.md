@@ -70,6 +70,36 @@ web app and through the API, reading `date_next` after each Enter Now (EVERYCENT
 - **Closed accounts** (help center): schedules stop occurring and new ones can't be added; Enter
   Now still works. Whether missed dates catch up on reopening is EVERYCENT-115.
 
+## Scheduled transactions in the plan (phase 10b) (settled 2026-10-12)
+
+Checked in "Onboarding Check" (categories U10 A–J, memos `x-u10-*`, Card W), new plans "C4
+Order" / "C4 Order FS" (fresh start) and "C4 Clean", and on support.ynab.com ("Underfunded",
+"Colors and Icons", "Scheduled Transactions", "Plan Resets and Fresh Starts"). Built:
+
+- **Upcoming per category and month:** the month's occurrences after today count, inflows netted
+  against outflows (U10 A, −$30 and +$25 → "2 Upcoming Transactions −$5.00"); a weekly $10 is 3 in
+  October after 10/12 and 4 in November; a later month counts only its own occurrences. Split lines
+  count in their own categories; spending on a card counts in its category; a payment from a
+  budget account counts against the card's payment category. A scheduled Ready to Assign inflow
+  counts nowhere.
+- **Inspector:** under Available Balance (a payment category: under Available for Payment), "N
+  Upcoming Transaction(s)" with the net amount, then "Available After Upcoming", yellow when
+  negative. The first line opens an Activity popover (Account, Date, Payee, Memo, Amount, latest
+  first, Close); a row opens the schedule's register.
+- **Pill:** yellow with a calendar when Available doesn't cover them, over a target's pie or check
+  (U10 D unmet, U10 I met); green without it when covered; a snoozed target keeps its Zz on yellow
+  (help center).
+- **Underfunded:** the larger of the target's need and what Available doesn't cover (U10 B $20,
+  D $40 with a $40 target and $30 scheduled, I $20), funded whole at the category's earliest
+  upcoming date ("C4 Order": Utilities with 10/15 and 10/27 before Rent's 10/24; "C4 Order FS":
+  X10's $10 target and $6 on 10/16 before $6 on 10/20). A scheduled card payment: Card W, owing
+  $10 with $5 scheduled, still asked $10.
+- **Fresh start** copies every schedule unchanged; the archived plan keeps them too.
+- **Auto-entry** is done by YNAB's client with the device's local date: at 00:25 local (+06,
+  still 10/11 in UTC) opening the web app entered a 10/12 schedule at once; one created with no
+  client open waited until the app was opened. Whether a server job also enters them for plans
+  nobody opens is being checked (`x-tz-server` in "C4 Clean").
+
 ## Duplicate, Enter Now and Make Repeating (EVERYCENT-40) (settled 2026-10-11)
 
 Checked in "Onboarding Check" (S10 Sav, S10 Cash2, R9 Chk A, All Accounts; memos `x-dupc`,

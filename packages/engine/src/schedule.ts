@@ -131,3 +131,21 @@ export function firstOccurrenceAfter(
   while (next !== null && next <= date) next = nextOccurrence(frequency, dateFirst, next);
   return next;
 }
+
+/**
+ * The schedule's occurrences dated after `after` and up to `until` (both YYYY-MM-DD), in order,
+ * starting from its pending `dateNext`. YNAB lists these as a category's upcoming transactions.
+ */
+export function occurrencesBetween(
+  schedule: { frequency: ScheduleFrequency; dateFirst: string; dateNext: string },
+  after: string,
+  until: string,
+): string[] {
+  const dates: string[] = [];
+  let date: string | null = schedule.dateNext;
+  while (date !== null && date <= until) {
+    if (date > after) dates.push(date);
+    date = nextOccurrence(schedule.frequency, schedule.dateFirst, date);
+  }
+  return dates;
+}

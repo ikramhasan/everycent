@@ -5,7 +5,7 @@ import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { CircleCheck } from "lucide-react";
+import { CalendarDays, CircleCheck } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import type { TargetMark } from "@/lib/budget-view";
 import { type MoneyOption, minAmount, monthLabel } from "@/lib/months";
@@ -70,6 +70,12 @@ export function AvailablePill({
         <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
       )}
       {mark?.kind === "underfunded" && <TargetPie percent={mark.percent} />}
+      {mark?.kind === "upcoming" && (
+        <CalendarDays
+          className="size-3.5 shrink-0"
+          aria-label="Not enough for upcoming scheduled transactions"
+        />
+      )}
       {mark?.kind === "snoozed" && (
         // YNAB's "Zz" snooze icon.
         <span

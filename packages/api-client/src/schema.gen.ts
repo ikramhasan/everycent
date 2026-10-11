@@ -1620,6 +1620,7 @@ export interface components {
             bar: components["schemas"]["ProgressBar"];
             /** @description What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned) */
             underfundedParts: components["schemas"]["FundingPart"][];
+            upcoming: components["schemas"]["CategoryUpcoming"];
         };
         /** @description Set on a credit account's payment category */
         PaymentDetails: {
@@ -1706,6 +1707,23 @@ export interface components {
             /** @description YYYY-MM-DD it's due; empty when the step isn't ordered by date */
             date: string;
         };
+        /** @description Scheduled transactions still to come in the month (YNAB's "Upcoming Transactions"): after the user's today, none in past months; null when there are none */
+        CategoryUpcoming: {
+            /** @description Their net amount for the category; negative when more goes out than comes in */
+            amount: string;
+            /** @description Latest first */
+            transactions: {
+                scheduleId: string;
+                accountId: string;
+                accountName: string;
+                /** Format: date */
+                date: string;
+                payeeName: string | null;
+                memo: string;
+                /** @description What it does to this category */
+                amount: string;
+            }[];
+        } | null;
         MonthTotals: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             assigned: string;

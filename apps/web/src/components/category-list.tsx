@@ -28,9 +28,9 @@ import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
+  availableMark,
   isCaution,
   summarize,
-  targetMark,
   toTotals,
   UNCATEGORIZED as UNCATEGORIZED_ID,
 } from "@/lib/budget-view";
@@ -905,14 +905,14 @@ function CategoryRow({
                 format={format}
                 actions={move}
                 caution={caution}
-                target={targetMark(totals.target)}
+                target={availableMark(totals)}
               />
             ) : (
               <AvailablePill
                 amount={totals.available}
                 format={format}
                 caution={caution}
-                target={targetMark(totals.target)}
+                target={availableMark(totals)}
               />
             )}
           </span>

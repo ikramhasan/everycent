@@ -2,7 +2,7 @@ import { type BudgetMonth, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,17 +24,18 @@ import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-as
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
 import { TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
+import { UpcomingTransactions } from "@/components/upcoming-transactions";
 import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import {
+  availableMark,
   breakdown,
   EMPTY_VIEW,
   filteredIds,
   isCaution,
   overspentCount,
   summarize,
-  targetMark,
   UNCATEGORIZED,
   useBudgetFilter,
   useProgressBars,
@@ -555,7 +556,8 @@ function Inspector({
   targetActions: ReturnType<typeof useTargetActions>;
   onShowOverspent: () => void;
 }) {
-  const { budget } = useBudget();
+  const { budget, formatDate } = useBudget();
+  const navigate = useNavigate();
   const history = useUndo();
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
@@ -584,14 +586,30 @@ function Inspector({
         format={format}
         actions={figures.move}
         caution={caution}
-        target={targetMark(totals.target)}
+        target={availableMark(totals)}
       />
     ) : (
       <AvailablePill
         amount={totals.available}
         format={format}
         caution={caution}
-        target={targetMark(totals.target)}
+        target={availableMark(totals)}
+      />
+    );
+    const upcoming = totals.upcoming && (
+      <UpcomingTransactions
+        name={category.name}
+        available={BigInt(totals.available)}
+        upcoming={totals.upcoming}
+        format={format}
+        formatDate={formatDate}
+        onOpen={(accountId, scheduleId) =>
+          void navigate({
+            to: "/budgets/$budgetId/accounts/$accountId",
+            params: { budgetId: budget.id, accountId },
+            search: { transaction: scheduleId },
+          })
+        }
       />
     );
     if (totals.payment) {
@@ -610,6 +628,7 @@ function Inspector({
           {...alertProps}
           past={past}
           available={available}
+          upcoming={upcoming}
           note={category.note}
           onNoteChange={(note) => onNoteChange(only, note)}
           target={
@@ -652,6 +671,7 @@ function Inspector({
         totals={breakdown(totals)}
         format={format}
         available={available}
+        upcoming={upcoming}
         note={category.note}
         onNoteChange={(note) => onNoteChange(only, note)}
         target={

@@ -29,8 +29,10 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up (Auto and
   Manually tabs, docs/verify.md) isn't built (EVERYCENT-24). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
-- YNAB marks a category's Available with a calendar pill when a scheduled transaction is coming.
-  Scheduled transactions exist since 10a; the pill is 10b (EVERYCENT-5).
+- Upcoming scheduled transactions (10b) put a yellow calendar on a category's Available when it
+  doesn't cover them, list under the inspector's Available Balance and count in Underfunded
+  (docs/verify.md "Scheduled transactions in the plan"). Payment categories show their scheduled
+  payments in the inspector but keep their own pill.
 - YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
   yet.
 - The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
@@ -94,7 +96,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 - Not yet: the rollover section of a dated "Set aside another…" target (support.ynab.com: money
   left at the end of the last target period gets its own first section; drawn as one section for
   now); YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
-- Underfunded ignores scheduled transactions (phase 10); YNAB funds them with the due-date step.
+- Underfunded funds upcoming scheduled transactions with the due-date step (10b). Among card
+  payments, those with a scheduled payment go first; YNAB then puts card payment targets before
+  plain Underfunded alerts, which everycent doesn't order yet.
 - 8f added the summary's Expected Income (with its bars), YNAB's start-month rule for changed
   targets, and the past/future month details (no Assign in past months, the snooze switch disabled
   outside the current month). A fresh start doesn't copy the expected income yet (not seen in
@@ -129,12 +133,12 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The setup flow (`/budgets/$id/setup`) follows YNAB's new-plan checklist: "Personalize plan",
   "Add accounts" and "Fund categories" (which opens the budget to assign, as YNAB's does).
 - Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories (with their
-  targets, which start in the fresh start's month), payees and accounts. When these exist, it must
-  copy them too: scheduled transactions (phase 10), payee rules (phase 12).
+  targets, which start in the fresh start's month), payees, accounts and scheduled transactions
+  (10b; future-dated transactions are schedules since 10a). When they exist, it must copy payee
+  rules too (phase 12). It doesn't copy the expected income yet (EVERYCENT-20).
 - By decision, a fresh start drops all transactions, uncleared ones included; each account starts
-  from its working balance on the fresh-start date as a single cleared Starting Balance. That
-  balance leaves out future-dated transactions, so they're lost; phase 10 should carry them over
-  as scheduled transactions.
+  from its working balance on the fresh-start date as a single cleared Starting Balance. YNAB
+  starts unlinked accounts at $0 (EVERYCENT-119, to confirm with the user).
 
 ## Transactions and register (phase 5)
 
@@ -216,8 +220,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   only; YNAB selects both sides of the copy.
 - Bulk Categorize's un-split warning counts selected transactions only; selected scheduled splits
   are un-split (or keep their transfer lines) without it.
-- The calendar pill on a category's Available, Underfunded funding scheduled outflows, and fresh
-  start carrying schedules over are 10b (EVERYCENT-5). A fresh start doesn't copy schedules yet.
 - The transactions API still accepts future dates (the web never sends them; YNAB's API refuses
   them). Those rows stay out of balances until their date. Rejecting them would need the client's
   `today` on every create and edit.

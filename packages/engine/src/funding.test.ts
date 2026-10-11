@@ -137,3 +137,59 @@ describe("fundUnderfunded", () => {
     );
   });
 });
+
+// YNAB, 2026-10-12 ("Onboarding Check" U10 A–I, "C4 Order", "C4 Order FS").
+describe("upcoming scheduled transactions", () => {
+  const up = (amount: bigint, date = "2026-10-20") => ({ amount, date });
+
+  it("asks what Available doesn't cover, at the earliest upcoming date", () => {
+    expect(spendingFunding("2026-10", 0n, null, null, false, up(-30_00n))).toEqual({
+      underfunded: 30_00n,
+      overfunded: 0n,
+      parts: [{ amount: 30_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-20" }],
+    });
+    // U10 B: $10.00 available, $30.00 scheduled.
+    expect(spendingFunding("2026-10", 10_00n, null, null, false, up(-30_00n)).underfunded).toBe(
+      20_00n,
+    );
+    // U10 H: covered; U10 G: an inflow asks nothing.
+    expect(spendingFunding("2026-10", 50_00n, null, null, false, up(-30_00n)).underfunded).toBe(0n);
+    expect(spendingFunding("2026-10", 0n, null, null, false, up(25_00n)).underfunded).toBe(0n);
+  });
+
+  it("asks the larger of the target and the schedule, all at the schedule's date", () => {
+    // U10 D: $40.00 target, $30.00 scheduled → $40.00 (X10: funded whole at its date).
+    expect(spendingFunding("2026-10", 0n, monthly, need(40_00n), false, up(-30_00n))).toEqual({
+      underfunded: 40_00n,
+      overfunded: 0n,
+      parts: [{ amount: 40_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-20" }],
+    });
+    // U10 I: target met at $40.00, $60.00 scheduled → $20.00.
+    expect(
+      spendingFunding("2026-10", 40_00n, monthly, need(0n), false, up(-60_00n)).underfunded,
+    ).toBe(20_00n);
+    // Snoozed targets ask nothing, scheduled transactions still do.
+    expect(
+      spendingFunding("2026-10", 0n, monthly, need(40_00n), true, up(-30_00n)).underfunded,
+    ).toBe(30_00n);
+  });
+
+  it("puts a card with a scheduled payment first among card payments", () => {
+    // Card W: owes $10.00, $5.00 payment scheduled → still $10.00.
+    const card = paymentFunding(0n, 10_00n, 0n, null, up(-5_00n, "2026-10-21"));
+    expect(card.underfunded).toBe(10_00n);
+    expect(card.parts).toEqual([
+      { amount: 10_00n, step: FUNDING_STEPS.cardPayment, date: "2026-10-21" },
+    ]);
+    const plain = paymentFunding(0n, 10_00n, 0n);
+    expect(
+      fundUnderfunded(
+        [
+          { categoryId: "plain", parts: plain.parts },
+          { categoryId: "scheduled", parts: card.parts },
+        ],
+        10_00n,
+      ),
+    ).toEqual(new Map([["scheduled", 10_00n]]));
+  });
+});

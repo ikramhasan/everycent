@@ -68,7 +68,7 @@ import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
-import { enterDueScheduled } from "../../lib/scheduled";
+import { type CategoryUpcoming, enterDueScheduled, upcomingByCategory } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -570,6 +570,7 @@ async function monthState(
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
   const { history, paymentAccounts, creditOverspent } = await budgetHistory(db, budgetId, cutoff);
+  const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts);
 
   const range = await monthRange(db, budgetId, today);
 
@@ -651,6 +652,7 @@ async function monthState(
     bar: ProgressBar | null;
     payment: ReturnType<typeof paymentOf>;
     funding: CategoryFunding;
+    upcoming: CategoryUpcoming | null;
     hidden: boolean;
   }[] = [];
   const groups = new Map<string, CategoryMonth>();
@@ -685,9 +687,10 @@ async function monthState(
     const need = target && targetNeed(entries, target, month, monthOf(today), owed);
     // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
     const snoozed = !payment && snoozedNow.has(cat.id);
+    const coming = upcoming.get(cat.id) ?? null;
     const funding = payment
-      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need)
-      : spendingFunding(month, figures.available, target, need, snoozed);
+      ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need, coming)
+      : spendingFunding(month, figures.available, target, need, snoozed, coming);
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
@@ -706,6 +709,7 @@ async function monthState(
       bar: payment ? null : progressBar(figures, target, need, snoozed, month),
       payment,
       funding,
+      upcoming: coming,
       hidden: isHidden,
     });
     if (isHidden) {
@@ -801,6 +805,18 @@ export async function budgetMonthJson(
           step: p.step,
           date: p.date,
         })),
+        upcoming: l.upcoming && {
+          amount: l.upcoming.amount.toString(),
+          transactions: l.upcoming.transactions.map((t) => ({
+            scheduleId: t.scheduleId,
+            accountId: t.accountId,
+            accountName: t.accountName,
+            date: t.date,
+            payeeName: t.payeeName,
+            memo: t.memo,
+            amount: t.amount.toString(),
+          })),
+        },
       };
     }),
     groups: groupRows.map((g) => ({ groupId: g.id, ...totalsJson(groups.get(g.id) ?? ZERO) })),
