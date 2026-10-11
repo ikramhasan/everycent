@@ -127,3 +127,26 @@ export function useRegisterView(budgetId: string, key: string) {
   }, []);
   return [current, setView] as const;
 }
+
+/**
+ * YNAB remembers each register's search in the browser (per plan and account, All Accounts
+ * included) and shows it again when you come back, even after a reload (checked 2026-10-11).
+ */
+const SEARCH_PREFIX = "everycent:register-search:";
+
+export function savedSearch(budgetId: string, key: string): string | undefined {
+  try {
+    return localStorage.getItem(`${SEARCH_PREFIX}${budgetId}:${key}`) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveSearch(budgetId: string, key: string, q: string | undefined) {
+  try {
+    if (q) localStorage.setItem(`${SEARCH_PREFIX}${budgetId}:${key}`, q);
+    else localStorage.removeItem(`${SEARCH_PREFIX}${budgetId}:${key}`);
+  } catch {
+    // Blocked storage: the search just isn't remembered.
+  }
+}

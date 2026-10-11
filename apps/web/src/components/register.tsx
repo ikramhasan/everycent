@@ -67,7 +67,7 @@ import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
-import { invalidateMonths } from "@/lib/months";
+import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
 import {
   deleteWarning,
   editWarning,
@@ -81,7 +81,7 @@ import {
   type SortColumn,
   searchText,
 } from "@/lib/register-filters";
-import { useRegisterView } from "@/lib/register-view";
+import { addMonths, savedSearch, saveSearch, useRegisterView } from "@/lib/register-view";
 import {
   isEmpty,
   isSelected,
@@ -174,6 +174,14 @@ export function Register({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [view, setView] = useRegisterView(budget.id, accountId ?? "all");
+  // Coming back to a register brings back its last search, unless we came to show one
+  // transaction (the other side of a transfer opens unfiltered).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the register opens
+  useEffect(() => {
+    if (search.q !== undefined || focusId) return;
+    const saved = savedSearch(budget.id, accountId ?? "all");
+    if (saved) onSearchChange({ q: saved }, true);
+  }, [budget.id, accountId]);
   const query = registerQuery(accountId, search, view);
   const transactions = useInfiniteQuery({
     queryKey: [...transactionsQueryPrefix, budget.id, query],
@@ -205,6 +213,9 @@ export function Register({
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
   const dateOrder = query.sort === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
+  // The budget starts the month before its oldest transaction (or before this month).
+  const monthData = useQuery(monthQueryOptions(budget.id, currentMonth()));
+  const oldestMonth = monthData.data ? addMonths(monthData.data.firstMonth, 1) : undefined;
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const payees = useQuery(payeesQueryOptions(budget.id));
   const flagList = useQuery(flagsQueryOptions(budget.id));
@@ -869,10 +880,19 @@ export function Register({
         )}
         <div className="ml-auto flex items-center gap-1">
           <UndoRedoButtons />
-          <RegisterViewMenu view={view} onChange={setView} runningBalance={!allAccounts} />
+          <RegisterViewMenu
+            view={view}
+            onChange={setView}
+            runningBalance={!allAccounts}
+            oldestMonth={oldestMonth}
+          />
           <RegisterSearchBox
             value={search.q ?? ""}
-            onCommit={(text) => onSearchChange({ q: text.trim() ? text : undefined })}
+            onCommit={(text) => {
+              const q = text.trim() ? text : undefined;
+              saveSearch(budget.id, accountId ?? "all", q);
+              onSearchChange({ q });
+            }}
             placeholder={allAccounts ? "Search All Accounts" : `Search ${account?.name ?? ""}`}
             sources={searchSources}
           />

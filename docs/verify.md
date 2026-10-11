@@ -8,43 +8,29 @@ Entries marked **Built so far (before this rule)** are small gaps inside a featu
 otherwise confirmed in YNAB (web app, 2026-10-02); the app needed some behaviour to work at all,
 so it has one. Change it if YNAB differs.
 
-## Register search (phase 5e, rebuilt to YNAB's search syntax)
+## Register search and View menu (phase 5e) (settled 2026-10-11)
 
-### How a picked "equals" amount or a date reads in the search box
+Checked in "ihni7's Plan" and "Onboarding Check" (EVERYCENT-12, EVERYCENT-13):
 
-- **Question:** picking "Outflow more or equal to $25.00" writes `Outflow: >=25,`. What does
-  "Outflow equals $25.00" write (`Outflow: 25`? `Outflow: =25`?), and what do "On 10/02/2026",
-  "On or before …" and "On or after …" write?
-- **Built so far (before this rule):** `Outflow: 25`, `On: 10/02/2026`, `Before: …`, `After: …`.
-  The search accepts `25` and `=25` both.
-
-### What "Find … in any field" searches
-
-- **Question:** free text (and "Find "x" in any field") matched payee, category and memo in YNAB,
-  and a number matched an exact amount. Does it also match the account name?
-- **Built so far (before this rule):** payee, category, memo, account name, and exact amounts.
-
-### The hidden-rows note when both a search and a filter hide rows
-
-- **Question:** YNAB says "Some transactions are hidden by your search for "…"" or "Some
-  transactions are hidden by filters." Which does it show when both a search and the date range
-  (or hidden reconciled transactions) hide rows?
-- **Built so far (before this rule):** the search message.
-
-## View menu (phase 5e)
-
-### Where view options are kept
-
-- **Question:** YNAB keeps the View menu's options per account (and for All Accounts). Are they
-  saved to the account (the same on another browser or device) or only in this browser?
-- **Built so far (before this rule):** this browser (`localStorage`).
-
-### The From/To pickers on All Dates
-
-- **Question:** with All Dates, YNAB's pickers showed October 2026 to October 2036 in a budget
-  whose transactions were all in October 2026. Is "From" the month of the oldest transaction, or
-  the current month?
-- **Built so far (before this rule):** the current month to ten years on.
+- **Picked terms:** "Outflow equals $0.00" writes `Outflow: 0,`; the date picks are "On
+  10/02/2026", "On or before …", "On or after …" and write `On:`, `Before: 10/02/2026,`, `After:`.
+  As built.
+- **Free text** matches the account name too (`Zqx` found both transactions of the account
+  "Zqx Acct", whose payees, categories and memos don't contain it). As built.
+- **Search and filter both hiding rows:** the search message ("Some transactions are hidden by
+  your search for "x-rec"."), with reconciled transactions hidden as well. As built.
+- **The search is remembered** per plan and account (All Accounts too) in the browser
+  (`{plan}_{account}_searchText` in localStorage) and comes back when you return, even days
+  later. Built: `everycent:register-search:*` in localStorage (not when jumping to a transfer's
+  other side, which opens unfiltered).
+- **View menu options** are kept in the browser, per plan and account (`{plan}_{account}_account_filter`
+  in localStorage). As built.
+- **All Dates' "From"** is the month of the plan's oldest transaction, in every account: August
+  2026 in "ihni7's Plan" (oldest transaction 08/15) even for Card E3, whose own transactions are
+  all October; September in "Onboarding Check" (oldest 09/01). "To" is ten years past this month.
+  Built (it used to start at the current month).
+- YNAB also offers `Income:` ("Enter month like 'Income: October 2026'"), still listed in
+  `docs/deferred.md`.
 
 ## Bulk edit (phase 5f) (settled 2026-10-11)
 
@@ -123,19 +109,13 @@ after the latest month with money assigned, which stays open even after an undo;
 runs from the month before the current one); group collapse survives a reload and applies to every
 month.
 
-### Where collapsed groups are kept
+### Collapsed groups and the month on screen (settled 2026-10-11)
 
-- **Question:** YNAB keeps a collapsed group collapsed after a reload. Is that saved to the budget
-  or account (the same on another device or for a partner) or only in this browser?
-- **Built so far (before this rule):** this browser (`localStorage`, per budget).
-
-### Which month the budget screen opens on
-
-- **Found:** going from an account back to Plan opened the month last viewed (November), not the
-  current month; YNAB's URL holds the month (`/budget/202611`).
-- **Question:** does it also reopen the last month after a reload, or on another device?
-- **Skipped:** the budget screen always opens on the current month; `?month=` holds the month
-  while browsing.
+- **Collapsed groups** are kept in the browser (`.collapsedCategories` in localStorage, one list
+  of group ids). As built (per budget in localStorage).
+- **The month:** a reload of `/budget` opens the current month (November was on screen before);
+  within the page's life, coming back to Plan reopens the month last viewed. Built: the sidebar's
+  Budget link goes back to the last month viewed, kept in memory.
 
 ## Assigning and Ready to Assign (phase 6b)
 
@@ -247,11 +227,9 @@ Checked in YNAB's web app on 2026-10-03 and built as found:
   categories." / "You don't currently have categories with money available." The view stays
   across months and reloads.
 
-### Where the budget view is kept
+### Where the budget view is kept (settled 2026-10-11)
 
-- **Question:** the view survives a reload. Is it saved to the account or only in this browser?
-- **Built so far (before this rule):** this browser (`localStorage`, per budget), like collapsed
-  groups.
+- In the browser, per plan (`{plan}_active_budget_view` in localStorage). As built.
 
 ### Group totals in a view
 

@@ -209,8 +209,8 @@ function readFilter(key: string): BudgetFilter {
 }
 
 /**
- * The budget list's view. YNAB keeps it across reloads and months; where (account or browser) is
- * open in docs/verify.md, so this browser it is, per budget.
+ * The budget list's view. YNAB keeps it across reloads and months, in the browser, per plan
+ * (`{plan}_active_budget_view` in localStorage, checked 2026-10-11).
  */
 export function useBudgetFilter(budgetId: string) {
   const key = `everycent:budget-filter:${budgetId}`;

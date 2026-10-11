@@ -144,7 +144,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   and run the window over the page only, or cache balances.
 - Search follows YNAB's syntax (`parseSearch` in `@everycent/engine`) and uses `ilike` (no
   index; fine at the sizes above). A `pg_trgm` index would help much bigger budgets.
-- Search terms YNAB has that wait for their phases: `Income:` (income for future months, phase 6)
+- Search terms YNAB has that aren't built: `Income:` ("Income: October 2026", EVERYCENT-114)
   and `Is:` Matched, Approved, Unapproved, Needs Category, Unapproved or Needs Category (phase
   13). Typed, they're searched as free text for now.
 - Like YNAB, a term can't contain a comma (commas separate terms), so amounts with a thousands

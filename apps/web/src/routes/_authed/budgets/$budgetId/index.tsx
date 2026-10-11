@@ -49,6 +49,7 @@ import {
   invalidateMonths,
   moneyOptions,
   monthQueryOptions,
+  rememberMonth,
   toMoney,
   useCollapsedGroups,
 } from "@/lib/months";
@@ -69,6 +70,7 @@ function BudgetPage() {
   const navigate = Route.useNavigate();
   const today = currentMonth();
   const month: BudgetMonth = Route.useSearch().month ?? today;
+  useEffect(() => rememberMonth(budget.id, month), [budget.id, month]);
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const figures = useQuery({
     ...monthQueryOptions(budget.id, month),
