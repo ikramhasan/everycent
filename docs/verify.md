@@ -411,6 +411,21 @@ Built as found:
   Assigned, Funded Spending, Payments Made), Auto-Assign and Notes. everycent's pill matches;
   its past-month inspector still shows Current Balance (EVERYCENT-22).
 
+### Payment inspector sections, Auto-Assign labels and the card Activity window (settled 2026-10-11)
+
+- **Current Balance** and **Available for Payment** fold to their title and total (chevron
+  down/right); YNAB remembers it in the browser (`.is-budget-inspector-cc-current-balance`,
+  `.is-budget-inspector-cc-available-for-payment` in localStorage). Each lists "Activity This
+  Month" above its last lines. Built (EVERYCENT-22).
+- **Auto-Assign:** one payment category selected (Visa in "ihni7's Plan"): Underfunded, Assigned
+  Last Month, Paid Last Month, Average Assigned, Average Paid, Reset Available Amount, Reset
+  Assigned Amount. Visa and Amex selected: "2 Categories Selected" with Spent Last Month, Average
+  Spent and the plural Resets. As built.
+- **Activity window** (Visa, Card T5): columns Date, Payee, Category, Memo, Amount (no Account);
+  categories read "Group: Category"; a payment ("Transfer : Wallet") reads "Credit Card Payments:
+  Card T5"; a split on the card is listed line by line (G-S5b −$5.00, G-S5a −$3.00, payee
+  GateS5). Built.
+
 ## Payments, returns and statement credits (phase 7d)
 
 Checked against support.ynab.com ("Credit Card Refunds and Returns", "How to Handle Credit Card

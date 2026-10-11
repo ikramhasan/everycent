@@ -46,14 +46,14 @@ before starting a roadmap phase** and remove an entry once it's done.
   "Credit lifecycle and loans" below). Uncategorized card spending counts as credit overspending,
   except its cash part on a positive card, as YNAB's "Uncategorized cash transactions … $2.00
   will be deducted" note suggests (cash part only).
-- A payment category's Activity opens the card's register for the month with YNAB's Spending /
-  Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
-  transactions with their categories; ours uses the same columns as other categories (Account,
-  Date, Payee, Memo, Amount). "Cover Overspent Categories" switches to the Overspent view and past
-  months hide the alert and Current Balance, as YNAB does; the Current Balance and Available for
-  Payment lines aren't collapsible as YNAB's are (EVERYCENT-22). Auto-Assign on payment categories has Underfunded and Reduce
-  Overfunding (8c), but its other options still use the spending labels (YNAB: Paid Last Month,
-  Average Paid when only payment categories are covered).
+- A payment category's Activity lists the card's transactions for the month (its splits line by
+  line) with YNAB's Spending / Returns / Funded Spending / Payments & Returns summary and Date,
+  Payee, Category, Memo, Amount columns ("Group: Category"; payments show "Credit Card Payments:
+  <card>"). "Cover Overspent Categories" switches to the Overspent view and past months hide the
+  alert and Current Balance, as YNAB does; Current Balance and Available for Payment fold, and the
+  folding is remembered in the browser (EVERYCENT-22). Auto-Assign reads Paid Last Month and
+  Average Paid for one payment category and the spending labels when several are selected, as
+  YNAB does.
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
   cash and credit, as YNAB's is; only the Available pill and the inspector change colour.
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap

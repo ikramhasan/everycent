@@ -333,6 +333,12 @@ const ActivityRowSchema = z
     date: z.iso.date(),
     payeeName: z.string().nullable(),
     categoryId: z.string().nullable(),
+    categoryName: z
+      .string()
+      .nullable()
+      .describe(
+        '"Group: Category" (internal categories by their own name); a card\'s transfers show its payment category',
+      ),
     memo: z.string(),
     amount: zMinorUnits.describe("Negative is an outflow"),
   })
@@ -349,7 +355,8 @@ export const listMonthActivity = createRoute({
   description:
     "Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its " +
     "totals) or `uncategorized=true`. Lists the transactions dated in the month up to the " +
-    "user's today, a split's lines one by one, newest first.",
+    "user's today, a split's lines one by one, newest first. A payment category lists its " +
+    "card's transactions (all but the starting balance).",
   request: {
     params: BudgetParams,
     query: z.object({

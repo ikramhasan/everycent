@@ -582,7 +582,7 @@ export interface paths {
         };
         /**
          * The transactions behind a category's, a group's or Uncategorized's Activity
-         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.
+         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first. A payment category lists its card's transactions (all but the starting balance).
          */
         get: operations["listMonthActivity"];
         put?: never;
@@ -1464,6 +1464,8 @@ export interface components {
             date: string;
             payeeName: string | null;
             categoryId: string | null;
+            /** @description "Group: Category" (internal categories by their own name); a card's transfers show its payment category */
+            categoryName: string | null;
             memo: string;
             /** @description Negative is an outflow */
             amount: string;

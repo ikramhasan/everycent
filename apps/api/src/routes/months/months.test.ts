@@ -512,15 +512,34 @@ describe("budget months", () => {
       await create({ accountId: visa.id, date: "2026-10-01", amount: "-500", categoryId: rent.id });
       await create({ date: "2026-10-02", amount: "-300", transferAccountId: visa.id });
       await create({ accountId: visa.id, date: "2026-09-30", amount: "-100", categoryId: rent.id });
+      // YNAB (Card T5, 2026-10-11) lists a card's split line by line.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "-80",
+        categoryId: null,
+        subtransactions: [
+          { amount: "-50", categoryId: rent.id },
+          { amount: "-30", categoryId: rent.id },
+        ],
+      });
       const res = await send(
         "GET",
         `${base}/months/2026-10/activity?categoryId=${visa.paymentCategoryId}&today=${TODAY}`,
         cookie,
       );
       expect(res.status).toBe(200);
-      const { transactions } = await json<{ transactions: { amount: string }[] }>(res);
-      // The purchase and the payment; not September's or the Starting Balance.
-      expect(transactions.map((t) => t.amount).sort()).toEqual(["-500", "300"]);
+      const { transactions } = await json<{
+        transactions: { amount: string; categoryName: string | null }[];
+      }>(res);
+      // The purchase, the split's lines and the payment; not September's or the Starting Balance.
+      expect(transactions.map((t) => t.amount).sort()).toEqual(["-30", "-50", "-500", "300"]);
+      // "Group: Category"; the payment shows the payment category (YNAB's "Credit Card
+      // Payments: Card T5").
+      expect(transactions.find((t) => t.amount === "-500")?.categoryName).toMatch(/: /);
+      expect(transactions.find((t) => t.amount === "300")?.categoryName).toBe(
+        "Credit Card Payments: Visa",
+      );
     });
 
     it("goes red when more is paid than set aside, and takes it from next month", async () => {
