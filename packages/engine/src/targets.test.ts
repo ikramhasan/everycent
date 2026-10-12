@@ -87,6 +87,17 @@ describe("weekly targets (YNAB T8 A, $10 on Saturdays)", () => {
     expect(need([], weekly, "2026-11")?.needed).toBe(40_00n);
     expect(need([f("2026-10", 20_00n)], weekly)?.underfunded).toBe(30_00n);
   });
+  // YNAB C5 W1–W3 (plan "C4 Clean", 2026-10-12): a weekly refill fills the month's occurrences.
+  it("refills the month's occurrences, counting what was carried in", () => {
+    const weekly = target("refill", "2026-10", { cadence: "weekly", amount: 10_00n, dueDay: 6 });
+    expect(need([], weekly)?.underfunded).toBe(50_00n); // W1
+    expect(need([], weekly, "2026-11")?.underfunded).toBe(40_00n);
+    expect(need([f("2026-09", 15_00n)], weekly)).toMatchObject({
+      funded: 15_00n,
+      underfunded: 35_00n,
+    }); // W2
+    expect(need([f("2026-10", 25_00n, -15_00n)], weekly)?.underfunded).toBe(25_00n); // W3
+  });
 });
 
 describe("dated targets", () => {
@@ -171,6 +182,21 @@ describe("dated targets", () => {
       funded: 100_00n,
       underfunded: 0n,
     });
+  });
+
+  // YNAB C5 D1–D3 (plan "C4 Clean", 2026-10-12): refill $1,200 by March 2027, $300 carried in.
+  it("refill counts what was carried in, not this month's spending", () => {
+    const refill = target("refill", "2026-10", {
+      cadence: "custom",
+      amount: 1200_00n,
+      dueDate: "2027-03-31",
+    });
+    expect(need([f("2026-09", 300_00n)], refill)?.underfunded).toBe(150_00n); // D2
+    expect(need([f("2026-09", 300_00n), f("2026-10", 0n, -120_00n)], refill)).toMatchObject({
+      funded: 300_00n,
+      underfunded: 150_00n,
+    }); // D1
+    expect(need([f("2026-09", 300_00n, -120_00n)], refill)?.underfunded).toBe(170_00n); // D3
   });
 });
 
@@ -315,7 +341,8 @@ describe("payment targets", () => {
 describe("targetPercent", () => {
   it("rounds down and stays within 0–100", () => {
     expect(targetPercent({ needed: 100_00n, funded: 40_00n })).toBe(40);
-    expect(targetPercent({ needed: 100_00n, funded: 99_99n })).toBe(99);
+    expect(targetPercent({ needed: 100_00n, funded: 99_99n })).toBe(99); // YNAB C5 R1: 99%
+    expect(targetPercent({ needed: 40_00n, funded: 15_00n })).toBe(37); // C5 W2 in November
     expect(targetPercent({ needed: 100_00n, funded: 150_00n })).toBe(100);
     expect(targetPercent({ needed: 100_00n, funded: -20_00n })).toBe(0);
     // On track for a yearly target: a third of the total (YNAB showed 33%).

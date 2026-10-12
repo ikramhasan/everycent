@@ -729,12 +729,11 @@ November, T8 B's due day is the 15th). Built as found:
   subscriptions, saving over time", "Most people choose this" and the default; Refill up to $X —
   "Use for: gasoline, fun money, dining out"); Delete, Cancel, Save Target.
 
-### Percentage rounding
+### Percentage rounding (settled 2026-10-12)
 
-- **Question:** whether the ring rounds or truncates (e.g. $99.99 of $100.00: 99% or 100%).
-  Assigning $99.99 to T8 A didn't stick in the web app and the API was rate-limited.
-- **Built so far (before this rule):** rounded down, so the ring never reads 100% before the target
-  is met.
+- **Rounded down, as built.** Plan "C4 Clean", group "C5 Targets", through the API
+  (`goal_percentage_complete`): C5 R1 ($100.00 monthly set aside, $99.99 assigned) reads 99%;
+  C5 W2 in November ($15.00 of $40.00) reads 37%.
 
 ### Small target details not seen in YNAB yet
 
@@ -791,10 +790,24 @@ saved). Built as found:
   month to stay on track", "Balance Needed by Dec 2026 / Current Balance / To Go", row "$100.00
   needed this month".
 
+### Dated refill spending and weekly refill (settled 2026-10-12)
+
+Plan "C4 Clean", group "C5 Targets", through the API; September money came from inflows (memo
+`x-c5-carry`), spending has memo `x-c5-spend`. Both as built:
+
+- **Spending this month doesn't change a dated refill's ask; spending in earlier months does.**
+  Refill $1,200.00 by March 2027 with $300.00 carried in asked $150.00 in October (C5 D2), and
+  still $150.00 after $120.00 was spent in October (C5 D1, Funded $300.00). With the $120.00 spent
+  in September instead, $180.00 was carried in and October asked $170.00 (C5 D3).
+- **Weekly refill** asks the weekly amount once per occurrence, less what was carried in and
+  assigned: $10.00 a week asked $50.00 in October and $40.00 in November (C5 W1); $15.00 carried
+  in → $35.00 (C5 W2); $25.00 assigned with $15.00 spent → $25.00 more (C5 W3).
+- A dated balance target can't be created through the API (it only makes "NEED" targets), so its
+  spending case wasn't run; everycent treats it like the refill.
+
 ### Details of 8b not seen in YNAB
 
-- **Question:** (1) Does spending during the month change what a refill or balance target with a
-  date asks (its Funded/Current Balance)? (2) For set aside, does money assigned before the
+- **Question:** (1) Settled above. (2) For set aside, does money assigned before the
   target's start month count toward the first period? (3) The inspector heading of a custom "Fill
   up to" target. (4) The weekly refill's numbers (only the form was seen). (5) Earliest due date the
   picker allows.
