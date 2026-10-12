@@ -4,8 +4,9 @@ import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@everycent/ui/components/tabs";
 import { cn } from "@everycent/ui/lib/utils";
-import { CalendarDays, CircleCheck } from "lucide-react";
+import { CalendarDays, ChevronDown, CircleCheck, Zap } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import type { TargetMark } from "@/lib/budget-view";
 import { type MoneyOption, minAmount, monthLabel } from "@/lib/months";
@@ -188,12 +189,17 @@ function MoveForm({
   format,
   actions,
   onDone,
+  label = "Move",
+  submitLabel = "OK",
 }: {
   categoryId: string;
   amount: string;
   format: Format;
   actions: MoveActions;
   onDone: () => void;
+  /** The amount's label ("Move", or "Assign" in the banner's pop-up). */
+  label?: string;
+  submitLabel?: string;
 }) {
   const [text, setText] = useState(() => actions.toInput(amount));
   const [to, setTo] = useState<string | null>(null);
@@ -213,7 +219,7 @@ function MoveForm({
   return (
     <form onSubmit={submit} className="grid gap-3">
       <Field data-invalid={error ? true : undefined}>
-        <FieldLabel htmlFor="move-amount">Move</FieldLabel>
+        <FieldLabel htmlFor="move-amount">{label}</FieldLabel>
         <Input
           id="move-amount"
           autoFocus
@@ -231,7 +237,7 @@ function MoveForm({
       <Field>
         <FieldLabel>To</FieldLabel>
         <CategoryField
-          label="Move to"
+          label={`${label} to`}
           placeholder=""
           value={to}
           onChange={setTo}
@@ -244,10 +250,83 @@ function MoveForm({
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!to}>
-          OK
+          {submitLabel}
         </Button>
       </div>
     </form>
+  );
+}
+
+const ASSIGN_TAB_KEY = "everycent.assignTab";
+
+/**
+ * The Ready to Assign banner's Assign button (YNAB, checked 2026-10-12 in "ihni7's Plan"): a
+ * pop-up with two tabs, "Auto" (the Auto-Assign options) and "Manually" ("Assign:" filled with all
+ * of Ready to Assign, "To:" a category, Cancel / Assign). It opens on the tab used last, which YNAB
+ * keeps in the browser.
+ */
+export function AssignButton({
+  readyToAssign,
+  format,
+  actions,
+  auto,
+}: {
+  readyToAssign: string;
+  format: Format;
+  actions: MoveActions;
+  /** The Auto-Assign options for the rows in view. */
+  auto: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState(() => {
+    try {
+      return localStorage.getItem(ASSIGN_TAB_KEY) === "auto" ? "auto" : "manual";
+    } catch {
+      return "manual";
+    }
+  });
+  const choose = (value: string) => {
+    setTab(value);
+    try {
+      localStorage.setItem(ASSIGN_TAB_KEY, value);
+    } catch {
+      // Remembering the tab is a convenience.
+    }
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" className="bg-green-800 text-white hover:bg-green-900">
+          Assign
+          <ChevronDown />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="center" className="w-80">
+        <Tabs value={tab} onValueChange={choose}>
+          <TabsList className="w-full">
+            <TabsTrigger value="auto">
+              <Zap />
+              Auto
+            </TabsTrigger>
+            <TabsTrigger value="manual">Manually</TabsTrigger>
+          </TabsList>
+          <TabsContent value="auto" className="pt-2">
+            {auto}
+          </TabsContent>
+          <TabsContent value="manual" className="pt-2">
+            <MoveForm
+              categoryId={actions.readyToAssignId}
+              amount={readyToAssign}
+              format={format}
+              actions={actions}
+              onDone={() => setOpen(false)}
+              label="Assign"
+              submitLabel="Assign"
+            />
+          </TabsContent>
+        </Tabs>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -14,12 +14,15 @@ export function ReadyToAssignBanner({
   overdraft,
   format,
   action,
+  assign,
 }: {
   amount: string;
   overdraft: boolean;
   format: (minorUnits: string) => string;
   /** A button for money assigned beyond what there is (YNAB's "Fix This"). */
   action?: ReactNode;
+  /** YNAB's Assign button, while there's money to assign. */
+  assign?: ReactNode;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   const negativeLabel = overdraft
@@ -41,6 +44,7 @@ export function ReadyToAssignBanner({
           {sign > 0 ? "Ready to Assign" : sign === 0 ? "All Money Assigned" : negativeLabel}
         </span>
       </span>
+      {sign > 0 && assign}
       {sign === 0 && <CircleCheck className="size-6" aria-hidden />}
       {sign < 0 && !overdraft && action}
     </output>

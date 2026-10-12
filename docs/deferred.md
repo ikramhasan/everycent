@@ -24,8 +24,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   plus single and bulk transaction create/edit/delete. A later partner edit to the same row can
   still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
   real-time collaboration or phase 19 audit history).
-- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up (Auto and
-  Manually tabs, docs/verify.md) isn't built (EVERYCENT-24). The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts
+  phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
 - Upcoming scheduled transactions (10b) put a yellow calendar on a category's Available when it
   doesn't cover them, list under the inspector's Available Balance and count in Underfunded

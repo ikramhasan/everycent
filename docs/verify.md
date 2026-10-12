@@ -374,8 +374,9 @@ as found:
   Amounts" with "Update Assigned Amounts". As built.
 - **The banner's Assign pop-up** (while Ready to Assign is positive) has two tabs: **Auto**, the
   inspector's Auto-Assign list with amounts, and **Manually**: "Assign:" prefilled with all of
-  Ready to Assign (selected), "To:" a category picker, Cancel / Assign. Not built yet
-  (EVERYCENT-24).
+  Ready to Assign (selected), "To:" a category picker ("Plan Categories" by group, each with its
+  Available), Cancel / Assign. It reopens on the tab used last (YNAB keeps that in the browser's
+  localStorage, checked 2026-10-12). Built (EVERYCENT-24).
 
 ## Cash and credit spending (phase 7a)
 

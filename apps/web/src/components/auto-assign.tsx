@@ -144,6 +144,7 @@ export function AutoAssignPanel({
   format,
   onApply,
   onViewAll,
+  bare = false,
 }: {
   /** The categories it covers: the selection, or the rows in view. */
   categories: readonly MonthCategory[];
@@ -156,6 +157,8 @@ export function AutoAssignPanel({
   onApply: (option: AutoAssignOption) => Promise<void>;
   /** A view that keeps nothing: YNAB says so instead of listing the options. */
   onViewAll?: () => void;
+  /** Without the frame and heading, as in the Ready to Assign banner's Assign pop-up. */
+  bare?: boolean;
 }) {
   const [preview, setPreview] = useState<AutoAssignOption | null>(null);
   // YNAB's labels go singular whenever one category is covered (selected or the only one in view).
@@ -189,8 +192,11 @@ export function AutoAssignPanel({
   const count = (n: number) => `${n} ${n === 1 ? "category" : "categories"}`;
 
   return (
-    <section aria-label="Auto-Assign" className="grid gap-2 rounded-lg border p-4">
-      <h2 className="font-semibold text-sm">Auto-Assign</h2>
+    <section
+      aria-label="Auto-Assign"
+      className={cn("grid gap-2", !bare && "rounded-lg border p-4")}
+    >
+      {!bare && <h2 className="font-semibold text-sm">Auto-Assign</h2>}
       {categories.length === 0 ? (
         <div className="grid justify-items-start gap-1 text-muted-foreground text-sm">
           <p>This view has no categories.</p>

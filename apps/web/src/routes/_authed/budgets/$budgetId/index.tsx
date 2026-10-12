@@ -18,7 +18,12 @@ import {
 } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
-import { AvailableButton, AvailablePill, FixThisButton } from "@/components/move-money";
+import {
+  AssignButton,
+  AvailableButton,
+  AvailablePill,
+  FixThisButton,
+} from "@/components/move-money";
 import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
@@ -302,6 +307,115 @@ function BudgetPage() {
     },
   });
 
+  /**
+   * The Auto-Assign options for `selection` (the inspector's), or for the rows in view with an
+   * empty one (the Ready to Assign banner's Assign pop-up, YNAB's "Auto" tab).
+   */
+  const autoAssignPanel = (selection: ReadonlySet<string>, bare = false) =>
+    listFigures && (
+      <AutoAssignPanel
+        bare={bare}
+        // The selected categories, or the rows in view (hidden categories never are).
+        categories={listFigures.month.categories.filter((c) =>
+          selection.size > 0 ? selection.has(c.categoryId) : (shown ?? visible).has(c.categoryId),
+        )}
+        onViewAll={() => setFilter("all")}
+        names={listed}
+        selection={selection.size > 0}
+        readyToAssign={BigInt(listFigures.month.readyToAssign)}
+        format={listFigures.format}
+        onApply={async (option) => {
+          // Selected, or the rows in view; the server takes no list as every visible one.
+          const categoryIds =
+            selection.size > 0
+              ? [...selection].filter((id) => id !== UNCATEGORIZED)
+              : shown
+                ? [...shown].filter((id) => id !== UNCATEGORIZED)
+                : [];
+          if ((selection.size > 0 || shown) && categoryIds.length === 0) return;
+          const before = Object.fromEntries(
+            listFigures.month.categories
+              .filter((category) =>
+                categoryIds.length ? categoryIds.includes(category.categoryId) : true,
+              )
+              .map((category) => [category.categoryId, category.assigned]),
+          );
+          const apply = () =>
+            autoAssignMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month } },
+              body: {
+                option,
+                ...(categoryIds.length ? { categoryIds } : {}),
+                // A view's rows share Ready to Assign, as the whole plan does.
+                ...(selection.size === 0 && shown ? { scope: "view" as const } : {}),
+                today: todayIso(),
+              },
+            });
+          const readyToAssignId = listFigures.move?.readyToAssignId;
+          if (!readyToAssignId) return;
+          let deltas: Record<string, bigint> = {};
+          const moveDeltas = async (reverse: boolean) => {
+            let updated = listFigures.month;
+            for (const [categoryId, delta] of Object.entries(deltas)) {
+              if (delta === 0n) continue;
+              const positive = delta > 0n !== reverse;
+              updated = await moveMutation.mutateAsync({
+                params: { path: { budgetId: budget.id, month } },
+                body: {
+                  fromCategoryId: positive ? readyToAssignId : categoryId,
+                  toCategoryId: positive ? categoryId : readyToAssignId,
+                  amount: (delta > 0n ? delta : -delta).toString(),
+                  today: todayIso(),
+                },
+              });
+            }
+            return updated;
+          };
+          const refresh = async () => {
+            await Promise.all([
+              invalidateMonths(queryClient),
+              queryClient.invalidateQueries({
+                queryKey: movesQueryOptions(budget.id).queryKey,
+              }),
+            ]);
+          };
+          try {
+            const updated = await apply();
+            deltas = Object.fromEntries(
+              updated.categories
+                .filter((category) => category.categoryId in before)
+                .map((category) => [
+                  category.categoryId,
+                  BigInt(category.assigned) - BigInt(before[category.categoryId] ?? "0"),
+                ]),
+            );
+            queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
+            history.record({
+              label: "auto-assign",
+              undo: async () => {
+                queryClient.setQueryData(
+                  monthQueryOptions(budget.id, month).queryKey,
+                  await moveDeltas(true),
+                );
+                await refresh();
+              },
+              redo: async () => {
+                queryClient.setQueryData(
+                  monthQueryOptions(budget.id, month).queryKey,
+                  await moveDeltas(false),
+                );
+                await refresh();
+              },
+            });
+          } catch (error) {
+            toast.error(apiErrorMessage(error, "Couldn't assign the money."));
+          } finally {
+            void refresh();
+          }
+        }}
+      />
+    );
+
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -320,6 +434,16 @@ function BudgetPage() {
             amount={listFigures.month.readyToAssign}
             overdraft={listFigures.month.overdraft}
             format={listFigures.format}
+            assign={
+              listFigures.move && (
+                <AssignButton
+                  readyToAssign={listFigures.month.readyToAssign}
+                  format={listFigures.format}
+                  actions={listFigures.move}
+                  auto={autoAssignPanel(new Set(), true)}
+                />
+              )
+            }
             action={
               // An overdraft's "Next Steps" (a YNAB help page) isn't built.
               listFigures.move && (
@@ -407,110 +531,7 @@ function BudgetPage() {
               onShowOverspent={() => setFilter("overspent")}
             />
             {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
-            {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && (
-              <AutoAssignPanel
-                // The selected categories, or the rows in view (hidden categories never are).
-                categories={listFigures.month.categories.filter((c) =>
-                  selection.size > 0
-                    ? selection.has(c.categoryId)
-                    : (shown ?? visible).has(c.categoryId),
-                )}
-                onViewAll={() => setFilter("all")}
-                names={listed}
-                selection={selection.size > 0}
-                readyToAssign={BigInt(listFigures.month.readyToAssign)}
-                format={listFigures.format}
-                onApply={async (option) => {
-                  // Selected, or the rows in view; the server takes no list as every visible one.
-                  const categoryIds =
-                    selection.size > 0
-                      ? [...selection].filter((id) => id !== UNCATEGORIZED)
-                      : shown
-                        ? [...shown].filter((id) => id !== UNCATEGORIZED)
-                        : [];
-                  if ((selection.size > 0 || shown) && categoryIds.length === 0) return;
-                  const before = Object.fromEntries(
-                    listFigures.month.categories
-                      .filter((category) =>
-                        categoryIds.length ? categoryIds.includes(category.categoryId) : true,
-                      )
-                      .map((category) => [category.categoryId, category.assigned]),
-                  );
-                  const apply = () =>
-                    autoAssignMutation.mutateAsync({
-                      params: { path: { budgetId: budget.id, month } },
-                      body: {
-                        option,
-                        ...(categoryIds.length ? { categoryIds } : {}),
-                        // A view's rows share Ready to Assign, as the whole plan does.
-                        ...(selection.size === 0 && shown ? { scope: "view" as const } : {}),
-                        today: todayIso(),
-                      },
-                    });
-                  const readyToAssignId = listFigures.move?.readyToAssignId;
-                  if (!readyToAssignId) return;
-                  let deltas: Record<string, bigint> = {};
-                  const moveDeltas = async (reverse: boolean) => {
-                    let updated = listFigures.month;
-                    for (const [categoryId, delta] of Object.entries(deltas)) {
-                      if (delta === 0n) continue;
-                      const positive = delta > 0n !== reverse;
-                      updated = await moveMutation.mutateAsync({
-                        params: { path: { budgetId: budget.id, month } },
-                        body: {
-                          fromCategoryId: positive ? readyToAssignId : categoryId,
-                          toCategoryId: positive ? categoryId : readyToAssignId,
-                          amount: (delta > 0n ? delta : -delta).toString(),
-                          today: todayIso(),
-                        },
-                      });
-                    }
-                    return updated;
-                  };
-                  const refresh = async () => {
-                    await Promise.all([
-                      invalidateMonths(queryClient),
-                      queryClient.invalidateQueries({
-                        queryKey: movesQueryOptions(budget.id).queryKey,
-                      }),
-                    ]);
-                  };
-                  try {
-                    const updated = await apply();
-                    deltas = Object.fromEntries(
-                      updated.categories
-                        .filter((category) => category.categoryId in before)
-                        .map((category) => [
-                          category.categoryId,
-                          BigInt(category.assigned) - BigInt(before[category.categoryId] ?? "0"),
-                        ]),
-                    );
-                    queryClient.setQueryData(monthQueryOptions(budget.id, month).queryKey, updated);
-                    history.record({
-                      label: "auto-assign",
-                      undo: async () => {
-                        queryClient.setQueryData(
-                          monthQueryOptions(budget.id, month).queryKey,
-                          await moveDeltas(true),
-                        );
-                        await refresh();
-                      },
-                      redo: async () => {
-                        queryClient.setQueryData(
-                          monthQueryOptions(budget.id, month).queryKey,
-                          await moveDeltas(false),
-                        );
-                        await refresh();
-                      },
-                    });
-                  } catch (error) {
-                    toast.error(apiErrorMessage(error, "Couldn't assign the money."));
-                  } finally {
-                    void refresh();
-                  }
-                }}
-              />
-            )}
+            {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && autoAssignPanel(selection)}
             {month === today && (
               <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
             )}
