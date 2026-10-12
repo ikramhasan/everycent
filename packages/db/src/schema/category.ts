@@ -193,3 +193,22 @@ export const categoryTarget = pgTable(
   },
   (t) => [index("category_target_budget_id_idx").on(t.budgetId)],
 );
+
+/**
+ * YNAB's month note ("Enter a note…" under the month name): one per budget and month, not carried
+ * to other months.
+ */
+export const monthNote = pgTable(
+  "month_note",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    /** First day of the month, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    note: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("month_note_budget_month_idx").on(t.budgetId, t.month)],
+);

@@ -638,6 +638,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the month's note
+         * @description YNAB's note under the month name: one per month, not carried to other months. An empty note removes it.
+         */
+        put: operations["setMonthNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/months/{month}/moves": {
         parameters: {
             query?: never;
@@ -1617,6 +1637,8 @@ export interface components {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 assigned: string;
             }[];
+            /** @description The month's note (YNAB's "Enter a note…"); empty for none */
+            note: string;
             /** @description The first later month whose Ready to Assign is negative, if any */
             futureShortfall: {
                 /** @description A month, YYYY-MM */
@@ -1797,6 +1819,14 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+        };
+        MonthNote: {
+            /** @description A month, YYYY-MM */
+            month: string;
+            note: string;
+        };
+        SetMonthNote: {
+            note: string;
         };
         MoveMoney: {
             fromCategoryId: string;
@@ -4557,6 +4587,70 @@ export interface operations {
                 };
             };
             /** @description No such budget or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setMonthNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMonthNote"];
+            };
+        };
+        responses: {
+            /** @description The month's note */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthNote"];
+                };
+            };
+            /** @description Invalid month or note */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change the plan */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

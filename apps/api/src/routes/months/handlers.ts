@@ -1,4 +1,4 @@
-import { sql } from "@everycent/db";
+import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
   budget as budgetTable,
@@ -7,6 +7,7 @@ import {
   categoryGroup,
   categoryTarget,
   moneyMove,
+  monthNote,
   payee,
   subTransaction,
   transaction,
@@ -80,6 +81,7 @@ import type {
   listMoves,
   moveMoney,
   setExpectedIncome,
+  setMonthNote,
 } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
@@ -808,6 +810,13 @@ export async function budgetMonthJson(
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
+    note:
+      (
+        await db
+          .select({ note: monthNote.note })
+          .from(monthNote)
+          .where(and(eq(monthNote.budgetId, budget.id), eq(monthNote.month, `${month}-01`)))
+      )[0]?.note ?? "",
     futureShortfall: futureShortfall(state, future),
     categories: listed.map((l) => {
       const reg = l.payment && register.get(l.payment.accountId);
@@ -889,6 +898,28 @@ export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = a
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.today) await enterDueScheduled(c.var.deps.db, budgetId, query.today);
   return c.json(await budgetMonthJson(c.var.deps.db, budget, month, today), 200);
+};
+
+export const setMonthNoteHandler: RouteHandler<typeof setMonthNote, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { note } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
+  const day = `${month}-01`;
+  if (note.trim() === "") {
+    await db
+      .delete(monthNote)
+      .where(and(eq(monthNote.budgetId, budgetId), eq(monthNote.month, day)));
+    return c.json({ month, note: "" }, 200);
+  }
+  await db
+    .insert(monthNote)
+    .values({ id: newId(), budgetId, month: day, note })
+    .onConflictDoUpdate({
+      target: [monthNote.budgetId, monthNote.month],
+      set: { note, updatedAt: sql`now()` },
+    });
+  return c.json({ month, note }, 200);
 };
 
 export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = async (c) => {

@@ -253,6 +253,13 @@ support.ynab.com:
   Ready to Assign reaches zero ("Getting Started with YNAB"). Built: setup's third step points to
   the budget with that advice.
 
+### Month notes (settled 2026-10-12)
+
+- "C5 First FS": "Enter a note…" under the month name opens a text box with OK (no length limit
+  seen); the note then shows on one line, cut short with an ellipsis. Each month has its own
+  (November stayed empty; the API's month `note`). Saving it empty removes it. Undo and Redo cover
+  it. A fresh start doesn't copy it ("C5 First FS2"). Built (EVERYCENT-25).
+
 ## Overspending and moving money (phase 6c)
 
 Checked in YNAB's web app on 2026-10-02 and built as found:

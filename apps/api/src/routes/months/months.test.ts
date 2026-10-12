@@ -25,6 +25,7 @@ type Month = {
   overdraft: boolean;
   assignedInFuture: string;
   futureShortfall: { month: string; readyToAssign: string } | null;
+  note: string;
   futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
@@ -1162,6 +1163,24 @@ describe("budget months", () => {
       });
       await put(phone.id, "2026-11", "0");
       expect((await month("2026-10")).futureShortfall).toBeNull();
+    });
+
+    // YNAB "C5 First FS", 2026-10-12: one note per month; an empty one removes it.
+    it("keeps a note per month", async () => {
+      const { cookie, base, month } = await setup();
+      const setNote = (m: string, note: string) =>
+        send("PUT", `${base}/months/${m}/note`, cookie, { note });
+      expect((await setNote("2026-10", "Rent due early")).status).toBe(200);
+      expect((await month("2026-10")).note).toBe("Rent due early");
+      expect((await month("2026-11")).note).toBe("");
+      await setNote("2026-10", "Rent paid");
+      expect((await month("2026-10")).note).toBe("Rent paid");
+      await setNote("2026-10", "  ");
+      expect((await month("2026-10")).note).toBe("");
+      const other = await signUp(app);
+      expect(
+        (await send("PUT", `${base}/months/2026-10/note`, other.cookie, { note: "x" })).status,
+      ).toBe(404);
     });
 
     it("leaves income dated after today out", async () => {

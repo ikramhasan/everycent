@@ -224,6 +224,7 @@ const MonthSchema = z
     futureMonths: z
       .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
       .describe("The later months with money assigned, in order"),
+    note: z.string().describe("The month's note (YNAB's \"Enter a note…\"); empty for none"),
     futureShortfall: z
       .object({ month: zBudgetMonth, readyToAssign: zMinorUnits })
       .nullable()
@@ -280,6 +281,44 @@ export const getBudgetMonth = createRoute({
     },
     400: jsonError("Invalid month or date"),
     401: jsonError("Not signed in"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const setMonthNote = createRoute({
+  method: "put",
+  path: "/budgets/{budgetId}/months/{month}/note",
+  operationId: "setMonthNote",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Set the month's note",
+  description:
+    "YNAB's note under the month name: one per month, not carried to other months. An empty note " +
+    "removes it.",
+  request: {
+    params: BudgetParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ note: z.string().max(10_000) }).openapi("SetMonthNote"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The month's note",
+      content: {
+        "application/json": {
+          schema: z.object({ month: zBudgetMonth, note: z.string() }).openapi("MonthNote"),
+        },
+      },
+    },
+    400: jsonError("Invalid month or note"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't change the plan"),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });

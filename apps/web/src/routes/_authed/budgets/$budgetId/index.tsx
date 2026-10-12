@@ -18,6 +18,7 @@ import {
 } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { MonthNav } from "@/components/month-nav";
+import { MonthNote } from "@/components/month-note";
 import {
   AssignButton,
   AvailableButton,
@@ -98,6 +99,33 @@ function BudgetPage() {
     "/v1/budgets/{budgetId}/months/{month}/categories/{categoryId}",
   );
   const moveMutation = $api.useMutation("post", "/v1/budgets/{budgetId}/months/{month}/moves");
+  const noteMutation = $api.useMutation("put", "/v1/budgets/{budgetId}/months/{month}/note");
+  /** Saves `month`'s note; YNAB's Undo covers month notes (checked 2026-10-12). */
+  const saveMonthNote = async (m: BudgetMonth, before: string, after: string) => {
+    const put = async (note: string) => {
+      try {
+        await noteMutation.mutateAsync({
+          params: { path: { budgetId: budget.id, month: m } },
+          body: { note },
+        });
+      } catch (error) {
+        toast.error(apiErrorMessage(error, "Couldn't save the note."));
+        throw error;
+      } finally {
+        await invalidateMonths(queryClient);
+      }
+    };
+    try {
+      await put(after);
+    } catch {
+      return;
+    }
+    history.record({
+      label: "month note",
+      undo: () => put(before),
+      redo: () => put(after),
+    });
+  };
   const autoAssignMutation = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/months/{month}/auto-assign",
@@ -428,6 +456,13 @@ function BudgetPage() {
             last={range?.last ?? month}
             onChange={goTo}
           />
+          {figures.data && (
+            <MonthNote
+              key={month}
+              note={figures.data.note}
+              onSave={(note) => saveMonthNote(month, figures.data?.note ?? "", note)}
+            />
+          )}
         </div>
         {listFigures && (
           <ReadyToAssignBanner

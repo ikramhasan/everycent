@@ -31,8 +31,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   doesn't cover them, list under the inspector's Available Balance and count in Underfunded
   (docs/verify.md "Scheduled transactions in the plan"). Payment categories show their scheduled
   payments in the inspector but keep their own pill.
-- YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
-  yet.
 - The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.

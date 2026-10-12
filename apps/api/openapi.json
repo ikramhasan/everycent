@@ -3930,6 +3930,10 @@
             },
             "description": "The later months with money assigned, in order"
           },
+          "note": {
+            "type": "string",
+            "description": "The month's note (YNAB's \"Enter a note…\"); empty for none"
+          },
           "futureShortfall": {
             "type": [
               "object",
@@ -4037,6 +4041,7 @@
           "overdraft",
           "assignedInFuture",
           "futureMonths",
+          "note",
           "futureShortfall",
           "categories",
           "groups",
@@ -4531,6 +4536,35 @@
         },
         "required": [
           "assigned"
+        ]
+      },
+      "MonthNote": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "A month, YYYY-MM"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "note"
+        ]
+      },
+      "SetMonthNote": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 10000
+          }
+        },
+        "required": [
+          "note"
         ]
       },
       "MoveMoney": {
@@ -8754,6 +8788,104 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/months/{month}/note": {
+      "put": {
+        "operationId": "setMonthNote",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set the month's note",
+        "description": "YNAB's note under the month name: one per month, not carried to other months. An empty note removes it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMonthNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The month's note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthNote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid month or note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change the plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {
