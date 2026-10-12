@@ -49,6 +49,7 @@ export {
   zNumberFormat,
 } from "./format-settings";
 export {
+  afterStart,
   type CategoryFunding,
   FUNDING_STEPS,
   type FundingPart,
@@ -141,6 +142,7 @@ export {
   targetNeed,
   targetPercent,
   weekdaysIn,
+  weeklyDays,
   zTargetBehavior,
   zTargetCadence,
 } from "./targets";

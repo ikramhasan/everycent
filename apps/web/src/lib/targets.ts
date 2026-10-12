@@ -14,7 +14,7 @@ export type TargetNeed = NonNullable<components["schemas"]["TargetNeed"]>;
 type SetTargetBody = components["schemas"]["SetCategoryTarget"];
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** A target as the editor saves it, one shape per cadence. */
-export type TargetInput = DistributiveOmit<SetTargetBody, "month">;
+export type TargetInput = DistributiveOmit<SetTargetBody, "month" | "today">;
 type Format = (minorUnits: string) => string;
 
 const WEEKDAYS = [
@@ -317,7 +317,7 @@ export function useTargetActions(budgetId: string) {
           () =>
             put.mutateAsync({
               params: { path: { budgetId, categoryId } },
-              body: { ...input, month } as SetTargetBody,
+              body: { ...input, month, today: todayIso() } as SetTargetBody,
             }),
           "Couldn't save the target.",
         ),

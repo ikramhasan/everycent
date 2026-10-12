@@ -74,6 +74,9 @@ const PaymentSchema = z
       "Money moved in this month for funded card spending, less returns (YNAB's Funded Spending)",
     ),
     paymentsMade: zMinorUnits.describe("This month's payments to the card, negative"),
+    hasUncategorized: z
+      .boolean()
+      .describe("The card has uncategorized transactions this month (up to today)"),
   })
   .nullable()
   .describe("Set on a credit account's payment category")
@@ -122,8 +125,8 @@ const FundingPartSchema = z
       .min(1)
       .max(5)
       .describe(
-        "1 overspending, 2 due on a date this month, 3 due at the end of the month, 4 due in a " +
-          "later month, 5 credit card payment",
+        "1 overspending, 2 due this month (by date; end of month is the last day), 3 due before " +
+          "the budget started (its first month only), 4 due in a later month, 5 credit card payment",
       ),
     date: z.string().describe("YYYY-MM-DD it's due; empty when the step isn't ordered by date"),
   })

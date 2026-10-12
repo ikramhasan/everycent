@@ -1,5 +1,5 @@
 import type { BudgetMonth, CategoryMonth } from "./months";
-import { type CategoryTarget, type TargetNeed, weekdaysIn } from "./targets";
+import { type CategoryTarget, type TargetNeed, weeklyDays } from "./targets";
 
 /** A stretch of a section: money spent, money still available, or spending beyond the money. */
 export interface BarSegment {
@@ -39,7 +39,10 @@ export interface ProgressBar {
  */
 export function progressBar(
   figures: Pick<CategoryMonth, "carried" | "assigned" | "activity">,
-  target: Pick<CategoryTarget, "cadence" | "behavior" | "amount" | "dueDay"> | null,
+  target:
+    | (Pick<CategoryTarget, "cadence" | "behavior" | "amount" | "dueDay"> &
+        Partial<Pick<CategoryTarget, "startMonth" | "startDay">>)
+    | null,
   need: TargetNeed | null,
   snoozed: boolean,
   month: BudgetMonth,
@@ -68,7 +71,7 @@ export function progressBar(
       });
     }
     if (weekly) {
-      const weeks = weekdaysIn(month, target.dueDay ?? 0);
+      const weeks = weeklyDays(target, month).length;
       for (let i = 0; i < weeks; i++) {
         sections.push({ kind: "target", size: target.amount, money: 0n, segments: [] });
       }

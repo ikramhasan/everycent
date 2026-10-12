@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MonthFigures } from "./months";
-import { type CategoryTarget, targetNeed, targetPercent, weekdaysIn } from "./targets";
+import { type CategoryTarget, targetNeed, targetPercent, weekdaysIn, weeklyDays } from "./targets";
 
 const target = (
   behavior: CategoryTarget["behavior"],
@@ -288,10 +288,15 @@ describe("what's over and the month's targets", () => {
     });
     expect(need([carried(70_00n)], refill)?.monthAmount).toBe(465_00n); // T8 G
     const eventually = target("balance", "2026-10", { cadence: "custom", amount: 300_00n });
+    // What it holds above the balance is over (YNAB "C5 First" Medical: $10.00, $30.00 assigned
+    // → $20.00; $15.00 spent → $5.00).
     expect(need([f("2026-10", 500_00n)], eventually)).toMatchObject({
       monthAmount: 0n,
-      overfunded: 0n,
+      overfunded: 200_00n,
     });
+    const small = { ...eventually, amount: 10_00n };
+    expect(need([f("2026-10", 30_00n)], small)?.overfunded).toBe(20_00n);
+    expect(need([f("2026-10", 30_00n, -15_00n)], small)?.overfunded).toBe(5_00n);
   });
 });
 
@@ -370,6 +375,29 @@ describe("payment targets", () => {
     const h = [card("2026-10", 50_00n)];
     expect(pay(h, monthly, 105_00n)).toMatchObject({ underfunded: 0n, overfunded: 20_00n });
     expect(pay(h, monthly, 105_00n, "2026-11")?.underfunded).toBe(30_00n);
+  });
+});
+
+// YNAB plans "C5 First" and "C4 Clean", 2026-10-12: weekly targets created on Monday the 12th.
+describe("weekly targets that start mid-month", () => {
+  const saturdays = target("set_aside", "2026-10", {
+    cadence: "weekly",
+    amount: 10_00n,
+    dueDay: 6,
+    startDay: 12,
+  });
+
+  it("ask only for the weeks from their start day, then every week", () => {
+    expect(weeklyDays(saturdays, "2026-10")).toEqual([17, 24, 31]);
+    expect(need([], saturdays)).toMatchObject({ needed: 30_00n, underfunded: 30_00n });
+    expect(need([], saturdays, "2026-11")).toMatchObject({ needed: 40_00n });
+    // October's Targets still counts all five Saturdays.
+    expect(need([], saturdays)?.monthAmount).toBe(50_00n);
+  });
+
+  it("count the start day itself", () => {
+    expect(weeklyDays({ ...saturdays, startDay: 17 }, "2026-10")).toEqual([17, 24, 31]);
+    expect(weeklyDays({ ...saturdays, startDay: null }, "2026-10")).toEqual([3, 10, 17, 24, 31]);
   });
 });
 

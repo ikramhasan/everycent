@@ -984,6 +984,11 @@ export interface components {
         }) & {
             /** @description The month the target is set from */
             month: string;
+            /**
+             * Format: date
+             * @description The user's today (defaults to the server's UTC date): a target made weekly in this month asks only for the weeks from today
+             */
+            today?: string;
         };
         SnoozeTarget: {
             /** @description The month to snooze; must be the user's current month */
@@ -1640,6 +1645,8 @@ export interface components {
             fundedSpending: string;
             /** @description This month's payments to the card, negative */
             paymentsMade: string;
+            /** @description The card has uncategorized transactions this month (up to today) */
+            hasUncategorized: boolean;
         } | null;
         /** @description The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month */
         TargetNeed: {
@@ -1704,7 +1711,7 @@ export interface components {
         FundingPart: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             amount: string;
-            /** @description 1 overspending, 2 due on a date this month, 3 due at the end of the month, 4 due in a later month, 5 credit card payment */
+            /** @description 1 overspending, 2 due this month (by date; end of month is the last day), 3 due before the budget started (its first month only), 4 due in a later month, 5 credit card payment */
             step: number;
             /** @description YYYY-MM-DD it's due; empty when the step isn't ordered by date */
             date: string;

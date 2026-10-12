@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
+import { cn } from "@everycent/ui/lib/utils";
 import { useState } from "react";
 import type { BudgetMonthData } from "@/lib/months";
 
@@ -122,8 +123,13 @@ function listsOption(option: AutoAssignOption, amount: bigint, one: boolean) {
 }
 
 /** Cards Underfunded flags: their payment categories wait on this month's credit overspending. */
+/**
+ * Cards Underfunded lists apart: credit overspending, or uncategorized transactions this month
+ * (YNAB, 2026-10-12, "C5 First": F Card with an uncategorized $5.00 was listed; moved to September,
+ * it wasn't).
+ */
 const needsAttention = (c: MonthCategory) =>
-  Boolean(c.payment && c.payment.overspentCategories !== "0");
+  Boolean(c.payment && (c.payment.overspentCategories !== "0" || c.payment.hasUncategorized));
 
 /**
  * YNAB's Auto-Assign section of the inspector. With categories selected an option applies to them
@@ -169,15 +175,18 @@ export function AutoAssignPanel({
     : [];
   const listed = changes.filter((c) => !attention.some((a) => a.categoryId === c.categoryId));
   const full = new Map(categories.map((c) => [c.categoryId, c]));
-  const fullyFunded = listed.filter((c) => {
+  const isFull = (c: AutoAssignChange) => {
     const category = full.get(c.categoryId);
     return (
       category && BigInt(category.assigned) + c.delta === BigInt(category.autoAssign.underfunded)
     );
-  }).length;
-  const byGroup = new Map<string, AutoAssignChange[]>();
-  for (const c of listed) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
+  };
+  // Underfunded lists what it can only partly fund apart from what it funds in full (YNAB,
+  // 2026-10-12, "C5 First" with $30.00 for $40.00 of targets).
+  const fullyFunded = underfunded ? listed.filter(isFull) : listed;
+  const partlyFunded = underfunded ? listed.filter((c) => !isFull(c)) : [];
   const amountText = (delta: bigint) => `${delta > 0n ? "+" : ""}${format(delta.toString())}`;
+  const count = (n: number) => `${n} ${n === 1 ? "category" : "categories"}`;
 
   return (
     <section aria-label="Auto-Assign" className="grid gap-2 rounded-lg border p-4">
@@ -220,47 +229,43 @@ export function AutoAssignPanel({
             <AlertDialogTitle>
               Auto-Assign Preview: {preview && label(preview, false)}
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className={cn(underfunded && changes.length > 0 && "sr-only")}>
               {changes.length === 0
                 ? "This won't change any assigned amounts."
                 : underfunded
-                  ? `${fullyFunded} ${fullyFunded === 1 ? "category" : "categories"} will be fully funded.`
-                  : `This will update the assigned amount for ${changes.length} ${
-                      changes.length === 1 ? "category" : "categories"
-                    }.`}
+                  ? `${count(fullyFunded.length)} will be fully funded.`
+                  : `This will update the assigned amount for ${count(changes.length)}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {attention.length > 0 && (
-            <div className="grid gap-2 rounded-md bg-yellow-100 p-3 text-sm text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100">
-              <p>
-                These credit cards may need more attention, because of credit overspending, or
-                uncategorized transactions.
-              </p>
-              <div className="grid gap-1">
-                {attention.map((c) => (
-                  <div key={c.categoryId} className="flex justify-between gap-2 pl-2">
-                    <span className="truncate">{c.name}</span>
-                    <span className="tabular-nums">{amountText(c.delta)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {listed.length > 0 && (
-            <div className="grid max-h-72 gap-3 overflow-y-auto text-sm">
-              {[...byGroup].map(([group, list]) => (
-                <div key={group} className="grid gap-1">
-                  <p className="font-semibold">{group}</p>
-                  {list.map((c) => (
-                    <div key={c.categoryId} className="flex justify-between gap-2 pl-2">
-                      <span className="truncate">{c.name}</span>
-                      <span className="tabular-nums">{amountText(c.delta)}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="grid max-h-96 gap-3 overflow-y-auto text-sm">
+            {attention.length > 0 && (
+              <PreviewBox tone="yellow">
+                <p>
+                  {attention.length === 1 ? "This credit card" : "These credit cards"} may need more
+                  attention, because of credit overspending, or uncategorized transactions.
+                </p>
+                <ChangeList changes={attention} amountText={amountText} />
+              </PreviewBox>
+            )}
+            {partlyFunded.length > 0 && (
+              <PreviewBox tone="yellow">
+                <p>
+                  You don't have enough money to fully fund all of your categories.{" "}
+                  <strong>{count(partlyFunded.length)}</strong> will be partially funded.
+                </p>
+                <ChangeList changes={partlyFunded} amountText={amountText} />
+              </PreviewBox>
+            )}
+            {underfunded && fullyFunded.length > 0 && (
+              <PreviewBox tone="green">
+                <p>
+                  <strong>{count(fullyFunded.length)}</strong> will be fully funded.
+                </p>
+                <ChangeList changes={fullyFunded} amountText={amountText} />
+              </PreviewBox>
+            )}
+            {!underfunded && <ChangeList changes={listed} amountText={amountText} />}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -276,5 +281,48 @@ export function AutoAssignPanel({
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/** One of the Underfunded preview's boxes: yellow for what needs a look, green for what's funded. */
+function PreviewBox({ tone, children }: { tone: "yellow" | "green"; children: React.ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "grid gap-2 rounded-md p-3",
+        tone === "yellow"
+          ? "bg-yellow-100 text-yellow-950 dark:bg-yellow-900/40 dark:text-yellow-50"
+          : "bg-green-100 text-green-950 dark:bg-green-900/40 dark:text-green-50",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Changes listed by category group, as YNAB's preview does. */
+function ChangeList({
+  changes,
+  amountText,
+}: {
+  changes: readonly { categoryId: string; name: string; group: string; delta: bigint }[];
+  amountText: (delta: bigint) => string;
+}) {
+  const byGroup = new Map<string, (typeof changes)[number][]>();
+  for (const c of changes) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
+  return (
+    <div className="grid gap-3">
+      {[...byGroup].map(([group, list]) => (
+        <div key={group} className="grid gap-1">
+          <p className="font-semibold">{group}</p>
+          {list.map((c) => (
+            <div key={c.categoryId} className="flex justify-between gap-2 pl-2">
+              <span className="truncate">{c.name}</span>
+              <span className="tabular-nums">{amountText(c.delta)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }

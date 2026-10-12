@@ -1156,6 +1156,11 @@
                 "type": "string",
                 "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
                 "description": "The month the target is set from"
+              },
+              "today": {
+                "type": "string",
+                "format": "date",
+                "description": "The user's today (defaults to the server's UTC date): a target made weekly in this month asks only for the weeks from today"
               }
             },
             "required": [
@@ -4097,6 +4102,10 @@
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "This month's payments to the card, negative"
+          },
+          "hasUncategorized": {
+            "type": "boolean",
+            "description": "The card has uncategorized transactions this month (up to today)"
           }
         },
         "required": [
@@ -4107,7 +4116,8 @@
           "underfunded",
           "overspentCategories",
           "fundedSpending",
-          "paymentsMade"
+          "paymentsMade",
+          "hasUncategorized"
         ],
         "description": "Set on a credit account's payment category"
       },
@@ -4300,7 +4310,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 5,
-            "description": "1 overspending, 2 due on a date this month, 3 due at the end of the month, 4 due in a later month, 5 credit card payment"
+            "description": "1 overspending, 2 due this month (by date; end of month is the last day), 3 due before the budget started (its first month only), 4 due in a later month, 5 credit card payment"
           },
           "date": {
             "type": "string",

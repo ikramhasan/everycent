@@ -289,15 +289,29 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     existing.repeatEvery === values.repeatEvery &&
     existing.repeatUnit === values.repeatUnit;
   const startMonth = unchanged && existing.startMonth < start ? existing.startMonth : start;
+  // YNAB, 2026-10-12 ("C5 First", "C4 Clean"): a target created as weekly, or made weekly, in the
+  // current month starts on the day it's saved (its earlier weeks aren't asked for); editing a
+  // weekly target keeps its start day while its start month stays.
+  const today = body.today ?? serverToday();
+  const startDay =
+    values.cadence !== "weekly"
+      ? null
+      : existing?.cadence === "weekly"
+        ? existing.startMonth === startMonth
+          ? existing.startDay
+          : null
+        : body.month === monthOf(today)
+          ? Number(today.slice(8))
+          : null;
   const [target] = existing
     ? await db
         .update(categoryTarget)
-        .set({ ...values, startMonth })
+        .set({ ...values, startMonth, startDay })
         .where(eq(categoryTarget.id, existing.id))
         .returning()
     : await db
         .insert(categoryTarget)
-        .values({ id: newId(), budgetId, categoryId, ...values, startMonth })
+        .values({ id: newId(), budgetId, categoryId, ...values, startMonth, startDay })
         .returning();
   return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };

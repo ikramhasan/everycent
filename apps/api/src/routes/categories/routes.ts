@@ -116,7 +116,18 @@ const SetTargetSchema = z
       dueMonth: zMonth.describe("Pay off the card's balance by the end of this month"),
     }),
   ])
-  .and(z.object({ month: zMonth.describe("The month the target is set from") }))
+  .and(
+    z.object({
+      month: zMonth.describe("The month the target is set from"),
+      today: z.iso
+        .date()
+        .optional()
+        .describe(
+          "The user's today (defaults to the server's UTC date): a target made weekly in this " +
+            "month asks only for the weeks from today",
+        ),
+    }),
+  )
   .superRefine((v, ctx) => {
     // YNAB keeps no pay-off target dated before the month it's saved from (docs/verify.md).
     if (v.cadence === "payoff_by_date" && v.dueMonth < v.month) {

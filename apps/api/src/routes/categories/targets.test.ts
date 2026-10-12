@@ -64,6 +64,7 @@ async function setup() {
       amount: "10000",
       dueDay: null,
       month: "2026-10",
+      today: TODAY,
       ...input,
     });
   const assign = (categoryId: string, m: string, assigned: string) =>
@@ -215,6 +216,24 @@ describe("category targets", () => {
     expect(res.status).toBe(200);
     expect((await need(rent.id, "2026-10"))?.needed).toBe("5000");
     expect((await need(rent.id, "2026-11"))?.needed).toBe("4000");
+  });
+
+  // YNAB "C5 First" and "C4 Clean", 2026-10-12: made weekly on Monday the 12th.
+  it("asks a target made weekly mid-month only for the weeks from that day", async () => {
+    const { rent, phone, setTarget, need } = await setup();
+    const weekly = { cadence: "weekly", amount: "1000", dueDay: 6, today: "2026-10-12" };
+    await setTarget(rent.id, weekly);
+    expect((await need(rent.id, "2026-10"))?.needed).toBe("3000");
+    expect((await need(rent.id, "2026-11"))?.needed).toBe("4000");
+    // Editing it keeps its start day; a monthly target made weekly starts that day too.
+    await setTarget(rent.id, { ...weekly, amount: "2000", today: "2026-10-20" });
+    expect((await need(rent.id, "2026-10"))?.needed).toBe("6000");
+    await setTarget(phone.id, { amount: "2000", today: "2026-10-12" });
+    await setTarget(phone.id, { ...weekly, today: "2026-10-20" });
+    expect((await need(phone.id, "2026-10"))?.needed).toBe("2000");
+    // Saved from another month, it asks for every week there.
+    await setTarget(phone.id, { ...weekly, amount: "500", month: "2026-11" });
+    expect((await need(phone.id, "2026-11"))?.needed).toBe("2000");
   });
 
   it("spreads a yearly target over the months left (YNAB T8 F)", async () => {

@@ -27,17 +27,19 @@ type Month = {
   futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
-    payment: Record<
-      | "balance"
-      | "priorBalance"
-      | "spendingAndOutflows"
-      | "paymentsAndInflows"
-      | "underfunded"
-      | "overspentCategories"
-      | "fundedSpending"
-      | "paymentsMade",
-      string
-    > | null;
+    payment:
+      | (Record<
+          | "balance"
+          | "priorBalance"
+          | "spendingAndOutflows"
+          | "paymentsAndInflows"
+          | "underfunded"
+          | "overspentCategories"
+          | "fundedSpending"
+          | "paymentsMade",
+          string
+        > & { hasUncategorized: boolean })
+      | null;
     autoAssign: Record<string, string>;
     underfundedParts: { amount: string; step: number; date: string }[];
     upcoming: {
@@ -1642,6 +1644,46 @@ describe("budget months", () => {
       const oct = await month("2026-10");
       expect(oct.byCategory(rent.id)).toMatchObject(t("12000", "-12000", "0"));
       expect(oct.byCategory(phone.id)).toMatchObject(t("-5000", "0", "10000"));
+    });
+
+    // YNAB plan "C5 First" (created 2026-10-12), checked that day.
+    it("funds what fell due before the budget began last in its first month", async () => {
+      const ctx = await setup();
+      const { month, rent, phone, groceries } = ctx;
+      await target(ctx, rent.id, { dueDay: 5 }); // before the start
+      await target(ctx, phone.id, { dueDay: 20 });
+      await target(ctx, groceries.id); // end of month: the 31st
+      const oct = await month("2026-10", "2026-10-12");
+      expect(oct.byCategory(rent.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 3, date: "2026-10-05" },
+      ]);
+      expect(oct.byCategory(phone.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 2, date: "2026-10-20" },
+      ]);
+      expect(oct.byCategory(groceries.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 2, date: "2026-10-31" },
+      ]);
+      // Only in the first month.
+      const nov = await month("2026-11", "2026-10-12");
+      expect(nov.byCategory(rent.id)?.underfundedParts[0]?.step).toBe(2);
+    });
+
+    it("flags a card with uncategorized transactions this month", async () => {
+      const ctx = await cards();
+      const spendOnVisa = (date: string) =>
+        send("POST", `${ctx.base}/transactions`, ctx.cookie, {
+          accountId: ctx.visa.id,
+          categoryId: null,
+          date,
+          amount: "-500",
+        });
+      expect((await spendOnVisa("2026-09-20")).status).toBe(201);
+      const flag = async () =>
+        (await ctx.month("2026-10")).byCategory(ctx.visa.paymentCategoryId)?.payment
+          ?.hasUncategorized;
+      expect(await flag()).toBe(false);
+      expect((await spendOnVisa("2026-10-01")).status).toBe(201);
+      expect(await flag()).toBe(true);
     });
 
     it("asks a card's payment category for what's owed, and gives back the rest", async () => {

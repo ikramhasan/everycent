@@ -18,6 +18,7 @@ import {
   type AutoAssignOption,
   accountFamily,
   addMonths,
+  afterStart,
   autoAssignAmounts,
   type BudgetMonth,
   budgetMonthRange,
@@ -561,11 +562,15 @@ async function moneyCategory(db: Db, budgetId: string, categoryId: string) {
  */
 async function monthState(
   db: Db,
-  budget: { id: string; currency: CurrencyCode },
+  budget: { id: string; currency: CurrencyCode; createdAt?: Date },
   month: BudgetMonth,
   today: string,
 ) {
   const budgetId = budget.id;
+  // The budget's first day: the day it was created, or the user's today if that's earlier (the
+  // creation time is UTC; behind UTC, a budget made in the evening was created "tomorrow").
+  const created = budget.createdAt?.toISOString().slice(0, 10) ?? today;
+  const firstDay = created < today ? created : today;
   const { start, end } = monthBounds(month);
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
@@ -608,10 +613,13 @@ async function monthState(
   // Each card's payment details: what's owed at the end of the month (up to today) against what's
   // set aside, and how much of the shortfall is this month's credit overspending.
   const balances = await accountBalances(db, budgetId, cutoff);
-  // The card's month in its register: what it owed before, and its outflows and inflows since.
+  // The card's month in its register: what it owed before, and its outflows and inflows since,
+  // and whether any of the month's transactions are uncategorized.
+  const uncategorizedId = categories.find((c) => c.internalKind === "uncategorized")?.id ?? "";
   const cardMonth = await db
     .select({
       accountId: transaction.accountId,
+      uncategorized: sql<number>`count(*) filter (where ${transaction.date} >= ${start} and ${transaction.categoryId} = ${uncategorizedId})`,
       prior: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} < ${start}), 0)`,
       outflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} < 0), 0)`,
       inflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} > 0), 0)`,
@@ -688,9 +696,13 @@ async function monthState(
     // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
     const snoozed = !payment && snoozedNow.has(cat.id);
     const coming = upcoming.get(cat.id) ?? null;
-    const funding = payment
+    const funded = payment
       ? paymentFunding(figures.available, payment.owed, payment.fromOverspending, need, coming)
       : spendingFunding(month, figures.available, target, need, snoozed, coming);
+    const funding =
+      month === monthOf(firstDay)
+        ? { ...funded, parts: afterStart(funded.parts, firstDay) }
+        : funded;
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
@@ -741,7 +753,7 @@ async function monthState(
 /** The budget screen's numbers for `month`, as of the user's `today`. */
 export async function budgetMonthJson(
   db: Db,
-  budget: { id: string; currency: CurrencyCode; expectedIncome?: bigint | null },
+  budget: { id: string; currency: CurrencyCode; expectedIncome?: bigint | null; createdAt?: Date },
   month: BudgetMonth,
   today: string,
 ) {
@@ -781,6 +793,7 @@ export async function budgetMonthJson(
           overspentCategories: l.payment.fromOverspending.toString(),
           fundedSpending: l.figures.fundedSpending.toString(),
           paymentsMade: l.figures.payments.toString(),
+          hasUncategorized: Number(reg?.uncategorized ?? 0) > 0,
         },
         target: l.need && {
           needed: l.need.needed.toString(),

@@ -4,9 +4,10 @@ import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Switch } from "@everycent/ui/components/switch";
 import { cn } from "@everycent/ui/lib/utils";
-import { Check, Trash2 } from "lucide-react";
+import { Check, CircleHelp, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { todayIso } from "@/lib/dates";
 import {
@@ -239,22 +240,51 @@ export function TargetSection({
       </Button>
       {(onSnooze || (snoozeLocked && !payment)) && (
         // YNAB keeps the target's details on show while it's snoozed.
-        <Label
-          className={cn(
-            "flex items-center gap-2 font-normal text-sm",
-            !onSnooze && "text-muted-foreground",
-          )}
-          title={onSnooze ? undefined : "You can only snooze targets in the current month."}
-        >
-          <Switch
-            checked={need.snoozed}
-            disabled={!onSnooze}
-            onCheckedChange={(checked) => void onSnooze?.(checked)}
-          />
-          Snooze target for this month
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label
+            className={cn(
+              "flex items-center gap-2 font-normal text-sm",
+              !onSnooze && "text-muted-foreground",
+            )}
+            title={onSnooze ? undefined : "You can only snooze targets in the current month."}
+          >
+            <Switch
+              checked={need.snoozed}
+              disabled={!onSnooze}
+              onCheckedChange={(checked) => void onSnooze?.(checked)}
+            />
+            Snooze target for this month
+          </Label>
+          <SnoozeHelp />
+        </div>
       )}
     </Section>
+  );
+}
+
+/** The "?" beside the snooze switch; YNAB opens this on click (app.ynab.com, 2026-10-12). */
+function SnoozeHelp() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground"
+          aria-label="About snoozing"
+        >
+          <CircleHelp />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-sm">
+        <p className="font-medium">Snooze Target</p>
+        <p className="text-muted-foreground">
+          When you snooze a Target, everycent will treat the category as if it didn't have a Target
+          (which means the category won't show as underfunded). At the start of next month, your
+          Target will reactivate, well-rested and in a very good mood!
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

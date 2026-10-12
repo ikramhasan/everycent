@@ -68,6 +68,11 @@ export interface CategoryTarget {
   repeatUnit: TargetRepeatUnit | null;
   /** The first month the target applies to (YNAB's goal creation month). */
   startMonth: BudgetMonth;
+  /**
+   * Weekly: the day of `startMonth` it was created on; occurrences before it aren't asked for in
+   * that month. Null (or absent) for the whole month.
+   */
+  startDay?: number | null;
 }
 
 export interface TargetNeed {
@@ -113,6 +118,25 @@ export function weekdaysIn(month: BudgetMonth, weekday: number) {
   // Days 1..days whose weekday matches: the first is day 1 + offset, then every 7 days.
   const offset = (weekday - first + 7) % 7;
   return offset >= days ? 0 : Math.floor((days - 1 - offset) / 7) + 1;
+}
+
+/**
+ * The days of `month` a weekly target asks for: each time its weekday falls in the month, from its
+ * start day in its first month (YNAB, 2026-10-12: $10 on Saturdays created on Monday the 12th
+ * asked $30.00 for the 17th, 24th and 31st, with three week sections; November asked all four).
+ */
+export function weeklyDays(
+  target: Pick<CategoryTarget, "dueDay"> & Partial<Pick<CategoryTarget, "startMonth" | "startDay">>,
+  month: BudgetMonth,
+): number[] {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const offset = ((target.dueDay ?? 0) - first + 7) % 7;
+  const from = month === target.startMonth ? (target.startDay ?? 1) : 1;
+  return Array.from(
+    { length: weekdaysIn(month, target.dueDay ?? 0) },
+    (_, i) => 1 + offset + i * 7,
+  ).filter((day) => day >= from);
 }
 
 /** Months between due dates: yearly is 12, custom every N months or N × 12. */
@@ -199,7 +223,7 @@ export function targetNeed(
   ) {
     const needed =
       target.cadence === "weekly"
-        ? target.amount * BigInt(weekdaysIn(month, target.dueDay ?? 0))
+        ? target.amount * BigInt(weeklyDays(target, month).length)
         : target.amount;
     // What this month's Assigned has to reach: refill counts what was carried in (below zero
     // when more was carried in than the target).
@@ -211,18 +235,27 @@ export function targetNeed(
       monthAmount: needed,
       overfunded: over(figures, due),
       dueDate: null,
+      // The month's targets count every week, even those before a weekly target began (YNAB
+      // "C5 First": October's Targets counted F W's five Saturdays while it asked for three).
+      ...(target.cadence === "weekly" && {
+        monthAmount: target.amount * BigInt(weekdaysIn(month, target.dueDay ?? 0)),
+      }),
     };
   }
 
   const needed = target.amount;
   if (!target.dueDate) {
-    // "Have a balance of…" eventually: tracked, never asked for this month.
+    // "Have a balance of…" eventually: tracked, never asked for this month. What it holds above
+    // the balance is over (YNAB, 2026-10-12, "C5 First": $10.00 target, $30.00 assigned →
+    // Reduce Overfunding $20.00; with $15.00 spent, $5.00).
+    const funded = holding ?? 0n;
+    const extra = funded - needed;
     return {
       needed,
-      funded: holding ?? 0n,
+      funded,
       underfunded: 0n,
       monthAmount: 0n,
-      overfunded: 0n,
+      overfunded: extra <= 0n || figures.available <= 0n ? 0n : min(extra, figures.available),
       dueDate: null,
     };
   }
@@ -312,6 +345,8 @@ const pastDue = (needed: bigint, funded: bigint, dueDate: string): TargetNeed =>
   overfunded: 0n,
   dueDate,
 });
+
+const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
 const under = (needed: bigint, funded: bigint) => (funded < needed ? needed - funded : 0n);
 

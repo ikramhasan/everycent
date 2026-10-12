@@ -1,1 +1,30 @@
 @import "@everycent/ui/globals.css";
+
+/*
+ * Progress bar colours, YNAB's own (its `--budgetBar*` variables on :root and body.theme-dark, read
+ * from app.ynab.com on 2026-10-12): the empty track and its border, then the available (funded,
+ * underfunded) and spent (stripes of two shades) parts, and overspending.
+ */
+:root {
+  --bar-track: #f3eee2;
+  --bar-border: #ece7da;
+  --bar-funded: #77ba21;
+  --bar-funded-spent: #aee865;
+  --bar-funded-spent-stripe: #f1fbe9;
+  --bar-underfunded: #f6c91d;
+  --bar-underfunded-spent: #fbe48e;
+  --bar-underfunded-spent-stripe: #fef9ed;
+  --bar-overspent: #bf2e3b;
+  --bar-overspent-stripe: #fdd7d3;
+}
+
+.dark {
+  --bar-track: #3c3e53;
+  --bar-border: #3c3e53;
+  --bar-funded-spent: #346011;
+  --bar-funded-spent-stripe: #1d300d;
+  --bar-underfunded-spent: #6d5600;
+  --bar-underfunded-spent-stripe: #362c05;
+  --bar-overspent: #912333;
+  --bar-overspent-stripe: #4c0814;
+}

@@ -1,17 +1,19 @@
 import { type BudgetMonth, monthOf } from "./months";
-import { type CategoryTarget, type TargetNeed, weekdaysIn } from "./targets";
+import { type CategoryTarget, type TargetNeed, weeklyDays } from "./targets";
 
 /**
  * Underfunded's order when it can't fund everything (support.ynab.com "Underfunded"): overspent
- * categories first, then what's due on a date this month (weekly occurrences, monthly targets with
- * a due day, dated targets due this month) by date, then monthly targets due at the end of the
- * month, then dated targets due in a later month by due date, then credit card payments. Within a
- * step, categories go top to bottom.
+ * categories first, then what's due this month by date (weekly occurrences, monthly targets, dated
+ * targets due this month; "end of month" is the month's last day), then, in a budget's first
+ * month only, what fell due before the budget started, then dated targets due in a later month by
+ * due date, then credit card payments. On the same date or within a step, categories go top to
+ * bottom (YNAB, 2026-10-12, plan "C5 First": weekly F D at the top got its Oct 31 share before
+ * end-of-month F C; F B, due the 5th of the first month, went after both end-of-month targets).
  */
 export const FUNDING_STEPS = {
   overspent: 1,
   dueThisMonth: 2,
-  endOfMonth: 3,
+  beforeStart: 3,
   dueLater: 4,
   cardPayment: 5,
 } as const;
@@ -60,16 +62,6 @@ const lastDay = (month: BudgetMonth) => {
 const dayOf = (month: BudgetMonth, day: number) =>
   `${month}-${String(Math.min(day, lastDay(month))).padStart(2, "0")}`;
 
-/** The dates `weekday` (0 = Sunday) falls on in `month`. */
-function weekdayDates(month: BudgetMonth, weekday: number) {
-  const [y, m] = month.split("-").map(Number) as [number, number];
-  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
-  const offset = (weekday - first + 7) % 7;
-  return Array.from({ length: weekdaysIn(month, weekday) }, (_, i) =>
-    dayOf(month, 1 + offset + i * 7),
-  );
-}
-
 /**
  * What Underfunded and Reduce Overfunding do to a spending category in `month` (YNAB, checked in
  * its web app on 2026-10-07, docs/verify.md "Underfunded and Reduce Overfunding"):
@@ -88,7 +80,7 @@ function weekdayDates(month: BudgetMonth, weekday: number) {
 export function spendingFunding(
   month: BudgetMonth,
   available: bigint,
-  target: Pick<CategoryTarget, "cadence" | "dueDay"> | null,
+  target: FundedTarget | null,
   need: TargetNeed | null,
   snoozed = false,
   upcoming: Upcoming | null = null,
@@ -117,16 +109,16 @@ export function spendingFunding(
   return { underfunded, overfunded, parts: targetParts(month, target, need) };
 }
 
+/** What Underfunded needs to know of a target. */
+type FundedTarget = Pick<CategoryTarget, "cadence" | "dueDay"> &
+  Partial<Pick<CategoryTarget, "startMonth" | "startDay">>;
+
 /** A target's shortfall placed in Underfunded's order. */
-function targetParts(
-  month: BudgetMonth,
-  target: Pick<CategoryTarget, "cadence" | "dueDay">,
-  need: TargetNeed,
-): FundingPart[] {
+function targetParts(month: BudgetMonth, target: FundedTarget, need: TargetNeed): FundingPart[] {
   const amount = need.underfunded;
   if (target.cadence === "weekly") {
     // Each week's occurrence is due on its own date; what's assigned so far covers the earliest.
-    const dates = weekdayDates(month, target.dueDay ?? 0);
+    const dates = weeklyDays(target, month).map((day) => dayOf(month, day));
     const perWeek = dates.length ? need.needed / BigInt(dates.length) : amount;
     const parts: FundingPart[] = [];
     let left = amount;
@@ -138,11 +130,8 @@ function targetParts(
     return parts;
   }
   if (target.cadence === "monthly") {
-    return [
-      target.dueDay === null
-        ? { amount, step: FUNDING_STEPS.endOfMonth, date: "" }
-        : { amount, step: FUNDING_STEPS.dueThisMonth, date: dayOf(month, target.dueDay) },
-    ];
+    const day = target.dueDay ?? lastDay(month);
+    return [{ amount, step: FUNDING_STEPS.dueThisMonth, date: dayOf(month, day) }];
   }
   const due = need.dueDate ?? "";
   return [
@@ -200,6 +189,21 @@ export function paymentFunding(
     overfunded,
     parts: underfunded ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date }] : [],
   };
+}
+
+/**
+ * In a budget's first month, what was due before the budget started goes after everything else
+ * due that month (support.ynab.com "Underfunded": "any targets with due dates set prior to the
+ * starting date of the plan itself will be funded after targets with a due date coming up"; seen
+ * 2026-10-12 in "C5 First", created on the 12th: due the 5th or 11th went after, due the 12th
+ * didn't). `start` is the budget's first day, YYYY-MM-DD.
+ */
+export function afterStart(parts: readonly FundingPart[], start: string): FundingPart[] {
+  return parts.map((p) =>
+    p.step === FUNDING_STEPS.dueThisMonth && p.date !== "" && p.date < start
+      ? { ...p, step: FUNDING_STEPS.beforeStart }
+      : p,
+  );
 }
 
 /**

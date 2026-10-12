@@ -147,3 +147,17 @@ describe("progressBar", () => {
     ]);
   });
 });
+
+// YNAB "C5 First", 2026-10-12: F W, $10 on Saturdays from Monday the 12th, drew three weeks.
+describe("progressBar for a weekly target that starts mid-month", () => {
+  it("draws only the weeks it asks for", () => {
+    const weekly = {
+      ...target("set_aside", "weekly", 10_00n),
+      startMonth: "2026-10",
+      startDay: 12,
+    };
+    expect(
+      drawn(progressBar(fig(0n, 0n), weekly, need(30_00n, 0n, 30_00n), false, "2026-10")),
+    ).toEqual(["33.3[]", "33.3[]", "33.3[]"]);
+  });
+});

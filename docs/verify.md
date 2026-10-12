@@ -885,22 +885,40 @@ by it. Built as found:
   increase your total to $2,703.33" below it. Shown only in the current month (not in September or
   November).
 
-### Details of 8c not seen in YNAB
+### Preview wording, first month, end of month, balance and attention list (settled 2026-10-12)
 
-- **Question:** (1) The preview's wording when Ready to Assign runs out part-way (partly funded
-  categories). (2) Reduce Overfunding on a "Have a balance of" target without a date. (3) A dated
-  refill or balance target carrying more than its total. (4) Underfunded's first-month rule
-  (targets due before the plan started go after those coming up). (5) Settled: "Next month's
-  targets…" shows only when higher (support.ynab.com, 8f). (6) Whether hidden categories' targets
-  count in October's Targets, and what the summary shows with categories selected. (7) Which
-  "uncategorized transactions" put a card in the attention list. (8) Auto-Assign labels when
-  several categories, all of them payment categories, are covered (one selected payment category
-  reads "Paid Last Month", "Average Paid": seen in 8e, built).
-- **Built so far (before this rule):** (1) "N categories will be fully funded." counting only the
-  full ones, partly funded ones listed with what they get; (2) nothing is over; (3) the surplus
-  over the total is over; (4) not built; (5) —; (6) hidden categories left
-  out, Cost to Be Me only with nothing selected; (7) credit overspending only; (8) the usual
-  labels for several.
+Checked in YNAB's web app and API in a new plan **"C5 First"** (created 2026-10-12; F Cash, F Card;
+categories F A–F D, F W and template targets on Groceries, Utilities, Medical expenses and
+Rent/Mortgage; memos `x-f-*`), in "C4 Clean" and in "ihni7's Plan":
+
+- **Preview when Ready to Assign runs out:** a yellow box "You don't have enough money to fully
+  fund all of your categories. **N categories** will be partially funded." with those categories by
+  group, then a green box "**N categories** will be fully funded." with the rest. The card attention
+  box comes first. Built.
+- **"Have a balance of" without a date:** Reduce Overfunding takes Available above the balance
+  ($10.00 target with $30.00 assigned → $20.00; after $15.00 spent → $5.00). Built.
+- **A dated refill holding more than its total:** the surplus is over (C5 D2 lowered to $100.00
+  with $300.00 carried in → Reduce Overfunding $200.00). As built.
+- **First month:** in the plan's first month, what was due before the plan was created goes after
+  everything else due this month and before targets due later (F B due the 5th or the 11th; due
+  the 12th, the creation day, it was upcoming; Groceries' Oct 2 and 9 Fridays likewise). Built,
+  with the budget's creation date as its first day.
+- **End of month is the month's last day:** it's ordered by date with weekly and dated parts, and
+  ties go top to bottom (weekly F D at the top got its Oct 31 share before end-of-month F C;
+  end-of-month F C and F A, above F W, went before F W's Oct 31 share). Built (it was a step of its
+  own after everything dated).
+- **Hidden categories** are left out of October's Targets and of Underfunded (hiding C5 Z0 took
+  $100.00 off both); with categories selected the summary has no Cost to Be Me. As built.
+- **Attention list:** a card with an uncategorized transaction this month is listed (F Card, $5.00
+  uncategorized); dated in September, it isn't. With one card the box says "This credit card may
+  need more attention, because of credit overspending, or uncategorized transactions.", with the
+  card under its group heading. Built.
+- **Several payment categories selected** (Card E2, Card E3): the usual Auto-Assign labels. As
+  built.
+- **Cost to Be Me and repeating custom targets (open, EVERYCENT-120):** a custom "Fill up to $600"
+  due Mar 31 2027 counts its $100.00 share one-time and as a yearly refill, but $600.00 once it
+  repeats every month (October's Targets $410.00 → $910.00; the ask stayed $100.00). A set aside
+  repeating every month (F D, $60.00 by Dec 31) counted its $20.00 share.
 
 ## Snooze and progress bars (phase 8d)
 
@@ -934,16 +952,32 @@ bars were read from the page (section `flex-basis`, segment widths and classes).
 - The two toolbar icons switch bars on and off; off hides the bars and the notes too. The setting
   is this browser's (support.ynab.com).
 
-### Details of 8d not seen in YNAB
+### Snoozed notes, carried set aside, the snooze help and bar styles (settled 2026-10-12)
 
-- **Question:** (1) The note of a snoozed category with spending. (2) "Spent $x of $y" for a set
-  aside target with money carried in: is $y only this month's money? (3) The "?" help text beside
-  the snooze switch. (4) Settled in 8f: the switch shows in every month, disabled
-  outside the current one. (5) Exact bar colours and thickness.
-- **Built so far (before this rule):** (1) the no-target notes ("Spent …", "Fully Spent"); (2)
-  carried plus assigned; (3) not built; (4) —; (5) Tailwind green/yellow/red,
-  6px.
+- **A snoozed category with spending** gets the no-target note: T8 E, $70.00 carried in and $20.00
+  spent, read "Spent $20.00 of $70.00" (the spend was removed afterwards). As built.
+- **A met set aside with money carried in** counts carried plus assigned: P1 ($80.00 carried,
+  $100.00 assigned, $50.00 spent) read "Funded. Spent $50.00 of $180.00" (P1 was put back to
+  $30.00). As built.
+- **The "?" beside the snooze switch** opens a popover on click, titled "Snooze Target", saying the
+  category is treated as if it had no target (so it won't show as underfunded) and that the target
+  wakes up next month. Built.
+- **Bars** use YNAB's `--budgetBar*` colours (from its stylesheet: light on `:root`, dark on
+  `body.theme-dark`): track #f3eee2 (dark #3c3e53), funded #77ba21, underfunded #f6c91d, spent and
+  overspent as 135° stripes of 5px and 1px (funded #aee865/#f1fbe9, underfunded #fbe48e/#fef9ed,
+  overspent #bf2e3b/#fdd7d3; dark #346011/#1d300d, #6d5600/#362c05, #912333/#4c0814). 4px tall,
+  4px between sections, a 1px inset border; a lone section is rounded, otherwise only the bar's
+  ends (and the extra section on its own). Built.
 
+### Weekly targets that start mid-month (settled 2026-10-12)
+
+- A weekly target created in the web app, or a target changed to weekly, starts on the day it's
+  saved (the API's `goal_creation_month` read 2026-10-12): that month it asks only for the weeks
+  from that day ($10.00 on Saturdays → $30.00 for the 17th, 24th and 31st, with three bar
+  sections), the next month for every week ($40.00). Seen in "C5 First" and "C4 Clean", so not
+  only in a plan's first month. Editing a weekly target (Groceries' weekday) kept its start; a
+  template target and API-made ones start on the 1st. October's Targets still counts every week
+  (F W: $50.00). Built.
 
 ## Credit card payment targets (phase 8e)
 

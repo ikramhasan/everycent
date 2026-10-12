@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FUNDING_STEPS, fundUnderfunded, paymentFunding, spendingFunding } from "./funding";
+import {
+  afterStart,
+  FUNDING_STEPS,
+  fundUnderfunded,
+  paymentFunding,
+  spendingFunding,
+} from "./funding";
 import type { TargetNeed } from "./targets";
 
 const need = (underfunded: bigint, extra: Partial<TargetNeed> = {}): TargetNeed => ({
@@ -28,7 +34,8 @@ describe("spendingFunding", () => {
 
   it("places a target's shortfall by its due date", () => {
     expect(spendingFunding("2026-10", 0n, monthly, need(60_00n)).parts).toEqual([
-      { amount: 60_00n, step: FUNDING_STEPS.endOfMonth, date: "" },
+      // End of month is due on the month's last day.
+      { amount: 60_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-31" },
     ]);
     expect(
       spendingFunding("2026-11", 0n, { cadence: "monthly", dueDay: 31 }, need(60_00n)).parts,
@@ -94,7 +101,7 @@ describe("fundUnderfunded", () => {
   });
   const categories = [
     { categoryId: "card", parts: [part(50_00n, FUNDING_STEPS.cardPayment)] },
-    { categoryId: "rent", parts: [part(100_00n, FUNDING_STEPS.endOfMonth)] },
+    { categoryId: "rent", parts: [part(100_00n, FUNDING_STEPS.dueThisMonth, "2026-10-31")] },
     { categoryId: "netflix", parts: [part(15_00n, FUNDING_STEPS.dueThisMonth, "2026-10-23")] },
     { categoryId: "groceries", parts: [part(10_00n, FUNDING_STEPS.dueThisMonth, "2026-10-17")] },
     { categoryId: "over", parts: [part(4_00n, FUNDING_STEPS.overspent)] },
@@ -124,10 +131,10 @@ describe("fundUnderfunded", () => {
     expect(fundUnderfunded(categories, 0n).size).toBe(0);
   });
 
-  it("goes top to bottom within a step", () => {
+  it("goes top to bottom on the same date", () => {
     const tied = [
-      { categoryId: "a", parts: [part(10_00n, FUNDING_STEPS.endOfMonth)] },
-      { categoryId: "b", parts: [part(10_00n, FUNDING_STEPS.endOfMonth)] },
+      { categoryId: "a", parts: [part(10_00n, FUNDING_STEPS.dueThisMonth, "2026-10-31")] },
+      { categoryId: "b", parts: [part(10_00n, FUNDING_STEPS.dueThisMonth, "2026-10-31")] },
     ];
     expect(fundUnderfunded(tied, 15_00n)).toEqual(
       new Map([
@@ -191,5 +198,66 @@ describe("upcoming scheduled transactions", () => {
         10_00n,
       ),
     ).toEqual(new Map([["scheduled", 10_00n]]));
+  });
+});
+
+// YNAB plan "C5 First" (created 2026-10-12), checked 2026-10-12.
+describe("Underfunded in the budget's first month", () => {
+  type Target = { cadence: "monthly" | "weekly"; dueDay: number | null };
+  const eom: Target = { cadence: "monthly", dueDay: null };
+  const due = (day: number): Target => ({ cadence: "monthly", dueDay: day });
+  const weekly: Target = { cadence: "weekly", dueDay: 6 };
+  const parts = (target: Target, needed: bigint) =>
+    afterStart(
+      spendingFunding("2026-10", 0n, target, need(needed, { needed })).parts,
+      "2026-10-12",
+    );
+
+  it("funds what fell due before the start after the rest of the month, before later months", () => {
+    const later = need(20_00n, { needed: 60_00n, dueDate: "2026-12-31" });
+    const categories = [
+      {
+        categoryId: "d",
+        parts: spendingFunding("2026-10", 0n, { cadence: "custom", dueDay: null }, later).parts,
+      },
+      { categoryId: "c", parts: parts(eom, 20_00n) },
+      { categoryId: "b", parts: parts(due(5), 20_00n) },
+      { categoryId: "a", parts: parts(due(20), 20_00n) },
+    ];
+    // $30: A then C; $50: A, C, then B before D.
+    expect(fundUnderfunded(categories, 30_00n)).toEqual(
+      new Map([
+        ["a", 20_00n],
+        ["c", 10_00n],
+      ]),
+    );
+    expect(fundUnderfunded(categories, 50_00n).get("b")).toBe(10_00n);
+    expect(fundUnderfunded(categories, 50_00n).has("d")).toBe(false);
+  });
+
+  it("counts the start day itself as coming up", () => {
+    expect(parts(due(12), 20_00n)[0]?.step).toBe(FUNDING_STEPS.dueThisMonth);
+    expect(parts(due(11), 20_00n)[0]?.step).toBe(FUNDING_STEPS.beforeStart);
+  });
+
+  it("moves a weekly target's occurrences before the start too (Groceries' Oct 2 and 9)", () => {
+    expect(parts(weekly, 50_00n).map((p) => [p.date, p.step])).toEqual([
+      ["2026-10-03", FUNDING_STEPS.beforeStart],
+      ["2026-10-10", FUNDING_STEPS.beforeStart],
+      ["2026-10-17", FUNDING_STEPS.dueThisMonth],
+      ["2026-10-24", FUNDING_STEPS.dueThisMonth],
+      ["2026-10-31", FUNDING_STEPS.dueThisMonth],
+    ]);
+  });
+
+  it("ties a weekly occurrence on the last day with end of month by list order", () => {
+    const categories = [
+      {
+        categoryId: "weekly",
+        parts: [{ amount: 10_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-31" }],
+      },
+      { categoryId: "eom", parts: parts(eom, 20_00n) },
+    ];
+    expect(fundUnderfunded(categories, 10_00n)).toEqual(new Map([["weekly", 10_00n]]));
   });
 });

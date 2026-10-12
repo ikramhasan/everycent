@@ -182,6 +182,11 @@ export const categoryTarget = pgTable(
     repeatUnit: text({ enum: TARGET_REPEAT_UNITS }),
     /** First day of the first month the target applies to, YYYY-MM-01. */
     startMonth: date({ mode: "string" }).notNull(),
+    /**
+     * Weekly: the day of the start month it began on, when created (or made weekly) in the user's
+     * current month; earlier occurrences that month aren't asked for. Null for the whole month.
+     */
+    startDay: integer(),
     /** YYYY-MM-01 of the month the target is snoozed for (YNAB's snooze lasts one month). */
     snoozedMonth: date({ mode: "string" }),
     ...timestamps,
