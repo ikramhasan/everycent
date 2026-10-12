@@ -928,10 +928,13 @@ Rent/Mortgage; memos `x-f-*`), in "C4 Clean" and in "ihni7's Plan":
   card under its group heading. Built.
 - **Several payment categories selected** (Card E2, Card E3): the usual Auto-Assign labels. As
   built.
-- **Cost to Be Me and repeating custom targets (open, EVERYCENT-120):** a custom "Fill up to $600"
-  due Mar 31 2027 counts its $100.00 share one-time and as a yearly refill, but $600.00 once it
-  repeats every month (October's Targets $410.00 → $910.00; the ask stayed $100.00). A set aside
-  repeating every month (F D, $60.00 by Dec 31) counted its $20.00 share.
+- **Cost to Be Me and repeating custom targets (settled 2026-10-12, EVERYCENT-120):** a custom
+  Fill up repeating every month counts its full amount in October's Targets, whatever its due date
+  (Rent/Mortgage in "C5 First FS2", $600: by Mar 31 2027 it asked $100.00 and counted $600.00; by
+  Nov 30 it asked $300.00 and counted $600.00). Every 2 months it counted its share ($100.00 by Mar
+  31), as did a set aside repeating every month ($300.00 by Nov 30), a Fill up repeating every year
+  ($300.00 by Nov 30) and a one-time or yearly Fill up. Built. Rent/Mortgage was left as a Fill up
+  of $600 every year by Nov 30.
 
 ## Snooze and progress bars (phase 8d)
 

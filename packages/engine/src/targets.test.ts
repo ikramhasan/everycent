@@ -294,6 +294,22 @@ describe("what's over and the month's targets", () => {
       dueDate: "2026-11-01",
     });
     expect(need([carried(70_00n)], refill)?.monthAmount).toBe(465_00n); // T8 G
+    // A custom Fill up repeating every month counts its full amount; every 2 months, or set
+    // aside every month, its share (YNAB "C5 First FS2" Rent/Mortgage, $600 by Nov 30).
+    const custom = (behavior: CategoryTarget["behavior"], repeatEvery: number) =>
+      target(behavior, "2026-10", {
+        cadence: "custom",
+        amount: 600_00n,
+        dueDate: "2026-11-30",
+        repeatEvery,
+        repeatUnit: "month",
+      });
+    expect(need([], custom("refill", 1))).toMatchObject({
+      underfunded: 300_00n,
+      monthAmount: 600_00n,
+    });
+    expect(need([], custom("refill", 2))?.monthAmount).toBe(300_00n);
+    expect(need([], custom("set_aside", 1))?.monthAmount).toBe(300_00n);
     const eventually = target("balance", "2026-10", { cadence: "custom", amount: 300_00n });
     // What it holds above the balance is over (YNAB "C5 First" Medical: $10.00, $30.00 assigned
     // → $20.00; $15.00 spent → $5.00).

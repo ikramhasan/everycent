@@ -289,11 +289,17 @@ export function targetNeed(
     if (period.past) return pastDue(needed, funded, period.due);
     // What was in before this month's Assigned.
     const share = shareOf(needed - (funded - figures.assigned), monthsLeft);
+    // A Fill up repeating every month counts in full in the month's targets, as a monthly refill
+    // does, whatever its due date (YNAB, 2026-10-12, "C5 First FS2": $600 by Nov 30 or by Mar 31
+    // counted $600.00 while asking $300.00 or $100.00; every 2 months, or set aside every month,
+    // counted the share).
+    const everyMonth =
+      target.cadence === "custom" && target.repeatEvery === 1 && target.repeatUnit === "month";
     return {
       needed,
       funded,
       underfunded: under(share, figures.assigned),
-      monthAmount: share > 0n ? share : 0n,
+      monthAmount: everyMonth ? needed : share > 0n ? share : 0n,
       overfunded: over(figures, share),
       dueDate: period.due,
     };
