@@ -161,3 +161,20 @@ describe("progressBar for a weekly target that starts mid-month", () => {
     ).toEqual(["33.3[]", "33.3[]", "33.3[]"]);
   });
 });
+
+// YNAB "C4 Clean", 2026-10-12: C5 RO's bar in October (57.1% rollover, 42.9% period).
+describe("progressBar for a dated set aside with money left from its last period", () => {
+  it("draws the rollover first, then the period", () => {
+    const dated = { ...target("set_aside", "custom", 60_00n), dueDay: null };
+    expect(
+      drawn(
+        progressBar(fig(80_00n, 0n), dated, need(60_00n, 0n, 30_00n), false, "2026-10", 80_00n),
+      ),
+    ).toEqual(["rollover 57.1[available 100]", "42.8[]"]);
+    expect(
+      drawn(
+        progressBar(fig(110_00n, 0n), dated, need(60_00n, 30_00n, 0n), false, "2026-11", 80_00n),
+      ),
+    ).toEqual(["rollover 57.1[available 100]", "42.8[available 50]"]);
+  });
+});

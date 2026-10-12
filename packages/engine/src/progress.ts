@@ -46,6 +46,8 @@ export function progressBar(
   need: TargetNeed | null,
   snoozed: boolean,
   month: BudgetMonth,
+  /** A dated set aside target's money left from its last period (`periodRollover`). */
+  rollover = 0n,
 ): ProgressBar {
   const spent = figures.activity < 0n ? -figures.activity : 0n;
   const positive = (v: bigint) => (v > 0n ? v : 0n);
@@ -62,13 +64,9 @@ export function progressBar(
     weekly = target.cadence === "weekly";
     const setAsideMonthly =
       target.behavior === "set_aside" && (weekly || target.cadence === "monthly");
-    if (setAsideMonthly && figures.carried > 0n) {
-      sections.push({
-        kind: "rollover",
-        size: figures.carried,
-        money: figures.carried,
-        segments: [],
-      });
+    const carriedIn = setAsideMonthly ? figures.carried : rollover;
+    if (carriedIn > 0n) {
+      sections.push({ kind: "rollover", size: carriedIn, money: carriedIn, segments: [] });
     }
     if (weekly) {
       const weeks = weeklyDays(target, month).length;

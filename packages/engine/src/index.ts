@@ -132,6 +132,7 @@ export {
   type CategoryTarget,
   isPaymentTarget,
   PAYMENT_TARGET_CADENCES,
+  periodRollover,
   TARGET_BEHAVIORS,
   TARGET_CADENCES,
   TARGET_REPEAT_UNITS,

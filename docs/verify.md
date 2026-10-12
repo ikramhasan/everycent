@@ -969,6 +969,14 @@ bars were read from the page (section `flex-basis`, segment widths and classes).
   4px between sections, a 1px inset border; a lone section is rounded, otherwise only the bar's
   ends (and the extra section on its own). Built.
 
+### Rollover of a dated set aside target (settled 2026-10-12)
+
+- "C4 Clean" C5 RO: set aside $60.00 every 2 months due Sep 30, $80.00 assigned in September. In
+  October the bar has a first section for the $80.00 left from the last period (57.1%) and one for
+  the period's $60.00 (42.9%); with $30.00 assigned in October the period section is half full. In
+  November (same period) the first section is still $80.00, not the $110.00 carried in, and the
+  row reads "$30.00 more needed by November 30th". Built (EVERYCENT-28).
+
 ### Weekly targets that start mid-month (settled 2026-10-12)
 
 - A weekly target created in the web app, or a target changed to weekly, starts on the day it's

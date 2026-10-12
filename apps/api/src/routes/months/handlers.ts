@@ -42,6 +42,7 @@ import {
   monthOf,
   type ProgressBar,
   paymentFunding,
+  periodRollover,
   progressBar,
   readyToAssign,
   spendingFunding,
@@ -718,7 +719,16 @@ async function monthState(
       },
       need,
       snoozed,
-      bar: payment ? null : progressBar(figures, target, need, snoozed, month),
+      bar: payment
+        ? null
+        : progressBar(
+            figures,
+            target,
+            need,
+            snoozed,
+            month,
+            target ? periodRollover(entries, target, month) : 0n,
+          ),
       payment,
       funding,
       upcoming: coming,

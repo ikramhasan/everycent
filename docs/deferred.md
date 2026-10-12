@@ -93,9 +93,7 @@ before starting a roadmap phase** and remove an entry once it's done.
   in Underfunded, Reduce Overfunding and the month's targets. Not built there: the form's "Making
   minimum payments?" help link (YNAB's help center; everycent has none), "Cover Overspent
   Categories", and loan "Monthly Debt Payment" targets (they need 7f's loan activity).
-- Not yet: the rollover section of a dated "Set aside another…" target (support.ynab.com: money
-  left at the end of the last target period gets its own first section; drawn as one section for
-  now); YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
+- Not yet: YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
 - Underfunded funds upcoming scheduled transactions with the due-date step (10b). Among card
   payments, those with a scheduled payment go first; YNAB then puts card payment targets before
   plain Underfunded alerts, which everycent doesn't order yet.

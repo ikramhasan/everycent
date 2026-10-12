@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MonthFigures } from "./months";
-import { type CategoryTarget, targetNeed, targetPercent, weekdaysIn, weeklyDays } from "./targets";
+import {
+  type CategoryTarget,
+  periodRollover,
+  targetNeed,
+  targetPercent,
+  weekdaysIn,
+  weeklyDays,
+} from "./targets";
 
 const target = (
   behavior: CategoryTarget["behavior"],
@@ -382,6 +389,30 @@ describe("payment targets", () => {
     const h = [card("2026-10", 50_00n)];
     expect(pay(h, monthly, 105_00n)).toMatchObject({ underfunded: 0n, overfunded: 20_00n });
     expect(pay(h, monthly, 105_00n, "2026-11")?.underfunded).toBe(30_00n);
+  });
+});
+
+// YNAB "C4 Clean", 2026-10-12: C5 RO, set aside $60 every 2 months due Sep 30, $80 in September.
+describe("periodRollover", () => {
+  const ro = target("set_aside", "2026-09", {
+    cadence: "custom",
+    amount: 60_00n,
+    dueDate: "2026-09-30",
+    repeatEvery: 2,
+    repeatUnit: "month",
+  });
+  const h = [f("2026-09", 80_00n), f("2026-10", 30_00n)];
+
+  it("is what the last period left, through the whole new period", () => {
+    expect(periodRollover(h, ro, "2026-10")).toBe(80_00n);
+    expect(periodRollover(h, ro, "2026-11")).toBe(80_00n);
+    // "$30.00 more needed by November 30th".
+    expect(need(h, ro, "2026-11")).toMatchObject({ funded: 30_00n, underfunded: 30_00n });
+  });
+
+  it("is zero for other targets", () => {
+    expect(periodRollover(h, { ...ro, behavior: "refill" }, "2026-10")).toBe(0n);
+    expect(periodRollover(h, target("set_aside", "2026-09"), "2026-10")).toBe(0n);
   });
 });
 

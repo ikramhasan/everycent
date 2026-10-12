@@ -168,6 +168,27 @@ function periodOf(target: CategoryTarget, dueDate: string, month: BudgetMonth) {
   return { due: clampDay(due), dueMonth, start: addMonths(dueMonth, 1 - step), past: false };
 }
 
+/**
+ * What a dated "Set aside another…" target (yearly, custom) had left when its last period ended:
+ * the money carried into the current period's first month, drawn as the bar's first section
+ * (support.ynab.com "Progress Bars"; YNAB, 2026-10-12, "C4 Clean" C5 RO, $60 every 2 months due
+ * Sep 30 with $80 assigned in September: $80 rollover in October and still $80 in November, with
+ * $30 assigned in October in the period's section). Zero for other targets.
+ */
+export function periodRollover(
+  history: readonly MonthFigures[],
+  target: CategoryTarget,
+  month: BudgetMonth,
+): bigint {
+  const dated = target.cadence === "yearly" || target.cadence === "custom";
+  if (!dated || target.behavior !== "set_aside" || !target.dueDate) return 0n;
+  const period = periodOf(target, target.dueDate, month);
+  if (!period || period.past) return 0n;
+  const first =
+    period.start === null || period.start < target.startMonth ? target.startMonth : period.start;
+  return categoryMonth(history, first > month ? month : first).carried;
+}
+
 /** A YYYY-MM-DD whose day is past its month's end moves to the last day (Jan 31 → Feb 28). */
 function clampDay(date: string) {
   const month = monthOf(date);
