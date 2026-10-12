@@ -307,6 +307,34 @@ describe("fresh start", () => {
     });
   });
 
+  // YNAB "C5 First FS", 2026-10-12: the copy of a weekly target begun that day asked the same.
+  it("keeps a weekly target's start day in the same month", async () => {
+    const { owner, budget, base } = await setup();
+    const categories = async (b: string) =>
+      (
+        await json<{ groups: Group[] }>(
+          await send("GET", `/v1/budgets/${b}/categories`, owner.cookie),
+        )
+      ).groups.flatMap((g) => g.categories);
+    const [rent] = await categories(budget.id);
+    if (!rent) throw new Error("starter data missing");
+    await send("PUT", `${base}/categories/${rent.id}/target`, owner.cookie, {
+      cadence: "weekly",
+      behavior: "set_aside",
+      amount: "1000",
+      dueDay: 6,
+      month: TODAY.slice(0, 7),
+      today: `${TODAY.slice(0, 7)}-12`,
+    });
+    const fresh = await json<Budget>(await freshStart(budget.id, owner.cookie));
+    const copy = (await categories(fresh.id)).find((c) => c.name === rent.name);
+    const month = await json<{ categories: { categoryId: string; target: { needed: string } }[] }>(
+      await send("GET", `/v1/budgets/${fresh.id}/months/2026-10?today=${TODAY}`, owner.cookie),
+    );
+    // Saturdays from the 12th of October 2026: the 17th, 24th and 31st.
+    expect(month.categories.find((c) => c.categoryId === copy?.id)?.target.needed).toBe("3000");
+  });
+
   it("starts budgets created from scratch with the template", async () => {
     const { owner, base } = await setup();
     const groups = (

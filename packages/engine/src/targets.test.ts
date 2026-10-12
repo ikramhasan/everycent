@@ -364,7 +364,14 @@ describe("payment targets", () => {
 
   it("pay off by date asks the rest in its month and nothing after it", () => {
     expect(pay([], payoff("2026-10-01"), 120_00n)?.underfunded).toBe(120_00n);
-    expect(pay([], payoff("2026-09-01"), 120_00n)).toBeNull();
+    // YNAB "C5 First", 2026-10-12: F Card by October still showed in November, asking nothing.
+    expect(pay([card("2026-10", 1_00n)], payoff("2026-09-01"), 2_00n)).toMatchObject({
+      needed: 2_00n,
+      funded: 1_00n,
+      underfunded: 0n,
+      monthAmount: 0n,
+      dueDate: "2026-09-01",
+    });
   });
 
   it("pay specific amount monthly asks the amount each month, whatever was paid or spent", () => {

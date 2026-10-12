@@ -8,6 +8,7 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
+import { serverToday } from "../../lib/ledger";
 import { requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
@@ -129,8 +130,8 @@ const SetTargetSchema = z
     }),
   )
   .superRefine((v, ctx) => {
-    // YNAB keeps no pay-off target dated before the month it's saved from (docs/verify.md).
-    if (v.cadence === "payoff_by_date" && v.dueMonth < v.month) {
+    // YNAB drops a pay-off target saved with a month before today's (docs/verify.md).
+    if (v.cadence === "payoff_by_date" && v.dueMonth < (v.today ?? serverToday()).slice(0, 7)) {
       ctx.addIssue({ code: "custom", path: ["dueMonth"], message: "Choose this month or later" });
     }
     if (v.cadence !== "custom") return;

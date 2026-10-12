@@ -214,9 +214,18 @@ describe("credit card payment targets", () => {
     expect((await json<ErrorBody>(spending)).error.code).toBe("MANAGED_CATEGORY");
     const onRent = await setTarget(rent.id, { cadence: "payment_monthly", amount: "3000" });
     expect(onRent.status).toBe(409);
-    // YNAB keeps no pay-off target dated before this month.
+    // YNAB keeps no pay-off target dated before this month, even saved from that month.
     expect(
       (await setTarget(payment.id, { cadence: "payoff_by_date", dueMonth: "2026-09" })).status,
+    ).toBe(400);
+    expect(
+      (
+        await setTarget(payment.id, {
+          cadence: "payoff_by_date",
+          dueMonth: "2026-09",
+          month: "2026-09",
+        })
+      ).status,
     ).toBe(400);
     expect((await setTarget(payment.id, { cadence: "payment_monthly", amount: "0" })).status).toBe(
       400,

@@ -119,7 +119,6 @@ export function TargetSection({
     return (
       <PaymentTargetEditor
         target={target}
-        month={payment.month}
         parse={parse}
         toInput={toInput}
         onCancel={() => setEditing(false)}
@@ -177,7 +176,7 @@ export function TargetSection({
   }
 
   const percent = targetPercent({ needed: BigInt(need.needed), funded: BigInt(need.funded) });
-  const message = targetMessage(target, need, format);
+  const message = targetMessage(target, need, format, payment?.month);
   const met = BigInt(need.funded) >= BigInt(need.needed);
   const kind = paymentTargetKind(target);
   const headingAmount = format(
@@ -680,7 +679,6 @@ const nextMonthValue = () => firstOfNextMonth().slice(0, 7);
  */
 function PaymentTargetEditor({
   target,
-  month: screenMonth,
   parse,
   toInput,
   onSave,
@@ -688,8 +686,6 @@ function PaymentTargetEditor({
   onDelete,
 }: {
   target: CategoryTarget | null;
-  /** The month it's saved from, YYYY-MM: the earliest month to pay off by. */
-  month: string;
   parse: (text: string) => bigint | string;
   toInput: (amount: string) => string;
   onSave: (input: TargetInput) => Promise<void>;
@@ -721,8 +717,9 @@ function PaymentTargetEditor({
       if (parsed <= 0n) return setError("Enter how much you want to pay each month.");
       input = { cadence, amount: parsed.toString() };
     } else {
-      // YNAB keeps no pay-off target dated before the month it's saved from (docs/verify.md).
-      if (dueMonth < screenMonth) return setError("Choose this month or later.");
+      // YNAB drops a pay-off target saved with a month before today's, even from an earlier
+      // month (2026-10-12, "C5 First": September saved from September), so it's refused.
+      if (dueMonth < todayIso().slice(0, 7)) return setError("Choose this month or later.");
       input = { cadence, dueMonth };
     }
     setError(null);

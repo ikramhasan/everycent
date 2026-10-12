@@ -255,7 +255,12 @@ export function targetLines(
  * or nothing (a balance target without a date, a one-time target past its due month). `prompt` is
  * the amount the Assign button adds.
  */
-export function targetMessage(target: CategoryTarget, need: TargetNeed, format: Format) {
+export function targetMessage(
+  target: CategoryTarget,
+  need: TargetNeed,
+  format: Format,
+  month?: BudgetMonth,
+) {
   const status = targetStatus(need);
   // Past a one-time target's due month YNAB shows no message unless it's met (C5 U1, 2026-10-12).
   if (need.pastDue && status !== "met") return null;
@@ -275,6 +280,11 @@ export function targetMessage(target: CategoryTarget, need: TargetNeed, format: 
       : { text: "You're on track to meet your target!" };
   }
   const amount = format(need.underfunded);
+  // In its own month a pay-off target asks to meet it (YNAB, 2026-10-12: F Card by October read
+  // "Assign $1.00 to meet your target"); custom targets keep "this month to stay on track".
+  if (target.cadence === "payoff_by_date" && month && need.dueDate?.slice(0, 7) === month) {
+    return { prompt: amount, suffix: " to meet your target" };
+  }
   if (isDated(target)) return { prompt: amount, suffix: " this month to stay on track" };
   return {
     prompt: `${amount}${BigInt(need.funded) > 0n ? " more" : ""}`,

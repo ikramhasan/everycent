@@ -162,6 +162,21 @@ describe("target wording", () => {
     expect(targetMessage(once, past("3000"), format)).toBeNull();
   });
 
+  // YNAB "C5 First", 2026-10-12.
+  it("asks to meet a pay-off target in its own month", () => {
+    const payoff = target({ cadence: "payoff_by_date", dueDate: "2026-10-01", amount: "0" });
+    const n = need("200", "100", "100", "2026-10-01");
+    expect(targetMessage(payoff, n, format, "2026-10")).toEqual({
+      prompt: "$1.00",
+      suffix: " to meet your target",
+    });
+    expect(targetMessage(payoff, { ...n, dueDate: "2026-12-01" }, format, "2026-10")).toEqual({
+      prompt: "$1.00",
+      suffix: " this month to stay on track",
+    });
+    expect(targetMessage(payoff, need("200", "100", "0", "2026-10-01", true), format)).toBeNull();
+  });
+
   it("labels the inspector lines and message per kind", () => {
     const yearly = target({ cadence: "yearly", dueDate: "2026-12-30" });
     const n = need("100000", "0", "33334", "2026-12-30");

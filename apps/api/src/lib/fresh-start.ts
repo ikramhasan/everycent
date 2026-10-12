@@ -181,6 +181,9 @@ export async function copyIntoFreshStart(
         repeatEvery: target.repeatEvery,
         repeatUnit: target.repeatUnit,
         startMonth: `${monthOf(date)}-01`,
+        // A weekly target begun this month keeps its start day (YNAB, 2026-10-12: "C5 First FS"
+        // still asked F D for the Saturdays from the 12th).
+        startDay: monthOf(target.startMonth) === monthOf(date) ? target.startDay : null,
       });
     }
   }

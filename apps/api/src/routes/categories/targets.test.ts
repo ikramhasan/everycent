@@ -145,6 +145,9 @@ describe("category targets", () => {
     await setTarget(rent.id, { amount: "9000", month: "2026-10" });
     await setTarget(rent.id, { amount: "9000", month: "2026-11" });
     expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+    // A new due day alone isn't a change (YNAB "C5 First" F A, 2026-10-12).
+    await setTarget(rent.id, { amount: "9000", dueDay: 15, month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
   });
 
   it("set aside counts this month's Assigned (YNAB T8 B, C, E)", async () => {

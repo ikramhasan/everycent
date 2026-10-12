@@ -308,7 +308,9 @@ export function targetNeed(
  *   left up to the target's month and rounded up, as for dated targets ($100.00 by December from
  *   October: $33.34; $125.00 by March: $20.84). Money carried in counts in a future month too (E1
  *   in November: ($125.00 − $50.00) ÷ 5 = $15.00).
- * - After the target's month it asks for nothing (YNAB keeps no target with a past date).
+ * - After the target's month it stays on and asks for nothing (YNAB, 2026-10-12, "C5 First": F Card
+ *   paying off by October still showed "Pay off $2.00 … By Oct 2026", 50%, in November, without a
+ *   message or Underfunded). A target saved with a month already past is dropped (refused here).
  */
 function payoffNeed(
   figures: CategoryMonth,
@@ -318,10 +320,10 @@ function payoffNeed(
 ): TargetNeed | null {
   if (!target.dueDate) return null;
   const dueMonth = monthOf(target.dueDate);
-  if (month > dueMonth) return null;
   const left = owed - figures.fundedSpending;
   const needed = left > 0n ? left : 0n;
   const funded = figures.available - figures.fundedSpending;
+  if (month > dueMonth) return pastDue(needed, funded, target.dueDate);
   const share = shareOf(
     needed - (funded - figures.assigned),
     BigInt(monthsThrough(month, dueMonth)),

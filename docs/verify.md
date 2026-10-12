@@ -1028,19 +1028,33 @@ from Brac). E1's target was later saved with a past date, which removed it. Buil
 - Saving a pay-off month before the current month left no target (API `goal_type` null; the
   inspector offered "Create a Debt Payoff Target" again).
 
-### Details of 8e not seen in YNAB
+### After the pay-off month, Underfunded's order, red cards, Paid labels and past months (settled 2026-10-12)
 
-- **Question:** (1) What a pay-off target shows in months after its month (April 2027 for E1's
-  March) and in a month when Available covers the whole balance ("You've met your target!"?).
-  (2) Whether a targeted payment category keeps its place last in Underfunded's funding order.
-  (3) The Total Underfunded of a paid-off card that's red (owes nothing, −$10.00). (4) What
-  "Paid Last Month" and "Average Paid" add up. (5) Whether the pill of a payment target is yellow
-  in past months (spending targets are). (6) The help text behind "Making minimum payments?".
-- **Built so far (before this rule):** (1) no target after its month; met reads "You've met your
-  target!" as for other targets; a past month is refused when saving ("Choose this month or
-  later"), since YNAB drops the target; (2) last, with the other card payments; (3) $0.00, as
-  before; (4) the usual Spent Last Month / Average Spent amounts, relabelled; (5) the usual target
-  colours in every month; (6) the link isn't built (everycent has no help center).
+Checked in YNAB's web app and API in "C5 First" (F Card) and "ihni7's Plan" (Card X, Citi, Card E3):
+
+- **A pay-off target after its month stays on**, asking nothing: F Card "by October" in November
+  read "Pay off $2.00", "By Oct 2026", 50%, its lines, no message, no Underfunded option, green
+  pill. Built. **In its own month** it reads "Assign $1.00 to meet your target" (custom targets due
+  this month keep "… this month to stay on track"). Built. Covered in full it reads "Cheers to a
+  debt-free future!" (checked 2026-10-11).
+- **A pay-off month before today's month is dropped**, even saved from that month (September saved
+  from September left "Create Target"). everycent refuses it ("Choose this month or later.") by
+  today's month now, not the month on screen.
+- **Order:** targeted card payments come with the card payments, last (support.ynab.com
+  "Underfunded": "Credit Card payoff targets, any Credit Card Payment Scheduled Transactions, and
+  Credit Card Payment categories with an Underfunded alert"). As built; the order among card
+  payments is in docs/deferred.md.
+- **A paid-off card that's red** (Card X, owes nothing, −$10.00): "You sent more to Card X than you
+  had set aside for the payment.", no Total Underfunded line, Underfunded $10.00. As built.
+- **Paid Last Month / Average Paid** count the payment category's outflow: F Card with a $3.00
+  September payment read $3.00 and $3.00 (then $1.50 over two months); Citi with +$5.00 of funded
+  spending in September read $0.00. As built (the spending amounts, relabelled).
+- **Past months:** an underfunded payment target is yellow with a pie there too (F Card in September,
+  "Assign $6.00 more to meet your target"); without a target the payment pill isn't yellow in a past
+  month and there's no Payment alert, only "Create Target". As built. A card that owed nothing
+  (Card E3 before it existed) asked $0.00: EVERYCENT-121.
+- "Making minimum payments?" and "Why am I seeing this warning?" link to YNAB's help center;
+  everycent has none, so they aren't built.
 
 ## Targets overview and history (phase 8f)
 
@@ -1074,10 +1088,13 @@ times, now a monthly refill of $90.00 from October); the test plan's expected in
   current month."). Before a target's start month the category shows no target (API: no
   `goal_under_funded`).
 
-### Details of 8f not seen in YNAB
+### Fresh start income, due-day changes and snoozed edits (settled 2026-10-12)
 
-- **Question:** (1) Whether a fresh start copies the expected income. (2) Whether changing only a
-  target's snooze or due day counts as a change (only amount and type were seen). (3) Whether
-  editing a target into a month that's snoozed keeps the snooze.
-- **Built so far (before this rule):** (1) not copied; (2) any field of the target counts (the
-  snooze isn't a field of it); (3) the snooze is kept.
+- **A fresh start doesn't copy the expected income** ("C5 First" with $1,500.00 → "C5 First FS"
+  offered "Enter your expected income"). As built. It keeps a weekly target's start day (F D still
+  asked $30.00 for the Saturdays from the 12th). Built.
+- **A new due day alone isn't a change:** F A, started in September, moved from the end of the month
+  to the 15th from October and kept its September start (`goal_creation_month`). Built (any other
+  field still restarts it).
+- **Editing a snoozed target keeps the snooze:** T8 E, snoozed in October, changed to $110.00 (API)
+  and back to $100.00 (web) kept its Zz. As built.

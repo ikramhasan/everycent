@@ -279,12 +279,13 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   };
   // YNAB (docs/verify.md "Targets overview and history"): a changed target starts in the month
   // it's saved from, so earlier months show none; saving it unchanged only moves the start back.
+  // A new due day (or weekday) alone isn't a change (2026-10-12, "C5 First": F A moved from the
+  // end of the month to the 15th kept its September start).
   const unchanged =
     existing &&
     existing.cadence === values.cadence &&
     existing.behavior === values.behavior &&
     existing.amount === values.amount &&
-    existing.dueDay === values.dueDay &&
     existing.dueDate === values.dueDate &&
     existing.repeatEvery === values.repeatEvery &&
     existing.repeatUnit === values.repeatUnit;
