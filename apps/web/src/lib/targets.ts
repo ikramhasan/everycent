@@ -124,7 +124,7 @@ export function targetHeading(target: CategoryTarget, amount: string) {
           ? " Each Year"
           : repeatPhrase(target);
   if (target.behavior === "set_aside") return `Set Aside Another ${amount}${suffix}`;
-  // A custom target's "Fill up to" heading wasn't seen in YNAB (docs/verify.md).
+  // YNAB, 2026-10-12 (C5 U1): "Fill Up to $200.00", then "By Sep 8 2026".
   return target.cadence === "custom"
     ? `Fill Up to ${amount}${suffix}`
     : `Refill Up to ${amount}${suffix}`;
@@ -160,7 +160,8 @@ export function targetStatus(need: TargetNeed) {
 }
 
 /**
- * The note under a category's name (YNAB, docs/verify.md): "Funded" when met; "On Track" when this
+ * The note under a category's name (YNAB, docs/verify.md): "Funded" when met or past a one-time
+ * target's due month; "On Track" when this
  * month's share of a dated target is in; otherwise "$60.00 more needed by the 31st", "… this month"
  * (weekly, and dated targets before their due month), "… by December 30th" (a dated target's due
  * month), "$300.00 needed eventually" (a balance target without a date). Set aside always says
@@ -173,7 +174,9 @@ export function targetRowNote(
   format: Format,
 ) {
   const status = targetStatus(need);
-  if (status === "met") return { met: true, text: "Funded" };
+  // A one-time target past its due month reads like a met one (YNAB, 2026-10-12: C5 P1 "Funded.
+  // Spent $10.00 of $30.00", C5 U1 "Funded"); `categoryRowNote` drops it when nothing's in.
+  if (status === "met" || need.pastDue) return { met: true, text: "Funded" };
   const more = target.behavior === "set_aside" || BigInt(need.funded) > 0n ? " more" : "";
   if (status === "onTrack") {
     if (target.behavior === "balance" && !target.dueDate) {
@@ -249,10 +252,13 @@ export function targetLines(
 /**
  * The inspector's message: "You've met your target!", "You're on track to meet your target!",
  * "Assign $333.34 this month to stay on track" (dated), "Assign $60.00 more to meet your target",
- * or nothing (a balance target without a date). `prompt` is the amount the Assign button adds.
+ * or nothing (a balance target without a date, a one-time target past its due month). `prompt` is
+ * the amount the Assign button adds.
  */
 export function targetMessage(target: CategoryTarget, need: TargetNeed, format: Format) {
   const status = targetStatus(need);
+  // Past a one-time target's due month YNAB shows no message unless it's met (C5 U1, 2026-10-12).
+  if (need.pastDue && status !== "met") return null;
   if (status === "met") {
     // YNAB, 2026-10-11: Cards T2 (still owing) and T7 (paid off); Pay Specific Amount Monthly
     // keeps the usual words (Card T3).
@@ -350,7 +356,8 @@ type MonthBar = NonNullable<components["schemas"]["ProgressBar"]>;
 /**
  * The note under a category that isn't overspent (YNAB, docs/verify.md "Snooze and progress
  * bars"). With a target that's working this month: its note ("Funded", "$60.00 more needed by the
- * 31st", …), a met one adding what was spent of its money ("Funded. Spent $30.00 of $100.00").
+ * 31st", …), a met one adding what was spent of its money ("Funded. Spent $30.00 of $100.00"),
+ * or "Fully Spent" once all of it is.
  * Without one (or snoozed): "Fully Spent" when spending used all the money, "Spent $7.00 of $20.00"
  * while some is left, nothing otherwise. `strong` is the part YNAB sets in bold.
  */
@@ -375,6 +382,10 @@ export function categoryRowNote(
   if (target && need && !need.snoozed) {
     const note = targetRowNote(target, need, month, format);
     if (!note.met) return { strong: "", rest: note.text };
+    // YNAB, 2026-10-12: a target past its due month with nothing in it (C5 U1 at $0.00) has no
+    // note; a met one whose money is all spent reads "Fully Spent" (C5 M0, $50.00 of $50.00).
+    if (need.pastDue && money === 0n) return null;
+    if (spent > 0n && left === 0n) return { strong: "", rest: "Fully Spent" };
     return { strong: note.text, rest: spent > 0n ? `. ${spentOf}` : "" };
   }
   if (spent === 0n) return null;

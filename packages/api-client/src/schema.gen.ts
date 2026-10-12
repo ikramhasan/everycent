@@ -1641,11 +1641,11 @@ export interface components {
             /** @description This month's payments to the card, negative */
             paymentsMade: string;
         } | null;
-        /** @description The category's target this month; null without one, before it starts or after a one-time target's due month */
+        /** @description The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month */
         TargetNeed: {
             /** @description What the target needs: this month's amount (weekly, monthly) or the total by its due date (yearly, custom), or the balance to reach */
             needed: string;
-            /** @description What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative */
+            /** @description What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on), or Available (balance); can be negative */
             funded: string;
             /** @description What's still to assign this month to stay on track; 0 when this month's share is in */
             underfunded: string;
@@ -1654,6 +1654,8 @@ export interface components {
              * @description Yearly and custom: the due date of the period this month is in
              */
             dueDate: string | null;
+            /** @description A one-time target after its due month: still shown, asking for nothing (underfunded 0) */
+            pastDue: boolean;
             /** @description Snoozed this month: it asks for nothing more (Underfunded leaves it out) */
             snoozed: boolean;
         } | null;

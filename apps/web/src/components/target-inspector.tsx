@@ -191,14 +191,16 @@ export function TargetSection({
         <p className="font-medium text-sm">{targetHeading(target, headingAmount)}</p>
         <p className="text-muted-foreground text-xs">{targetDueLine(target, need)}</p>
       </div>
-      {met ? <MetRing /> : <ProgressRing percent={percent} />}
+      {met ? (
+        <MetRing />
+      ) : (
+        // Green once this month asks for nothing more (YNAB, 2026-10-12: T8 F on track, C5 U1 past
+        // its due date), yellow while it does.
+        <ProgressRing percent={percent} green={need.underfunded === "0"} />
+      )}
       {message && "text" in message && (
-        <p
-          className={cn(
-            "rounded-md p-3 text-center font-medium text-sm",
-            met && "bg-green-100 text-green-950 dark:bg-green-900/40 dark:text-green-50",
-          )}
-        >
+        // Met and on track both sit in green (YNAB T8 F, T8 L).
+        <p className="rounded-md bg-green-100 p-3 text-center font-medium text-green-950 text-sm dark:bg-green-900/40 dark:text-green-50">
           {message.text}
         </p>
       )}
@@ -288,7 +290,7 @@ function MetRing() {
   );
 }
 
-function ProgressRing({ percent }: { percent: number }) {
+function ProgressRing({ percent, green }: { percent: number; green: boolean }) {
   const r = 26;
   const c = 2 * Math.PI * r;
   return (
@@ -308,7 +310,7 @@ function ProgressRing({ percent }: { percent: number }) {
           strokeWidth="6"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - percent / 100)}
-          className="stroke-yellow-400"
+          className={green ? "stroke-green-500" : "stroke-yellow-400"}
         />
       </svg>
       <span className="absolute inset-0 grid place-items-center font-semibold text-sm">

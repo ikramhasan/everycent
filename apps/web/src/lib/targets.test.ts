@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CategoryTarget,
+  categoryRowNote,
   dueDayIn,
   ordinal,
   payoffAmount,
@@ -31,7 +32,22 @@ const need = (
   funded: string,
   underfunded: string,
   dueDate: string | null = null,
-): TargetNeed => ({ needed, funded, underfunded, dueDate, snoozed: false });
+  pastDue = false,
+): TargetNeed => ({ needed, funded, underfunded, dueDate, pastDue, snoozed: false });
+/** A one-section bar holding `spent` and `left`. */
+const bar = (spent: string, left: string) => ({
+  tone: "funded" as const,
+  sections: [
+    {
+      kind: "target" as const,
+      size: "0",
+      segments: [
+        { kind: "spent" as const, amount: spent },
+        { kind: "available" as const, amount: left },
+      ],
+    },
+  ],
+});
 
 describe("target wording", () => {
   it("writes ordinals", () => {
@@ -118,6 +134,32 @@ describe("target wording", () => {
     expect(
       note({ ...eventually, dueDate: "2026-12-01" }, need("30000", "0", "10000", "2026-12-01")),
     ).toBe("$100.00 needed this month");
+  });
+
+  // YNAB plan "C4 Clean", 2026-10-12.
+  it("writes met and past-due row notes with their spending", () => {
+    const row = (t: CategoryTarget, n: TargetNeed, spent: string, left: string) =>
+      categoryRowNote(t, n, bar(spent, left), "2026-10", format);
+    const monthly = target({ amount: "5000" });
+    // C5 M0: $50.00 assigned and spent.
+    expect(row(monthly, need("5000", "5000", "0"), "5000", "0")).toEqual({
+      strong: "",
+      rest: "Fully Spent",
+    });
+    expect(row(monthly, need("5000", "5000", "0"), "2000", "3000")).toEqual({
+      strong: "Funded",
+      rest: ". Spent $20.00 of $50.00",
+    });
+    const once = target({ cadence: "custom", amount: "10000", dueDate: "2026-09-15" });
+    const past = (funded: string) => need("10000", funded, "0", "2026-09-15", true);
+    // C5 P1: $30.00 assigned, $10.00 spent; C5 U1 with $40.00 and with nothing in it.
+    expect(row(once, past("3000"), "1000", "2000")).toEqual({
+      strong: "Funded",
+      rest: ". Spent $10.00 of $30.00",
+    });
+    expect(row(once, past("4000"), "0", "4000")).toEqual({ strong: "Funded", rest: "" });
+    expect(row(once, past("0"), "0", "0")).toBeNull();
+    expect(targetMessage(once, past("3000"), format)).toBeNull();
   });
 
   it("labels the inspector lines and message per kind", () => {

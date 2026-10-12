@@ -18,7 +18,13 @@ type Target = {
 };
 type Category = { id: string; name: string; target: Target | null };
 type Group = { id: string; kind: string | null; categories: Category[] };
-type Need = { needed: string; funded: string; underfunded: string; dueDate: string | null } | null;
+type Need = {
+  needed: string;
+  funded: string;
+  underfunded: string;
+  dueDate: string | null;
+  pastDue: boolean;
+} | null;
 type Month = { categories: { categoryId: string; available: string; target: Need }[] };
 type ErrorBody = { error: { code: string } };
 
@@ -254,6 +260,42 @@ describe("category targets", () => {
     });
     expect((await findCategory(phone.id))?.target?.dueDate).toBe("2026-12-01");
     expect((await need(phone.id, "2026-10"))?.underfunded).toBe("10000");
+  });
+
+  // YNAB plan "C4 Clean", 2026-10-12: C5 U1, C5 P1 (one-time, due in September) seen in October.
+  it("keeps a one-time target on past its due month, asking nothing; balance targets count Available", async () => {
+    const { rent, phone, setTarget, assign, spend, need } = await setup();
+    await setTarget(rent.id, {
+      cadence: "custom",
+      amount: "10000",
+      dueDate: "2026-09-15",
+      repeat: null,
+      dueDay: undefined,
+    });
+    expect(await assign(rent.id, "2026-10", "3000")).toHaveProperty("status", 200);
+    expect(await need(rent.id, "2026-10")).toMatchObject({
+      needed: "10000",
+      funded: "3000",
+      underfunded: "0",
+      dueDate: "2026-09-15",
+      pastDue: true,
+    });
+    // Balance: $40.00 carried in, $20.00 spent in October → $180.00 over three months.
+    await setTarget(phone.id, {
+      cadence: "custom",
+      behavior: "balance",
+      amount: "20000",
+      dueDate: "2026-12-01",
+      repeat: null,
+      dueDay: undefined,
+    });
+    await assign(phone.id, "2026-09", "4000");
+    await spend(phone.id, "2026-10-01", "-2000");
+    expect(await need(phone.id, "2026-10")).toMatchObject({
+      funded: "2000",
+      underfunded: "6000",
+      pastDue: false,
+    });
   });
 
   it("refuses cadence fields that don't fit", async () => {

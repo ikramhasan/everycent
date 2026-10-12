@@ -124,21 +124,24 @@ function periodMonths(target: CategoryTarget): number | null {
 
 /**
  * The period of a dated target that `month` falls in: its due date and first month. A repeating
- * target starts a new period the month after each due month; a one-time target has none after its
- * due month (null).
+ * target starts a new period the month after each due month. A one-time target stays in its only
+ * period after its due month (`past`), except a balance target, which has none then (null).
  */
 function periodOf(target: CategoryTarget, dueDate: string, month: BudgetMonth) {
   const firstDue = monthOf(dueDate);
   const step = periodMonths(target);
   if (step === null) {
-    return month <= firstDue ? { due: dueDate, dueMonth: firstDue, start: null } : null;
+    if (month <= firstDue) return { due: dueDate, dueMonth: firstDue, start: null, past: false };
+    return target.behavior === "balance"
+      ? null
+      : { due: dueDate, dueMonth: firstDue, start: null, past: true };
   }
   // Due months fall every `step` months from the first; take the first one at or after `month`.
   let k = 0;
   if (month > firstDue) k = Math.ceil((monthsThrough(firstDue, month) - 1) / step);
   const dueMonth = addMonths(firstDue, k * step);
   const due = `${dueMonth}-${dueDate.slice(8)}`;
-  return { due: clampDay(due), dueMonth, start: addMonths(dueMonth, 1 - step) };
+  return { due: clampDay(due), dueMonth, start: addMonths(dueMonth, 1 - step), past: false };
 }
 
 /** A YYYY-MM-DD whose day is past its month's end moves to the last day (Jan 31 → Feb 28). */
@@ -158,10 +161,14 @@ function clampDay(date: string) {
  * - Monthly and weekly: the month's amount (weekly: once per occurrence of its weekday). Set aside
  *   counts this month's Assigned; refill counts what was carried in plus this month's Assigned.
  * - Yearly and custom (dated): the period's total, spread over the months left up to the due month,
- *   rounding up. Set aside counts what was assigned in the period; refill and balance count what was
+ *   rounding up. Set aside counts what was assigned in the period; refill counts what was
  *   carried in plus this month's Assigned. This month's share is what's missing from the total
  *   before this month, divided by the months left; anything assigned this month counts against it.
- * - Balance without a date: never asks for money this month.
+ * - Balance counts the category's Available, this month's spending included (YNAB, 2026-10-12: C5
+ *   U1 with $40.00 carried in and $20.00 spent: Current Balance $20.00, $200.00 by December asked
+ *   $60.00). Without a date it never asks for money this month.
+ * - A one-time set aside or fill up target past its due month stays on, asking for nothing (YNAB,
+ *   2026-10-12: C5 U1 due Sep 8 and C5 P1 due Sep 15 seen in October); a balance target is gone.
  *
  * In a month after `currentMonth` (the user's month) carried money doesn't count for refill and
  * balance: leftover money only counts once the month begins.
@@ -181,6 +188,9 @@ export function targetNeed(
   if (target.cadence === "payoff_by_date") return payoffNeed(figures, target, month, owed);
   const carried = month <= currentMonth ? figures.carried : 0n;
   const holds = target.behavior !== "set_aside";
+  // Balance counts what the category holds: carried in, Assigned and this month's activity.
+  const holding =
+    target.behavior === "balance" ? carried + figures.assigned + figures.activity : null;
 
   if (
     target.cadence === "monthly" ||
@@ -209,7 +219,7 @@ export function targetNeed(
     // "Have a balance of…" eventually: tracked, never asked for this month.
     return {
       needed,
-      funded: carried + figures.assigned,
+      funded: holding ?? 0n,
       underfunded: 0n,
       monthAmount: 0n,
       overfunded: 0n,
@@ -221,10 +231,13 @@ export function targetNeed(
   const monthsLeft = BigInt(monthsThrough(month, period.dueMonth));
 
   if (holds) {
-    const share = shareOf(needed - carried, monthsLeft);
+    const funded = holding ?? carried + figures.assigned;
+    if (period.past) return pastDue(needed, funded, period.due);
+    // What was in before this month's Assigned.
+    const share = shareOf(needed - (funded - figures.assigned), monthsLeft);
     return {
       needed,
-      funded: carried + figures.assigned,
+      funded,
       underfunded: under(share, figures.assigned),
       monthAmount: share > 0n ? share : 0n,
       overfunded: over(figures, share),
@@ -238,6 +251,7 @@ export function targetNeed(
   for (const h of history) {
     if (h.month >= from && h.month < month) before += h.assigned;
   }
+  if (period.past) return pastDue(needed, before + figures.assigned, period.due);
   const share = shareOf(needed - before, monthsLeft);
   return {
     needed,
@@ -288,6 +302,16 @@ function payoffNeed(
     dueDate: target.dueDate,
   };
 }
+
+/** A one-time target after its due month: still shown, asking for nothing. */
+const pastDue = (needed: bigint, funded: bigint, dueDate: string): TargetNeed => ({
+  needed,
+  funded,
+  underfunded: 0n,
+  monthAmount: 0n,
+  overfunded: 0n,
+  dueDate,
+});
 
 const under = (needed: bigint, funded: bigint) => (funded < needed ? needed - funded : 0n);
 

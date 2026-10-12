@@ -787,6 +787,8 @@ export async function budgetMonthJson(
           funded: l.need.funded.toString(),
           underfunded: l.need.underfunded.toString(),
           dueDate: l.need.dueDate,
+          // Only a one-time target's due date can be before the month it's shown in.
+          pastDue: l.need.dueDate !== null && monthOf(l.need.dueDate) < month,
           snoozed: l.snoozed,
         },
         bar: l.bar && {

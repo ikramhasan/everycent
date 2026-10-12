@@ -158,14 +158,35 @@ describe("dated targets", () => {
     });
   });
 
-  it("stops asking after a one-time target's due month", () => {
+  // YNAB C5 U1 and C5 P1 (plan "C4 Clean", 2026-10-12), due in September, seen in October.
+  it("stops asking after a one-time target's due month, but keeps it on", () => {
     const once = target("set_aside", "2026-10", {
       cadence: "custom",
       amount: 300_00n,
       dueDate: "2026-11-30",
     });
     expect(need([], once)?.underfunded).toBe(150_00n);
-    expect(need([], once, "2026-12")).toBeNull();
+    expect(need([f("2026-10", 30_00n)], once, "2026-12")).toMatchObject({
+      needed: 300_00n,
+      funded: 30_00n,
+      underfunded: 0n,
+      monthAmount: 0n,
+      overfunded: 0n,
+      dueDate: "2026-11-30",
+    });
+    // P1: set aside $100.00 due Sep 15, $30.00 assigned in October: nothing over.
+    const p1 = { ...once, amount: 100_00n, dueDate: "2026-09-15" };
+    expect(need([f("2026-10", 30_00n)], p1)).toMatchObject({ funded: 30_00n, overfunded: 0n });
+    // U1: fill up to $200.00 due Sep 8 with $40.00 carried in: Funded $40.00, nothing asked.
+    const u1 = target("refill", "2026-10", {
+      cadence: "custom",
+      amount: 200_00n,
+      dueDate: "2026-09-08",
+    });
+    expect(need([f("2026-09", 40_00n)], u1)).toMatchObject({ funded: 40_00n, underfunded: 0n });
+    // A balance target past its month is gone (U1 with "by January 2026").
+    const pastBalance = { ...u1, behavior: "balance" as const, dueDate: "2026-01-01" };
+    expect(need([f("2026-09", 40_00n)], pastBalance)).toBeNull();
   });
 
   it("balance targets ask only with a date", () => {
@@ -182,6 +203,20 @@ describe("dated targets", () => {
       funded: 100_00n,
       underfunded: 0n,
     });
+  });
+
+  // YNAB C5 U1 (plan "C4 Clean", 2026-10-12): $40.00 carried in, $20.00 spent in October.
+  it("balance targets count Available, this month's spending included", () => {
+    const h = [f("2026-09", 40_00n), f("2026-10", 0n, -20_00n)];
+    const byDec = target("balance", "2026-10", {
+      cadence: "custom",
+      amount: 200_00n,
+      dueDate: "2026-12-01",
+    });
+    expect(need(h, byDec)).toMatchObject({ funded: 20_00n, underfunded: 60_00n });
+    expect(need([f("2026-09", 40_00n)], byDec)?.underfunded).toBe(53_34n);
+    const eventually = { ...byDec, dueDate: null };
+    expect(need(h, eventually)).toMatchObject({ funded: 20_00n, underfunded: 0n });
   });
 
   // YNAB C5 D1–D3 (plan "C4 Clean", 2026-10-12): refill $1,200 by March 2027, $300 carried in.

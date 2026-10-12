@@ -4125,7 +4125,7 @@
           "funded": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative"
+            "description": "What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on), or Available (balance); can be negative"
           },
           "underfunded": {
             "type": "string",
@@ -4140,6 +4140,10 @@
             "format": "date",
             "description": "Yearly and custom: the due date of the period this month is in"
           },
+          "pastDue": {
+            "type": "boolean",
+            "description": "A one-time target after its due month: still shown, asking for nothing (underfunded 0)"
+          },
           "snoozed": {
             "type": "boolean",
             "description": "Snoozed this month: it asks for nothing more (Underfunded leaves it out)"
@@ -4150,9 +4154,10 @@
           "funded",
           "underfunded",
           "dueDate",
+          "pastDue",
           "snoozed"
         ],
-        "description": "The category's target this month; null without one, before it starts or after a one-time target's due month"
+        "description": "The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month"
       },
       "AutoAssignAmounts": {
         "type": "object",

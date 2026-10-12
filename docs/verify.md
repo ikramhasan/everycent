@@ -735,15 +735,19 @@ November, T8 B's due day is the 15th). Built as found:
   (`goal_percentage_complete`): C5 R1 ($100.00 monthly set aside, $99.99 assigned) reads 99%;
   C5 W2 in November ($15.00 of $40.00) reads 37%.
 
-### Small target details not seen in YNAB yet
+### Due day, met at $0.00, $0.00 targets and Undo (settled 2026-10-12)
 
-- **Question:** (1) a due day past the month's end (the 31st in November): does the note say "by
-  the 30th"? (2) The Available pill of a met target whose Available is $0.00 (all spent): grey,
-  green, with or without the check? (3) A $0.00 target: can it be saved? (4) Do target edits show
-  in YNAB's Undo?
-- **Built so far (before this rule):** (1) the month's last day; (2) the plain colour rules (grey at
-  $0.00) with the check; (3) refused, the amount must be positive; (4) target edits aren't in
-  everycent's undo history.
+Plan "C4 Clean", group "C5 Targets", in the web app (C5 Z0, C5 M0, C5 U1; memo `x-c5-m0`):
+
+- **Due day past the month's end:** a monthly target due the 31st reads "$100.00 more needed by the
+  30th" in November, while the heading keeps "By the 31st of the Month". As built.
+- **Met with all of it spent** (C5 M0: $50.00 assigned and spent): grey $0.00 pill with the check,
+  as built; the row note is **"Fully Spent"** (it was "Funded. Spent $50.00 of $50.00"). Fixed.
+- **A $0.00 target** can't be saved: the form says "Targets require a positive amount." As built.
+  (The API does accept `goal_target: 0`; the web app then offers "Create Target".)
+- **Undo covers targets:** creating, editing and deleting a target are each undone by Undo, and
+  undoing an edit made from November put its start month (`goal_creation_month`) back to October.
+  Built in EVERYCENT-27.
 
 ## Weekly, yearly and custom targets (phase 8b)
 
@@ -802,19 +806,37 @@ Plan "C4 Clean", group "C5 Targets", through the API; September money came from 
 - **Weekly refill** asks the weekly amount once per occurrence, less what was carried in and
   assigned: $10.00 a week asked $50.00 in October and $40.00 in November (C5 W1); $15.00 carried
   in → $35.00 (C5 W2); $25.00 assigned with $15.00 spent → $25.00 more (C5 W3).
-- A dated balance target can't be created through the API (it only makes "NEED" targets), so its
-  spending case wasn't run; everycent treats it like the refill.
+- A dated balance target can't be created through the API (it only makes "NEED" targets); in the
+  web app it counts this month's spending too (below).
 
-### Details of 8b not seen in YNAB
+### Set aside before the start, Fill up heading, due dates and balance targets (settled 2026-10-12)
 
-- **Question:** (1) Settled above. (2) For set aside, does money assigned before the
-  target's start month count toward the first period? (3) The inspector heading of a custom "Fill
-  up to" target. (4) The weekly refill's numbers (only the form was seen). (5) Earliest due date the
-  picker allows.
-- **Built so far (before this rule):** (1) the month's share is worked out from what was carried
-  in (spending this month doesn't change it), Funded and Current Balance show carried + assigned;
-  (2) no, the period starts no earlier than the start month; (3) "Fill Up to $X …"; (4) as a
-  monthly refill with the weekly amount; (5) any date.
+Plan "C4 Clean", group "C5 Targets", in the web app and API (C5 U1, C5 P1; memos `x-c5-u1-spend`,
+`x-c5-p1-spend`; U1 got $40.00 assigned in September):
+
+- **Money assigned before the start month doesn't count** toward a set aside target's first
+  period: U1, one-time "Set aside $200.00" due Dec 31 created in October, asked $66.67 (= $200.00
+  ÷ 3), not $53.34. As built.
+- **"Fill up to" heading:** "Fill Up to $200.00", "By Sep 8 2026"; lines "Needed by Sep 8 2026 /
+  Funded / To Go". As built.
+- **Any due date can be picked**, past ones included (Sep 8 2026 saved in October). As built.
+- **A one-time target past its due month stays on** and asks for nothing: heading, ring and lines
+  as usual, no Assign box or message, `goal_under_funded` 0, nothing over (P1 with $30.00 assigned
+  wasn't in Overfunded) and nothing in the month's targets. The row note reads like a met target's:
+  "Funded" (U1 holding $40.00), "Funded. Spent $10.00 of $30.00" (P1), none with nothing in it; the
+  pill is green with a part-filled pie, grey at $0.00; the ring is green. everycent dropped the
+  target there; fixed. YNAB won't show months after next month, so this was only seen with a due
+  date already past.
+- **A balance target past its month is gone** (U1 as "Have a balance of $200.00" by January 2026:
+  "Create Target", note "Spent $20.00 of $40.00"), as built. YNAB still offered "Reduce Overfunding
+  $20.00" for it; everycent doesn't copy that.
+- **"Have a balance of" counts Available**, this month's spending included: U1 with $40.00 carried
+  in and $20.00 spent showed Current Balance $20.00 and 10%, and by Dec 2026 asked $60.00 (=
+  $180.00 ÷ 3); without a date "$180.00 more needed eventually". everycent counted carried +
+  assigned; fixed.
+- **The inspector's ring is green once the month asks for nothing more** (T8 F on track at 33%,
+  U1 past due at 20%), yellow while it does; "You're on track to meet your target!" sits in green
+  like "You've met your target!". Fixed (the ring was always yellow).
 
 ## Underfunded and Reduce Overfunding (phase 8c)
 
