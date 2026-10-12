@@ -210,9 +210,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 ## Scheduled transactions (phase 10a follow-ups)
 
 - Due occurrences are entered when a read arrives with the user's `today` (register, accounts,
-  month, activity); there's no background job yet, and nothing is entered without a `today`
-  (the server's UTC date could be a day early). The periodic job and the budget's time zone are
-  10b (EVERYCENT-5).
+  month, activity); nothing is entered without a `today` (the server's UTC date could be a day
+  early). There's no background job on purpose: YNAB only enters from an open client, by the
+  device's date (checked 2026-10-12, EVERYCENT-5; see `docs/verify.md`).
 - Entered-on-their-date transactions are stored unapproved, as YNAB does, but the register has
   no approve/unapproved styling yet (EVERYCENT-65).
 - Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
