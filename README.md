@@ -211,7 +211,7 @@ phase 10 — see `docs/deferred.md` and `docs/verify.md`.
 - [ ] Repeat frequencies: once, daily, weekly, every other week, twice a month, every 4 weeks,
       monthly, every other month, every 3/4 months, twice a year, yearly, every other year
 - [ ] Upcoming transactions list in register, enter now / skip / edit
-- [ ] Auto-entry on the due date (background job)
+- [ ] Auto-entry on the due date (when the plan is opened, by the device's date)
 - [ ] Scheduled splits and transfers
 - [ ] Bills calendar view **(extra)**
 - [ ] Upcoming bill reminders (email / push) **(extra)**

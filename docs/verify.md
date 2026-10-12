@@ -97,8 +97,10 @@ Order" / "C4 Order FS" (fresh start) and "C4 Clean", and on support.ynab.com ("U
 - **Fresh start** copies every schedule unchanged; the archived plan keeps them too.
 - **Auto-entry** is done by YNAB's client with the device's local date: at 00:25 local (+06,
   still 10/11 in UTC) opening the web app entered a 10/12 schedule at once; one created with no
-  client open waited until the app was opened. Whether a server job also enters them for plans
-  nobody opens is being checked (`x-tz-server` in "C4 Clean").
+  client open waited until the app was opened. There's no server job: `x-tz-server` (10/12),
+  planted in "C4 Clean" and never opened, was still scheduled at 2026-10-12 10:57 UTC with no
+  transaction entered. A plan nobody opens enters nothing, so everycent's catch-up on reads
+  matches and has no background job.
 
 ## Duplicate, Enter Now and Make Repeating (EVERYCENT-40) (settled 2026-10-11)
 
