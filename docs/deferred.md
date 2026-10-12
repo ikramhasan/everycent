@@ -97,6 +97,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   targets, and the past/future month details (no Assign in past months, the snooze switch disabled
   outside the current month). A fresh start doesn't copy the expected income yet (not seen in
   YNAB, docs/verify.md).
+- A payment target in a month before its card account existed asks nothing in YNAB; everycent
+  asks as usual (EVERYCENT-122, backlog; only reachable by saving the target from such a month).
 - October's Targets for a custom target repeating every month with a far due date: YNAB counted
   a repeating Fill up's full amount, everycent counts its share (EVERYCENT-120, docs/verify.md).
 - A category's history is reassigned on delete, but its target is deleted with it (YNAB does the same, checked 2026-10-11).

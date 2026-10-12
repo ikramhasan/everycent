@@ -1072,8 +1072,11 @@ Checked in YNAB's web app and API in "C5 First" (F Card) and "ihni7's Plan" (Car
   spending in September read $0.00. As built (the spending amounts, relabelled).
 - **Past months:** an underfunded payment target is yellow with a pie there too (F Card in September,
   "Assign $6.00 more to meet your target"); without a target the payment pill isn't yellow in a past
-  month and there's no Payment alert, only "Create Target". As built. A card that owed nothing
-  (Card E3 before it existed) asked $0.00: EVERYCENT-121.
+  month and there's no Payment alert, only "Create Target". As built.
+- **A card that owes nothing** still asks its Pay Specific Amount Monthly ("C5 First FS2": F Card at
+  $0.00 with $10.00 a month read "Assign $10.00 to meet your target", yellow). As built. Only a
+  month before the card account existed asked $0.00 (Card E3 in September, opened October 8):
+  backlog EVERYCENT-122.
 - "Making minimum payments?" and "Why am I seeing this warning?" link to YNAB's help center;
   everycent has none, so they aren't built.
 
