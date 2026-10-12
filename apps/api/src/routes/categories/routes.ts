@@ -60,6 +60,16 @@ const TargetSchema = z
       .describe("Custom: repeats every N months or years; null for one-time"),
     repeatUnit: RepeatUnit.nullable(),
     startMonth: zMonth.describe("The first month the target applies to"),
+    startDay: z
+      .number()
+      .int()
+      .min(1)
+      .max(31)
+      .nullable()
+      .describe(
+        "Weekly: the day of the start month it began on (earlier weeks that month aren't asked " +
+          "for); null for the whole month",
+      ),
     snoozedMonth: zMonth
       .nullable()
       .describe("The month it's snoozed for: it asks for nothing more that month only"),
@@ -475,6 +485,34 @@ export const setCategoryTarget = createRoute({
   },
   responses: {
     200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The caller's role can't edit categories"),
+    404: notFound,
+    409: jsonError(
+      "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
+    ),
+  },
+});
+
+export const restoreCategoryTarget = createRoute({
+  method: "put",
+  path: "/budgets/{budgetId}/categories/{categoryId}/target/restore",
+  operationId: "restoreCategoryTarget",
+  tags: ["Categories"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Put a category's target back as it was (undo and redo)",
+  description:
+    "Writes the target exactly as given, start month, start day and snooze included, or removes " +
+    "it when `target` is null. For undoing and redoing target edits; the start-month rules of " +
+    "setCategoryTarget don't apply.",
+  request: {
+    params: CategoryParams,
+    body: json(z.object({ target: TargetSchema.nullable() })),
+  },
+  responses: {
+    200: { description: "Restored", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
     403: jsonError("The caller's role can't edit categories"),

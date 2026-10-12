@@ -24,6 +24,7 @@ const target = (extra: Partial<CategoryTarget> = {}): CategoryTarget => ({
   repeatEvery: null,
   repeatUnit: null,
   startMonth: "2026-10",
+  startDay: null,
   snoozedMonth: null,
   ...extra,
 });

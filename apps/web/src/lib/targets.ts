@@ -8,6 +8,7 @@ import { apiErrorMessage } from "./budgets";
 import { categoriesQueryOptions } from "./categories";
 import { todayIso } from "./dates";
 import { invalidateMonths } from "./months";
+import type { UndoCommand } from "./undo";
 
 export type CategoryTarget = NonNullable<components["schemas"]["CategoryTarget"]>;
 export type TargetNeed = NonNullable<components["schemas"]["TargetNeed"]>;
@@ -293,9 +294,13 @@ export function targetMessage(
 }
 
 /** Create, replace and remove a category's target; failures show a toast. */
-export function useTargetActions(budgetId: string) {
+export function useTargetActions(budgetId: string, record?: (command: UndoCommand) => void) {
   const queryClient = useQueryClient();
   const put = $api.useMutation("put", "/v1/budgets/{budgetId}/categories/{categoryId}/target");
+  const restore = $api.useMutation(
+    "put",
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/restore",
+  );
   const remove = $api.useMutation(
     "delete",
     "/v1/budgets/{budgetId}/categories/{categoryId}/target",
@@ -320,22 +325,53 @@ export function useTargetActions(budgetId: string) {
         ]);
       }
     }
+    /** Puts a category's target back exactly as it was (or removes it), for undo and redo. */
+    const putBack = async (categoryId: string, target: CategoryTarget | null) => {
+      await run(
+        () => restore.mutateAsync({ params: { path: { budgetId, categoryId } }, body: { target } }),
+        "Couldn't restore the target.",
+      );
+    };
+    // YNAB's Undo covers creating, editing and deleting a target, start month included (checked
+    // 2026-10-12, docs/verify.md).
+    const remember = (
+      label: string,
+      categoryId: string,
+      before: CategoryTarget | null,
+      after: CategoryTarget | null,
+    ) =>
+      record?.({
+        label,
+        undo: () => putBack(categoryId, before),
+        redo: () => putBack(categoryId, after),
+      });
     return {
-      /** Saves the target from `month`, the month on screen. */
-      save: (categoryId: string, month: BudgetMonth, input: TargetInput) =>
-        run(
-          () =>
-            put.mutateAsync({
-              params: { path: { budgetId, categoryId } },
-              body: { ...input, month, today: todayIso() } as SetTargetBody,
-            }),
-          "Couldn't save the target.",
-        ),
-      remove: (categoryId: string) =>
-        run(
+      /** Saves the target from `month`, the month on screen; `before` is the target it replaces. */
+      save: async (
+        categoryId: string,
+        month: BudgetMonth,
+        input: TargetInput,
+        before: CategoryTarget | null = null,
+      ) => {
+        let after: CategoryTarget | null = null;
+        const ok = await run(async () => {
+          const saved = await put.mutateAsync({
+            params: { path: { budgetId, categoryId } },
+            body: { ...input, month, today: todayIso() } as SetTargetBody,
+          });
+          after = saved.target;
+        }, "Couldn't save the target.");
+        if (ok) remember(before ? "edit target" : "create target", categoryId, before, after);
+        return ok;
+      },
+      remove: async (categoryId: string, before: CategoryTarget | null = null) => {
+        const ok = await run(
           () => remove.mutateAsync({ params: { path: { budgetId, categoryId } } }),
           "Couldn't delete the target.",
-        ),
+        );
+        if (ok && before) remember("delete target", categoryId, before, null);
+        return ok;
+      },
       /** Snoozes the target for `month` (the current month), or wakes it. */
       snooze: (categoryId: string, month: BudgetMonth, snoozed: boolean) =>
         run(
@@ -358,7 +394,7 @@ export function useTargetActions(budgetId: string) {
         ),
     };
     // mutateAsync is stable; the mutation objects change every render.
-  }, [budgetId, queryClient]);
+  }, [budgetId, queryClient, record]);
 }
 
 type MonthBar = NonNullable<components["schemas"]["ProgressBar"]>;

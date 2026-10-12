@@ -14,6 +14,7 @@ type Target = {
   repeatEvery: number | null;
   repeatUnit: string | null;
   startMonth: string;
+  startDay: number | null;
   snoozedMonth: string | null;
 };
 type Category = { id: string; name: string; target: Target | null };
@@ -105,6 +106,7 @@ describe("category targets", () => {
       repeatEvery: null,
       repeatUnit: null,
       startMonth: "2026-10",
+      startDay: null,
       snoozedMonth: null,
     });
     expect((await findCategory(rent.id))?.target?.amount).toBe("10000");
@@ -148,6 +150,25 @@ describe("category targets", () => {
     // A new due day alone isn't a change (YNAB "C5 First" F A, 2026-10-12).
     await setTarget(rent.id, { amount: "9000", dueDay: 15, month: "2026-11" });
     expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+  });
+
+  // YNAB's Undo puts a target back, start month included (2026-10-12, "C4 Clean" C5 Z0).
+  it("restores a target exactly as it was, or removes it", async () => {
+    const { cookie, base, rent, setTarget, findCategory } = await setup();
+    await setTarget(rent.id, { amount: "10000" });
+    const before = (await findCategory(rent.id))?.target;
+    await setTarget(rent.id, { amount: "13000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-11");
+    const restore = (target: unknown) =>
+      send("PUT", `${base}/categories/${rent.id}/target/restore`, cookie, { target });
+    expect((await restore(before)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toEqual(before);
+    expect((await restore(null)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toBeNull();
+    expect((await restore(before)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toEqual(before);
+    const payment = { ...before, cadence: "payment_monthly" };
+    expect((await restore(payment)).status).toBe(409);
   });
 
   it("set aside counts this month's Assigned (YNAB T8 B, C, E)", async () => {

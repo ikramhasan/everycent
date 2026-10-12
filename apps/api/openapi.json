@@ -814,6 +814,15 @@
             "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
             "description": "The first month the target applies to"
           },
+          "startDay": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 31,
+            "description": "Weekly: the day of the start month it began on (earlier weeks that month aren't asked for); null for the whole month"
+          },
           "snoozedMonth": {
             "type": [
               "string",
@@ -832,6 +841,7 @@
           "repeatEvery",
           "repeatUnit",
           "startMonth",
+          "startDay",
           "snoozedMonth"
         ]
       },
@@ -6238,6 +6248,119 @@
           },
           "404": {
             "description": "No such budget, group or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/restore": {
+      "put": {
+        "operationId": "restoreCategoryTarget",
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Put a category's target back as it was (undo and redo)",
+        "description": "Writes the target exactly as given, start month, start day and snooze included, or removes it when `target` is null. For undoing and redoing target edits; the start-month rules of setCategoryTarget don't apply.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/components/schemas/CategoryTarget"
+                  }
+                },
+                "required": [
+                  "target"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't edit categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, group or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
             "content": {
               "application/json": {
                 "schema": {

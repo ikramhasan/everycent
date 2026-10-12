@@ -79,8 +79,8 @@ function BudgetPage() {
     placeholderData: keepPreviousData,
   });
   const actions = useCategoryActions(budget.id);
-  const targetActions = useTargetActions(budget.id);
   const history = useUndo();
+  const targetActions = useTargetActions(budget.id, history.record);
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
@@ -642,8 +642,8 @@ function Inspector({
                 parse={assign.parse}
                 toInput={assign.toInput}
                 dateFormat={budget.dateFormat}
-                onSave={(input) => targetActions.save(only, month.month, input)}
-                onDelete={() => targetActions.remove(only)}
+                onSave={(input) => targetActions.save(only, month.month, input, category.target)}
+                onDelete={() => targetActions.remove(only, category.target)}
                 onAssign={
                   month.month < figures.currentMonth
                     ? undefined
@@ -685,8 +685,8 @@ function Inspector({
               parse={assign.parse}
               toInput={assign.toInput}
               dateFormat={budget.dateFormat}
-              onSave={(input) => targetActions.save(only, month.month, input)}
-              onDelete={() => targetActions.remove(only)}
+              onSave={(input) => targetActions.save(only, month.month, input, category.target)}
+              onDelete={() => targetActions.remove(only, category.target)}
               onAssign={
                 // YNAB leaves the Assign button out in past months (seen 2026-10-08).
                 month.month < figures.currentMonth

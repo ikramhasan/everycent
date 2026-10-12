@@ -30,6 +30,7 @@ export function toTargetJson(t: TargetRow) {
     repeatEvery: t.repeatEvery,
     repeatUnit: t.repeatUnit,
     startMonth: monthOf(t.startMonth),
+    startDay: t.startDay,
     snoozedMonth: t.snoozedMonth && monthOf(t.snoozedMonth),
   };
 }

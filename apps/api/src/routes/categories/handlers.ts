@@ -31,6 +31,7 @@ import type {
   listCategories,
   moveCategory,
   moveCategoryGroup,
+  restoreCategoryTarget,
   setCategoryTarget,
   snoozeCategoryTarget,
   updateCategory,
@@ -313,6 +314,54 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     : await db
         .insert(categoryTarget)
         .values({ id: newId(), budgetId, categoryId, ...values, startMonth, startDay })
+        .returning();
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
+};
+
+/**
+ * Undo and redo of target edits (YNAB's Undo covers them, docs/verify.md): the target goes back
+ * exactly as it was, start month and start day included, or away when there was none.
+ */
+export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTarget, Env> = async (
+  c,
+) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { target: snapshot } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  if (!snapshot) {
+    await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
+    return c.json(await loadCategoryJson(db, budgetId, row, null), 200);
+  }
+  const paymentTarget =
+    snapshot.cadence === "payment_monthly" || snapshot.cadence === "payoff_by_date";
+  if (Boolean(row.linkedAccountId) !== paymentTarget) {
+    throw managedError("Payment categories take only payment targets, other categories none");
+  }
+  const values = {
+    cadence: snapshot.cadence,
+    behavior: snapshot.behavior,
+    amount: BigInt(snapshot.amount),
+    currency: budget.currency,
+    dueDay: snapshot.dueDay,
+    dueDate: snapshot.dueDate,
+    repeatEvery: snapshot.repeatEvery,
+    repeatUnit: snapshot.repeatUnit,
+    startMonth: `${snapshot.startMonth}-01`,
+    startDay: snapshot.startDay,
+    snoozedMonth: snapshot.snoozedMonth && `${snapshot.snoozedMonth}-01`,
+  };
+  const existing = await findTarget(db, categoryId);
+  const [target] = existing
+    ? await db
+        .update(categoryTarget)
+        .set(values)
+        .where(eq(categoryTarget.id, existing.id))
+        .returning()
+    : await db
+        .insert(categoryTarget)
+        .values({ id: newId(), budgetId, categoryId, ...values })
         .returning();
   return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };

@@ -221,6 +221,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put a category's target back as it was (undo and redo)
+         * @description Writes the target exactly as given, start month, start day and snooze included, or removes it when `target` is null. For undoing and redoing target edits; the start-month rules of setCategoryTarget don't apply.
+         */
+        put: operations["restoreCategoryTarget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/categories/{categoryId}/target/snooze": {
         parameters: {
             query?: never;
@@ -894,6 +914,8 @@ export interface components {
             repeatUnit: "month" | "year" | null;
             /** @description The first month the target applies to */
             startMonth: string;
+            /** @description Weekly: the day of the start month it began on (earlier weeks that month aren't asked for); null for the whole month */
+            startDay: number | null;
             /** @description The month it's snoozed for: it asks for nothing more that month only */
             snoozedMonth: string | null;
         } | null;
@@ -2931,6 +2953,80 @@ export interface operations {
             };
             /** @description No such budget, group or category, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    restoreCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    target: components["schemas"]["CategoryTarget"];
+                };
+            };
+        };
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: payment categories take only payment targets, other categories none */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
