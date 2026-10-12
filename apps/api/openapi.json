@@ -3930,6 +3930,29 @@
             },
             "description": "The later months with money assigned, in order"
           },
+          "futureShortfall": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                "description": "A month, YYYY-MM"
+              },
+              "readyToAssign": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              }
+            },
+            "required": [
+              "month",
+              "readyToAssign"
+            ],
+            "description": "The first later month whose Ready to Assign is negative, if any"
+          },
           "categories": {
             "type": "array",
             "items": {
@@ -4014,6 +4037,7 @@
           "overdraft",
           "assignedInFuture",
           "futureMonths",
+          "futureShortfall",
           "categories",
           "groups",
           "hidden",

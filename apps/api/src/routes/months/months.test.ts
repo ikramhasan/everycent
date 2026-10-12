@@ -24,6 +24,7 @@ type Month = {
   readyToAssign: string;
   overdraft: boolean;
   assignedInFuture: string;
+  futureShortfall: { month: string; readyToAssign: string } | null;
   futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
@@ -1153,6 +1154,14 @@ describe("budget months", () => {
       expect((await month("2026-10")).readyToAssign).toBe("0");
       // November assigned more than there is.
       expect((await month("2026-11")).readyToAssign).toBe("-25000");
+      // The current month names the first later month that's short (YNAB "C5 First FS").
+      await put(rent.id, "2026-12", "1000");
+      expect((await month("2026-10")).futureShortfall).toEqual({
+        month: "2026-11",
+        readyToAssign: "-25000",
+      });
+      await put(phone.id, "2026-11", "0");
+      expect((await month("2026-10")).futureShortfall).toBeNull();
     });
 
     it("leaves income dated after today out", async () => {

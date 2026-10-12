@@ -242,6 +242,11 @@ support.ynab.com:
   Not built: everycent has no help center (docs/deferred.md).
 - **"Assigned in Future Months"** shows in the current month only: September and November didn't
   show it with money assigned in October–December. As built.
+- **A later month that's over-assigned** (checked 2026-10-12, "C5 First FS": $50.00 assigned in
+  November, then $20.00 in December, with nothing to assign): the panel's heading gets a warning
+  sign and a red line names the first such month, "Ready to Assign in November is −$50.00"
+  (December, also negative, isn't named). There are no buttons; the month rows don't navigate.
+  Built (EVERYCENT-23).
 - **Setup's funding step:** YNAB's new-plan checklist is "Personalize plan", "Add accounts" and
   "Fund categories", which "opens Assign mode so you can assign your money" (support.ynab.com,
   "Creating a New Plan"); first-plan onboarding says to assign the money you have right now until

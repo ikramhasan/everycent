@@ -18,8 +18,6 @@ before starting a roadmap phase** and remove an entry once it's done.
 - The overdraft banner ("Overdraft? We can help with that!") has no "Next Steps" button: YNAB's
   opens its help article "Getting Out of Overdraft with YNAB", and everycent has no help center
   (EVERYCENT-117).
-- The current month doesn't warn when a later month is negative (YNAB's future-months panel:
-  "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
 - Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
   partners cannot undo one another's history. Undo and redo still call the API, so the resulting
   budget/transaction state is saved on the server. It covers assigning, moving and auto-assign,

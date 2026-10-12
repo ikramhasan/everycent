@@ -224,6 +224,10 @@ const MonthSchema = z
     futureMonths: z
       .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
       .describe("The later months with money assigned, in order"),
+    futureShortfall: z
+      .object({ month: zBudgetMonth, readyToAssign: zMinorUnits })
+      .nullable()
+      .describe("The first later month whose Ready to Assign is negative, if any"),
     categories: z
       .array(MonthCategorySchema)
       .describe("Every category of the category list, hidden ones included"),

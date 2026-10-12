@@ -163,6 +163,7 @@ const month: BudgetMonthData = {
   overdraft: false,
   assignedInFuture: "0",
   futureMonths: [],
+  futureShortfall: null,
   targets: { month: "0", nextMonth: "0", expectedIncome: null },
   categories: [
     {

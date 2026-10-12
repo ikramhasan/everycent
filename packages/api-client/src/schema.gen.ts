@@ -1617,6 +1617,13 @@ export interface components {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 assigned: string;
             }[];
+            /** @description The first later month whose Ready to Assign is negative, if any */
+            futureShortfall: {
+                /** @description A month, YYYY-MM */
+                month: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                readyToAssign: string;
+            } | null;
             /** @description Every category of the category list, hidden ones included */
             categories: components["schemas"]["MonthCategory"][];
             /** @description Each group's totals over its categories that aren't hidden */

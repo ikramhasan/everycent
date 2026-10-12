@@ -753,11 +753,30 @@ async function monthState(
     groups,
     hidden,
     uncategorized,
+    income,
     assigned,
+    overspent,
     rta,
     register,
     monthTargets,
   };
+}
+
+/**
+ * The first later month whose Ready to Assign is negative (YNAB's "Ready to Assign in November is
+ * −$50.00" under Assigned in Future Months; with December negative too it named only November,
+ * "C5 First FS", 2026-10-12). Later months have no transactions yet, so only months with money
+ * assigned can go negative.
+ */
+function futureShortfall(
+  state: Pick<Awaited<ReturnType<typeof monthState>>, "income" | "assigned" | "overspent">,
+  future: ReadonlyMap<BudgetMonth, bigint>,
+) {
+  for (const m of [...future.keys()].sort()) {
+    const { readyToAssign: amount } = readyToAssign({ month: m, ...state });
+    if (amount < 0n) return { month: m, readyToAssign: amount.toString() };
+  }
+  return null;
 }
 
 /** The budget screen's numbers for `month`, as of the user's `today`. */
@@ -789,6 +808,7 @@ export async function budgetMonthJson(
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
+    futureShortfall: futureShortfall(state, future),
     categories: listed.map((l) => {
       const reg = l.payment && register.get(l.payment.accountId);
       return {

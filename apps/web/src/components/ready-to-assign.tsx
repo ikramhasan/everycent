@@ -1,6 +1,6 @@
 import { addMonths } from "@everycent/engine";
 import { cn } from "@everycent/ui/lib/utils";
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { type BudgetMonthData, monthName } from "@/lib/months";
 
@@ -49,7 +49,9 @@ export function ReadyToAssignBanner({
 
 /**
  * YNAB's "Assigned in Future Months" panel: what later months already hold, by month. YNAB shows
- * it in the current month and lists the next month even when nothing is assigned there.
+ * it in the current month and lists the next month even when nothing is assigned there. When a
+ * later month is over-assigned the heading gets a warning sign and a red line names the first such
+ * month (YNAB, 2026-10-12, "C5 First FS": "Ready to Assign in November is −$50.00").
  */
 export function FutureMonthsPanel({
   data,
@@ -64,9 +66,20 @@ export function FutureMonthsPanel({
   return (
     <section aria-label="Assigned in Future Months" className="grid gap-2 rounded-lg border p-4">
       <div className="flex items-center justify-between gap-2 font-semibold text-sm">
-        <h2>Assigned in Future Months</h2>
+        <h2 className="flex items-center gap-1.5">
+          {data.futureShortfall && (
+            <TriangleAlert className="size-4 shrink-0" aria-label="A later month is short" />
+          )}
+          Assigned in Future Months
+        </h2>
         <span className="tabular-nums">{format(data.assignedInFuture)}</span>
       </div>
+      {data.futureShortfall && (
+        <p className="rounded-md bg-red-100 px-3 py-1.5 text-center text-red-950 text-sm dark:bg-red-900/40 dark:text-red-50">
+          Ready to Assign in {monthName(data.futureShortfall.month)} is{" "}
+          {format(data.futureShortfall.readyToAssign)}
+        </p>
+      )}
       <ul className="grid gap-1 text-sm">
         {months.map((m) => (
           <li key={m.month} className="flex justify-between gap-2">
