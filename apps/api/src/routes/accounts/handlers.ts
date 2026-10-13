@@ -31,6 +31,7 @@ import {
   freezeLoanCharges,
   keepEarlierTerms,
   lastLoanPayments,
+  lastPaymentSources,
   saveLoanTerms,
 } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
@@ -57,6 +58,7 @@ function toAccountJson(
   paymentCategoryId: string | null,
   hasHistory: boolean,
   lastPaymentDate: string | null,
+  lastPaymentFromAccountId: string | null,
 ) {
   return {
     id: a.id,
@@ -78,6 +80,7 @@ function toAccountJson(
     lastReconciledAt: a.lastReconciledAt?.toISOString() ?? null,
     pairedCategoryId: a.pairedCategoryId,
     lastPaymentDate,
+    lastPaymentFromAccountId,
   };
 }
 
@@ -105,6 +108,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     );
   const history = new Set(withHistory.map((r) => r.accountId));
   const lastPayments = await lastLoanPayments(db, budgetId, today);
+  const paidFrom = await lastPaymentSources(db, budgetId);
   return accounts.map((a) =>
     toAccountJson(
       a,
@@ -112,6 +116,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       paymentByAccount.get(a.id) ?? null,
       history.has(a.id),
       lastPayments.get(a.id) ?? null,
+      paidFrom.get(a.id) ?? null,
     ),
   );
 }

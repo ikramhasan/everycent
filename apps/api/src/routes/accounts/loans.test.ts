@@ -14,6 +14,7 @@ type Account = {
   balances: { cleared: string; uncleared: string; working: string };
   pairedCategoryId: string | null;
   lastPaymentDate: string | null;
+  lastPaymentFromAccountId: string | null;
 };
 type Charge = { total: string; applied: string; status: string; editedAt: string | null };
 type LoanMonth = {
@@ -126,6 +127,52 @@ async function setup() {
 }
 
 describe("loan activity (YNAB, 2026-10-13)", () => {
+  it("reports the account of the payment entered last, not the latest-dated one", async () => {
+    const { cookie, base, addAccount, checking, mortgage, account, pay } = await setup();
+    expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBeNull();
+
+    await pay("2026-09-05", "90000");
+    expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    expect((await account(checking.id))?.lastPaymentFromAccountId).toBeNull();
+
+    // YNAB (2026-10-14): a payment back-dated before the others still becomes the default.
+    const savings = await addAccount({ name: "Savings", type: "savings", balance: "500000" });
+    const res = await send("POST", `${base}/accounts/${mortgage.id}/loan/payments`, cookie, {
+      fromAccountId: savings.id,
+      amount: "1000",
+      date: "2026-08-01",
+      memo: "",
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBe(savings.id);
+  });
+
+  it("reports the cash account a credit card was last paid from", async () => {
+    const { cookie, base, addAccount, checking, account } = await setup();
+    const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });
+    const other = await addAccount({ name: "Amex", type: "credit_card", balance: "0" });
+    const transfer = async (from: string, to: string, date: string) => {
+      const res = await send("POST", `${base}/transactions`, cookie, {
+        accountId: from,
+        date,
+        amount: "-1000",
+        payeeName: null,
+        transferAccountId: to,
+        categoryId: null,
+        memo: "",
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBeNull();
+    await transfer(checking.id, card.id, "2026-10-05");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    // A balance transfer from another card isn't a payment; a cash advance goes the other way.
+    await transfer(other.id, card.id, "2026-10-06");
+    await transfer(card.id, checking.id, "2026-10-07");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    expect((await account(checking.id))?.lastPaymentFromAccountId).toBeNull();
+  });
+
   it("charges escrow and interest on the months with payments", async () => {
     const { mortgage, checking, payCategory, account, pay, months, transactions } = await setup();
     await pay("2026-08-05", "90000", "x-aug");

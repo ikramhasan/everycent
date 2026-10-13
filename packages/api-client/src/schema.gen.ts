@@ -1654,6 +1654,8 @@ export interface components {
              * @description Loan accounts: the date of the latest payment up to today
              */
             lastPaymentDate: string | null;
+            /** @description Record Payment's source: for a loan, the cash or credit account of the payment into it entered last; for a credit card, the cash account it was last paid from */
+            lastPaymentFromAccountId: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
