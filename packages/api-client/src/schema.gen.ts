@@ -1866,6 +1866,7 @@ export interface components {
             transferFromSplit: boolean;
             /** @description Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change) */
             transferReconciled: boolean;
+            transferSide: components["schemas"]["TransferSide"];
             /** @description A split's lines, in order (empty when not split); the split has no category */
             subtransactions: components["schemas"]["SubTransaction"][];
             /** @description The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest) */
@@ -1873,6 +1874,19 @@ export interface components {
             /** @description Under a search: the split lines that match it (the register shows only those). Null without a search */
             matchingLineIds: string[] | null;
         };
+        /** @description Transfers: the other side's own state (null when the other side is a split's line, or for other transactions) */
+        TransferSide: {
+            memo: string;
+            /** @enum {string} */
+            cleared: "uncleared" | "cleared" | "reconciled";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            approved: boolean;
+            categoryId: string | null;
+        } | null;
         SubTransaction: {
             id: string;
             /** @description Negative is an outflow */
@@ -1888,6 +1902,7 @@ export interface components {
             transferTransactionId: string | null;
             /** @description Transfer lines: the other side is reconciled */
             transferReconciled: boolean;
+            transferSide: components["schemas"]["TransferSide"] & unknown;
         };
         SelectionSummary: {
             count: number;
@@ -2001,6 +2016,11 @@ export interface components {
              * @enum {string|null}
              */
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description False brings back an unapproved transaction (an undo); true if left out */
+            approved?: boolean;
+            transferSide?: components["schemas"]["TransferSideInput"];
+            /** @description An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows */
+            restore?: boolean;
         };
         SubTransactionInput: {
             /** @description An existing line of this split; leave out for new ones */
@@ -2015,6 +2035,20 @@ export interface components {
             categoryId: string | null;
             /** @default  */
             memo: string;
+            transferSide?: components["schemas"]["TransferSideInput"];
+        };
+        /** @description Restoring a deleted transfer (an undo): its other side's own state, from the deleted transaction's `transferSide`. Left out, the other side starts uncleared, approved, unflagged and with this side's memo */
+        TransferSideInput: {
+            memo: string;
+            /** @enum {string} */
+            cleared: "uncleared" | "cleared" | "reconciled";
+            /**
+             * @description One of YNAB's six flag colors; null clears it
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            approved: boolean;
+            categoryId: string | null;
         };
         UpdateTransaction: {
             accountId?: string;
@@ -2273,6 +2307,8 @@ export interface components {
              * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
              */
             today?: string;
+            /** @description An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows */
+            restore?: boolean;
         };
         ScheduledSubTransactionInput: {
             /** @description Negative is an outflow */
@@ -2321,6 +2357,8 @@ export interface components {
              * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
              */
             today?: string;
+            /** @description An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows */
+            restore?: boolean;
         };
         EnteredScheduledTransaction: {
             transaction: components["schemas"]["Transaction"] & unknown;

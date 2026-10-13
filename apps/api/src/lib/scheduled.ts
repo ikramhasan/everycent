@@ -277,21 +277,28 @@ async function scheduleCategory(
 /**
  * Checks `input` with the rules transactions follow and writes it, as a new schedule or over
  * `existing.id`. New transfers need both accounts open; one that already points at a closed
- * account (an edited schedule, or a transaction being rescheduled) keeps it.
+ * account (an edited schedule, or a transaction being rescheduled) keeps it. `restore` (an undo
+ * putting a schedule back) skips the open-account checks, as YNAB's Undo does.
  */
 export async function writeSchedule(
   tx: Db,
   budgetId: string,
   input: ScheduleInput,
-  existing?: { id?: string; transferAccountId: string | null; accountId: string },
+  existing?: {
+    id?: string;
+    transferAccountId: string | null;
+    accountId: string;
+    restore?: boolean;
+  },
 ) {
+  const restore = existing?.restore === true;
   const account = await findAccount(tx, budgetId, input.accountId);
-  if (!existing || existing.accountId !== account.id) assertOpen(account);
+  if (!restore && (!existing || existing.accountId !== account.id)) assertOpen(account);
   let transferTo: AccountRow | null = null;
   if ("transferAccountId" in input.payee) {
     transferTo = await findAccount(tx, budgetId, input.payee.transferAccountId);
     assertNotSelf(account, transferTo);
-    if (existing?.transferAccountId !== transferTo.id) assertOpen(transferTo);
+    if (!restore && existing?.transferAccountId !== transferTo.id) assertOpen(transferTo);
   }
   if (input.dateFirst > input.date) {
     throw new AppError(400, "BAD_REQUEST", "`dateFirst` can't be after `date`");
@@ -350,7 +357,7 @@ export async function writeSchedule(
     if (line.transferAccountId) {
       lineTo = await findAccount(tx, budgetId, line.transferAccountId);
       assertNotSelf(account, lineTo);
-      assertOpen(lineTo);
+      if (!restore) assertOpen(lineTo);
     }
     await tx.insert(scheduledSubTransaction).values({
       id: newId(),

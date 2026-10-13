@@ -161,6 +161,8 @@ describe("scheduleRestoreBody", () => {
       payeeName: "Gym",
       categoryId: "c1",
       flag: "red",
+      // Even if its accounts were closed since (YNAB's Undo).
+      restore: true,
     });
     expect(scheduleRestoreBody({ ...row, transferAccountId: "savings" })).toMatchObject({
       transferAccountId: "savings",

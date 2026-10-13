@@ -194,6 +194,13 @@ export const createScheduledTransaction = createRoute({
           subtransactions: z.array(ScheduledLineInput).min(2).optional(),
           fromTransactionId: z.string().optional(),
           today: Today.optional(),
+          restore: z
+            .boolean()
+            .optional()
+            .describe(
+              "An undo putting a schedule back as it was: its accounts may have been closed " +
+                "since, as YNAB's Undo allows",
+            ),
         })
         .openapi("CreateScheduledTransaction"),
     ),
@@ -240,6 +247,13 @@ export const updateScheduledTransaction = createRoute({
           flag: Flag.optional(),
           subtransactions: z.array(ScheduledLineInput).min(2).optional(),
           today: Today.optional(),
+          restore: z
+            .boolean()
+            .optional()
+            .describe(
+              "An undo putting a schedule back as it was: its accounts may have been closed " +
+                "since, as YNAB's Undo allows",
+            ),
         })
         .openapi("UpdateScheduledTransaction"),
     ),
