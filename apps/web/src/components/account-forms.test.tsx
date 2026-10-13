@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { CategoryList } from "@/lib/categories";
 import type { MoneySettings } from "@/lib/money-input";
 import { AddAccountForm, EditAccountForm } from "./account-forms";
 
@@ -42,7 +43,10 @@ describe("AddAccountForm", () => {
     await userEvent.type(screen.getByLabelText("Nickname"), "Home");
     await userEvent.type(screen.getByLabelText("How much do you owe today?"), "250000");
     await userEvent.type(screen.getByLabelText("Interest rate (%)"), "6.125");
-    await userEvent.type(screen.getByLabelText("Minimum payment"), "1,800");
+    await userEvent.type(screen.getByLabelText("Monthly payment required by your lender"), "1,800");
+    // YNAB asks mortgages whether the payment includes escrow.
+    await userEvent.click(screen.getByLabelText("Yes"));
+    await userEvent.type(screen.getByLabelText("How much is the monthly escrow or fee?"), "150");
     await userEvent.click(screen.getByRole("button", { name: "Add account" }));
     expect(onSubmit).toHaveBeenCalledWith({
       name: "Home",
@@ -50,8 +54,48 @@ describe("AddAccountForm", () => {
       balance: "-25000000",
       interestRate: "6.125",
       minimumPayment: "180000",
-      escrowAmount: undefined,
+      escrowAmount: "15000",
     });
+  });
+
+  it("drops escrow typed for a mortgage when the type changes", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    render(<AddAccountForm settings={usd} onSubmit={onSubmit} />);
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "mortgage");
+    await userEvent.type(screen.getByLabelText("Nickname"), "Car");
+    await userEvent.click(screen.getByLabelText("Yes"));
+    await userEvent.type(screen.getByLabelText("How much is the monthly escrow or fee?"), "150");
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "auto_loan");
+    await userEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ escrowAmount: undefined }));
+  });
+
+  it("offers to pair a loan with a category, or skip", async () => {
+    const categories = {
+      groups: [
+        {
+          id: "g1",
+          name: "Bills",
+          kind: null,
+          categories: [{ id: "c1", name: "Car Loan", linkedAccountId: null }],
+        },
+      ],
+    } as unknown as CategoryList;
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    render(<AddAccountForm settings={usd} categories={categories} onSubmit={onSubmit} />);
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "auto_loan");
+    await userEvent.type(screen.getByLabelText("Nickname"), "Car");
+    await userEvent.type(screen.getByLabelText("How much do you owe today?"), "9000");
+    expect(screen.queryByLabelText("How much is the monthly escrow or fee?")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Optional: Pair a Category")).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText("Select a category"), "c1");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "auto_loan", pairing: { categoryId: "c1" } }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(onSubmit.mock.lastCall?.[0]).not.toHaveProperty("pairing");
   });
 
   it("reads amounts in the budget's number format", async () => {

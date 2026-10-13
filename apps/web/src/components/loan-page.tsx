@@ -1,0 +1,767 @@
+import { ACCOUNT_TYPE_LABELS, monthOf } from "@everycent/engine";
+import { Badge } from "@everycent/ui/components/badge";
+import { Button } from "@everycent/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@everycent/ui/components/dropdown-menu";
+import { Skeleton } from "@everycent/ui/components/skeleton";
+import { cn } from "@everycent/ui/lib/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  CircleDashed,
+  Clock,
+  Lock,
+  Pencil,
+  Puzzle,
+} from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
+import { type Account, accountsQueryOptions } from "@/lib/accounts";
+import { $api } from "@/lib/api";
+import { useBudget } from "@/lib/budget-context";
+import { apiErrorMessage } from "@/lib/budgets";
+import { categoriesQueryOptions } from "@/lib/categories";
+import { todayIso } from "@/lib/dates";
+import {
+  chargeNote,
+  chargeShown,
+  datesLabel,
+  dayLabel,
+  formatRate,
+  hasEscrow,
+  joinAnd,
+  type LoanLineData,
+  type LoanMonthData,
+  loanQueryOptions,
+  longMonth,
+  newestFirst,
+  OTHER_LABELS,
+  otherKind,
+  paymentStatus,
+} from "@/lib/loans";
+import { invalidateMonths, monthQueryOptions } from "@/lib/months";
+import { transactionsQueryPrefix } from "@/lib/transactions";
+import {
+  type ActivityKind,
+  EditChargeDialog,
+  LoanActivityDialog,
+  PairCategoryDialog,
+  type PairChoice,
+  RecordInterestDialog,
+  RecordPaymentDialog,
+  UpdateBalanceDialog,
+} from "./loan-dialogs";
+import { AvailablePill } from "./move-money";
+import { reconciledLabel } from "./reconcile";
+
+type Open =
+  | { kind: "payment" }
+  | { kind: "interest" }
+  | { kind: "update" }
+  | { kind: "pair" }
+  | { kind: "activity"; activity: ActivityKind; line?: LoanLineData }
+  | { kind: "charge"; charge: "interest" | "escrow"; month: LoanMonthData }
+  | null;
+
+/** YNAB's "Updated never" / "Updated 15 minutes ago" (a loan's last Update Balance). */
+export const updatedLabel = (lastReconciledAt: string | null) =>
+  lastReconciledAt
+    ? reconciledLabel(lastReconciledAt).replace(/^Reconciled/, "Updated")
+    : "Updated never";
+
+/** Refreshes everything a loan change can move. */
+export function useLoanRefresh(budgetId: string) {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
+      // Registers and loan activity.
+      queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
+      queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),
+      invalidateMonths(queryClient),
+    ]);
+}
+
+/** Saves a pairing choice, creating the new category first when there is one. */
+export function usePairCategory(budgetId: string) {
+  const createCategory = $api.useMutation("post", "/v1/budgets/{budgetId}/categories");
+  return async (choice: Exclude<PairChoice, null>) => {
+    if ("categoryId" in choice) return choice.categoryId;
+    const created = await createCategory.mutateAsync({
+      params: { path: { budgetId } },
+      body: { name: choice.name.trim(), groupId: choice.groupId },
+    });
+    return created.id;
+  };
+}
+
+/**
+ * YNAB's loan account page (checked 2026-10-13, docs/verify.md "Loan activity"): the loan's
+ * figures, Update Balance and Add Activity, its paired plan category, and its activity by month.
+ * Payoff Date, the progress chart and the Payoff Simulator come with the loan planner (7g).
+ */
+export function LoanPage({
+  account,
+  accounts,
+  onEdit,
+}: {
+  account: Account;
+  accounts: readonly Account[];
+  onEdit: () => void;
+}) {
+  const { budget, formatAmount } = useBudget();
+  const today = todayIso();
+  const format = (minorUnits: bigint) =>
+    formatAmount({ amount: minorUnits, currency: budget.currency });
+  const formatText = (minorUnits: string) => format(BigInt(minorUnits));
+  const path = { budgetId: budget.id, accountId: account.id };
+  const loan = useQuery(loanQueryOptions(budget.id, account.id, today));
+  const categories = useQuery(categoriesQueryOptions(budget.id));
+  const month = useQuery(monthQueryOptions(budget.id, monthOf(today), today));
+  const refresh = useLoanRefresh(budget.id);
+  const pairCategory = usePairCategory(budget.id);
+  const recordPayment = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/payments",
+  );
+  const setCharge = $api.useMutation(
+    "put",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/charges",
+  );
+  const reconcile = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile",
+  );
+  const updateAccount = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
+  const createTransaction = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
+  const updateTransaction = $api.useMutation(
+    "patch",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}",
+  );
+  const deleteTransaction = $api.useMutation(
+    "delete",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}",
+  );
+  const [open, setOpen] = useState<Open>(null);
+  const close = (isOpen: boolean) => !isOpen && setOpen(null);
+
+  /** Runs a change and refreshes; resolves to an error message or null. */
+  async function save(work: () => Promise<unknown>, failure: string) {
+    try {
+      await work();
+      await refresh();
+      return null;
+    } catch (error) {
+      return apiErrorMessage(error, failure);
+    }
+  }
+
+  const settings = { ...budget, dateFormat: budget.dateFormat };
+  const owed = -BigInt(account.balances.working);
+  const paired = categories.data?.groups
+    .flatMap((g) => g.categories.map((c) => ({ ...c, group: g.name })))
+    .find((c) => c.id === account.pairedCategoryId);
+  const pairedAvailable = BigInt(
+    month.data?.categories.find((c) => c.categoryId === account.pairedCategoryId)?.available ?? "0",
+  );
+  const months = loan.data?.months ?? [];
+  const current = monthOf(today);
+
+  return (
+    <div className="grid gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
+            {account.closed && <Badge variant="secondary">Closed</Badge>}
+          </div>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
+            <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
+            <span className="inline-flex items-center gap-1">
+              <Lock className="size-3.5" aria-hidden />
+              {updatedLabel(account.lastReconciledAt)}
+            </span>
+          </p>
+          {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={onEdit} aria-label="Edit account">
+            <Pencil />
+          </Button>
+          {!account.closed && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setOpen({ kind: "update" })}>
+                Update Balance
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm">Add Activity</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <MenuItem
+                    title="Add Payment"
+                    hint="For payments to reduce your balance"
+                    onSelect={() => setOpen({ kind: "payment" })}
+                  />
+                  <MenuItem
+                    title="Add Credit"
+                    hint="For credits or refunds to your account"
+                    onSelect={() => setOpen({ kind: "activity", activity: "credit" })}
+                  />
+                  <MenuItem
+                    title="Add Fee or Charge"
+                    hint="For late fees, annual fees, or withdrawals"
+                    onSelect={() => setOpen({ kind: "activity", activity: "charge" })}
+                  />
+                  <MenuItem
+                    title="Add Interest"
+                    hint="For recording known interest accrual"
+                    onSelect={() => setOpen({ kind: "interest" })}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+        </div>
+      </div>
+
+      <dl className="flex flex-wrap gap-x-8 gap-y-3 rounded-lg border px-4 py-3 tabular-nums">
+        <Figure label="Remaining Balance" value={format(owed)} />
+        <Figure
+          label="Interest Rate"
+          value={account.interestRate ? `${formatRate(account.interestRate)}%` : "--"}
+        />
+        <Figure
+          label="Minimum Payment"
+          value={account.minimumPayment ? formatText(account.minimumPayment) : "--"}
+        />
+        {hasEscrow(account.type) && (
+          <Figure
+            label="Escrow"
+            value={account.escrowAmount ? formatText(account.escrowAmount) : "--"}
+          />
+        )}
+      </dl>
+
+      {paired ? (
+        <section className="rounded-lg border" aria-label="Paired Plan Category">
+          <h2 className="border-b px-4 py-3 font-semibold text-sm">Paired Plan Category</h2>
+          <div className="flex flex-wrap items-end justify-between gap-4 px-4 py-3 text-sm">
+            <div className="grid gap-0.5">
+              <span className="text-muted-foreground text-xs">Category</span>
+              <Link
+                to="/budgets/$budgetId"
+                params={{ budgetId: budget.id }}
+                className="font-medium text-primary hover:underline"
+              >
+                {paired.group}: {paired.name}
+              </Link>
+            </div>
+            <div className="grid justify-items-end gap-0.5">
+              <span className="text-muted-foreground text-xs">Available to spend</span>
+              <AvailablePill amount={pairedAvailable.toString()} format={formatText} />
+            </div>
+          </div>
+        </section>
+      ) : (
+        !account.closed && (
+          <section
+            className="flex flex-wrap items-center gap-4 rounded-lg border px-4 py-3"
+            aria-label="Pair your loan"
+          >
+            <Puzzle className="size-8 text-primary" aria-hidden />
+            <div className="grid flex-1 gap-1">
+              <p className="font-semibold text-sm">Pair your loan and get more out of your plan</p>
+              <p className="text-muted-foreground text-sm">
+                Pairing your loan with a plan category helps you better keep track of your payments
+                in your plan.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setOpen({ kind: "pair" })} disabled={!categories.data}>
+              Get Started
+            </Button>
+          </section>
+        )
+      )}
+
+      <section className="grid gap-3" aria-label="Account Activity">
+        <h2 className="font-semibold text-xl">Account Activity</h2>
+        {loan.isPending ? (
+          <Skeleton className="h-40" />
+        ) : (
+          [...months].reverse().map((m, index) => (
+            <MonthCard
+              key={m.month}
+              month={m}
+              first={index === months.length - 1}
+              defaultOpen={m.month === current}
+              accounts={accounts}
+              budgetId={budget.id}
+              format={format}
+              onEditCharge={
+                account.closed
+                  ? undefined
+                  : (charge) => setOpen({ kind: "charge", charge, month: m })
+              }
+              onEditLine={
+                account.closed
+                  ? undefined
+                  : (line) => {
+                      const kind = otherKind(line);
+                      if (kind === "initial") return onEdit();
+                      setOpen({
+                        kind: "activity",
+                        activity: kind === "adjustment" ? "adjustment" : kind,
+                        line,
+                      });
+                    }
+              }
+            />
+          ))
+        )}
+      </section>
+
+      {open?.kind === "payment" && (
+        <RecordPaymentDialog
+          open
+          onOpenChange={close}
+          accounts={accounts}
+          settings={settings}
+          format={format}
+          paired={paired ? { name: paired.name, available: pairedAvailable } : null}
+          onSave={(input) =>
+            save(
+              () =>
+                recordPayment.mutateAsync({
+                  params: { path },
+                  body: { ...input, amount: input.amount.toString() },
+                }),
+              "Couldn't record the payment.",
+            )
+          }
+        />
+      )}
+      {open?.kind === "interest" && (
+        <RecordInterestDialog
+          open
+          onOpenChange={close}
+          months={months}
+          settings={settings}
+          format={format}
+          onSave={(monthId, total) =>
+            save(
+              () =>
+                setCharge.mutateAsync({
+                  params: { path },
+                  body: { month: monthId, kind: "interest", amount: total.toString(), today },
+                }),
+              "Couldn't record the interest.",
+            )
+          }
+        />
+      )}
+      {open?.kind === "charge" && (
+        <EditChargeDialog
+          open
+          onOpenChange={close}
+          kind={open.charge}
+          month={open.month.month}
+          amount={BigInt(open.month[open.charge].applied)}
+          settings={settings}
+          onSave={(amount) =>
+            save(
+              () =>
+                setCharge.mutateAsync({
+                  params: { path },
+                  body: {
+                    month: open.month.month,
+                    kind: open.charge,
+                    amount: amount.toString(),
+                    today,
+                  },
+                }),
+              `Couldn't save the ${open.charge}.`,
+            )
+          }
+        />
+      )}
+      {open?.kind === "activity" && (
+        <LoanActivityDialog
+          open
+          onOpenChange={close}
+          kind={open.activity}
+          initial={
+            open.line && {
+              amount: BigInt(open.line.amount),
+              date: open.line.date,
+              memo: open.line.memo,
+            }
+          }
+          settings={settings}
+          onSave={(input) => {
+            const line = open.line;
+            const body = { amount: input.amount.toString(), date: input.date, memo: input.memo };
+            return save(
+              () =>
+                line
+                  ? updateTransaction.mutateAsync({
+                      params: { path: { budgetId: budget.id, transactionId: line.id } },
+                      body,
+                    })
+                  : createTransaction.mutateAsync({
+                      params: { path: { budgetId: budget.id } },
+                      body: {
+                        ...body,
+                        accountId: account.id,
+                        categoryId: null,
+                        payeeName: null,
+                        cleared: "cleared",
+                        flag: null,
+                      },
+                    }),
+              "Couldn't save the activity.",
+            );
+          }}
+          onDelete={
+            open.line
+              ? () => {
+                  const id = open.line?.id ?? "";
+                  return save(
+                    () =>
+                      deleteTransaction.mutateAsync({
+                        params: { path: { budgetId: budget.id, transactionId: id } },
+                      }),
+                    "Couldn't delete it.",
+                  );
+                }
+              : undefined
+          }
+        />
+      )}
+      {open?.kind === "update" && (
+        <UpdateBalanceDialog
+          open
+          onOpenChange={close}
+          account={account}
+          settings={settings}
+          format={format}
+          onReconcile={(balance) =>
+            save(
+              () =>
+                reconcile.mutateAsync({
+                  params: { path },
+                  body: { balance: balance.toString(), date: today },
+                }),
+              "Couldn't update the balance.",
+            )
+          }
+        />
+      )}
+      {open?.kind === "pair" && categories.data && (
+        <PairCategoryDialog
+          open
+          onOpenChange={close}
+          list={categories.data}
+          onSave={(choice) =>
+            save(async () => {
+              const categoryId = await pairCategory(choice);
+              await updateAccount.mutateAsync({
+                params: { path },
+                body: { pairedCategoryId: categoryId },
+              });
+              toast.success("Category paired");
+            }, "Couldn't pair the category.")
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  title,
+  hint,
+  onSelect,
+}: {
+  title: string;
+  hint: string;
+  onSelect: () => void;
+}) {
+  return (
+    <DropdownMenuItem onSelect={onSelect} className="grid items-start gap-0">
+      <span className="font-medium">{title}</span>
+      <span className="text-muted-foreground text-xs">{hint}</span>
+    </DropdownMenuItem>
+  );
+}
+
+function Figure({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid">
+      <dd className="order-first font-semibold text-lg">{value}</dd>
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+    </div>
+  );
+}
+
+/** A clickable line in a month (charges and other activity open their editors). */
+function Row({
+  children,
+  amount,
+  onClick,
+  className,
+}: {
+  children: ReactNode;
+  amount?: ReactNode;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const body = (
+    <>
+      <div className="grid min-w-0 flex-1 gap-0.5">{children}</div>
+      {amount !== undefined && <span className="shrink-0 tabular-nums">{amount}</span>}
+    </>
+  );
+  const classes = cn(
+    "flex w-full items-center gap-3 border-t px-4 py-2.5 text-left text-sm",
+    className,
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cn(classes, "group hover:bg-muted/60")}>
+      {body}
+    </button>
+  ) : (
+    <div className={classes}>{body}</div>
+  );
+}
+
+const StatusIcon = ({ status }: { status: ReturnType<typeof paymentStatus> }) =>
+  status === "none" ? (
+    <Clock className="size-4 text-muted-foreground" aria-label="No payments" />
+  ) : status === "partial" ? (
+    <CircleDashed
+      className="size-4 text-amber-600 dark:text-amber-400"
+      aria-label="Partly covered"
+    />
+  ) : (
+    <CircleCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-label="Covered" />
+  );
+
+/** One month of YNAB's Account Activity: payments, interest, escrow and other activity. */
+function MonthCard({
+  month,
+  first,
+  defaultOpen,
+  accounts,
+  budgetId,
+  format,
+  onEditCharge,
+  onEditLine,
+}: {
+  month: LoanMonthData;
+  /** The loan's first month ("Initial Balance" under its total). */
+  first: boolean;
+  defaultOpen: boolean;
+  accounts: readonly Account[];
+  budgetId: string;
+  format: (minorUnits: bigint) => string;
+  onEditCharge?: (charge: "interest" | "escrow") => void;
+  onEditLine?: (line: LoanLineData) => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [showPayments, setShowPayments] = useState(true);
+  const [showOther, setShowOther] = useState(true);
+  const payments = newestFirst(month.transactions.filter((t) => t.kind === "payment"));
+  const others = newestFirst(month.transactions.filter((t) => t.kind !== "payment"));
+  const hasActivity =
+    month.transactions.length > 0 || chargeShown(month.interest) || chargeShown(month.escrow);
+  const nameOf = (id: string | null) =>
+    accounts.find((a) => a.id === id)?.name ?? "another account";
+  const signed = (amount: string) => format(BigInt(amount));
+  const paymentText = (t: LoanLineData) =>
+    `${signed(t.amount)} from ${nameOf(t.fromAccountId)} on ${dayLabel(t.date)}${t.memo ? `: ${t.memo}` : ""}`;
+  const otherText = (t: LoanLineData) =>
+    `${signed(t.amount)} ${OTHER_LABELS[otherKind(t)]} on ${dayLabel(t.date)}${t.memo ? `: ${t.memo}` : ""}`;
+  const Toggle = open ? ChevronDown : ChevronRight;
+  const otherTotal = others.reduce((s, t) => s + BigInt(t.amount), 0n);
+  const status = paymentStatus(month);
+
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="flex items-center gap-1 font-semibold text-sm">
+          {longMonth(month.month)}
+          <Toggle className="size-4" aria-hidden />
+        </span>
+        {hasActivity && (
+          <span className="grid justify-items-end text-sm tabular-nums">
+            {format(BigInt(month.endBalance))}
+            {first && <span className="text-muted-foreground text-xs">Initial Balance</span>}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div>
+          <Row
+            amount={
+              payments.length > 0 ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  {format(BigInt(month.payments))}
+                </span>
+              ) : undefined
+            }
+            onClick={payments.length > 1 ? () => setShowPayments(!showPayments) : undefined}
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <StatusIcon status={status} />
+              Payments
+              {payments.length > 1 &&
+                (showPayments ? (
+                  <ChevronDown className="size-3.5" />
+                ) : (
+                  <ChevronRight className="size-3.5" />
+                ))}
+            </span>
+            <span className="pl-6 text-muted-foreground text-xs">
+              {payments.length === 0 ? (
+                "No payments this month"
+              ) : payments.length === 1 && payments[0] ? (
+                <PaymentLink budgetId={budgetId} line={payments[0]}>
+                  {paymentText(payments[0])}
+                </PaymentLink>
+              ) : (
+                `From ${joinAnd([...new Set(payments.map((p) => nameOf(p.fromAccountId)))])} on ${datesLabel(payments)}`
+              )}
+            </span>
+          </Row>
+          {payments.length > 1 &&
+            showPayments &&
+            payments.map((p) => (
+              <Row key={p.id} className="pl-12 text-muted-foreground">
+                <PaymentLink budgetId={budgetId} line={p}>
+                  {paymentText(p)}
+                </PaymentLink>
+              </Row>
+            ))}
+          {chargeShown(month.interest) && (
+            <Row
+              amount={format(-BigInt(month.interest.applied))}
+              onClick={onEditCharge && (() => onEditCharge("interest"))}
+            >
+              <span className="flex items-center gap-2 pl-6 font-medium">
+                Interest Charges This Month
+                {onEditCharge && <EditMark />}
+              </span>
+              <span className="pl-6 text-muted-foreground text-xs">
+                {chargeNote("interest", month.interest, format)}
+              </span>
+            </Row>
+          )}
+          {chargeShown(month.escrow) && (
+            <Row
+              amount={format(-BigInt(month.escrow.applied))}
+              onClick={onEditCharge && (() => onEditCharge("escrow"))}
+            >
+              <span className="flex items-center gap-2 pl-6 font-medium">
+                Escrow Held
+                {onEditCharge && <EditMark />}
+              </span>
+              <span className="pl-6 text-muted-foreground text-xs">
+                {chargeNote("escrow", month.escrow, format)}
+              </span>
+            </Row>
+          )}
+          {others.length > 0 && (
+            <>
+              <Row
+                amount={format(otherTotal)}
+                onClick={
+                  others.length > 1
+                    ? () => setShowOther(!showOther)
+                    : others[0] && onEditLine
+                      ? () => others[0] && onEditLine(others[0])
+                      : undefined
+                }
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Badge
+                    variant="secondary"
+                    className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                  >
+                    {others.length}
+                  </Badge>
+                  Other Activity
+                  {others.length > 1 &&
+                    (showOther ? (
+                      <ChevronDown className="size-3.5" />
+                    ) : (
+                      <ChevronRight className="size-3.5" />
+                    ))}
+                </span>
+                <span className="pl-6 text-muted-foreground text-xs">
+                  {others.length === 1 && others[0]
+                    ? otherText(others[0])
+                    : `Activity on ${datesLabel(others)}`}
+                </span>
+              </Row>
+              {others.length > 1 &&
+                showOther &&
+                others.map((t) => (
+                  <Row
+                    key={t.id}
+                    className="pl-12 text-muted-foreground"
+                    onClick={onEditLine && (() => onEditLine(t))}
+                  >
+                    <span>{otherText(t)}</span>
+                  </Row>
+                ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EditMark = () => (
+  <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+);
+
+/** A payment line; it jumps to the paying side, as YNAB's "Click to jump to the other side". */
+function PaymentLink({
+  budgetId,
+  line,
+  children,
+}: {
+  budgetId: string;
+  line: LoanLineData;
+  children: ReactNode;
+}) {
+  if (!line.fromAccountId || !line.otherSideId) return <span>{children}</span>;
+  return (
+    <Link
+      to="/budgets/$budgetId/accounts/$accountId"
+      params={{ budgetId, accountId: line.fromAccountId }}
+      search={{ transaction: line.otherSideId }}
+      title="Click to jump to the other side of this transfer"
+      className="inline-flex items-center gap-1 hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <ArrowLeftRight className="size-3" aria-hidden />
+      {children}
+    </Link>
+  );
+}

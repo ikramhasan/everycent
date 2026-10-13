@@ -5,8 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@everycent/ui/components/dialog";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Budget } from "@/lib/budgets";
+import { categoriesQueryOptions } from "@/lib/categories";
 import { useCreateAccount } from "@/lib/use-create-account";
 import { AddAccountForm } from "./account-forms";
 
@@ -22,6 +24,7 @@ export function AddAccountDialog({
 }) {
   const navigate = useNavigate();
   const createAccount = useCreateAccount(budget.id);
+  const categories = useQuery(categoriesQueryOptions(budget.id));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -33,6 +36,7 @@ export function AddAccountDialog({
         </DialogHeader>
         <AddAccountForm
           settings={budget}
+          categories={categories.data}
           onSubmit={async (values) => {
             const result = await createAccount(values);
             if ("error" in result) return result.error;

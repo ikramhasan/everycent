@@ -745,6 +745,77 @@ on LOC H while positive was cash (November −$4).
 - When creating transactions through the API, YNAB fills in the payee's last category if none is
   given. Use a fresh payee (or none) for uncategorized test data.
 
+## Loan activity (phase 7f) (settled 2026-10-13)
+
+Checked in "C9 Payees FS" (EVERYCENT-37): loans `L7 Mortgage` ($100,000, 5.125%, $900 a month,
+$150 escrow), `L7 Neg` ($10,001, 6%, $20) and `L7 Half` ($7, 6%), paid from `L7 Chk`, paired
+category `Bills: L7 Mortgage Pay`, memos `x-l7-*`. Starting balances were backdated through the
+API to get past months.
+
+- **Interest estimate:** the balance at the end of the previous month × rate ÷ 12, rounded half
+  up to the cent with exact math ($100,000 → $427.08, $99,677.08 → $425.70, $10,001 at 6% →
+  $50.01, $7 at 6% → $0.04). The month's own activity is left out (a $100 credit on the 1st or
+  the 2nd didn't change October's $420.25); in the loan's first month the starting balance counts.
+- **Charges only with payments.** A month without payments gets no interest or escrow ("No
+  payments this month"). Escrow comes first, then interest, then principal, each capped by the
+  month's payments; the rest isn't capitalized. $500 against $150 escrow + $427.08 interest showed
+  escrow −$150 and interest −$350 "Estimated, $77.08 still due ($427.08 total this month)"; $100
+  showed only escrow −$100 "Set aside by your lender, $50.00 still due ($150.00 total this
+  month)", and no interest row. Two payments in a month share one charge (cap = their total).
+- **Editing:** Edit Interest / Edit Escrow ("This is for the total interest charge for Sep 2026.
+  Any existing estimate or recorded interest charge will override when you save the changes.")
+  set the month's total, shown as "Edited on October 13" and applied in full. Delete Interest
+  stores $0. Add Activity → Add Interest ("Interest recorded will be in addition to any existing
+  estimated or recorded interest in the chosen month.") adds to the total, with the preview
+  "After saving, the Oct 2026 interest charge will be $430.25"; its months run from the loan's
+  first month to this month. The help center: interest accruing without payments is added this
+  way, so a recorded amount applies even without payments.
+- **Not transactions:** interest and escrow move the balance but the API doesn't list them.
+- **Rate, minimum payment and escrow** are kept per month (API `debt_interest_rates` etc., keyed
+  by month). A change applies "for October and going forward"; months before the first entry use
+  the first one (setting L7 Neg to 12% in October recomputed September to $100.01).
+- **Add Activity:** Add Payment ("Record Payment": Payment Amount, From Account grouped Cash
+  Accounts / Credit Accounts, Date, Memo; paired: "You have $0.00 available for payment in L7
+  Mortgage Pay." and the paired category; unpaired: Uncategorized), Add Credit ("Record Credit or
+  Refund": an inflow without payee or category), Add Fee or Charge ("Record New Charge": an
+  outflow), Add Interest. The loan side of a payment made here is cleared.
+- **Update Balance** is the loan's reconcile ("Is your current balance at your lender -$97,980.25
+  ?" No/Yes): a "Reconciliation Balance Adjustment" (memo "Entered automatically by YNAB"),
+  everything reconciled, every month's interest and escrow frozen at the applied amount and shown
+  as "Reconciled" (still editable), and "Updated a few seconds ago" in the header. Its optional
+  interest-rate/escrow step is not built: changing the rate there gave a result that didn't match
+  the entered balance (EVERYCENT-126).
+- **Pairing:** "Optional: Pair a Category" after adding a loan (an existing category, or a new
+  one with a name and group; Skip). Pairing is one-to-one: choosing a category paired with another
+  loan moves it. Edit Account has "Pair with a Plan Category" / "Unpair Category"; closing a loan
+  unpairs it (help center).
+- **Paired category inspector:** "Paired with L7 Neg Account", "Available for Payment", Record
+  Payment (prefilled with Available; "This payment will appear in the paired account, and as a
+  transaction in the account your payment is coming from.") or, below zero, Cover Payment and
+  "Your payment was more than what you assigned. Cover the payment or you can't trust your plan
+  balances!", and "Last Paid on September 20".
+- **Edit Account (loan):** Account Nickname, Account Notes, Today's Balance ("An adjustment
+  transaction will be created automatically if you change this amount."), Loan Type (loan types
+  only), Minimum Monthly Payment, Interest Rate (%), Monthly Escrow or Fee Amount (mortgages only).
+- **Other Activity lines** open "Edit Credit or Refund" (Delete Credit), "Edit Charge" (Delete
+  Charge) or "Edit Balance Adjustment" ("YNAB made this adjustment during a balance update. After
+  editing, make sure you update your balance again …"; Date, Balance Adjustment Amount, Memo,
+  Delete Adjustment); the Initial Balance opens Edit Account; payments jump to the paying side.
+  Lines read "-$5.00 Charge on October 13: x-l7-fee", "$80.25 Balance adjustment on October 13:
+  …"; several are "Activity on October 1 and October 13", several payments "From F Card and L7 Chk
+  on October 5 and October 13", newest first.
+- **Cover Payment** opens the usual "Cover overspending from" popover. An edited escrow also reads
+  "Edited on October 13".
+- **Fresh start** ("C9 Payees FS" → "L7 Loans FS") keeps a loan's pairing and its current rate,
+  payment and escrow (keyed by the new month).
+- **Not in 7f:** Payoff Date, the progress chart, Share Your Progress, the Payoff Simulator and the
+  paired inspector's paid-off message ("You did it! You paid off your loan in 3 months. You saved
+  $2.10 in interest and paid it off 4 months earlier. Time to celebrate!", which needs the
+  minimum-payment projection) are 7g; Debt Payment targets come after it.
+- **Record Payment's From Account** started on F Card in every case (the plan's only card, last in
+  its Cash Accounts / Credit Accounts list, even after adding "AA L7 Test"); everycent starts on
+  the last account in the list. The exact rule wasn't confirmed.
+
 ## Monthly targets (phase 8a)
 
 Checked in YNAB on 2026-10-03 through the API (`goal_*` fields; categories "T8 A"–"T8 N" in the

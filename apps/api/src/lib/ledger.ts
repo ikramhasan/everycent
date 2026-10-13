@@ -11,6 +11,7 @@ import {
 } from "@everycent/db/schema";
 import { type AccountType, isOnBudget } from "@everycent/engine";
 import { and, eq, isNull, lte, max } from "drizzle-orm";
+import { loanChargeBalances } from "./loans";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Db = Database | Tx;
@@ -187,11 +188,14 @@ export async function accountBalances(db: Db, budgetId: string, today: string) {
     .from(transaction)
     .where(and(eq(transaction.budgetId, budgetId), lte(transaction.date, today)))
     .groupBy(transaction.accountId);
+  // A loan's interest and escrow aren't transactions but add to what it owes (phase 7f).
+  const charges = await loanChargeBalances(db, budgetId, today);
   const balances = new Map<string, AccountBalances>();
   for (const row of rows) {
+    const charge = charges.get(row.accountId);
     // Postgres returns numeric sums as strings; BigInt parses them exactly.
-    const cleared = BigInt(row.cleared);
-    const uncleared = BigInt(row.uncleared);
+    const cleared = BigInt(row.cleared) - (charge?.cleared ?? 0n);
+    const uncleared = BigInt(row.uncleared) - (charge?.uncleared ?? 0n);
     balances.set(row.accountId, { cleared, uncleared, working: cleared + uncleared });
   }
   return balances;

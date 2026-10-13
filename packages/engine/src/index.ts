@@ -62,6 +62,24 @@ export {
 } from "./funding";
 export { convert } from "./fx";
 export {
+  LOAN_CHARGE_KINDS,
+  LOAN_CHARGE_STATUSES,
+  LOAN_LINE_KINDS,
+  type LoanCharge,
+  type LoanChargeKind,
+  type LoanChargeOverride,
+  type LoanChargeStatus,
+  type LoanLine,
+  type LoanLineKind,
+  type LoanMonth,
+  type LoanTerms,
+  loanCharges,
+  loanMonths,
+  monthlyInterest,
+  rateThousandths,
+  termsFor,
+} from "./loans";
+export {
   add,
   compare,
   equals,

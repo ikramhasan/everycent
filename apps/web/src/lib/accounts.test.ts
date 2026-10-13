@@ -15,6 +15,8 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     paymentCategoryId: null,
     hasHistory: false,
     lastReconciledAt: null,
+    pairedCategoryId: null,
+    lastPaymentDate: null,
     balances: { cleared: working, uncleared: "0", working },
   };
 }

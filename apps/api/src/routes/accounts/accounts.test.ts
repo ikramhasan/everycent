@@ -22,6 +22,8 @@ type Account = {
   paymentCategoryId: string | null;
   balances: Balances;
   lastReconciledAt: string | null;
+  pairedCategoryId: string | null;
+  lastPaymentDate: string | null;
 };
 type Txn = {
   date: string;
@@ -286,7 +288,7 @@ describe("accounts", () => {
     expect((await accounts())[0]?.lastReconciledAt).not.toBeNull();
   });
 
-  it("reconciles cards and tracking accounts, but not loans", async () => {
+  it("reconciles cards, tracking accounts and loans", async () => {
     const { base, cookie, addAccount, transactions } = await setup();
     const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });
     const house = await addAccount({ name: "House", type: "asset", balance: "10000" });
@@ -315,7 +317,13 @@ describe("accounts", () => {
         (t) => t.payeeName === "Reconciliation Balance Adjustment",
       ),
     ).toMatchObject({ amount: "2000", categoryName: null });
-    expect((await reconcile(loan.id, "-900000")).status).toBe(400);
+    // A loan's Update Balance (YNAB, 2026-10-13).
+    expect((await reconcile(loan.id, "-890000")).status).toBe(200);
+    expect(
+      (await transactions(loan.id)).find(
+        (t) => t.payeeName === "Reconciliation Balance Adjustment",
+      ),
+    ).toMatchObject({ amount: "10000", categoryName: null, cleared: "reconciled" });
   });
 
   it("sets a working balance with a Manual Balance Adjustment", async () => {
@@ -344,7 +352,8 @@ describe("accounts", () => {
         ?.amount,
     ).toBe("13400");
 
-    // The same balance adds nothing; closed accounts and loans have no working balance field.
+    // The same balance adds nothing; closed accounts have no working balance field. A loan's is
+    // YNAB's "Today's Balance".
     await patch(checking.id, { workingBalance: "32000" });
     expect(
       (await transactions(checking.id)).filter((t) => t.payeeName === "Manual Balance Adjustment"),
@@ -352,7 +361,10 @@ describe("accounts", () => {
     await send("POST", `${base}/accounts/${card.id}/close`, cookie, { date: TODAY });
     expect((await patch(card.id, { workingBalance: "0" })).status).toBe(400);
     const loan = await addAccount({ name: "Car", type: "auto_loan", balance: "-900000" });
-    expect((await patch(loan.id, { workingBalance: "0" })).status).toBe(400);
+    expect((await patch(loan.id, { workingBalance: "-850000" })).status).toBe(200);
+    expect(
+      (await transactions(loan.id)).find((t) => t.payeeName === "Manual Balance Adjustment"),
+    ).toMatchObject({ amount: "50000", categoryName: null });
   });
 
   it("deletes a fresh account with its starting balance and payment category", async () => {
