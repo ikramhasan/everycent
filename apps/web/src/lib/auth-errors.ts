@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   PASSWORD_COMPROMISED:
     "That password has appeared in a data breach. Choose one you haven't used anywhere else.",
   INVALID_PASSWORD: "That password isn't right.",
+  SIGN_IN_REQUIRED:
+    "Sign in to your account in this browser, then open the link from the email again.",
 };
 
 /** A sentence to show for a Better Auth client error. */

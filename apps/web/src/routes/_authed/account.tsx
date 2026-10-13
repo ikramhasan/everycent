@@ -83,8 +83,8 @@ function EmailCard({ email }: { email: string }) {
             <p>
               We've emailed <span className="font-medium break-all">{email}</span> a link to approve
               the change. Once it's approved, we'll send a confirmation link to{" "}
-              <span className="font-medium break-all">{pendingTo}</span>. Your email changes when
-              you open that one.
+              <span className="font-medium break-all">{pendingTo}</span>. Open that one in a browser
+              where you're signed in, and your email changes.
             </p>
             <p className="text-muted-foreground">
               Both links expire in 1 hour. If the new address already has an account, no link is

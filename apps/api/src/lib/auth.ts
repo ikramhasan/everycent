@@ -2,13 +2,14 @@ import { type Database, newId } from "@everycent/db";
 import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
 import type { EmailMessage, EmailSender } from "./email/sender";
 import { emails } from "./email/templates";
 import { seedInternalCategories } from "./starter-categories";
+import { tryPasswordCheck } from "./throttle";
 
 export interface AuthOptions {
   /** Better Auth's rate limiter. On everywhere but tests unless a test turns it on. */
@@ -112,6 +113,35 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       storage: "database",
     },
     hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/change-password") {
+          // Shares the per-user limit with /v1/me/email: both answer whether a password is right.
+          const session = await getSessionFromCtx(ctx);
+          if (!session) return;
+          const retryAfter = await tryPasswordCheck(db, session.user.id);
+          if (retryAfter !== null) {
+            throw new APIError("TOO_MANY_REQUESTS", {
+              code: "RATE_LIMITED",
+              message: "Too many attempts. Try again later.",
+            });
+          }
+        }
+        if (ctx.path === "/verify-email") {
+          // Better Auth signs in whoever opens a change-email confirmation link without a
+          // session. Confirming a new address must come from the account's own signed-in
+          // browser, so the link alone never yields a session.
+          const token = typeof ctx.query?.token === "string" ? ctx.query.token : "";
+          if (
+            tokenRequestType(token) === "change-email-verification" &&
+            !(await getSessionFromCtx(ctx))
+          ) {
+            throw new APIError("UNAUTHORIZED", {
+              code: "SIGN_IN_REQUIRED",
+              message: "Sign in to your account on this device, then open the link again.",
+            });
+          }
+        }
+      }),
       after: createAuthMiddleware(async (ctx) => {
         const returned = ctx.context.returned;
         if (returned instanceof Error) return;

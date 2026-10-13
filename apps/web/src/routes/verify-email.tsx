@@ -39,7 +39,8 @@ const COPY: Record<
   change: {
     title: "Confirm your new email",
     doneTitle: "Email changed",
-    description: "Confirm this address to make it your account's email.",
+    description:
+      "Confirm this address to make it your account's email. You need to be signed in to your account in this browser.",
     button: "Confirm new email",
     done: "Your email address has been changed.",
   },

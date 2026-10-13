@@ -262,6 +262,18 @@ describe("change email (EVERYCENT-46)", () => {
     const confirm = emailsTo(app, next, "change-email-verify");
     expect(confirm).toHaveLength(1);
 
+    // Opened where nobody is signed in (another device, a forwarded link): no session, no change.
+    const signedOut = await verify(linkToken(confirm[0]));
+    expect(signedOut.status).toBe(401);
+    expect(await signedOut.json()).toMatchObject({ code: "SIGN_IN_REQUIRED" });
+    expect(signedOut.headers.getSetCookie().some((c) => c.includes("session_token="))).toBe(false);
+    expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
+
+    // Someone else's session doesn't count either.
+    const { cookie: stranger } = await signUp(app);
+    expect((await verify(linkToken(confirm[0]), stranger)).status).toBeGreaterThanOrEqual(400);
+    expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
+
     expect((await verify(linkToken(confirm[0]), cookie)).status).toBe(200);
     const row = await db.query.user.findFirst({ where: eq(user.email, next) });
     expect(row?.emailVerified).toBe(true);
@@ -344,6 +356,29 @@ describe("change password (EVERYCENT-46)", () => {
     expect((await app.request("/v1/me", { headers: { cookie: newCookie } })).status).toBe(200);
     expect(emailsTo(app, email, "password-changed")).toHaveLength(1);
     expect(await signIn(app, email, "brand-new-password-1")).toContain("session_token=");
+  });
+});
+
+describe("password guessing with a stolen session", () => {
+  it("counts change-password and change-email attempts against one hourly limit", async () => {
+    const { cookie, password } = await signUp(app);
+    const changePassword = (currentPassword: string) =>
+      post(
+        "/api/auth/change-password",
+        { currentPassword, newPassword: "brand-new-password-1" },
+        cookie,
+      );
+    for (let i = 0; i < PASSWORD_CHECKS_PER_HOUR / 2; i++) {
+      expect((await changePassword("wrong-guess-1")).status).toBe(400);
+      expect(
+        (await post("/v1/me/email", { newEmail: fresh(), password: "wrong-guess-2" }, cookie))
+          .status,
+      ).toBe(403);
+    }
+    const limited = await changePassword(password);
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ code: "RATE_LIMITED" });
+    expect((await app.request("/v1/me", { headers: { cookie } })).status).toBe(200);
   });
 });
 

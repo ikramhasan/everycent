@@ -74,7 +74,8 @@ export const emails = {
   changeEmailVerify: (to: string, webOrigin: string, token: string) =>
     render("change-email-verify", to, {
       subject: "Confirm your new email address",
-      intro: "Confirm this address to make it the email for your everycent account.",
+      intro:
+        "Confirm this address to make it the email for your everycent account. Open the link in a browser where you're signed in to everycent.",
       action: {
         label: "Confirm new email",
         url: link(webOrigin, "/verify-email", { token, step: "change" }),
