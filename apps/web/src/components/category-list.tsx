@@ -105,8 +105,11 @@ export interface CategoryFigures {
    * everything. A view leaves hidden categories and empty groups out and can't be reordered.
    */
   shown?: ReadonlySet<string>;
-  /** What to say when a view keeps nothing, with a way back to All. */
-  emptyView?: { message: string; onViewAll: () => void };
+  /**
+   * What to say when a view keeps nothing, with a way back to All (and, for a custom view, to
+   * edit it).
+   */
+  emptyView?: { message: string; onViewAll: () => void; onEdit?: () => void };
   /** YNAB's Progress Bars setting: off hides the bars and the notes under category names. */
   progressBars?: boolean;
 }
@@ -151,6 +154,7 @@ export function CategoryList({
   collapsed = NO_GROUPS,
   onCollapsedChange,
   toolbar,
+  addGroupDisabled = false,
 }: {
   data: CategoryListData;
   actions: CategoryListActions;
@@ -159,6 +163,8 @@ export function CategoryList({
   onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
   /** More buttons next to "Category Group" (e.g. Recent Moves). */
   toolbar?: ReactNode;
+  /** Greys out "Category Group" (YNAB does in a custom view). */
+  addGroupDisabled?: boolean;
 }) {
   const serverLayout = useMemo(() => visibleLayout(data), [data]);
   const [layout, setLayout] = useState<VisibleLayout>(serverLayout);
@@ -272,7 +278,7 @@ export function CategoryList({
           submitLabel="Add"
           onSubmit={({ name }) => actions.createGroup(name)}
           trigger={
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled={addGroupDisabled}>
               <Plus /> Category Group
             </Button>
           }
@@ -460,9 +466,16 @@ export function CategoryList({
               <EmptyHeader>
                 <EmptyDescription>{figures.emptyView.message}</EmptyDescription>
               </EmptyHeader>
-              <Button variant="link" size="sm" onClick={figures.emptyView.onViewAll}>
-                View All
-              </Button>
+              <div className="flex gap-2">
+                {figures.emptyView.onEdit && (
+                  <Button variant="secondary" size="sm" onClick={figures.emptyView.onEdit}>
+                    Edit View
+                  </Button>
+                )}
+                <Button variant="link" size="sm" onClick={figures.emptyView.onViewAll}>
+                  View All
+                </Button>
+              </div>
             </Empty>
           )}
           {shown && selectable.length > 0 && figures?.emptyView && (

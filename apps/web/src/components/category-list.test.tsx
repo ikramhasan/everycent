@@ -449,6 +449,35 @@ describe("CategoryList", () => {
       expect(selection.setAll).toHaveBeenLastCalledWith(["c1", "c2"]);
     });
 
+    it("offers Edit View on an empty custom view and greys out Category Group", async () => {
+      const onEdit = vi.fn();
+      const onViewAll = vi.fn();
+      render(
+        <CategoryList
+          data={data}
+          actions={makeActions()}
+          addGroupDisabled
+          figures={{
+            month,
+            currentMonth: "2026-10",
+            format: (a) => `A${a}`,
+            shown: new Set(),
+            emptyView: {
+              message: "There are no categories selected for Bills.",
+              onViewAll,
+              onEdit,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText("There are no categories selected for Bills.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Category Group" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("button", { name: "Edit View" }));
+      expect(onEdit).toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "View All" }));
+      expect(onViewAll).toHaveBeenCalled();
+    });
+
     it("shows only the categories a view keeps, without the hidden row", () => {
       renderSelectable(new Set(["c2"]));
       expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
