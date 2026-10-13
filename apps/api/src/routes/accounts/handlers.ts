@@ -26,7 +26,12 @@ import {
   transferPayeeName,
   ZERO_BALANCES,
 } from "../../lib/ledger";
-import { freezeLoanCharges, lastLoanPayments, saveLoanTerms } from "../../lib/loans";
+import {
+  freezeLoanCharges,
+  keepEarlierTerms,
+  lastLoanPayments,
+  saveLoanTerms,
+} from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -179,6 +184,8 @@ async function pairCategory(tx: Db, account: AccountRow, categoryId: string | nu
     .where(eq(budgetAccount.id, account.id));
 }
 
+const hasEscrow = (type: AccountRow["type"]) => type === "mortgage";
+
 const optionalBigInt = (v: string | null | undefined) =>
   v === undefined ? undefined : v === null ? null : BigInt(v);
 
@@ -227,7 +234,8 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
         currency: budget.currency,
         interestRate: body.interestRate ?? null,
         minimumPayment: optionalBigInt(body.minimumPayment) ?? null,
-        escrowAmount: optionalBigInt(body.escrowAmount) ?? null,
+        // Only mortgages have escrow (YNAB's forms); other loans would be charged it unseen.
+        escrowAmount: hasEscrow(body.type) ? (optionalBigInt(body.escrowAmount) ?? null) : null,
       })
       .returning();
     if (created && accountFamily(created.type) === "loan") {
@@ -280,13 +288,16 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     );
   }
   assertLoanFields(type, body);
+  // Only mortgages have escrow: a loan that isn't one (or stops being one) has none.
+  const escrowAmount =
+    accountFamily(type) === "loan" && !hasEscrow(type) ? null : optionalBigInt(body.escrowAmount);
   // Edit Account sends every field; only a real change starts new terms.
   const rate = (v: string | null) => (v === null ? null : rateThousandths(v));
   const termsChanged =
     (body.interestRate !== undefined && rate(body.interestRate) !== rate(account.interestRate)) ||
     (body.minimumPayment !== undefined &&
       optionalBigInt(body.minimumPayment) !== account.minimumPayment) ||
-    (body.escrowAmount !== undefined && optionalBigInt(body.escrowAmount) !== account.escrowAmount);
+    (escrowAmount !== undefined && escrowAmount !== account.escrowAmount);
 
   await db.transaction(async (tx) => {
     const fields = {
@@ -295,7 +306,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       type: body.type,
       interestRate: body.interestRate,
       minimumPayment: optionalBigInt(body.minimumPayment),
-      escrowAmount: optionalBigInt(body.escrowAmount),
+      escrowAmount,
     };
     // Drizzle refuses an update with nothing to set (a working balance alone).
     if (Object.values(fields).some((v) => v !== undefined)) {
@@ -306,6 +317,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
         .returning();
       // YNAB keeps a loan's terms per month: a change applies "for October and going forward".
       if (updated && termsChanged && accountFamily(updated.type) === "loan") {
+        await keepEarlierTerms(tx, account);
         await saveLoanTerms(tx, updated, date);
       }
     }

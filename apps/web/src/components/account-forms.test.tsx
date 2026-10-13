@@ -58,6 +58,18 @@ describe("AddAccountForm", () => {
     });
   });
 
+  it("drops escrow typed for a mortgage when the type changes", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    render(<AddAccountForm settings={usd} onSubmit={onSubmit} />);
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "mortgage");
+    await userEvent.type(screen.getByLabelText("Nickname"), "Car");
+    await userEvent.click(screen.getByLabelText("Yes"));
+    await userEvent.type(screen.getByLabelText("How much is the monthly escrow or fee?"), "150");
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "auto_loan");
+    await userEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ escrowAmount: undefined }));
+  });
+
   it("offers to pair a loan with a category, or skip", async () => {
     const categories = {
       groups: [

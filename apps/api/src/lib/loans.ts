@@ -43,6 +43,9 @@ export interface LoanState {
 
 const firstOfMonth = (month: BudgetMonth) => `${month}-01`;
 
+/** Where a loan's terms from before 7f are filed: before any month it can have. */
+const EARLIEST_MONTH = "0001-01";
+
 /** The loans' transactions up to `today`, classified for `loanMonths`. */
 async function loanTransactions(db: Db, accountIds: string[], today: string) {
   if (accountIds.length === 0) return [];
@@ -109,7 +112,7 @@ async function termsByAccount(db: Db, accounts: AccountRow[]) {
     if (!byAccount.has(a.id)) {
       byAccount.set(a.id, [
         {
-          month: "0001-01",
+          month: EARLIEST_MONTH,
           interestRate: a.interestRate,
           minimumPayment: a.minimumPayment,
           escrowAmount: a.escrowAmount,
@@ -264,6 +267,23 @@ export async function saveLoanTerms(
       ...values,
     })
     .onConflictDoUpdate({ target: [loanTerms.accountId, loanTerms.month], set: values });
+}
+
+/**
+ * Before a loan from before 7f (no `loan_terms` rows yet) gets new terms, records the ones it had
+ * so earlier months keep them: months before the first entry use that entry (`termsFor`).
+ */
+export async function keepEarlierTerms(
+  db: Db,
+  account: Pick<AccountRow, "id" | "currency" | "interestRate" | "minimumPayment" | "escrowAmount">,
+) {
+  const [existing] = await db
+    .select({ id: loanTerms.id })
+    .from(loanTerms)
+    .where(eq(loanTerms.accountId, account.id))
+    .limit(1);
+  if (existing) return;
+  await saveLoanTerms(db, account, `${EARLIEST_MONTH}-01`);
 }
 
 /** The date of each loan's latest payment, for the paired category's "Last Paid on …". */

@@ -121,7 +121,8 @@ function AccountPage() {
     try {
       await update.mutateAsync({
         params: { path },
-        body: values.workingBalance === undefined ? values : { ...values, date: todayIso() },
+        // The user's today dates an adjustment and starts a loan's new terms in their month.
+        body: { ...values, date: todayIso() },
       });
       await refresh();
       setEditing(false);

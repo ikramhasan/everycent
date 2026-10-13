@@ -46,7 +46,7 @@ type LoanResult =
     }
   | { ok: false; error: string };
 
-function parseLoan(values: LoanValues, settings: MoneySettings): LoanResult {
+function parseLoan(values: LoanValues, settings: MoneySettings, type: AccountType): LoanResult {
   const rate = values.interestRate.trim().replace(/%$/, "").replace(",", ".");
   if (rate && !RATE.test(rate)) return { ok: false, error: "Enter the interest rate like 6.125" };
   const amounts: Record<"minimumPayment" | "escrowAmount", string | null> = {
@@ -54,6 +54,8 @@ function parseLoan(values: LoanValues, settings: MoneySettings): LoanResult {
     escrowAmount: null,
   };
   for (const key of ["minimumPayment", "escrowAmount"] as const) {
+    // A hidden escrow field (not a mortgage) sends nothing, even if typed in before.
+    if (key === "escrowAmount" && !hasEscrow(type)) continue;
     if (!values[key].trim()) continue;
     const parsed = parseMoneyInput(values[key], settings);
     if (typeof parsed === "string") return { ok: false, error: parsed };
@@ -212,7 +214,7 @@ export function AddAccountForm({
     event.preventDefault();
     const parsed = parseMoneyInput(balance || "0", settings);
     if (typeof parsed === "string") return setError(parsed);
-    const loanValues = isLoan ? parseLoan(loan, settings) : null;
+    const loanValues = isLoan ? parseLoan(loan, settings, type) : null;
     if (loanValues && !loanValues.ok) return setError(loanValues.error);
     if (isLoan && categories && !pairStep) {
       setError(null);
@@ -364,7 +366,7 @@ export function EditAccountForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const loanValues = isLoan
-      ? parseLoan(loan, settings)
+      ? parseLoan(loan, settings, type)
       : ({ ok: true, interestRate: null, minimumPayment: null, escrowAmount: null } as const);
     if (!loanValues.ok) return setError(loanValues.error);
     // YNAB takes the working balance as typed (signed): a card's "70" is $70 in credit.

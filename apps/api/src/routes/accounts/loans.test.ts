@@ -1,3 +1,5 @@
+import { loanTerms } from "@everycent/db/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
 
@@ -204,6 +206,38 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect(sep?.interest.applied).toBe("42708"); // still 5.125% on $100,000
     // 6% on what September left: 100,000 − 900 + 427.08 + 150 = $99,677.08 → $498.39.
     expect(oct?.interest.applied).toBe("49839");
+  });
+
+  it("keeps a pre-7f loan's old terms for earlier months", async () => {
+    const { base, cookie, mortgage, pay, months } = await setup();
+    // Loans from before 7f have no loan_terms rows, only the account's columns.
+    await db.delete(loanTerms).where(eq(loanTerms.accountId, mortgage.id));
+    await pay("2026-09-05", "90000");
+    await pay("2026-10-05", "90000");
+    expect((await months())[2]?.interest.applied).toBe("42708");
+    await send("PATCH", `${base}/accounts/${mortgage.id}`, cookie, {
+      interestRate: "6",
+      date: TODAY,
+    });
+    const [, , sep, oct] = await months();
+    expect(sep?.interest.applied).toBe("42708"); // still 5.125%
+    expect(oct?.interest.applied).toBe("49839"); // 6% from October
+  });
+
+  it("keeps escrow to mortgages", async () => {
+    const { base, cookie, addAccount, mortgage } = await setup();
+    const car = await addAccount({
+      name: "Car",
+      type: "auto_loan",
+      balance: "-500000",
+      escrowAmount: "1000",
+    });
+    expect((car as Account & { escrowAmount: string | null }).escrowAmount).toBeNull();
+    const res = await send("PATCH", `${base}/accounts/${mortgage.id}`, cookie, {
+      type: "personal_loan",
+      date: TODAY,
+    });
+    expect(((await res.json()) as { escrowAmount: string | null }).escrowAmount).toBeNull();
   });
 
   it("fixes the charges at Update Balance", async () => {
