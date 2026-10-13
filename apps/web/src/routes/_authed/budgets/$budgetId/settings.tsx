@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
+import { BudgetMembers } from "@/components/budget-members";
 import { useManagePayees } from "@/components/manage-payees";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -110,6 +111,8 @@ function BudgetSettingsPage() {
           />
         </CardContent>
       </Card>
+
+      <BudgetMembers />
 
       <Card>
         <CardHeader>

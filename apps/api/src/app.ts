@@ -11,6 +11,7 @@ import { categoriesRouter } from "./routes/categories";
 import { flagsRouter } from "./routes/flags";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
+import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
 import { payeesRouter } from "./routes/payees";
 import { scheduledRouter } from "./routes/scheduled";
@@ -51,6 +52,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", healthRouter);
   app.route("/v1", meRouter);
   app.route("/v1", budgetsRouter);
+  app.route("/v1", membersRouter);
   app.route("/v1", categoriesRouter);
   app.route("/v1", accountsRouter);
   app.route("/v1", transactionsRouter);

@@ -245,9 +245,12 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Budgets and sharing (phase 16)
 
-- Invitations: the organization plugin's `budget_invitation` table exists but nothing uses it.
-  Email delivery now exists (`deps.email`, `apps/api/src/lib/email`); invites add a template and
-  an `EmailKind`.
+- Sharing is per budget (YNAB Together shares plans within a subscription group; everycent has
+  no subscriptions): the owner invites, and a budget has at most 6 people, pending invitations
+  included, as a YNAB Together group does. Invitations last 14 days; YNAB also emails a reminder
+  3 days before expiry, which needs a background job (EVERYCENT-125).
+- The invitation email names only the inviter's address: budget and display names are free
+  text, shown on the invitation page instead.
 - There is no viewer role yet (YNAB has none; the roadmap lists it as an extra).
 - `session.active_organization_id` (added by the plugin) is unused; the current budget lives in the
   URL.
