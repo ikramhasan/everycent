@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { breakdownSections, ReadyToAssignBanner, TargetPie } from "./ready-to-assign";
+import { breakdownSections, FutureTargetIcon, ReadyToAssignBanner } from "./ready-to-assign";
 
 const format = (a: string) => `$${Number(a) / 100}`;
 
@@ -88,11 +88,11 @@ describe("Ready to Assign Breakdown", () => {
 });
 
 // YNAB "x132 Order", 2026-10-14 (EVERYCENT-143).
-describe("TargetPie", () => {
+describe("FutureTargetIcon", () => {
   it("fills with the funded share, and turns into a check once funded", () => {
-    const { rerender } = render(<TargetPie targets={{ needed: "500", funded: "300" }} />);
-    expect(screen.getByRole("img", { name: "60% of targets funded" })).toBeInTheDocument();
-    rerender(<TargetPie targets={{ needed: "500", funded: "500" }} />);
+    const { rerender } = render(<FutureTargetIcon targets={{ needed: "500", funded: "300" }} />);
+    expect(screen.getByRole("img", { name: "Target 60% funded" })).toBeInTheDocument();
+    rerender(<FutureTargetIcon targets={{ needed: "500", funded: "500" }} />);
     expect(screen.getByLabelText("Targets funded")).toBeInTheDocument();
   });
 });

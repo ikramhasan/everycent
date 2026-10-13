@@ -4,6 +4,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { CircleCheck, CircleMinus, CirclePlus, Info, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { type BudgetMonthData, monthName } from "@/lib/months";
+import { TargetPie } from "./move-money";
 
 type Breakdown = BudgetMonthData["readyToAssignBreakdown"];
 
@@ -219,7 +220,7 @@ export function FutureMonthsPanel({
         {months.map((m) => (
           <li key={m.month} className="flex justify-between gap-2">
             <span className="flex items-center gap-1.5">
-              {m.targets && <TargetPie targets={m.targets} />}
+              {m.targets && <FutureTargetIcon targets={m.targets} />}
               {monthName(m.month)}
             </span>
             <span className="tabular-nums">{format(m.assigned)}</span>
@@ -235,37 +236,12 @@ export function FutureMonthsPanel({
  * pie filling up, a check once they're all funded; no icon for a month without targets (YNAB,
  * 2026-10-14, "x132 Order": Groceries' $5.00 target with $3.00 in November, then $5.00).
  */
-export function TargetPie({ targets }: { targets: { needed: string; funded: string } }) {
+export function FutureTargetIcon({ targets }: { targets: { needed: string; funded: string } }) {
   const needed = BigInt(targets.needed);
   const funded = BigInt(targets.funded);
+  const tone = "text-blue-600 dark:text-blue-400";
   if (funded >= needed) {
-    return (
-      <CircleCheck
-        className="size-4 shrink-0 text-blue-600 dark:text-blue-400"
-        aria-label="Targets funded"
-      />
-    );
+    return <CircleCheck className={cn("size-4 shrink-0", tone)} aria-label="Targets funded" />;
   }
-  const percent = Number((funded * 100n) / needed);
-  const r = 6;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className="size-4 shrink-0 -rotate-90 text-blue-600 dark:text-blue-400"
-      role="img"
-      aria-label={`${percent}% of targets funded`}
-    >
-      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <circle
-        cx="8"
-        cy="8"
-        r={r / 2}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={r}
-        strokeDasharray={`${(c / 2) * (percent / 100)} ${c / 2}`}
-      />
-    </svg>
-  );
+  return <TargetPie percent={Number((funded * 100n) / needed)} className={cn("size-4", tone)} />;
 }
