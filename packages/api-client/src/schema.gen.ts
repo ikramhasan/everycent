@@ -604,6 +604,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Work out a reconcile's balance adjustment without saving
+         * @description The Reconciliation Balance Adjustment `reconcileAccount` would add for the same body (zero for none): Update Balance's Changes step after its interest rate / escrow check.
+         */
+        post: operations["previewReconcileAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
         parameters: {
             query?: never;
@@ -615,7 +635,7 @@ export interface paths {
         put?: never;
         /**
          * Reconcile an account against the bank's balance
-         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied.
+         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied. A loan's `loanTerms` (Update Balance's interest rate / escrow check) change its terms from `date`'s month first; the adjustment then makes up the difference to the balance with this month re-estimated on the new terms, while the months are fixed at what they had (YNAB, 2026-10-14).
          */
         post: operations["reconcileAccount"];
         delete?: never;
@@ -1722,6 +1742,10 @@ export interface components {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
         };
+        ReconcilePreview: {
+            /** @description Signed like the account; zero when it matches */
+            adjustment: string;
+        };
         ReconcileAccount: {
             /** @description The bank's current cleared balance (a loan's: what's owed), signed like the account's (negative for money owed) */
             balance: string;
@@ -1730,6 +1754,23 @@ export interface components {
              * @description The user's today
              */
             date: string;
+            loanTerms?: components["schemas"]["LoanTermsCheck"];
+        };
+        /** @description Loans only */
+        LoanTermsCheck: {
+            interestRate?: {
+                /** @description Annual interest rate in percent (loan accounts) */
+                rate: string | null;
+                /** @description Unchecked, next month goes back to the old rate ("… for October.") */
+                keepGoingForward: boolean;
+            };
+            /** @description Mortgages only */
+            escrowAmount?: {
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                amount: string | null;
+                /** @description Unchecked, next month goes back to the old escrow */
+                keepGoingForward: boolean;
+            };
         };
         CloseAccount: {
             /**
@@ -5186,6 +5227,60 @@ export interface operations {
             };
             /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    previewReconcileAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileAccount"];
+            };
+        };
+        responses: {
+            /** @description The adjustment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcilePreview"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

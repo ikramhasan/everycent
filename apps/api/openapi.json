@@ -2216,6 +2216,19 @@
           "beforeAccountId"
         ]
       },
+      "ReconcilePreview": {
+        "type": "object",
+        "properties": {
+          "adjustment": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Signed like the account; zero when it matches"
+          }
+        },
+        "required": [
+          "adjustment"
+        ]
+      },
       "ReconcileAccount": {
         "type": "object",
         "properties": {
@@ -2228,12 +2241,64 @@
             "type": "string",
             "format": "date",
             "description": "The user's today"
+          },
+          "loanTerms": {
+            "$ref": "#/components/schemas/LoanTermsCheck"
           }
         },
         "required": [
           "balance",
           "date"
         ]
+      },
+      "LoanTermsCheck": {
+        "type": "object",
+        "properties": {
+          "interestRate": {
+            "type": "object",
+            "properties": {
+              "rate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^\\d{1,3}(\\.\\d{1,3})?$",
+                "description": "Annual interest rate in percent (loan accounts)"
+              },
+              "keepGoingForward": {
+                "type": "boolean",
+                "description": "Unchecked, next month goes back to the old rate (\"… for October.\")"
+              }
+            },
+            "required": [
+              "rate",
+              "keepGoingForward"
+            ]
+          },
+          "escrowAmount": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "keepGoingForward": {
+                "type": "boolean",
+                "description": "Unchecked, next month goes back to the old escrow"
+              }
+            },
+            "required": [
+              "amount",
+              "keepGoingForward"
+            ],
+            "description": "Mortgages only"
+          }
+        },
+        "description": "Loans only"
       },
       "CloseAccount": {
         "type": "object",
@@ -9483,6 +9548,91 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview": {
+      "post": {
+        "operationId": "previewReconcileAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Work out a reconcile's balance adjustment without saving",
+        "description": "The Reconciliation Balance Adjustment `reconcileAccount` would add for the same body (zero for none): Update Balance's Changes step after its interest rate / escrow check.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The adjustment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcilePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
       "post": {
         "operationId": "reconcileAccount",
@@ -9495,7 +9645,7 @@
           }
         ],
         "summary": "Reconcile an account against the bank's balance",
-        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied.",
+        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied. A loan's `loanTerms` (Update Balance's interest rate / escrow check) change its terms from `date`'s month first; the adjustment then makes up the difference to the balance with this month re-estimated on the new terms, while the months are fixed at what they had (YNAB, 2026-10-14).",
         "parameters": [
           {
             "schema": {

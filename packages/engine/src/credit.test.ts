@@ -11,7 +11,7 @@ const card = (accountId: string, amount: bigint, date = "2026-10-01", order = ac
   amount,
   order,
 });
-const funded = (cash: bigint, cards: ReturnType<typeof card>[]) =>
+const funded = (cash: bigint, cards: Parameters<typeof fundedCardSpending>[1]) =>
   Object.fromEntries(fundedCardSpending(cash, cards).moved);
 
 describe("fundedCardSpending", () => {

@@ -338,6 +338,157 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await months())[2]?.interest.applied).toBe(sep?.interest.applied);
   });
 
+  describe("Update Balance's interest rate / escrow check (YNAB, 2026-10-14)", () => {
+    /** YNAB's x-126-Mort: $100,000 from Sep 1, 6%, $900, $150 escrow; $900 on Sep 15, Oct 5. */
+    async function x126() {
+      const s = await setup();
+      const loan = await s.addAccount({
+        name: "x-126-Mort",
+        type: "mortgage",
+        date: "2026-09-01",
+        balance: "-10000000",
+        interestRate: "6",
+        minimumPayment: "90000",
+        escrowAmount: "15000",
+      });
+      await s.pay("2026-09-15", "90000", "x-126-pay", loan.id);
+      await s.pay("2026-10-05", "90000", "x-126-pay", loan.id);
+      const body = (loanTerms?: unknown) => ({ balance: "-9940000", date: TODAY, loanTerms });
+      const preview = async (loanTerms?: unknown) => {
+        const res = await send(
+          "POST",
+          `${s.base}/accounts/${loan.id}/reconcile/preview`,
+          s.cookie,
+          body(loanTerms),
+        );
+        expect(res.status, await res.clone().text()).toBe(200);
+        return ((await res.json()) as { adjustment: string }).adjustment;
+      };
+      const reconcile = async (loanTerms?: unknown) => {
+        const res = await send(
+          "POST",
+          `${s.base}/accounts/${loan.id}/reconcile`,
+          s.cookie,
+          body(loanTerms),
+        );
+        expect(res.status, await res.clone().text()).toBe(200);
+        return (await res.json()) as Account & { escrowAmount: string | null };
+      };
+      const accountOn = async (today: string) =>
+        (
+          (await (await send("GET", `${s.base}/accounts?today=${today}`, s.cookie)).json()) as {
+            accounts: Array<Account & { escrowAmount: string | null }>;
+          }
+        ).accounts.find((a) => a.id === loan.id);
+      const terms = async () =>
+        (
+          (await (
+            await send("GET", `${s.base}/accounts/${loan.id}/loan?today=${TODAY}`, s.cookie)
+          ).json()) as { terms: Array<{ month: string; interestRate: string | null }> }
+        ).terms;
+      return { ...s, loan, preview, reconcile, accountOn, terms };
+    }
+
+    it("re-estimates this month on a new rate kept going forward", async () => {
+      const { loan, preview, reconcile, months, terms, accountOn } = await x126();
+      expect((await accountOn(TODAY))?.balances.working).toBe("-9949875");
+      // The check step's Difference: $98.75; the Changes step's after 6% → 7%: $181.88.
+      expect(await preview()).toBe("9875");
+      const rate7 = { interestRate: { rate: "7", keepGoingForward: true } };
+      expect(await preview(rate7)).toBe("18188");
+      // An unchanged rate is no change.
+      expect(await preview({ interestRate: { rate: "6.000", keepGoingForward: false } })).toBe(
+        "9875",
+      );
+
+      const after = await reconcile(rate7);
+      // YNAB froze October's interest at the old $498.75: −$99,498.75 + $181.88 = −$99,316.87.
+      expect(after.balances.working).toBe("-9931687");
+      expect(after.interestRate).toBe("7.000");
+      const [sep, oct] = await months(loan.id);
+      expect(sep?.interest).toMatchObject({ applied: "50000", status: "reconciled" });
+      expect(oct?.interest).toMatchObject({ applied: "49875", status: "reconciled" });
+      expect(oct?.transactions.map((t) => t.amount)).toContain("18188");
+      // September keeps 6%; October on is 7%.
+      expect((await terms()).map((t) => [t.month, t.interestRate])).toEqual([
+        ["2026-09", "6.000"],
+        ["2026-10", "7.000"],
+      ]);
+      expect((await accountOn("2027-01-15"))?.interestRate).toBe("7.000");
+    });
+
+    it("brings the old rate back next month when not kept", async () => {
+      const { reconcile, terms, accountOn } = await x126();
+      const after = await reconcile({ interestRate: { rate: "7", keepGoingForward: false } });
+      expect(after.balances.working).toBe("-9931687");
+      expect(after.interestRate).toBe("7.000");
+      expect((await terms()).map((t) => [t.month, t.interestRate])).toEqual([
+        ["2026-09", "6.000"],
+        ["2026-10", "7.000"],
+        ["2026-11", "6.000"],
+      ]);
+      expect((await accountOn("2026-11-02"))?.interestRate).toBe("6.000");
+    });
+
+    it("keeps earlier months' terms when the only entry is this month's", async () => {
+      // As in YNAB: the loan added in October, its starting balance moved back to September.
+      const s = await setup();
+      const loan = await s.addAccount({
+        name: "x-126-Late",
+        type: "mortgage",
+        date: TODAY,
+        balance: "-10000000",
+        interestRate: "6",
+        minimumPayment: "90000",
+        escrowAmount: "15000",
+      });
+      const [start] = (await s.transactions(loan.id)) as Array<Txn & { id: string }>;
+      await send("PATCH", `${s.base}/transactions/${start?.id}`, s.cookie, { date: "2026-09-01" });
+      await s.pay("2026-09-15", "90000", "", loan.id);
+      await s.pay("2026-10-05", "90000", "", loan.id);
+      const res = await send("POST", `${s.base}/accounts/${loan.id}/reconcile/preview`, s.cookie, {
+        balance: "-9940000",
+        date: TODAY,
+        loanTerms: { interestRate: { rate: "7", keepGoingForward: true } },
+      });
+      // Only October is re-estimated: September stays at 6% ($500.00), as in YNAB.
+      expect(await res.json()).toEqual({ adjustment: "18188" });
+    });
+
+    it("re-estimates escrow the same way", async () => {
+      const { loan, preview, reconcile, months, accountOn } = await x126();
+      const escrow = { escrowAmount: { amount: "20000", keepGoingForward: true } };
+      expect(await preview(escrow)).toBe("14875");
+      const after = await reconcile(escrow);
+      // YNAB: Balance Adjustment +$148.75, escrow kept "Reconciled −$150.00", ended −$99,350.00.
+      expect(after.balances.working).toBe("-9935000");
+      expect(after.escrowAmount).toBe("20000");
+      expect((await months(loan.id))[1]?.escrow).toMatchObject({
+        applied: "15000",
+        status: "reconciled",
+      });
+      expect((await accountOn("2026-12-01"))?.escrowAmount).toBe("20000");
+    });
+
+    it("refuses escrow on loans that aren't mortgages and terms on other accounts", async () => {
+      const { base, cookie, addAccount, checking } = await x126();
+      const car = await addAccount({ name: "Car", type: "auto_loan", balance: "-500000" });
+      const escrow = { escrowAmount: { amount: "100", keepGoingForward: true } };
+      const rate = { interestRate: { rate: "5", keepGoingForward: true } };
+      for (const [id, loanTerms] of [
+        [car.id, escrow],
+        [checking.id, rate],
+      ] as const) {
+        const res = await send("POST", `${base}/accounts/${id}/reconcile`, cookie, {
+          balance: "0",
+          date: TODAY,
+          loanTerms,
+        });
+        expect(res.status).toBe(400);
+      }
+    });
+  });
+
   it("pairs one loan per category", async () => {
     const {
       base,

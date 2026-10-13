@@ -204,6 +204,69 @@ export const updateAccount = createRoute({
   },
 });
 
+const LoanTermsCheck = z
+  .object({
+    interestRate: z
+      .object({
+        rate: InterestRate.nullable(),
+        keepGoingForward: z
+          .boolean()
+          .describe('Unchecked, next month goes back to the old rate ("… for October.")'),
+      })
+      .optional(),
+    escrowAmount: z
+      .object({
+        amount: zMinorUnits.nullable(),
+        keepGoingForward: z.boolean().describe("Unchecked, next month goes back to the old escrow"),
+      })
+      .optional()
+      .describe("Mortgages only"),
+  })
+  .openapi("LoanTermsCheck", {
+    description: "Update Balance's check step: the loan's interest rate and monthly escrow",
+  });
+
+const ReconcileAccountBody = z
+  .object({
+    balance: zMinorUnits.describe(
+      "The bank's current cleared balance (a loan's: what's owed), signed like the account's " +
+        "(negative for money owed)",
+    ),
+    date: IsoDate.describe("The user's today"),
+    loanTerms: LoanTermsCheck.optional().describe("Loans only"),
+  })
+  .openapi("ReconcileAccount");
+
+export const previewReconcileAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
+  operationId: "previewReconcileAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Work out a reconcile's balance adjustment without saving",
+  description:
+    "The Reconciliation Balance Adjustment `reconcileAccount` would add for the same body (zero " +
+    "for none): Update Balance's Changes step after its interest rate / escrow check.",
+  request: {
+    params: AccountParams,
+    body: json(ReconcileAccountBody),
+  },
+  responses: {
+    200: ok(
+      "The adjustment",
+      z
+        .object({
+          adjustment: zMinorUnits.describe("Signed like the account; zero when it matches"),
+        })
+        .openapi("ReconcilePreview"),
+    ),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    404: notFound,
+  },
+});
+
 export const reconcileAccount = createRoute({
   method: "post",
   path: "/budgets/{budgetId}/accounts/{accountId}/reconcile",
@@ -218,20 +281,13 @@ export const reconcileAccount = createRoute({
     "Adjustment for the difference comes first, dated `date` (budget accounts take it from " +
     "Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is " +
     "compared with its working balance, every transaction up to `date` is reconciled, and each " +
-    "month's interest and escrow are fixed at what's applied.",
+    "month's interest and escrow are fixed at what's applied. A loan's `loanTerms` (Update " +
+    "Balance's interest rate / escrow check) change its terms from `date`'s month first; the " +
+    "adjustment then makes up the difference to the balance with this month re-estimated on the " +
+    "new terms, while the months are fixed at what they had (YNAB, 2026-10-14).",
   request: {
     params: AccountParams,
-    body: json(
-      z
-        .object({
-          balance: zMinorUnits.describe(
-            "The bank's current cleared balance (a loan's: what's owed), signed like the account's " +
-              "(negative for money owed)",
-          ),
-          date: IsoDate.describe("The user's today"),
-        })
-        .openapi("ReconcileAccount"),
-    ),
+    body: json(ReconcileAccountBody),
   },
   responses: {
     200: ok("Reconciled", AccountSchema),
