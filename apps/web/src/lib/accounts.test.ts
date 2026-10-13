@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Account, sidebarSections } from "./accounts";
+import { type Account, closeAccountNotice, editBalanceLabel, sidebarSections } from "./accounts";
 
 function account(id: string, type: Account["type"], working: string, closed = false): Account {
   return {
@@ -40,5 +40,32 @@ describe("sidebarSections", () => {
 
   it("leaves out empty sections", () => {
     expect(sidebarSections([account("cash", "cash", "100")]).map((s) => s.id)).toEqual(["budget"]);
+  });
+});
+
+describe("closeAccountNotice", () => {
+  // Read off YNAB's Close Account dialog (EVERYCENT-129 and the credit-card findings).
+  it.each([
+    ["cash account with money (Wallet)", "checking", 92400n, -92400n, true],
+    ["card above zero (Card P)", "credit_card", 1000n, -1000n, true],
+    ["line of credit above zero", "line_of_credit", 500n, -500n, true],
+    ["overdrawn checking (x-129-Overdrawn)", "checking", -1000n, 1000n, false],
+    ["card in debt (Card Y)", "credit_card", -2000n, 2000n, false],
+    ["tracking asset above zero (x-129-AssetPos)", "asset", 4900n, -4900n, false],
+    ["tracking asset below zero (x-129-AssetNeg)", "asset", -600n, 600n, false],
+    ["tracking liability owing (x-129-LiabDebt)", "liability", -10100n, 10100n, false],
+    ["tracking liability above zero (x-129-LiabPos)", "liability", 1900n, -1900n, false],
+  ] as const)("%s", (_, type, working, adjustment, removesMoneyFromPlan) => {
+    expect(closeAccountNotice(type, working)).toEqual({ adjustment, removesMoneyFromPlan });
+  });
+});
+
+describe("editBalanceLabel", () => {
+  it("says Today's Balance for loans and tracking accounts, Working Balance otherwise", () => {
+    expect(editBalanceLabel("checking")).toBe("Working Balance");
+    expect(editBalanceLabel("credit_card")).toBe("Working Balance");
+    expect(editBalanceLabel("mortgage")).toBe("Today's Balance");
+    expect(editBalanceLabel("asset")).toBe("Today's Balance");
+    expect(editBalanceLabel("liability")).toBe("Today's Balance");
   });
 });

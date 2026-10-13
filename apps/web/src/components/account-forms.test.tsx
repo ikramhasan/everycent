@@ -146,6 +146,25 @@ describe("EditAccountForm", () => {
     expect(options).toEqual(["Credit Card", "Line of Credit"]);
   });
 
+  it("labels a tracking account's balance Today's Balance, as YNAB does", () => {
+    render(
+      <EditAccountForm
+        settings={usd}
+        initial={{
+          name: "House",
+          note: "",
+          type: "asset",
+          interestRate: null,
+          minimumPayment: null,
+          escrowAmount: null,
+        }}
+        workingBalance={4900n}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("Today's Balance")).toHaveValue("49.00");
+  });
+
   it("sends a changed working balance only", async () => {
     const onSubmit = vi.fn().mockResolvedValue(null);
     const user = userEvent.setup();

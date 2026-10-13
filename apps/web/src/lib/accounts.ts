@@ -1,5 +1,5 @@
 import type { components } from "@everycent/api-client";
-import { type AccountFamily, accountFamily } from "@everycent/engine";
+import { type AccountFamily, accountFamily, isOnBudget } from "@everycent/engine";
 import { $api } from "./api";
 import { todayIso } from "./dates";
 
@@ -47,4 +47,24 @@ export function sidebarSections(accounts: readonly Account[]): SidebarSection[] 
       return { id, title: TITLES[id], accounts: inSection, total };
     })
     .filter((s) => s.accounts.length > 0);
+}
+
+/**
+ * What YNAB's Close Account dialog says for an account whose working balance isn't zero: the
+ * closing adjustment (minus the balance), and whether it adds the info box "The money in this
+ * account will be removed from your plan…". The box shows only for money in the plan: an
+ * on-budget (cash or credit) account above zero. An overdrawn cash account, a card in debt and a
+ * tracking account of either sign get none (EVERYCENT-129, checked in YNAB 2026-10-14).
+ */
+export function closeAccountNotice(
+  type: Account["type"],
+  working: bigint,
+): { adjustment: bigint; removesMoneyFromPlan: boolean } {
+  return { adjustment: -working, removesMoneyFromPlan: working > 0n && isOnBudget(type) };
+}
+
+/** YNAB labels Edit Account's balance field "Today's Balance" for loans and tracking accounts. */
+export function editBalanceLabel(type: Account["type"]): string {
+  const family = accountFamily(type);
+  return family === "loan" || family === "tracking" ? "Today's Balance" : "Working Balance";
 }
