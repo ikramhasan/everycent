@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
+import { cardPaymentDraft, PaymentFigure, useCardPayment } from "@/components/card-payment";
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
@@ -89,6 +90,8 @@ function AccountPage() {
   const isLoan = account !== undefined && accountFamily(account.type) === "loan";
   // A loan's reconcile is its page's Update Balance (YNAB).
   const reconcilable = account !== undefined && !isLoan;
+  const isCard = account !== undefined && accountFamily(account.type) === "credit";
+  const cardPayment = useCardPayment(isCard ? account : undefined);
 
   // A reconciliation in progress belongs to the account it started on.
   useEffect(() => setReconcilingTo(null), [accountId]);
@@ -433,6 +436,16 @@ function AccountPage() {
           negative={working < 0n}
           strong
         />
+        {cardPayment && (
+          <div className="ml-auto">
+            <PaymentFigure
+              categoryId={cardPayment.categoryId}
+              available={cardPayment.available}
+              caution={cardPayment.caution}
+              format={(minorUnits) => show(minorUnits)}
+            />
+          </div>
+        )}
       </dl>
 
       {reconcilingTo !== null && (
@@ -451,6 +464,18 @@ function AccountPage() {
         focusId={transaction}
         search={registerSearch}
         onSearchChange={onSearchChange}
+        recordPayment={
+          isCard
+            ? () =>
+                cardPaymentDraft({
+                  card: account,
+                  accounts: accounts.data?.accounts ?? [],
+                  available: cardPayment?.available ?? 0n,
+                  settings: budget,
+                  today: todayIso(),
+                })
+            : undefined
+        }
       />
 
       {editDialog}

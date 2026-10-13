@@ -18,10 +18,9 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "./ledger";
 
 export const LOAN_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "loan");
-const PAYING_TYPES = ACCOUNT_TYPES.filter((t) => {
-  const family = accountFamily(t);
-  return family === "cash" || family === "credit";
-});
+const CASH_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "cash");
+const CREDIT_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "credit");
+const PAYING_TYPES = [...CASH_TYPES, ...CREDIT_TYPES];
 
 type AccountRow = typeof budgetAccount.$inferSelect;
 
@@ -320,9 +319,13 @@ export async function lastLoanPayments(db: Db, budgetId: string, today: string) 
  * the latest-dated one): Record Payment starts there. YNAB (2026-10-14, "L7 Loans FS"): the
  * default followed the newest payment per loan, from Record Payment or a register transfer, even
  * one back-dated to before the others.
+ *
+ * For each credit card, the cash account it was last paid from: a card's Record Payment prefills
+ * it (YNAB, 2026-10-14: "Payment from F Cash" after paying x-130 Card from F Cash). Money from
+ * another card is a balance transfer ("Transfer from F Card" in YNAB's payee list), not counted.
  */
 export async function lastPaymentSources(db: Db, budgetId: string) {
-  const loan = alias(budgetAccount, "loan");
+  const loan = alias(budgetAccount, "paid_to");
   const from = alias(budgetAccount, "paid_from");
   const rows = await db
     .selectDistinctOn([transaction.accountId], {
@@ -336,8 +339,10 @@ export async function lastPaymentSources(db: Db, budgetId: string) {
     .where(
       and(
         eq(transaction.budgetId, budgetId),
-        inArray(loan.type, LOAN_TYPES),
-        inArray(from.type, PAYING_TYPES),
+        or(
+          and(inArray(loan.type, LOAN_TYPES), inArray(from.type, PAYING_TYPES)),
+          and(inArray(loan.type, CREDIT_TYPES), inArray(from.type, CASH_TYPES)),
+        ),
         sql`${transaction.amount} > 0`,
       ),
     )

@@ -43,12 +43,15 @@ export function AvailablePill({
   className,
   caution = false,
   target,
+  icon,
 }: {
   amount: string;
   format: Format;
   className?: string;
   caution?: boolean;
   target?: TargetMark;
+  /** Shown before the amount (a card register's "!" on its Payment figure). */
+  icon?: ReactNode;
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   // An overspent category shows only its overspending.
@@ -87,6 +90,7 @@ export function AvailablePill({
           z<sup>z</sup>
         </span>
       )}
+      {icon}
       <span className="truncate">{format(amount)}</span>
     </span>
   );

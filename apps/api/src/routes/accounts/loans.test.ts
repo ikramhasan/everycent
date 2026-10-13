@@ -147,6 +147,32 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBe(savings.id);
   });
 
+  it("reports the cash account a credit card was last paid from", async () => {
+    const { cookie, base, addAccount, checking, account } = await setup();
+    const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });
+    const other = await addAccount({ name: "Amex", type: "credit_card", balance: "0" });
+    const transfer = async (from: string, to: string, date: string) => {
+      const res = await send("POST", `${base}/transactions`, cookie, {
+        accountId: from,
+        date,
+        amount: "-1000",
+        payeeName: null,
+        transferAccountId: to,
+        categoryId: null,
+        memo: "",
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBeNull();
+    await transfer(checking.id, card.id, "2026-10-05");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    // A balance transfer from another card isn't a payment; a cash advance goes the other way.
+    await transfer(other.id, card.id, "2026-10-06");
+    await transfer(card.id, checking.id, "2026-10-07");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    expect((await account(checking.id))?.lastPaymentFromAccountId).toBeNull();
+  });
+
   it("charges escrow and interest on the months with payments", async () => {
     const { mortgage, checking, payCategory, account, pay, months, transactions } = await setup();
     await pay("2026-08-05", "90000", "x-aug");
