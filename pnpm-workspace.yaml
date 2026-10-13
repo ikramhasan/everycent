@@ -37,6 +37,7 @@ catalog:
   cmdk: ^1.1.1
   date-fns: ^4.4.0
   dayjs: ^1.11.23
+  decimal.js: ^10.6.0
   drizzle-kit: ^0.31.11
   drizzle-orm: ^0.45.3
   embla-carousel-react: ^8.6.0

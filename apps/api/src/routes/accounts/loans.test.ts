@@ -164,6 +164,28 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     });
   });
 
+  it("rounds interest twice and lists the loan's terms (YNAB, L7 Half: $2,074.97 → $10.38)", async () => {
+    const { base, cookie, addAccount, pay } = await setup();
+    const half = await addAccount({
+      name: "L7 Half",
+      type: "personal_loan",
+      balance: "-207497",
+      interestRate: "6",
+      minimumPayment: "100",
+    });
+    await pay("2026-08-10", "5000", "", half.id);
+    const res = await send("GET", `${base}/accounts/${half.id}/loan?today=${TODAY}`, cookie);
+    const body = (await res.json()) as {
+      months: LoanMonth[];
+      terms: Array<{ month: string; interestRate: string | null; minimumPayment: string | null }>;
+    };
+    // $10.37485 rounds to $10.375, then $10.38 (one rounding gave $10.37).
+    expect(body.months[1]?.interest).toMatchObject({ total: "1038", applied: "1038" });
+    expect(body.terms).toEqual([
+      expect.objectContaining({ interestRate: "6.000", minimumPayment: "100", escrowAmount: null }),
+    ]);
+  });
+
   it("edits, deletes and adds to a month's interest and escrow", async () => {
     const { mortgage, account, pay, months, setCharge } = await setup();
     await pay("2026-09-05", "90000");

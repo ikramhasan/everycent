@@ -494,7 +494,7 @@ export interface paths {
         get?: never;
         /**
          * Create or replace a category's target
-         * @description A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.
+         * @description A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them; a category paired with a loan takes only debt_monthly (YNAB's Monthly Debt Payment), and only it does.
          */
         put: operations["setCategoryTarget"];
         post?: never;
@@ -1477,15 +1477,15 @@ export interface components {
         };
         CategoryTarget: {
             /** @enum {string} */
-            cadence: "weekly" | "monthly" | "yearly" | "custom" | "payment_monthly" | "payoff_by_date";
+            cadence: "weekly" | "monthly" | "yearly" | "custom" | "payment_monthly" | "payoff_by_date" | "debt_monthly";
             /**
-             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly, balance for payoff_by_date
+             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly and debt_monthly, balance for payoff_by_date
              * @enum {string}
              */
             behavior: "set_aside" | "refill" | "balance";
-            /** @description Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes */
+            /** @description Per week (weekly), per month (monthly, payment_monthly, debt_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes */
             amount: string;
-            /** @description Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday */
+            /** @description Monthly and debt_monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday */
             dueDay: number | null;
             /**
              * Format: date
@@ -1587,6 +1587,13 @@ export interface components {
             cadence: "payoff_by_date";
             /** @description Pay off the card's balance by the end of this month */
             dueMonth: string;
+        } | {
+            /** @enum {string} */
+            cadence: "debt_monthly";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /** @description Day of the month it's due; null is the last day. Only changes the wording */
+            dueDay: number | null;
         }) & {
             /** @description The month the target is set from */
             month: string;
@@ -1761,6 +1768,17 @@ export interface components {
                     /** @description Payments: the paying side's id */
                     otherSideId: string | null;
                 }[];
+            }[];
+            /** @description The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner */
+            terms: {
+                /** @description YYYY-MM */
+                month: string;
+                /** @description Annual rate in percent */
+                interestRate: string | null;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                minimumPayment: string | null;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                escrowAmount: string | null;
             }[];
         };
         LoanCharge: {

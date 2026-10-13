@@ -1102,7 +1102,8 @@
               "yearly",
               "custom",
               "payment_monthly",
-              "payoff_by_date"
+              "payoff_by_date",
+              "debt_monthly"
             ]
           },
           "behavior": {
@@ -1112,19 +1113,19 @@
               "refill",
               "balance"
             ],
-            "description": "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly, balance for payoff_by_date"
+            "description": "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly and debt_monthly, balance for payoff_by_date"
           },
           "amount": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes"
+            "description": "Per week (weekly), per month (monthly, payment_monthly, debt_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes"
           },
           "dueDay": {
             "type": [
               "integer",
               "null"
             ],
-            "description": "Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"
+            "description": "Monthly and debt_monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"
           },
           "dueDate": {
             "type": [
@@ -1498,6 +1499,36 @@
                 "required": [
                   "cadence",
                   "dueMonth"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "debt_monthly"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|-?[1-9]\\d*)$",
+                    "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                  },
+                  "dueDay": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 31,
+                    "description": "Day of the month it's due; null is the last day. Only changes the wording"
+                  }
+                },
+                "required": [
+                  "cadence",
+                  "amount",
+                  "dueDay"
                 ]
               }
             ]
@@ -2318,10 +2349,54 @@
               ]
             },
             "description": "From the loan's first month through today's, oldest first"
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                  "description": "YYYY-MM"
+                },
+                "interestRate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Annual rate in percent"
+                },
+                "minimumPayment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "escrowAmount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                }
+              },
+              "required": [
+                "month",
+                "interestRate",
+                "minimumPayment",
+                "escrowAmount"
+              ]
+            },
+            "description": "The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner"
           }
         },
         "required": [
-          "months"
+          "months",
+          "terms"
         ]
       },
       "LoanCharge": {
@@ -8396,7 +8471,7 @@
           }
         ],
         "summary": "Create or replace a category's target",
-        "description": "A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.",
+        "description": "A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them; a category paired with a loan takes only debt_monthly (YNAB's Monthly Debt Payment), and only it does.",
         "parameters": [
           {
             "schema": {

@@ -40,6 +40,10 @@ describe("spendingFunding", () => {
     expect(
       spendingFunding("2026-11", 0n, { cadence: "monthly", dueDay: 31 }, need(60_00n)).parts,
     ).toEqual([{ amount: 60_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-11-30" }]);
+    // A debt payment target is due like a monthly one (YNAB: "$300.00 needed by the 31st").
+    expect(
+      spendingFunding("2026-10", 0n, { cadence: "debt_monthly", dueDay: null }, need(60_00n)).parts,
+    ).toEqual([{ amount: 60_00n, step: FUNDING_STEPS.dueThisMonth, date: "2026-10-31" }]);
     const dated = need(150_00n, { dueDate: "2026-11-30" });
     expect(
       spendingFunding("2026-10", 0n, { cadence: "custom", dueDay: null }, dated).parts,

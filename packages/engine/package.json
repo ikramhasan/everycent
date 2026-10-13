@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "date-fns": "catalog:",
+    "decimal.js": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -466,3 +466,23 @@ describe("targetPercent", () => {
     expect(targetPercent({ needed: 1000_00n, funded: 333_34n })).toBe(33);
   });
 });
+
+// YNAB "L7 Loans FS", 2026-10-13: G7 Loan Pay, a $300.00 Monthly Debt Payment target.
+describe("debt payment targets", () => {
+  const debt = target("set_aside", "2026-10", { cadence: "debt_monthly", amount: 300_00n });
+
+  it("asks the amount each month like set aside, whatever was paid", () => {
+    expect(need([], debt)).toMatchObject({
+      needed: 300_00n,
+      underfunded: 300_00n,
+      monthAmount: 300_00n,
+    });
+    // $100.00 assigned: 33%, $200.00 to go; a $50.00 payment doesn't change it.
+    const h = [f("2026-10", 100_00n, -50_00n)];
+    const october = need(h, debt);
+    expect(october).toMatchObject({ funded: 100_00n, underfunded: 200_00n });
+    expect(october && targetPercent(october)).toBe(33);
+    // November asks $300.00 again with $50.00 carried in.
+    expect(need(h, debt, "2026-11")).toMatchObject({ funded: 0n, underfunded: 300_00n });
+  });
+});

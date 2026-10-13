@@ -129,7 +129,8 @@ function targetParts(month: BudgetMonth, target: FundedTarget, need: TargetNeed)
     }
     return parts;
   }
-  if (target.cadence === "monthly") {
+  // A debt payment is due like a monthly target ("$300.00 needed by the 31st" in YNAB's row).
+  if (target.cadence === "monthly" || target.cadence === "debt_monthly") {
     const day = target.dueDay ?? lastDay(month);
     return [{ amount, step: FUNDING_STEPS.dueThisMonth, date: dayOf(month, day) }];
   }

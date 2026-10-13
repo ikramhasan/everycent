@@ -372,6 +372,19 @@ const LoanActivitySchema = z
         }),
       )
       .describe("From the loan's first month through today's, oldest first"),
+    terms: z
+      .array(
+        z.object({
+          month: zBudgetMonth,
+          interestRate: z.string().nullable().describe("Annual rate in percent"),
+          minimumPayment: zMinorUnits.nullable(),
+          escrowAmount: zMinorUnits.nullable(),
+        }),
+      )
+      .describe(
+        "The loan's interest rate, minimum payment and escrow from each month on, oldest first " +
+          "(months before the first entry use it), for the payoff planner",
+      ),
   })
   .openapi("LoanActivity");
 

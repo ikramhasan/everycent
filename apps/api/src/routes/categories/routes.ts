@@ -35,17 +35,20 @@ const TargetSchema = z
       "set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what " +
         "brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: " +
         "reach the amount, by a month or eventually ('Have a balance of', custom only). Payment " +
-        "targets: set_aside for payment_monthly, balance for payoff_by_date",
+        "targets: set_aside for payment_monthly and debt_monthly, balance for payoff_by_date",
     ),
     amount: zMinorUnits.describe(
-      "Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); " +
+      "Per week (weekly), per month (monthly, payment_monthly, debt_monthly) or per period " +
+        "(yearly, custom); " +
         "0 for payoff_by_date, which pays off what the card owes",
     ),
     dueDay: z
       .number()
       .int()
       .nullable()
-      .describe("Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday"),
+      .describe(
+        "Monthly and debt_monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday",
+      ),
     dueDate: z.iso
       .date()
       .nullable()
@@ -125,6 +128,12 @@ const SetTargetSchema = z
     z.object({
       cadence: z.literal("payoff_by_date"),
       dueMonth: zMonth.describe("Pay off the card's balance by the end of this month"),
+    }),
+    // A category paired with a loan takes only this (YNAB's "Monthly Debt Payment").
+    z.object({
+      cadence: z.literal("debt_monthly"),
+      amount: Amount,
+      dueDay: DueDay,
     }),
   ])
   .and(
@@ -495,7 +504,8 @@ export const setCategoryTarget = createRoute({
     "target starts in `month` (the month it's saved from), so earlier months show none; saving it " +
     "unchanged from an earlier month moves the start back. Credit card payment categories take " +
     "only payment_monthly and " +
-    "payoff_by_date targets, and only they take them.",
+    "payoff_by_date targets, and only they take them; a category paired with a loan takes only " +
+    "debt_monthly (YNAB's Monthly Debt Payment), and only it does.",
   request: {
     params: CategoryParams,
     body: json(SetTargetSchema),
