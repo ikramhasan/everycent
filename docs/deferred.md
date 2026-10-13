@@ -271,7 +271,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   at deploy and durable sends).
 - The breach check (Have I Been Pwned) fails closed: if its API is down, sign-up, reset and
   change-password refuse with "Failed to check password" until it's back.
-- Checked checkboxes app-wide miss their checked style (EVERYCENT-123).
 
 ## Libraries
 
