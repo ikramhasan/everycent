@@ -391,7 +391,8 @@ function BudgetPage() {
     current: today,
     data: figures.data,
     categories: categories.data,
-    always: true,
+    // Only fetched when something is overspent: covering is the only use.
+    always: Boolean(figures.data?.categories.some((c) => c.available.startsWith("-"))),
     unassign: async (m, categoryId, amount) => {
       const move = listFigures?.move;
       if (move) await move.moveIn(m, categoryId, move.readyToAssignId, amount);

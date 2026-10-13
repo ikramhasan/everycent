@@ -1087,13 +1087,30 @@ export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) =
   await db.transaction(async (tx) => {
     if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, fromMonth, -value);
     if (!to.readyToAssign) await adjustAssigned(tx, budget, to.id, month, value);
-    await logMove(tx, budget, {
-      userId: c.var.user.id,
-      fromCategoryId: from.id,
-      toCategoryId: to.id,
-      month,
-      amount: value,
-    });
+    if (fromMonth === month) {
+      await logMove(tx, budget, {
+        userId: c.var.user.id,
+        fromCategoryId: from.id,
+        toCategoryId: to.id,
+        month,
+        amount: value,
+      });
+      return;
+    }
+    // Across months each side is logged in its own month: removed there, assigned here.
+    const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    const log = (fromId: string, toId: string, m: BudgetMonth) =>
+      fromId === toId
+        ? Promise.resolve()
+        : logMove(tx, budget, {
+            userId: c.var.user.id,
+            fromCategoryId: fromId,
+            toCategoryId: toId,
+            month: m,
+            amount: value,
+          });
+    await log(from.id, readyToAssignId, fromMonth);
+    await log(readyToAssignId, to.id, month);
   });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };

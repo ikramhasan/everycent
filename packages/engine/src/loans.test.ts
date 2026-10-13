@@ -117,6 +117,15 @@ describe("loanTermsEntries (Update Balance's check step)", () => {
     ).toEqual([terms("2026-12", "7", 20_000n), terms("2027-01", "7", 15_000n)]);
   });
 
+  it("keeps a kept value in later months an earlier unkept change wrote", () => {
+    // 7% unkept in October left {Oct: 7%, Nov: 6%}; 8% kept in October must hold in November too.
+    const after = [terms("2026-10", "7", 15_000n), terms("2026-11", "6", 15_000n)];
+    expect(loanTermsEntries(after, "2026-10", { interestRate: keep("8") })).toEqual([
+      terms("2026-10", "8", 15_000n),
+      terms("2026-11", "8", 15_000n),
+    ]);
+  });
+
   it("merges entries over the history", () => {
     const merged = withLoanTerms(
       [terms("2026-09", "5"), terms("2026-10", "6")],

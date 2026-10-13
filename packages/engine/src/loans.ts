@@ -161,6 +161,21 @@ export function loanTermsEntries(
       escrowAmount: escrowBack ? current.escrowAmount : now.escrowAmount,
     });
   }
+  // A value kept going forward also replaces it in later months' entries (an earlier unkept
+  // change left one for the month after it, which would otherwise bring the old value back).
+  const rateKept = rateChanged && rate.keep;
+  const escrowKept = escrowChanged && escrow.keep;
+  if (rateKept || escrowKept) {
+    const written = new Set(entries.map((e) => e.month));
+    for (const t of terms) {
+      if (t.month <= month || written.has(t.month)) continue;
+      entries.push({
+        ...t,
+        interestRate: rateKept ? now.interestRate : t.interestRate,
+        escrowAmount: escrowKept ? now.escrowAmount : t.escrowAmount,
+      });
+    }
+  }
   return entries;
 }
 
