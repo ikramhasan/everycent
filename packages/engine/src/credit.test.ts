@@ -112,6 +112,23 @@ describe("fundedCardSpending", () => {
     expect(moved).toEqual({ [AMEX]: -200n, [VISA]: 0n });
   });
 
+  // x128 ($0): Amex −$1 on 10/03; Card A owing $20 gets +$25 on 10/14: $20 is a return of credit
+  // ($1 refills Amex, $19 moves out), the $5 above zero comes in on its date and funds nothing.
+  it("adds a return's part above zero on its date, refilling nothing", () => {
+    const { moved, unfunded } = fundedCardSpending(0n, [
+      card(AMEX, -100n, "2026-10-03"),
+      { ...card(VISA, 2000n, "2026-10-14"), cash: 500n },
+    ]);
+    expect(Object.fromEntries(moved)).toEqual({ [AMEX]: 0n, [VISA]: -1900n });
+    expect(Object.fromEntries(unfunded)).toEqual({ [AMEX]: 100n });
+    // Card spending after it is funded from it.
+    const later = funded(0n, [
+      { ...card(VISA, 0n, "2026-10-14"), cash: 500n },
+      card(AMEX, -300n, "2026-10-20"),
+    ]);
+    expect(later).toEqual({ [VISA]: 0n, [AMEX]: 300n });
+  });
+
   it("keeps money and debt in balance", () => {
     // Whatever isn't funded stays in the category as (credit) overspending.
     const cards = [card(VISA, -700n), card(AMEX, -200n), card(CITI, 100n, "2026-10-02")];

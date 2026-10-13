@@ -173,8 +173,14 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
     payments,
     available,
     // What it had before card spending: carried in, assigned and cash activity. A payment category
-    // paid below zero is cash overspending (YNAB: red, deducted from next month).
-    ...splitOverspending(available, available - creditActivity - fundedSpending),
+    // paid below zero is cash overspending (YNAB: red, deducted from next month), and so is one a
+    // card return took below zero: returns moving money out aren't card spending (YNAB, 2026-10-14,
+    // x128 Card A: a $5 uncategorized return left the payment category at −$4, deducted from
+    // November).
+    ...splitOverspending(
+      available,
+      available - creditActivity - (fundedSpending > 0n ? fundedSpending : 0n),
+    ),
   };
 }
 

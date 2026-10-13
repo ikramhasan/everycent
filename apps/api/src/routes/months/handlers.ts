@@ -380,7 +380,7 @@ async function cardLines(db: Db, budgetId: string, cutoff: string): Promise<Plac
  * the cash part of category lines moves from credit to cash activity, and Ready to Assign gets what
  * the card's balance above zero adds or takes (instead of every inflow to it), and a transfer from
  * another card is a payment for the part that card paid from above zero. Returns each category's
- * credit activity per month and day, which funds card spending.
+ * credit activity (and returns' cash parts) per month and day, which funds card spending.
  */
 function applyCardLedger(
   history: Map<string, MonthFigures[]>,
@@ -394,7 +394,7 @@ function applyCardLedger(
   for (const line of lines) {
     byAccount.set(line.accountId, [...(byAccount.get(line.accountId) ?? []), line]);
   }
-  // categoryId → month → each card's credit activity per day.
+  // categoryId → month → each card's credit activity (and returns' cash parts) per day.
   const credit = new Map<string, Map<BudgetMonth, CardActivity[]>>();
   // A sending card's line id → what it paid from above zero.
   const paidFromCash = new Map<string, bigint>();
@@ -417,18 +417,22 @@ function applyCardLedger(
       if (effect.cash !== 0n) {
         push(line.categoryId, { month, assigned: 0n, activity: 0n, creditActivity: -effect.cash });
       }
-      if (effect.credit === 0n) continue;
+      // A return's part above zero joins the category on its date (`CardActivity.cash`).
+      const returned = effect.cash > 0n ? effect.cash : 0n;
+      if (effect.credit === 0n && returned === 0n) continue;
       const months = credit.get(line.categoryId) ?? new Map<BudgetMonth, CardActivity[]>();
       const days = months.get(month) ?? [];
       const same = days.find((d) => d.date === effect.date && d.accountId === accountId);
       if (same) {
         same.amount += effect.credit;
+        same.cash = (same.cash ?? 0n) + returned;
         if (line.transactionId < same.order) same.order = line.transactionId;
       } else {
         days.push({
           accountId,
           date: effect.date,
           amount: effect.credit,
+          cash: returned,
           order: line.transactionId,
         });
       }
@@ -464,7 +468,9 @@ function addFundedSpending(
     const entries = history.get(categoryId) ?? [];
     for (const [month, days] of months) {
       const figures = categoryMonth(entries, month);
-      const cash = figures.carried + figures.assigned + figures.cashActivity;
+      // Returns' parts above zero come in on their dates, not before the card activity.
+      const returned = days.reduce((sum, d) => sum + (d.cash ?? 0n), 0n);
+      const cash = figures.carried + figures.assigned + figures.cashActivity - returned;
       const { moved, unfunded: short } = fundedCardSpending(cash, days);
       for (const [accountId, amount] of short) {
         const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();

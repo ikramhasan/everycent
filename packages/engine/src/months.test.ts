@@ -284,6 +284,15 @@ describe("overspending: cash or credit", () => {
     expect(splitOverspending(-500n, 200n)).toEqual({ cashOverspent: 0n, creditOverspent: -500n });
     expect(splitOverspending(100n, -300n)).toEqual({ cashOverspent: 0n, creditOverspent: 0n });
   });
+
+  it("makes a payment category a return took below zero cash overspending (YNAB: x128 Card A)", () => {
+    const returned = { month: "2026-10", assigned: 0n, activity: -400n, fundedSpending: -400n };
+    expect(categoryMonth([returned], "2026-10")).toMatchObject({
+      available: -400n,
+      cashOverspent: -400n,
+      creditOverspent: 0n,
+    });
+  });
 });
 
 describe("categoryOverspending", () => {

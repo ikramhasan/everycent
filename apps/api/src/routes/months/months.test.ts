@@ -942,6 +942,61 @@ describe("budget months", () => {
       expect(sep.uncategorized).toMatchObject({ available: "900" });
     });
 
+    // YNAB, 2026-10-14 in "ihni7's Plan" (x128 Card A owing $20, EVERYCENT-128): a plain
+    // uncategorized inflow and an uncategorized transfer from a tracking account both act as a
+    // return in Uncategorized. It refills Uncategorized's unfunded card spending first (Amex's
+    // −$1), takes the rest of what pays down debt out of the payment category, and Uncategorized
+    // keeps what's left into the next month.
+    it.each([
+      ["a plain inflow", false],
+      ["a transfer from a tracking account", true],
+    ])("treats an uncategorized card inflow as a return in Uncategorized: %s", async (_, track) => {
+      const { cookie, base, month, spend, create, visa, amex } = await cards(2000n);
+      const asset = await json<{ id: string }>(
+        await send("POST", `${base}/accounts`, cookie, {
+          name: "House",
+          type: "asset",
+          balance: "100000",
+          date: "2026-08-20",
+        }),
+      );
+      const today = "2026-10-20";
+      await spend({ date: "2026-10-02", amount: "-200" });
+      await create({ accountId: amex.id, date: "2026-10-03", amount: "-100" });
+      const before = await month("2026-11", today);
+      const inflow = (amount: string) =>
+        create({
+          accountId: visa.id,
+          date: "2026-10-14",
+          amount,
+          ...(track ? { transferAccountId: asset.id } : {}),
+        });
+
+      // $5 on a card owing $20: $1 refills Amex's unfunded spending (which stays unfunded, as with
+      // G-X2), $4 leaves Visa's payment.
+      const first = await inflow("500");
+      let oct = await month("2026-10", today);
+      expect(oct.byCategory(visa.paymentCategoryId)?.available).toBe("-400");
+      expect(oct.byCategory(amex.paymentCategoryId)?.available).toBe("0");
+      expect(oct.uncategorized).toMatchObject({ available: "200" });
+      // November: Uncategorized's $2 cash overspending is gone, the payment's −$4 is deducted.
+      let nov = await month("2026-11", today);
+      expect(BigInt(nov.readyToAssign) - BigInt(before.readyToAssign)).toBe(-200n);
+
+      // $25: $20 pays down the debt ($19 out of the payment), the $5 above zero is cash.
+      expect((await send("DELETE", `${base}/transactions/${first.id}`, cookie)).status).toBe(204);
+      await inflow("2500");
+      oct = await month("2026-10", today);
+      expect(oct.byCategory(visa.paymentCategoryId)?.available).toBe("-1900");
+      expect(oct.uncategorized).toMatchObject({ available: "2200" });
+      nov = await month("2026-11", today);
+      expect(BigInt(nov.readyToAssign) - BigInt(before.readyToAssign)).toBe(-1700n);
+      // Uncategorized carries its $22 into November: $22 of uncategorized spending is covered.
+      await spend({ date: "2026-11-02", amount: "-2200" });
+      nov = await month("2026-11", "2026-11-05");
+      expect(nov.uncategorized).toMatchObject({ available: "0", cashOverspent: "0" });
+    });
+
     it("gives a split's cash part to its lines in order (YNAB: Card T8)", async () => {
       const { month, create, rent, phone, amex } = await cards();
       await create({ date: "2026-09-01", amount: "-500", transferAccountId: amex.id });
