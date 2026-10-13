@@ -15,7 +15,7 @@ function send(method: string, path: string, cookie: string, body?: unknown) {
   });
 }
 
-// YNAB's "Expected Income" under Cost to Be Me (docs/verify.md, checked 2026-10-08).
+// YNAB's "Expected Income" under Cost to Be Me (YNAB findings, checked 2026-10-08).
 describe("expected income", () => {
   it("is entered once and shows in every month", async () => {
     const { cookie } = await signUp(app);

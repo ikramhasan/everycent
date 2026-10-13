@@ -114,7 +114,7 @@ describe("accounts", () => {
         linkedAccountId: visa.id,
       }),
     ]);
-    // Starting debt stays uncategorized until phase 7 (docs/deferred.md).
+    // Starting debt has no category (existing debt; Design notes).
     expect((await transactions(visa.id))[0]).toMatchObject({
       amount: "-37500",
       categoryName: null,

@@ -314,7 +314,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     repeatEvery: repeat?.every ?? null,
     repeatUnit: repeat?.unit ?? null,
   };
-  // YNAB (docs/verify.md "Targets overview and history"): a changed target starts in the month
+  // YNAB (YNAB findings "Targets overview and history"): a changed target starts in the month
   // it's saved from, so earlier months show none; saving it unchanged only moves the start back.
   // A new due day (or weekday) alone isn't a change (2026-10-12, "C5 First": F A moved from the
   // end of the month to the 15th kept its September start).
@@ -355,7 +355,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
 };
 
 /**
- * Undo and redo of target edits (YNAB's Undo covers them, docs/verify.md): the target goes back
+ * Undo and redo of target edits (YNAB's Undo covers them, YNAB findings): the target goes back
  * exactly as it was, start month and start day included, or away when there was none.
  */
 export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTarget, Env> = async (

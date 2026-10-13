@@ -222,7 +222,7 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { account: ["create"] });
-  // Multi-currency arrives in phase 11 (see docs/deferred.md).
+  // Multi-currency arrives in phase 11 (see Design notes).
   if (body.currency && body.currency !== budget.currency) {
     throw new AppError(
       400,
@@ -298,7 +298,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
 
   const type = body.type ?? account.type;
   if (accountFamily(type) !== accountFamily(account.type)) {
-    // Cross-family changes move money in or out of the budget; see docs/deferred.md.
+    // Cross-family changes move money in or out of the budget; see Design notes.
     throw new AppError(
       400,
       "BAD_REQUEST",

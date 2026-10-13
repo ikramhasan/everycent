@@ -22,7 +22,7 @@ export interface FundedCardSpending {
 
 /**
  * How a category's card activity in a month moves money into each card's payment category (or, for
- * returns, back out of it): YNAB's Funded Spending, checked in its web app and API (docs/verify.md,
+ * returns, back out of it): YNAB's Funded Spending, checked in its web app and API (YNAB findings,
  * "Funded card spending (phase 7b)"):
  *
  * - `cash` is what the category has before card spending: carried in, assigned and the whole
@@ -130,7 +130,7 @@ export interface CardLineEffect {
 
 /**
  * Walks one card's lines in order and splits each by the card's balance just before it: the part
- * of a balance above zero is cash (YNAB, checked 2026-10-11 in "Onboarding Check"; docs/verify.md
+ * of a balance above zero is cash (YNAB, checked 2026-10-11 in "Onboarding Check"; YNAB findings
  * "Credit lifecycle (phase 7e)"). Lines run by date; on the same day outflows come first, the
  * largest first (Card S1: spending dated the day of the payment that made the card positive was
  * credit), and a split's lines in their order (Cards T5, T8).

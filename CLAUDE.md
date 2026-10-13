@@ -2,9 +2,10 @@
 
 Read `README.md` first, then `docs/plane.md` (how work is tracked in Plane: no deferring what you
 can settle, test what you build, a ticket for anything you can't, keep cycles and tickets current,
-single-line HTML), then `docs/deferred.md` (known gaps and work deliberately left for later
-phases — check it before starting a phase, and add to it whenever you defer something), then
-`docs/verify.md` (open questions about how YNAB behaves).
+single-line HTML). Plane holds everything that isn't code: open work and open YNAB questions are
+tickets, confirmed YNAB behaviour is on the Plane pages "YNAB findings" (one per area), and
+deliberate differences and simplifications are on "Design notes and known differences". Read the
+pages for the area you're working on before starting; there are no tracking files in the repo.
 
 ## Matching YNAB: confirm, don't assume
 
@@ -21,7 +22,7 @@ to that browser in your harness:
 
 The user is signed in there with a test account made for this, so you can add test accounts and
 transactions and run the actions you're checking. Look before asking the user, and note what you
-found (in `docs/verify.md`, or in the commit/plan you're working on). The same browser is how you
+found (as a comment on the Plane ticket, then on the matching "YNAB findings" page). The same browser is how you
 check your own UI changes in the running app.
 
 **Use the YNAB API to set up and read cases.** Clicking through YNAB's UI to build test data is
@@ -60,12 +61,13 @@ curl -s -H "Authorization: Bearer $YNAB_TOKEN" -H "Content-Type: application/jso
 If the app can't settle it (no browser tool is connected, or the case can't be reproduced):
 
 - Don't guess and don't fill the gap with a "sensible default". Skip that part of the feature.
-- Add an entry to `docs/verify.md`: the question, what you found (with links), the options you
-  see, and what's waiting on the answer.
-- Tell the user what you skipped and that it's in `docs/verify.md`.
+- Create a Plane ticket for it (a sub-ticket of EVERYCENT-7, label *ynab parity*, in the earliest
+  cycle with room): the question, what you found (with links), the options you see, and what's
+  waiting on the answer.
+- Tell the user what you skipped and which ticket has it.
 
-The user checks `docs/verify.md` in YNAB and settles the entries in a separate session; then
-build what was skipped and remove the entry. Never write "as YNAB does" in code or docs for
+The ticket is settled in YNAB later (by the user or a later session); then build what was
+skipped, add the answer to the "YNAB findings" page and close the ticket. Never write "as YNAB does" in code or docs for
 behaviour you haven't confirmed.
 
 ## Invariants (never break)

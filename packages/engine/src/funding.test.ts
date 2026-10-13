@@ -19,7 +19,7 @@ const need = (underfunded: bigint, extra: Partial<TargetNeed> = {}): TargetNeed 
 });
 const monthly = { cadence: "monthly" as const, dueDay: null };
 
-// YNAB's test categories in docs/verify.md ("Underfunded and Reduce Overfunding"), 2026-10-07.
+// YNAB's test categories in YNAB findings ("Underfunded and Reduce Overfunding"), 2026-10-07.
 describe("spendingFunding", () => {
   it("meets the target or covers overspending, whichever is more", () => {
     expect(spendingFunding("2026-10", -30_00n, monthly, need(100_00n)).underfunded).toBe(100_00n); // O11

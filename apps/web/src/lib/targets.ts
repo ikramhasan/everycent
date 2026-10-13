@@ -114,9 +114,9 @@ function repeatPhrase(target: Pick<CategoryTarget, "repeatEvery" | "repeatUnit">
 }
 
 /**
- * YNAB's inspector heading (docs/verify.md "Monthly targets", "Weekly, yearly and custom targets"):
+ * YNAB's inspector heading (YNAB findings "Monthly targets", "Weekly, yearly and custom targets"):
  * "Set Aside Another $100.00 Each Month", "Refill Up to $10.00 Each Week", "Set Aside Another
- * $300.00 Every 2 Months", "Have a Balance of $300.00". Payment targets (docs/verify.md "Credit card
+ * $300.00 Every 2 Months", "Have a Balance of $300.00". Payment targets (YNAB findings "Credit card
  * payment targets"): "$30.00" (Pay Specific Amount Monthly) and "Pay off $125.00" (Pay Off Balance
  * by Date, `amount` being what's still to pay off: what the target needs).
  */
@@ -171,7 +171,7 @@ export function targetStatus(need: TargetNeed) {
 }
 
 /**
- * The note under a category's name (YNAB, docs/verify.md): "Funded" when met or past a one-time
+ * The note under a category's name (YNAB, YNAB findings): "Funded" when met or past a one-time
  * target's due month; "On Track" when this
  * month's share of a dated target is in; otherwise "$60.00 more needed by the 31st", "… this month"
  * (weekly, and dated targets before their due month), "… by December 30th" (a dated target's due
@@ -349,7 +349,7 @@ export function useTargetActions(budgetId: string, record?: (command: UndoComman
       if (!ok) throw new Error("Couldn't restore the target.");
     };
     // YNAB's Undo covers creating, editing and deleting a target, start month included (checked
-    // 2026-10-12, docs/verify.md).
+    // 2026-10-12, YNAB findings).
     const remember = (
       label: string,
       categoryId: string,
@@ -416,7 +416,7 @@ export function useTargetActions(budgetId: string, record?: (command: UndoComman
 type MonthBar = NonNullable<components["schemas"]["ProgressBar"]>;
 
 /**
- * The note under a category that isn't overspent (YNAB, docs/verify.md "Snooze and progress
+ * The note under a category that isn't overspent (YNAB, YNAB findings "Snooze and progress
  * bars"). With a target that's working this month: its note ("Funded", "$60.00 more needed by the
  * 31st", …), a met one adding what was spent of its money ("Funded. Spent $30.00 of $100.00"),
  * or "Fully Spent" once all of it is.

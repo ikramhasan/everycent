@@ -69,9 +69,9 @@ Items marked **(extra)** go beyond what YNAB offers.
 - [x] Forgot / reset password
 - [x] Change email and password
 - [x] Active sessions list and revoke
-- [ ] Two-factor auth (TOTP + recovery codes)
-- [ ] OAuth sign-in (Google, Apple) **(extra over email-only)**
-- [ ] Delete account (with full data purge)
+- [x] Two-factor auth (TOTP + recovery codes)
+- [ ] Sign in with Google and Apple
+- [x] Delete account (with full data purge)
 - [ ] User preferences: locale, date format, number format, first day of week
 
 ### 2. Budgets (plans)
@@ -130,12 +130,12 @@ and fresh start (after phase 5 core).
 - [x] Running balance column
 - [x] Sort, search and filter (date range, payee, category, memo, amount, flag, cleared)
 - [x] Server-side paging of the register (keyset cursors; balances over the whole account)
-- [ ] Multi-select + bulk edit: selection, select all matching, total, cleared, flag and categorize
-      done; memo, move to account and delete still to come (see docs/verify.md)
+- [x] Multi-select + bulk edit: selection, select all matching, total, cleared, flag, categorize,
+      memo, move to account, delete, duplicate, enter now, make repeating
 - [ ] Approve / reject imported transactions (unapproved state)
 - [x] Future-dated transactions (excluded from balances until the date)
 - [ ] Tags on transactions **(extra)**
-- [ ] Receipt / file attachments **(extra)**
+- [ ] Photos on transactions
 
 #### Budget onboarding (moved from phase 2; needs phases 3–5 core)
 
@@ -166,7 +166,7 @@ and fresh start (after phase 5 core).
 
 ### 7. Credit cards & debt
 
-7a–7g are built — see `docs/deferred.md` for what's left.
+7a–7g are built — what's left is in Plane (cycles from 10 on).
 
 - [x] Spending on a credit card moves funds into its payment category automatically
 - [x] Credit overspending (becomes new debt, shown yellow)
@@ -185,7 +185,7 @@ and fresh start (after phase 5 core).
 
 ### 8. Targets (goals)
 
-Done (8a–8f, and loan debt targets with 7g) — see `docs/deferred.md` and `docs/verify.md`.
+Done (8a–8f, and loan debt targets with 7g) — what's left is in Plane (cycles from 10 on).
 
 - [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
       (every N months/years), by a specific date; refill vs set aside another
@@ -205,18 +205,18 @@ Done (8a–8f, and loan debt targets with 7g) — see `docs/deferred.md` and `do
 
 ### 9. Reconciliation
 
-- [ ] Reconcile flow: confirm cleared balance or enter bank balance
-- [ ] Automatic balance adjustment transaction
-- [ ] Lock reconciled transactions (warn before editing)
-- [ ] Last reconciled date per account
+- [x] Reconcile flow: confirm cleared balance or enter bank balance
+- [x] Automatic balance adjustment transaction
+- [x] Lock reconciled transactions (warn before editing)
+- [x] Last reconciled date per account
 
 ### 10. Scheduled transactions
 
-- [ ] Repeat frequencies: once, daily, weekly, every other week, twice a month, every 4 weeks,
+- [x] Repeat frequencies: once, daily, weekly, every other week, twice a month, every 4 weeks,
       monthly, every other month, every 3/4 months, twice a year, yearly, every other year
-- [ ] Upcoming transactions list in register, enter now / skip / edit
-- [ ] Auto-entry on the due date (when the plan is opened, by the device's date)
-- [ ] Scheduled splits and transfers
+- [x] Upcoming transactions list in register, enter now / skip / edit
+- [x] Auto-entry on the due date (when the plan is opened, by the device's date)
+- [x] Scheduled splits and transfers
 - [ ] Bills calendar view **(extra)**
 - [ ] Upcoming bill reminders (email / push) **(extra)**
 
@@ -234,7 +234,7 @@ Done (8a–8f, and loan debt targets with 7g) — see `docs/deferred.md` and `do
 
 ### 12. Payees & rules
 
-- [ ] Payee management: rename, combine/merge, delete, hide
+- [x] Payee management: rename, combine/merge, delete, hide
 - [ ] Payee default category / auto-categorization
 - [ ] Renaming rules for imported payees (starts with / contains / is)
 - [ ] Payee location (lat/long) for mobile suggestions
@@ -267,7 +267,7 @@ YNAB parity:
 - [ ] Net worth (assets vs debts over time)
 - [ ] Income vs expense (monthly table)
 - [ ] Age of Money
-- [ ] Report filters: date range, accounts, categories, payees
+- [ ] Report filters: date range, accounts, categories, payees; export to CSV
 - [ ] Budget-screen reflection stats (month summary: assigned, spent, avg, cost to be me)
 
 Extras:
@@ -282,14 +282,14 @@ Extras:
 - [ ] Currency exposure report (balances by currency, FX impact)
 - [ ] Year in review
 - [ ] Custom saved reports, dashboard of pinned report widgets
-- [ ] Export reports to CSV / PDF
+- [ ] Export reports to PDF
 
 ### 16. Sharing (YNAB Together)
 
-- [ ] Invite members to a budget by email (up to N members)
+- [x] Invite members to a budget by email (up to N members)
 - [ ] Roles: owner, editor, viewer **(extra over YNAB's single role)**
 - [ ] Per-member activity attribution ("entered by")
-- [ ] Leave budget / remove member / transfer ownership
+- [x] Leave budget / remove member / transfer ownership
 - [ ] Real-time updates across clients (WebSocket / SSE) **(extra)**
 
 ### 17. UX polish
@@ -300,7 +300,7 @@ Extras:
 - [ ] Installable PWA with offline entry queue and sync
 - [ ] Accessibility pass (screen readers, focus order, contrast)
 - [ ] Internationalization (UI translations)
-- [ ] Hide amounts / privacy mode **(extra)**
+- [ ] Hide amounts
 - [ ] In-app notifications center (overspending, sync issues, upcoming bills)
 
 ### 18. AI assistant (opt-in) **(extra)**

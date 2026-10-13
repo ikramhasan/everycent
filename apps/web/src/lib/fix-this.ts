@@ -5,7 +5,7 @@ import type { CategoryList } from "./categories";
 import { type BudgetMonthData, type MoneyOption, moneyOptions, monthQueryOptions } from "./months";
 
 /**
- * The months YNAB's Fix This offers (checked 2026-10-11, docs/verify.md): none to pick from in a
+ * The months YNAB's Fix This offers (checked 2026-10-11, YNAB findings): none to pick from in a
  * past month; otherwise the current month through the last month with money assigned (or the
  * month on screen, if later), months with nothing assigned disabled. The current month offers each
  * category's Available; a later month what's assigned to it there.

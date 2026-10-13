@@ -32,7 +32,7 @@ const f = (month: string, assigned: bigint, activity = 0n): MonthFigures => ({
 const need = (h: MonthFigures[], t: CategoryTarget, month = "2026-10") =>
   targetNeed(h, t, month, "2026-10");
 
-// Each case is one of the YNAB test categories in docs/verify.md ("Monthly targets").
+// Each case is one of the YNAB test categories in YNAB findings ("Monthly targets").
 describe("targetNeed", () => {
   it("set aside counts only this month's Assigned", () => {
     const setAside = target("set_aside");
@@ -242,7 +242,7 @@ describe("dated targets", () => {
   });
 });
 
-// YNAB's test categories O1–O10 and T8 F/L in docs/verify.md ("Underfunded and Reduce
+// YNAB's test categories O1–O10 and T8 F/L in YNAB findings ("Underfunded and Reduce
 // Overfunding"), checked on 2026-10-07.
 describe("what's over and the month's targets", () => {
   const carried = (amount: bigint) => f("2026-09", amount);
@@ -323,7 +323,7 @@ describe("what's over and the month's targets", () => {
   });
 });
 
-// The YNAB test cards in docs/verify.md ("Credit card payment targets"), checked 2026-10-08.
+// The YNAB test cards in YNAB findings ("Credit card payment targets"), checked 2026-10-08.
 describe("payment targets", () => {
   const card = (month: string, assigned: bigint, fundedSpending = 0n, payments = 0n) => ({
     month,

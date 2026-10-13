@@ -74,7 +74,7 @@ function onDay(date: Date, count: number, day: number) {
 /**
  * The occurrence after `current` of a schedule that started on `dateFirst`, or null for a one-off
  * ("never"). `current` is one of its occurrences (editing the date restarts the schedule there).
- * As YNAB does it (checked through its API on 2026-10-11, docs/verify.md "Scheduled
+ * As YNAB does it (checked through its API on 2026-10-11, YNAB findings "Scheduled
  * transactions"):
  *
  * - daily and the week-based ones step by a fixed number of days;

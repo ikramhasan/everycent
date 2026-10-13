@@ -17,7 +17,7 @@ import type { LoanActivity } from "./loans";
 
 /**
  * The loan planner's view of a loan (phase 7g), built on the engine's `loan-planner` from the
- * loan activity API. YNAB's behaviour is in docs/verify.md "Loan planner".
+ * loan activity API. YNAB's behaviour is in YNAB findings "Loan planner".
  */
 
 export interface PlannerTerms {

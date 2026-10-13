@@ -4,7 +4,7 @@ import { addMonths, type BudgetMonth } from "./months";
 
 /**
  * The loan planner (phase 7g): payoff projections and what-ifs, as YNAB's loan page, payoff
- * simulator and Debt Payment targets work (checked in its web app, 2026-10-13, docs/verify.md
+ * simulator and Debt Payment targets work (checked in its web app, 2026-10-13, YNAB findings
  * "Loan planner"). Nothing here writes to the ledger.
  *
  * YNAB projects with the closed-form annuity rather than month by month: a payment `A` pays `P`

@@ -36,7 +36,7 @@ const bar = (
   snoozed = false,
 ) => progressBar(f, t, n, snoozed, "2026-10");
 
-// Each case is a row of YNAB's test plan on 2026-10-07 (docs/verify.md "Snooze and progress bars").
+// Each case is a row of YNAB's test plan on 2026-10-07 (YNAB findings "Snooze and progress bars").
 describe("progressBar", () => {
   it("draws money and spending over the month without a target", () => {
     expect(drawn(bar(fig(0n, 20_00n, -7_00n), null, null))).toEqual([

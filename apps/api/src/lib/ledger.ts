@@ -205,8 +205,8 @@ export const ZERO_BALANCES: AccountBalances = { cleared: 0n, uncleared: 0n, work
 
 /**
  * An account's Starting Balance, as YNAB records it: money in budget accounts goes to Ready to
- * Assign; credit debt stays uncategorized until phase 7 (docs/deferred.md); off-budget accounts
- * never have a category.
+ * Assign; credit debt has no category (existing debt, paid from the payment category; Design
+ * notes); off-budget accounts never have a category.
  */
 export async function insertStartingBalance(
   db: Db,

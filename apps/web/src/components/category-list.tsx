@@ -503,7 +503,7 @@ export function CategoryList({
           {pendingDelete?.kind === "category" ? (
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Category</AlertDialogTitle>
-              {/* YNAB's wording (checked 2026-10-11, docs/verify.md). */}
+              {/* YNAB's wording (checked 2026-10-11, YNAB findings). */}
               <AlertDialogDescription className="grid gap-2">
                 {pendingDelete.hasTransactions ? (
                   <span>

@@ -3,7 +3,7 @@ import { divideRounded } from "./rounding";
 
 /**
  * Loan activity (phase 7f), as YNAB's loan accounts work (checked in its web app, 2026-10-13,
- * docs/verify.md "Loan activity"): each month that has payments is charged escrow first, then
+ * YNAB findings "Loan activity"): each month that has payments is charged escrow first, then
  * the month's interest, then the rest goes to principal. Interest and escrow aren't transactions;
  * they're worked out per month here and move the loan's balance.
  */

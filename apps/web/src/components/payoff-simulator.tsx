@@ -161,7 +161,7 @@ function Summary({
 }
 
 /**
- * YNAB's Loan Payoff Simulator (checked 2026-10-13, docs/verify.md "Loan planner"): try a monthly
+ * YNAB's Loan Payoff Simulator (checked 2026-10-13, YNAB findings "Loan planner"): try a monthly
  * payment or a payoff date (each gives the other) and a one-time extra this month, against the
  * minimum. Nothing here is saved; "Copy and go to my plan" copies an amount and opens the plan.
  */

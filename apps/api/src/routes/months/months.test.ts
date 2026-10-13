@@ -672,7 +672,7 @@ describe("budget months", () => {
         }),
       );
       // From a tracking account: no payment. Its card side is Uncategorized, a return like any
-      // other, so it takes its $5 out of the payment category (YNAB: Card R3, docs/verify.md).
+      // other, so it takes its $5 out of the payment category (YNAB: Card R3, YNAB findings).
       await create({
         accountId: asset.id,
         date: "2026-10-02",
@@ -757,7 +757,7 @@ describe("budget months", () => {
       });
       // Paid off in September, then refunded in October: the card is above zero, so the refund is
       // cash; the help center's clothing example takes it out of the payment category, but YNAB's
-      // app didn't (docs/verify.md, phase 7e).
+      // app didn't (YNAB findings, phase 7e).
       await create({ date: "2026-09-20", amount: "-1000", transferAccountId: visa.id });
       await create({ accountId: visa.id, date: "2026-10-01", amount: "1000", categoryId: rent.id });
       const oct = await month("2026-10");
@@ -770,7 +770,7 @@ describe("budget months", () => {
     });
   });
 
-  // Phase 7e, from YNAB's "Onboarding Check" plan (2026-10-11), docs/verify.md.
+  // Phase 7e, from YNAB's "Onboarding Check" plan (2026-10-11), YNAB findings.
   describe("positive card balances", () => {
     it("adds an overpayment above zero to Ready to Assign (YNAB: Card X)", async () => {
       const { month, create, amex } = await cards();
@@ -1548,7 +1548,7 @@ describe("budget months", () => {
     });
   });
 
-  // YNAB's rules, checked in its web app on 2026-10-07 (docs/verify.md "Underfunded and Reduce
+  // YNAB's rules, checked in its web app on 2026-10-07 (YNAB findings "Underfunded and Reduce
   // Overfunding").
   describe("underfunded and reduce overfunding", () => {
     const target = (

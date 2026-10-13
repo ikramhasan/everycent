@@ -209,7 +209,7 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
  * is set aside leaves it negative). Money moved out of a card to a budget account (a cash advance)
  * only raises what's owed. From another card only the part it paid from above zero is a payment
  * (`applyCardLedger`). A transfer from a tracking account is no payment: its category on the card
- * side decides, as for any card inflow (YNAB, 2026-10-11; docs/verify.md).
+ * side decides, as for any card inflow (YNAB, 2026-10-11; YNAB findings).
  */
 async function addPayments(
   db: Db,
@@ -651,7 +651,7 @@ async function monthState(
     const owed = balance < 0n ? -balance : 0n;
     // What's underfunded is the debt Available doesn't reach. A negative Available (overpayment,
     // red cash overspending) adds to it while the card still owes (YNAB, 2026-10-08: Card E2 owing
-    // $90.00 at −$10.00 showed Total Underfunded $100.00); a paid-off card's is open (verify.md).
+    // $90.00 at −$10.00 showed Total Underfunded $100.00); a paid-off card's: YNAB findings (8e).
     const setAside = owed > 0n || figures.available > 0n ? figures.available : 0n;
     const underfunded = owed > setAside ? owed - setAside : 0n;
     const overspentNow = creditOverspent.get(accountId)?.get(month) ?? 0n;

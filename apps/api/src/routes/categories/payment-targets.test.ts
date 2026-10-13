@@ -104,7 +104,7 @@ async function setup(owed = "12000") {
   };
 }
 
-// The YNAB test cards in docs/verify.md ("Credit card payment targets"), checked 2026-10-08.
+// The YNAB test cards in YNAB findings ("Credit card payment targets"), checked 2026-10-08.
 describe("credit card payment targets", () => {
   it("pays off the balance by a month: a sixth of $120.00 by March (Card E1)", async () => {
     const { payment, setTarget, row } = await setup();

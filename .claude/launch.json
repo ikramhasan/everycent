@@ -1,0 +1,45 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["RESEND_API_KEY=", "PORT=3100", "pnpm", "--dir", "apps/api", "dev"],
+      "port": 3100
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["API_PROXY_TARGET=http://localhost:3100", "pnpm", "--dir", "apps/web", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "api-real-email",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PORT=3101",
+        "WEB_ORIGIN=http://localhost:5174",
+        "BETTER_AUTH_URL=http://localhost:5174",
+        "pnpm",
+        "--dir",
+        "apps/api",
+        "dev"
+      ],
+      "port": 3101
+    },
+    {
+      "name": "web-real-email",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "API_PROXY_TARGET=http://localhost:3101",
+        "pnpm",
+        "--dir",
+        "apps/web",
+        "dev",
+        "--port",
+        "5174"
+      ],
+      "port": 5174
+    }
+  ]
+}

@@ -153,7 +153,7 @@ export function useLoanPlan(account: Account | undefined, originalFrom?: string)
 }
 
 /**
- * YNAB's loan account page (checked 2026-10-13, docs/verify.md "Loan activity" and "Loan
+ * YNAB's loan account page (checked 2026-10-13, YNAB findings "Loan activity" and "Loan
  * planner"): the loan's figures with its Payoff Date, the simulator and paid-off banners, Your
  * Loan's Progress, its paired plan category, and its activity by month.
  */

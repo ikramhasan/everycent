@@ -256,7 +256,7 @@ describe("overspending: cash or credit", () => {
     creditActivity,
   });
 
-  // YNAB's test plan (2026-10-03), docs/verify.md phase 7c.
+  // YNAB's test plan (2026-10-03), YNAB findings phase 7c.
   it.each([
     // [case, entry, cash overspent, credit overspent]
     ["cash only (Utilities −$25)", e(0n, -2500n, 0n), -2500n, 0n],

@@ -243,7 +243,7 @@ export function readyToAssign(input: {
  * This): even taking back every category's cash wouldn't bring it to zero. A category's cash is its
  * Available with credit overspending left out (cash overspending counts against it; overspent
  * amounts are negative, so it's `available - creditOverspent`); every category counts, payment
- * and hidden ones included, but not Uncategorized. Checked in YNAB on 2026-10-11 (docs/verify.md):
+ * and hidden ones included, but not Uncategorized. Checked in YNAB on 2026-10-11 (YNAB findings):
  * the month on screen doesn't matter, and exactly zero isn't one.
  */
 export function isOverdraft(

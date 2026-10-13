@@ -15,7 +15,7 @@ const funded = (cash: bigint, cards: ReturnType<typeof card>[]) =>
   Object.fromEntries(fundedCardSpending(cash, cards).moved);
 
 describe("fundedCardSpending", () => {
-  // Cases from YNAB's test plans (2026-10-03 and 2026-10-11), docs/verify.md phase 7b.
+  // Cases from YNAB's test plans (2026-10-03 and 2026-10-11), YNAB findings phase 7b.
   it.each([
     // [case, cash before cards, cards, moved]
     ["fully funded on one card", 2000n, [card(VISA, -500n)], { [VISA]: 500n }],
@@ -121,7 +121,7 @@ describe("fundedCardSpending", () => {
 });
 
 describe("cardLedger", () => {
-  // Cases from YNAB's "Onboarding Check" plan (2026-10-11), docs/verify.md phase 7e.
+  // Cases from YNAB's "Onboarding Check" plan (2026-10-11), YNAB findings phase 7e.
   let n = 0;
   const line = (date: string, amount: bigint, kind: CardLineKind) => {
     n += 1;

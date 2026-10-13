@@ -207,7 +207,7 @@ describe("target wording", () => {
   });
 });
 
-// docs/verify.md "Credit card payment targets" (YNAB, 2026-10-08).
+// YNAB findings "Credit card payment targets" (YNAB, 2026-10-08).
 describe("payment target wording", () => {
   const payoff = target({
     cadence: "payoff_by_date",
@@ -235,7 +235,7 @@ describe("payment target wording", () => {
     });
   });
 
-  // YNAB, 2026-10-11 (docs/verify.md "Credit lifecycle (phase 7e)").
+  // YNAB, 2026-10-11 (YNAB findings "Credit lifecycle (phase 7e)").
   it("cheers a met pay-off target and heads it with what's been put in plus To Go", () => {
     // Card T2: owes $14.00, $20.00 assigned and $6.00 paid, so $14.00 counts.
     expect(targetMessage(payoff, need("1400", "1400", "0"), format)).toEqual({

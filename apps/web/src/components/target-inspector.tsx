@@ -45,7 +45,7 @@ const CADENCES: { value: Cadence; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
-/** YNAB's behaviour choices and their help, per cadence (docs/verify.md). */
+/** YNAB's behaviour choices and their help, per cadence (YNAB findings). */
 const CHOICES = {
   set_aside: { use: "Use for: bills, subscriptions, saving over time" },
   refill: { use: "Use for: gasoline, fun money, dining out" },
@@ -63,13 +63,13 @@ function choiceLabel(cadence: Cadence, behavior: Behavior, amount: string) {
 }
 
 /**
- * The inspector's Target section (YNAB, checked in its web app on 2026-10-03, docs/verify.md
+ * The inspector's Target section (YNAB, checked in its web app on 2026-10-03, YNAB findings
  * "Monthly targets" and "Weekly, yearly and custom targets"): what the target asks for this month
  * and how far along it is, or an invitation to create one. `need` is null before the target's start
  * month (and after a one-time target's due month), which shows the invitation too.
  *
  * A credit card's payment category (`payment`) takes YNAB's two payment targets instead (checked
- * 2026-10-08, docs/verify.md "Credit card payment targets"). While none applies, or while the
+ * 2026-10-08, YNAB findings "Credit card payment targets"). While none applies, or while the
  * category is red, the payment alert shows in its place, with "Create a Debt Payoff Target".
  */
 export function TargetSection({

@@ -149,7 +149,7 @@ const SetTargetSchema = z
     }),
   )
   .superRefine((v, ctx) => {
-    // YNAB drops a pay-off target saved with a month before today's (docs/verify.md).
+    // YNAB drops a pay-off target saved with a month before today's (YNAB findings).
     if (v.cadence === "payoff_by_date" && v.dueMonth < (v.today ?? serverToday()).slice(0, 7)) {
       ctx.addIssue({ code: "custom", path: ["dueMonth"], message: "Choose this month or later" });
     }

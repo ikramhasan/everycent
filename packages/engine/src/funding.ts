@@ -64,7 +64,7 @@ const dayOf = (month: BudgetMonth, day: number) =>
 
 /**
  * What Underfunded and Reduce Overfunding do to a spending category in `month` (YNAB, checked in
- * its web app on 2026-10-07, docs/verify.md "Underfunded and Reduce Overfunding"):
+ * its web app on 2026-10-07, YNAB findings "Underfunded and Reduce Overfunding"):
  * - Underfunded assigns enough to meet the target and to cover any overspending, whichever is more
  *   (O11: $100.00 target, $30.00 overspent → $100.00; O13: met, $30.00 overspent → $30.00). A
  *   category without a target only gets its overspending covered.

@@ -210,7 +210,7 @@ function clampDay(date: string) {
 
 /**
  * What a category's target asks for in `month`, from the category's history (YNAB, checked through
- * its API and web app on 2026-10-03, docs/verify.md "Monthly targets" and "Weekly, yearly and
+ * its API and web app on 2026-10-03, YNAB findings "Monthly targets" and "Weekly, yearly and
  * custom targets"). Nothing before the target's start month (null).
  *
  * - Monthly and weekly: the month's amount (weekly: once per occurrence of its weekday). Set aside
@@ -335,7 +335,7 @@ export function targetNeed(
 }
 
 /**
- * Pay Off Balance by Date (YNAB, checked through its API and web app on 2026-10-08, docs/verify.md
+ * Pay Off Balance by Date (YNAB, checked through its API and web app on 2026-10-08, YNAB findings
  * "Credit card payment targets"): pay off what the card owes by the end of the target's month.
  *
  * - What's still to pay off is what's owed beyond Available (Card E1: $125.00 owed, $50.00
@@ -410,7 +410,8 @@ function over(figures: CategoryMonth, due: bigint) {
 
 /**
  * The share of a target that's funded, in whole percent from 0 to 100, rounded down so it never
- * reads 100 before the target is met (YNAB's rounding is open in docs/verify.md).
+ * reads 100 before the target is met (YNAB rounds down too: YNAB findings,
+ * "Percentage rounding").
  */
 export function targetPercent(need: Pick<TargetNeed, "needed" | "funded">): number {
   if (need.funded >= need.needed) return 100;

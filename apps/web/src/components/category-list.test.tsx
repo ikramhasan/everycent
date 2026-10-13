@@ -350,7 +350,7 @@ describe("CategoryList", () => {
     expect(screen.getByRole("button", { name: "Hide" })).toBeInTheDocument();
   });
 
-  // YNAB's delete dialogs, checked 2026-10-11 (docs/verify.md).
+  // YNAB's delete dialogs, checked 2026-10-11 (YNAB findings).
   const withUsage = (
     id: string,
     usage: { transactionCount?: number; hasAssignedMoney?: boolean },

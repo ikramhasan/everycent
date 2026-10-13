@@ -20,7 +20,7 @@ export const UNCATEGORIZED = "uncategorized";
 /**
  * Whether a category's numbers belong in a view: Overspent is below zero, Money Available above;
  * Underfunded is anything Underfunded would add to (overspending included), Overfunded anything
- * Reduce Overfunding would take from (YNAB, docs/verify.md "Underfunded and Reduce Overfunding").
+ * Reduce Overfunding would take from (YNAB, YNAB findings "Underfunded and Reduce Overfunding").
  * Uncategorized, with no Auto-Assign, counts as underfunded while it's negative. Snoozed is a
  * target snoozed this month.
  */
@@ -86,7 +86,7 @@ export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<stri
  * part keeps it red), or a payment category that doesn't cover what its card owes (or, with a
  * target, what the target asks). YNAB shows the
  * payment's Underfunded alert only from the current month on; earlier months stay green
- * (support.ynab.com, docs/verify.md phase 7c).
+ * (support.ynab.com, YNAB findings phase 7c).
  */
 /**
  * What a category's upcoming scheduled transactions need beyond Available (YNAB's negative
@@ -114,7 +114,7 @@ export function isCaution(
   // (support.ynab.com "Colors and Icons"; YNAB, 2026-10-12: U10 A–D, F, I).
   const scheduledShort = !totals.available.startsWith("-") && upcomingShortfall(totals) > 0n;
   if (totals.payment) {
-    // Paying more than was set aside is red (docs/verify.md, phase 7d).
+    // Paying more than was set aside is red (YNAB findings, phase 7d).
     if (totals.available.startsWith("-")) return false;
     if (scheduledShort) return true;
     // With a target, its own status decides, as for any target (YNAB, 2026-10-08: Card E1 on
@@ -124,14 +124,14 @@ export function isCaution(
   }
   if (totals.available.startsWith("-")) return totals.cashOverspent === "0";
   if (scheduledShort) return true;
-  // An underfunded target is yellow in any month it applies to (docs/verify.md, phase 8a), unless
+  // An underfunded target is yellow in any month it applies to (YNAB findings, phase 8a), unless
   // it's snoozed: then green or grey (support.ynab.com "Snooze a Target").
   return Boolean(totals.target && totals.target.underfunded !== "0" && !totals.target.snoozed);
 }
 
 /**
  * The icon on a category's Available pill: a target's pie filled to the funded percentage while
- * underfunded, a check when met (YNAB, docs/verify.md "Monthly targets"), Zz when snoozed, and a
+ * underfunded, a check when met (YNAB, YNAB findings "Monthly targets"), Zz when snoozed, and a
  * calendar when scheduled transactions later in the month aren't covered.
  */
 export type TargetMark =

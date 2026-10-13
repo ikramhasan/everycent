@@ -135,7 +135,7 @@ const barWidth = (part: bigint, whole: bigint) =>
   whole <= 0n || part >= whole ? "100%" : `${Number((part * 10000n) / whole) / 100}%`;
 
 /**
- * YNAB's Cost to Be Me (seen 2026-10-08, docs/verify.md "Targets overview and history"): the
+ * YNAB's Cost to Be Me (seen 2026-10-08, YNAB findings "Targets overview and history"): the
  * month's targets and, once entered, the expected income, each with a bar against the larger of
  * the two. The targets bar is blue while the income covers them and red when it falls short;
  * the income bar is grey. "Enter your expected income" opens an amount field; zero leaves it as

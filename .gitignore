@@ -9,3 +9,6 @@ coverage
 !.env.example
 .vite
 *.tsbuildinfo
+
+# Claude Code: personal settings stay local
+.claude/settings.local.json

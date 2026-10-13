@@ -39,7 +39,7 @@ export const budgetAccount = pgTable(
     /** Display order in the sidebar (ascending; gaps allowed). */
     sortOrder: integer().notNull(),
     closed: boolean().notNull().default(false),
-    /** Currency of every amount in this account. For now always the budget's (see deferred.md). */
+    /** Currency of every amount in this account. For now always the budget's (see Design notes). */
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
     /** Loan accounts: annual interest rate in percent, e.g. "6.125". */
     interestRate: numeric({ precision: 6, scale: 3 }),
