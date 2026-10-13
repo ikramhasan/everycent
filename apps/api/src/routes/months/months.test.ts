@@ -1670,6 +1670,21 @@ describe("budget months", () => {
       expect(oct.byCategory(phone.id)?.autoAssign.underfunded).toBe("13000");
     });
 
+    // YNAB plan "x132 Order", 2026-10-14 (EVERYCENT-132): a card with a payment target is funded
+    // before a card with only its Underfunded alert, even when listed below it.
+    it("funds card payment targets before plain card alerts", async () => {
+      const ctx = await cards(1000n);
+      const { put, month, rent, visa, amex } = ctx;
+      await target(ctx, amex.paymentCategoryId, { cadence: "payment_monthly", amount: "1000" });
+      await put(rent.id, "2026-10", "99500"); // $5.00 left to assign
+      const before = await month("2026-10");
+      expect(before.readyToAssign).toBe("500");
+      expect((await auto(ctx, "underfunded")).status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(amex.paymentCategoryId)?.assigned).toBe("500");
+      expect(oct.byCategory(visa.paymentCategoryId)?.assigned).toBe("0");
+    });
+
     it("funds in YNAB's order and stops when Ready to Assign runs out", async () => {
       const ctx = await setup();
       const { put, spend, month, rent, phone, groceries } = ctx;
