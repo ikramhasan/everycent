@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/nativ
 import { RadioGroup, RadioGroupItem } from "@everycent/ui/components/radio-group";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { editBalanceLabel } from "@/lib/accounts";
 import type { CategoryList } from "@/lib/categories";
 import { hasEscrow } from "@/lib/loans";
 import { type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
@@ -426,9 +427,7 @@ export function EditAccountForm({
       </Field>
       {workingBalance !== null && (
         <Field>
-          <FieldLabel htmlFor="edit-account-balance">
-            {isLoan ? "Today's Balance" : "Working Balance"}
-          </FieldLabel>
+          <FieldLabel htmlFor="edit-account-balance">{editBalanceLabel(type)}</FieldLabel>
           <Input
             id="edit-account-balance"
             inputMode="decimal"

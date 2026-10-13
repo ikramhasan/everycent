@@ -28,7 +28,7 @@ import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
-import { accountsQueryOptions } from "@/lib/accounts";
+import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
@@ -201,6 +201,7 @@ function AccountPage() {
 
   function confirmDialog() {
     if (!account) return null;
+    const closing = closeAccountNotice(account.type, working);
     return (
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
@@ -211,9 +212,9 @@ function AccountPage() {
             <AlertDialogDescription>
               {confirm === "delete"
                 ? "Only accounts with no transactions besides their starting balance can be deleted. This can't be undone."
-                : `Before you can close this account, the balance will have to be zeroed out. An adjustment transaction will be created for ${show((-working).toString())}.`}
+                : `Before you can close this account, the balance will have to be zeroed out. An adjustment transaction will be created for ${show(closing.adjustment.toString())}.`}
             </AlertDialogDescription>
-            {confirm === "close" && working > 0n && isOnBudget(account.type) && (
+            {confirm === "close" && closing.removesMoneyFromPlan && (
               <Alert>
                 <Info aria-hidden />
                 <AlertDescription>
