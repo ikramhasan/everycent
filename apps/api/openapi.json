@@ -223,6 +223,36 @@
           "code"
         ]
       },
+      "Preferences": {
+        "type": "object",
+        "properties": {
+          "openLastBudget": {
+            "type": "boolean",
+            "description": "Open the last used budget at start (else the budget list), as YNAB's option"
+          },
+          "keyboardShortcuts": {
+            "type": "boolean",
+            "description": "Keyboard shortcuts, undo and redo included"
+          }
+        },
+        "required": [
+          "openLastBudget",
+          "keyboardShortcuts"
+        ]
+      },
+      "UpdatePreferences": {
+        "type": "object",
+        "properties": {
+          "openLastBudget": {
+            "type": "boolean",
+            "description": "Open the last used budget at start (else the budget list), as YNAB's option"
+          },
+          "keyboardShortcuts": {
+            "type": "boolean",
+            "description": "Keyboard shortcuts, undo and redo included"
+          }
+        }
+      },
       "BudgetList": {
         "type": "object",
         "properties": {
@@ -5931,6 +5961,116 @@
           },
           "429": {
             "description": "Too many attempts (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/preferences": {
+      "get": {
+        "operationId": "getPreferences",
+        "tags": [
+          "Users"
+        ],
+        "summary": "The account's options (YNAB's Account Settings → Options)",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updatePreferences",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Change the account's options",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {

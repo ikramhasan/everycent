@@ -1,0 +1,2 @@
+ALTER TABLE "user_preference" ADD COLUMN "open_last_budget" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preference" ADD COLUMN "keyboard_shortcuts" boolean DEFAULT true NOT NULL;

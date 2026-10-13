@@ -24,6 +24,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
+import { NameCard, OptionsCard } from "@/components/account-options";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
@@ -41,10 +42,12 @@ function AccountPage() {
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
       <h1 className="font-semibold text-2xl tracking-tight">Account settings</h1>
+      <NameCard name={session.user.name} />
       <EmailCard email={session.user.email} />
       <PasswordCard />
       <TwoFactorCard />
       <DevicesCard />
+      <OptionsCard />
     </div>
   );
 }

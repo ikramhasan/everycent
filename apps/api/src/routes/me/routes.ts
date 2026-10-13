@@ -182,3 +182,51 @@ export const disableTwoFactor = createRoute({
     429: jsonError("Too many attempts (`RATE_LIMITED`)"),
   },
 });
+
+const PreferencesSchema = z
+  .object({
+    openLastBudget: z
+      .boolean()
+      .describe("Open the last used budget at start (else the budget list), as YNAB's option"),
+    keyboardShortcuts: z.boolean().describe("Keyboard shortcuts, undo and redo included"),
+  })
+  .openapi("Preferences");
+
+export const getPreferences = createRoute({
+  method: "get",
+  path: "/me/preferences",
+  operationId: "getPreferences",
+  tags: ["Users"],
+  summary: "The account's options (YNAB's Account Settings → Options)",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: { description: "Options", content: { "application/json": { schema: PreferencesSchema } } },
+    401: jsonError("Not signed in"),
+    403: unverified,
+  },
+});
+
+export const updatePreferences = createRoute({
+  method: "patch",
+  path: "/me/preferences",
+  operationId: "updatePreferences",
+  tags: ["Users"],
+  summary: "Change the account's options",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: PreferencesSchema.partial().openapi("UpdatePreferences") },
+      },
+    },
+  },
+  responses: {
+    200: { description: "Saved", content: { "application/json": { schema: PreferencesSchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: unverified,
+  },
+});

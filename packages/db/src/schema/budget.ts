@@ -4,7 +4,16 @@ import {
   DATE_FORMATS,
   NUMBER_FORMATS,
 } from "@everycent/engine";
-import { bigint, char, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  char,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { timestamps } from "./columns";
 
@@ -96,5 +105,9 @@ export const userPreference = pgTable("user_preference", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   lastBudgetId: text().references(() => budget.id, { onDelete: "set null" }),
+  /** YNAB's "Open last used plan by default": off opens the budget list instead. */
+  openLastBudget: boolean().notNull().default(true),
+  /** YNAB's "Enable keyboard shortcuts" (undo/redo included). */
+  keyboardShortcuts: boolean().notNull().default(true),
   ...timestamps,
 });

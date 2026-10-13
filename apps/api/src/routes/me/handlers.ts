@@ -1,4 +1,5 @@
-import { session, twoFactor, user as userTable } from "@everycent/db/schema";
+import { sql } from "@everycent/db";
+import { session, twoFactor, userPreference, user as userTable } from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { APIError } from "better-auth/api";
 import Bowser from "bowser";
@@ -11,9 +12,11 @@ import type {
   changeEmail,
   disableTwoFactor,
   getMe,
+  getPreferences,
   listSessions,
   revokeOtherSessions,
   revokeSession,
+  updatePreferences,
 } from "./routes";
 
 type Handler<R extends RouteConfig> = RouteHandler<R, AppEnv & AuthedEnv>;
@@ -144,4 +147,31 @@ export const disableTwoFactorHandler: Handler<typeof disableTwoFactor> = async (
     await tx.delete(twoFactor).where(eq(twoFactor.userId, me.id));
   });
   return c.body(null, 204);
+};
+
+async function preferencesOf(db: AppEnv["Variables"]["deps"]["db"], userId: string) {
+  const [row] = await db
+    .select({
+      openLastBudget: userPreference.openLastBudget,
+      keyboardShortcuts: userPreference.keyboardShortcuts,
+    })
+    .from(userPreference)
+    .where(eq(userPreference.userId, userId));
+  return row ?? { openLastBudget: true, keyboardShortcuts: true };
+}
+
+export const getPreferencesHandler: Handler<typeof getPreferences> = async (c) =>
+  c.json(await preferencesOf(c.var.deps.db, c.var.user.id), 200);
+
+export const updatePreferencesHandler: Handler<typeof updatePreferences> = async (c) => {
+  const { db } = c.var.deps;
+  const input = c.req.valid("json");
+  await db
+    .insert(userPreference)
+    .values({ userId: c.var.user.id, ...input })
+    .onConflictDoUpdate({
+      target: userPreference.userId,
+      set: { ...input, updatedAt: sql`now()` },
+    });
+  return c.json(await preferencesOf(db, c.var.user.id), 200);
 };

@@ -33,6 +33,7 @@ import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { invalidateMonths } from "@/lib/months";
+import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
@@ -87,8 +88,9 @@ function AccountPage() {
   useEffect(() => setReconcilingTo(null), [accountId]);
 
   // YNAB's shortcut for Reconcile is Shift+E.
+  const shortcuts = useShortcutsEnabled();
   useEffect(() => {
-    if (!reconcilable) return;
+    if (!reconcilable || !shortcuts) return;
     function onKeyDown(event: KeyboardEvent) {
       if (!event.shiftKey || event.code !== "KeyE" || event.metaKey || event.ctrlKey) return;
       const target = event.target as HTMLElement | null;
@@ -98,7 +100,7 @@ function AccountPage() {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [reconcilable]);
+  }, [reconcilable, shortcuts]);
 
   async function refresh() {
     await Promise.all([
