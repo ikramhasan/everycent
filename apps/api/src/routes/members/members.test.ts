@@ -171,3 +171,68 @@ describe("budget invitations", () => {
     expect((await send("GET", `${base}/members`, stranger.cookie)).status).toBe(404);
   });
 });
+
+describe("leaving, removing and transferring ownership", () => {
+  /** Shares the budget with a new user through an invitation. */
+  async function join(ctx: Awaited<ReturnType<typeof setup>>) {
+    const email = `m-${crypto.randomUUID()}@example.com`;
+    await ctx.invite(email);
+    const person = await signUp(app, { email });
+    const token = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    await send("POST", "/v1/invitations/accept", person.cookie, { token });
+    const id = (await ctx.members()).members.find((m) => m.email === email)?.userId as string;
+    return { ...person, id };
+  }
+
+  it("lets a member leave, but not the owner", async () => {
+    const ctx = await setup();
+    const pat = await join(ctx);
+    const owner = await send("POST", `${ctx.base}/leave`, ctx.owner.cookie);
+    expect(owner.status).toBe(409);
+    expect(await code(owner)).toBe("OWNER_CANNOT_LEAVE");
+    expect((await send("POST", `${ctx.base}/leave`, pat.cookie)).status).toBe(204);
+    expect((await send("GET", ctx.base, pat.cookie)).status).toBe(404);
+    expect((await ctx.members()).members).toHaveLength(1);
+  });
+
+  it("lets only the owner remove people, never the owner", async () => {
+    const ctx = await setup();
+    const pat = await join(ctx);
+    const sam = await join(ctx);
+    const ownerId = (await ctx.members()).members[0]?.userId as string;
+    expect((await send("DELETE", `${ctx.base}/members/${sam.id}`, pat.cookie)).status).toBe(403);
+    const self = await send("DELETE", `${ctx.base}/members/${ownerId}`, ctx.owner.cookie);
+    expect(await code(self)).toBe("CANNOT_REMOVE_OWNER");
+    expect((await send("DELETE", `${ctx.base}/members/${sam.id}`, ctx.owner.cookie)).status).toBe(
+      204,
+    );
+    expect((await send("GET", ctx.base, sam.cookie)).status).toBe(404);
+    expect((await send("DELETE", `${ctx.base}/members/${sam.id}`, ctx.owner.cookie)).status).toBe(
+      404,
+    );
+  });
+
+  it("transfers ownership; the old owner stays as a member", async () => {
+    const ctx = await setup();
+    const pat = await join(ctx);
+    expect(
+      (await send("POST", `${ctx.base}/transfer-ownership`, pat.cookie, { userId: pat.id })).status,
+    ).toBe(403);
+    const stranger = await signUp(app);
+    const nobody = await send("POST", `${ctx.base}/transfer-ownership`, ctx.owner.cookie, {
+      userId: "not-a-member",
+    });
+    expect(nobody.status).toBe(404);
+    const res = await send("POST", `${ctx.base}/transfer-ownership`, ctx.owner.cookie, {
+      userId: pat.id,
+    });
+    expect(res.status).toBe(204);
+    const roles = (await ctx.members(pat.cookie)).members.map((m) => [m.userId, m.role]);
+    expect(roles[0]).toEqual([pat.id, "owner"]);
+    expect(roles[1]?.[1]).toBe("editor");
+    // The new owner can now manage sharing; the old one can't.
+    expect((await ctx.invite(stranger.email, "S", ctx.owner.cookie)).status).toBe(403);
+    expect((await ctx.invite(stranger.email, "S", pat.cookie)).status).toBe(201);
+    expect((await send("POST", `${ctx.base}/leave`, ctx.owner.cookie)).status).toBe(204);
+  });
+});

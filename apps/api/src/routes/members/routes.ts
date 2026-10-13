@@ -197,3 +197,74 @@ export const acceptInvitation = createRoute({
     410: invitationGone,
   },
 });
+
+const MemberParams = BudgetParams.extend({
+  userId: z.string().openapi({ param: { name: "userId", in: "path" } }),
+});
+
+export const removeMember = createRoute({
+  method: "delete",
+  path: "/budgets/{budgetId}/members/{userId}",
+  operationId: "removeBudgetMember",
+  tags: ["Sharing"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Stop sharing the budget with someone (owner only)",
+  description:
+    "They lose access at once. The owner can't be removed (`CANNOT_REMOVE_OWNER`): transfer " +
+    "ownership first.",
+  request: { params: MemberParams },
+  responses: {
+    204: { description: "Removed" },
+    401: jsonError("Not signed in"),
+    403: ownerOnly,
+    404: notFound,
+    409: jsonError("The owner (`CANNOT_REMOVE_OWNER`)"),
+  },
+});
+
+export const leaveBudget = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/leave",
+  operationId: "leaveBudget",
+  tags: ["Sharing"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Leave a budget shared with you",
+  description:
+    "The owner can't leave (`OWNER_CANNOT_LEAVE`): transfer ownership to someone else first, or " +
+    "delete the budget.",
+  request: { params: BudgetParams },
+  responses: {
+    204: { description: "Left" },
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
+    404: notFound,
+    409: jsonError("The owner (`OWNER_CANNOT_LEAVE`)"),
+  },
+});
+
+export const transferOwnership = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transfer-ownership",
+  operationId: "transferBudgetOwnership",
+  tags: ["Sharing"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Make someone else the budget's owner (owner only)",
+  description:
+    "The new owner must already share the budget. The old owner keeps access as a member, as " +
+    'YNAB\'s plan owner does after "Transfer Plan".',
+  request: {
+    params: BudgetParams,
+    body: body(z.object({ userId: z.string() }).openapi("TransferBudgetOwnership")),
+  },
+  responses: {
+    204: { description: "Transferred" },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: ownerOnly,
+    404: jsonError("No such budget, or the new owner doesn't share it"),
+    409: jsonError("Already the owner (`ALREADY_OWNER`)"),
+  },
+});

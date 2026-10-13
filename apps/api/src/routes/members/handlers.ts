@@ -15,9 +15,12 @@ import {
   type cancelInvitation,
   type createInvitation,
   INVITATION_DAYS,
+  type leaveBudget,
   type listMembers,
   MAX_BUDGET_PEOPLE,
+  type removeMember,
   type resendInvitation,
+  type transferOwnership,
   type viewInvitation,
 } from "./routes";
 
@@ -312,4 +315,66 @@ export const acceptInvitationHandler: RouteHandler<typeof acceptInvitation, Env>
     return invitation.budgetId;
   });
   return c.json({ budgetId }, 200);
+};
+
+/** The budget's member row for `userId`, locked; a 404 when they don't share it. */
+async function memberRow(tx: Tx, budgetId: string, userId: string) {
+  const [row] = await tx
+    .select()
+    .from(budgetMember)
+    .where(and(eq(budgetMember.budgetId, budgetId), eq(budgetMember.userId, userId)))
+    .for("update");
+  if (!row) throw new AppError(404, "NOT_FOUND", "That person doesn't share this budget");
+  return row;
+}
+
+export const removeMemberHandler: RouteHandler<typeof removeMember, Env> = async (c) => {
+  const { budgetId, userId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { member: ["delete"] });
+  await db.transaction(async (tx) => {
+    const row = await memberRow(tx, budgetId, userId);
+    if (row.role === "owner") {
+      throw new AppError(
+        409,
+        "CANNOT_REMOVE_OWNER",
+        "The owner can't be removed. Transfer ownership first.",
+      );
+    }
+    await tx.delete(budgetMember).where(eq(budgetMember.id, row.id));
+  });
+  return c.body(null, 204);
+};
+
+export const leaveBudgetHandler: RouteHandler<typeof leaveBudget, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  await db.transaction(async (tx) => {
+    const row = await memberRow(tx, budgetId, c.var.user.id);
+    if (row.role === "owner") {
+      throw new AppError(
+        409,
+        "OWNER_CANNOT_LEAVE",
+        "The owner can't leave a budget. Transfer ownership to someone else first, or delete it.",
+      );
+    }
+    await tx.delete(budgetMember).where(eq(budgetMember.id, row.id));
+  });
+  return c.body(null, 204);
+};
+
+export const transferOwnershipHandler: RouteHandler<typeof transferOwnership, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { userId } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { organization: ["delete"] });
+  await db.transaction(async (tx) => {
+    const me = await memberRow(tx, budgetId, c.var.user.id);
+    const next = await memberRow(tx, budgetId, userId);
+    if (next.id === me.id) throw new AppError(409, "ALREADY_OWNER", "You already own this budget");
+    await tx.update(budgetMember).set({ role: "owner" }).where(eq(budgetMember.id, next.id));
+    await tx.update(budgetMember).set({ role: "editor" }).where(eq(budgetMember.id, me.id));
+  });
+  return c.body(null, 204);
 };

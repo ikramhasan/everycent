@@ -1,4 +1,14 @@
 import type { components } from "@everycent/api-client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
 import {
   Card,
@@ -15,19 +25,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@everycent/ui/components/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@everycent/ui/components/dropdown-menu";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { MoreHorizontal } from "lucide-react";
+import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
-import { apiErrorMessage } from "@/lib/budgets";
+import { apiErrorMessage, invalidateBudgets } from "@/lib/budgets";
 import { sessionQueryOptions } from "@/lib/session";
 
 /** Budget settings' sharing card: YNAB Together's members and pending invitations, per budget. */
-export function BudgetMembers({ actions }: { actions?: (member: Member) => ReactNode }) {
+export function BudgetMembers() {
   const { budget, formatDate } = useBudget();
   const queryClient = useQueryClient();
   const path = { budgetId: budget.id };
@@ -77,7 +95,7 @@ export function BudgetMembers({ actions }: { actions?: (member: Member) => React
                   <span className="text-muted-foreground text-xs">
                     {m.role === "owner" ? "Owner" : "Member"}
                   </span>
-                  {actions?.(m)}
+                  <MemberActions member={m} isMe={m.userId === me?.id} onChanged={refresh} />
                 </li>
               ))}
             </ul>
@@ -244,5 +262,117 @@ function InviteDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type Confirm = "remove" | "transfer" | "leave";
+
+/**
+ * The owner removes people or makes one of them the owner; anyone else can leave. Each asks
+ * first, as YNAB's Remove Member and Leave Group do.
+ */
+function MemberActions({
+  member,
+  isMe,
+  onChanged,
+}: {
+  member: Member;
+  isMe: boolean;
+  onChanged: () => Promise<unknown>;
+}) {
+  const { budget } = useBudget();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const path = { budgetId: budget.id };
+  const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/members/{userId}");
+  const leave = $api.useMutation("post", "/v1/budgets/{budgetId}/leave");
+  const transfer = $api.useMutation("post", "/v1/budgets/{budgetId}/transfer-ownership");
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const owner = budget.role === "owner";
+
+  if (member.role === "owner" || (!owner && !isMe)) return null;
+
+  async function run() {
+    try {
+      if (confirm === "remove") {
+        await remove.mutateAsync({ params: { path: { ...path, userId: member.userId } } });
+        toast.success(`${member.name} no longer shares this budget`);
+        await onChanged();
+      } else if (confirm === "transfer") {
+        await transfer.mutateAsync({ params: { path }, body: { userId: member.userId } });
+        toast.success(`${member.name} now owns this budget`);
+        await onChanged();
+        await invalidateBudgets(queryClient);
+      } else if (confirm === "leave") {
+        await leave.mutateAsync({ params: { path } });
+        await navigate({ to: "/" });
+        queryClient.removeQueries({ queryKey: ["get", "/v1/budgets/{budgetId}"] });
+        await invalidateBudgets(queryClient);
+        toast.success(`You left “${budget.name}”`);
+      }
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't do that. Try again."));
+    }
+  }
+
+  const copy: Record<Confirm, { title: string; body: string; action: string }> = {
+    remove: {
+      title: `Remove ${member.name}?`,
+      body: `${member.name} (${member.email}) will no longer be able to see or edit “${budget.name}”.`,
+      action: "Remove Member",
+    },
+    transfer: {
+      title: `Make ${member.name} the owner?`,
+      body: `${member.name} will own “${budget.name}”: only they will be able to invite or remove people, delete it or make a fresh start. You'll keep access as a member.`,
+      action: "Transfer Ownership",
+    },
+    leave: {
+      title: `Leave “${budget.name}”?`,
+      body: "You'll no longer be able to see or edit this budget. The owner can invite you again.",
+      action: "Leave Budget",
+    },
+  };
+
+  return (
+    <>
+      {isMe ? (
+        <Button size="sm" variant="outline" onClick={() => setConfirm("leave")}>
+          Leave
+        </Button>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" aria-label={`Actions for ${member.name}`}>
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuItem onSelect={() => setConfirm("transfer")}>Make owner</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => setConfirm("remove")}>
+              Remove Member
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
+        {confirm && (
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{copy[confirm].title}</AlertDialogTitle>
+              <AlertDialogDescription>{copy[confirm].body}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant={confirm === "transfer" ? "default" : "destructive"}
+                onClick={run}
+              >
+                {copy[confirm].action}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        )}
+      </AlertDialog>
+    </>
   );
 }
