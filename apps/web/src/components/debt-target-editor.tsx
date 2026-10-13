@@ -150,6 +150,8 @@ export function DebtTargetEditor({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    // Add a New Loan's form is portaled but still a React child: its submit bubbles up to here.
+    if (e.target !== e.currentTarget) return;
     if (typeof parsed === "string") return setError(parsed);
     if (parsed <= 0n) return setError("Enter how much you want to pay each month.");
     setError(null);
