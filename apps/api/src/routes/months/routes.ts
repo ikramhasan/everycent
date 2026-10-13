@@ -1,3 +1,4 @@
+import { BUDGET_ROLES } from "@everycent/db/schema";
 import {
   AUTO_ASSIGN_OPTIONS,
   BUDGET_MONTH_PATTERN,
@@ -579,9 +580,25 @@ const MoneyMoveSchema = z
     month: zBudgetMonth,
     amount: zMinorUnits.describe("Positive"),
     movedAt: z.iso.datetime(),
-    userName: z.string().nullable().describe("Who moved it; null if they left the budget"),
+    autoAssign: z
+      .object({
+        batchId: z.string().describe("Shared by every move of one Auto-Assign"),
+        method: z.enum(AUTO_ASSIGN_OPTIONS).describe("The Auto-Assign option used"),
+      })
+      .nullable()
+      .describe(
+        "Set on the moves of an Auto-Assign, which YNAB lists together as one entry; null otherwise",
+      ),
+    userId: z.string().nullable().describe("Who moved it; null if their user was deleted"),
+    userName: z.string().nullable().describe("Who moved it; null if their user was deleted"),
+    memberRole: z
+      .enum(BUDGET_ROLES)
+      .nullable()
+      .describe("The mover's role on the budget now; null once they've left it"),
   })
   .openapi("MoneyMove");
+
+const MoneyMoveList = z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList");
 
 export const listMoves = createRoute({
   method: "get",
@@ -604,9 +621,32 @@ export const listMoves = createRoute({
       description: "The last 34 days' moves",
       content: {
         "application/json": {
-          schema: z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList"),
+          schema: MoneyMoveList,
         },
       },
+    },
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const listMonthMoves = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/months/{month}/moves",
+  operationId: "listMonthMoves",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Every change to assigned money in a month, newest first",
+  description:
+    'Behind YNAB\'s per-category history ("Changes to your assigned amount this month"): all of ' +
+    "the month's moves, however old.",
+  request: { params: BudgetParams },
+  responses: {
+    200: {
+      description: "The month's moves",
+      content: { "application/json": { schema: MoneyMoveList } },
     },
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),

@@ -48,6 +48,7 @@ import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
+import { CategoryMovesButton, type CategoryMovesContext } from "./category-moves";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 import { ProgressBar } from "./progress-bar";
@@ -109,6 +110,10 @@ export interface CategoryFigures {
   emptyView?: { message: string; onViewAll: () => void };
   /** YNAB's Progress Bars setting: off hides the bars and the notes under category names. */
   progressBars?: boolean;
+  /** The month's moves, for the history button next to Assigned (recent months only). */
+  moves?: CategoryMovesContext;
+  /** A category to scroll into view (a new object each time it's asked for). */
+  scrollTo?: { id: string };
 }
 
 export interface SelectionActions {
@@ -772,9 +777,17 @@ function CategoryRow({
   const selected = selection?.selected.has(category.id) ?? false;
   // YNAB: clicking a name selects that category alone; clicking it again opens its editor.
   const onlySelected = selected && selection?.selected.size === 1;
+  const scrollTo = figures?.scrollTo;
+  useEffect(() => {
+    if (scrollTo?.id !== category.id) return;
+    document
+      .querySelector(`[data-category-row="${category.id}"]`)
+      ?.scrollIntoView?.({ block: "center" });
+  }, [scrollTo, category.id]);
 
   return (
     <div
+      data-category-row={category.id}
       ref={ref}
       className={cn(
         ROW,
@@ -878,19 +891,33 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          {assign ? (
-            <AssignedCell
-              categoryId={category.id}
-              categoryName={category.name}
-              amount={totals.assigned}
-              format={format}
-              actions={assign}
-              startEditing={figures?.editAssigned === category.id}
-              onStartedEditing={figures?.onEditAssignedStarted}
-            />
-          ) : (
-            <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
-          )}
+          <div className="group/assigned relative min-w-0">
+            {assign ? (
+              <AssignedCell
+                categoryId={category.id}
+                categoryName={category.name}
+                amount={totals.assigned}
+                format={format}
+                actions={assign}
+                startEditing={figures?.editAssigned === category.id}
+                onStartedEditing={figures?.onEditAssignedStarted}
+              />
+            ) : (
+              <span className={cn(FIGURE, "block text-sm")}>{format(totals.assigned)}</span>
+            )}
+            {figures?.moves?.withMoves.has(category.id) && (
+              // Just past the amount, in the gap before Activity's right-aligned figure.
+              <span className="absolute top-1/2 left-full -translate-y-1/2">
+                <CategoryMovesButton
+                  categoryId={category.id}
+                  categoryName={category.name}
+                  context={figures.moves}
+                  format={format}
+                  visible={selected}
+                />
+              </span>
+            )}
+          </div>
           <span className={cn(FIGURE, "text-sm")}>
             {figures && (
               <Activity

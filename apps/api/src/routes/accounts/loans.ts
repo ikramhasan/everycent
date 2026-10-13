@@ -1,4 +1,4 @@
-import { budgetAccount } from "@everycent/db/schema";
+import { budgetAccount, budget as budgetTable } from "@everycent/db/schema";
 import { accountFamily, isOnBudget, monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
@@ -17,6 +17,7 @@ import type { AppEnv } from "../../types";
 import { insertOtherSide } from "../transactions/rules";
 import { accountJson } from "./handlers";
 import type {
+  dismissLoanBanner,
   getLoanActivity,
   recordLoanPayment,
   setLoanCharge as setLoanChargeRoute,
@@ -43,7 +44,15 @@ async function loanState(db: Db, account: AccountRow, today: string) {
   return state;
 }
 
-function activityJson(state: LoanState) {
+/** The loan page's banners: the simulator one is dismissed plan-wide, the paid-off one per loan. */
+function bannersJson(budget: { loanSimulatorBannerDismissed: boolean }, account: AccountRow) {
+  return {
+    simulatorDismissed: budget.loanSimulatorBannerDismissed,
+    paidOffDismissed: account.paidOffBannerDismissed,
+  };
+}
+
+function activityJson(state: LoanState, banners: ReturnType<typeof bannersJson>) {
   const charge = (
     month: string,
     kind: "interest" | "escrow",
@@ -74,6 +83,7 @@ function activityJson(state: LoanState) {
         minimumPayment: t.minimumPayment?.toString() ?? null,
         escrowAmount: t.escrowAmount?.toString() ?? null,
       })),
+    banners,
   };
 }
 
@@ -81,16 +91,46 @@ export const getLoanActivityHandler: RouteHandler<typeof getLoanActivity, Env> =
   const { budgetId, accountId } = c.req.valid("param");
   const { today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
+  const { budget } = await loadBudgetAccess(c, budgetId);
   const account = await findLoan(db, budgetId, accountId);
-  return c.json(activityJson(await loanState(db, account, today)), 200);
+  return c.json(
+    activityJson(await loanState(db, account, today), bannersJson(budget, account)),
+    200,
+  );
+};
+
+export const dismissLoanBannerHandler: RouteHandler<typeof dismissLoanBanner, Env> = async (c) => {
+  const { budgetId, accountId } = c.req.valid("param");
+  const { banner } = c.req.valid("json");
+  const { db } = c.var.deps;
+  // Anyone on the plan can dismiss them, as anyone sees them.
+  const { budget } = await loadBudgetAccess(c, budgetId);
+  const account = await findLoan(db, budgetId, accountId);
+  if (banner === "simulator") {
+    await db
+      .update(budgetTable)
+      .set({ loanSimulatorBannerDismissed: true })
+      .where(eq(budgetTable.id, budgetId));
+  } else {
+    await db
+      .update(budgetAccount)
+      .set({ paidOffBannerDismissed: true })
+      .where(eq(budgetAccount.id, account.id));
+  }
+  return c.json(
+    {
+      simulatorDismissed: budget.loanSimulatorBannerDismissed || banner === "simulator",
+      paidOffDismissed: account.paidOffBannerDismissed || banner === "paidOff",
+    },
+    200,
+  );
 };
 
 export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
   const { month, kind, amount, today } = c.req.valid("json");
   const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  const { budget } = await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   const account = await findLoan(db, budgetId, accountId);
   const value = BigInt(amount);
   if (value < 0n) throw new AppError(400, "BAD_REQUEST", "Enter a charge of zero or more");
@@ -100,7 +140,10 @@ export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> 
     throw new AppError(400, "BAD_REQUEST", "That month is outside the loan's activity");
   }
   await setLoanCharge(db, account, { month, kind, amount: value, status: "edited" });
-  return c.json(activityJson(await loanState(db, account, today)), 200);
+  return c.json(
+    activityJson(await loanState(db, account, today), bannersJson(budget, account)),
+    200,
+  );
 };
 
 export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, Env> = async (c) => {

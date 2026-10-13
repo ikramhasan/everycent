@@ -54,6 +54,11 @@ export const budgetAccount = pgTable(
      * payments come out of. One loan per category; deleting the category unpairs it.
      */
     pairedCategoryId: text().references((): AnyPgColumn => category.id, { onDelete: "set null" }),
+    /**
+     * Loan accounts: "Another debt bites the dust" was dismissed (YNAB's plan setting
+     * `loan_payoff_celebration_completed_for_account_ids`, per loan, checked 2026-10-14).
+     */
+    paidOffBannerDismissed: boolean().notNull().default(false),
     ...timestamps,
   },
   (t) => [

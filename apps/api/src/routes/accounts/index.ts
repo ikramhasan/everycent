@@ -10,11 +10,17 @@ import {
   reopenAccountHandler,
   updateAccountHandler,
 } from "./handlers";
-import { getLoanActivityHandler, recordLoanPaymentHandler, setLoanChargeHandler } from "./loans";
+import {
+  dismissLoanBannerHandler,
+  getLoanActivityHandler,
+  recordLoanPaymentHandler,
+  setLoanChargeHandler,
+} from "./loans";
 import {
   closeAccount,
   createAccount,
   deleteAccount,
+  dismissLoanBanner,
   getLoanActivity,
   listAccounts,
   moveAccount,
@@ -38,4 +44,5 @@ export const accountsRouter = createRouter()
   .openapi(deleteAccount, deleteAccountHandler)
   .openapi(getLoanActivity, getLoanActivityHandler)
   .openapi(setLoanCharge, setLoanChargeHandler)
-  .openapi(recordLoanPayment, recordLoanPaymentHandler);
+  .openapi(recordLoanPayment, recordLoanPaymentHandler)
+  .openapi(dismissLoanBanner, dismissLoanBannerHandler);

@@ -569,3 +569,51 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await send("GET", `${base}/accounts/${checking.id}/loan`, cookie)).status).toBe(400);
   });
 });
+
+describe("loan page banners (YNAB plan settings, 2026-10-14)", () => {
+  it("dismisses the simulator banner plan-wide and the paid-off one per loan", async () => {
+    const { cookie, base, addAccount, checking, mortgage } = await setup();
+    const other = await addAccount({
+      name: "x-142 Loan",
+      type: "personal_loan",
+      balance: "-10000",
+      interestRate: "0",
+      minimumPayment: "5000",
+    });
+    const banners = async (loanId: string) => {
+      const res = await send("GET", `${base}/accounts/${loanId}/loan?today=${TODAY}`, cookie);
+      return ((await res.json()) as { banners: unknown }).banners;
+    };
+    const dismiss = (loanId: string, banner: string) =>
+      send("POST", `${base}/accounts/${loanId}/loan/banners/dismiss`, cookie, { banner });
+    expect(await banners(mortgage.id)).toEqual({
+      simulatorDismissed: false,
+      paidOffDismissed: false,
+    });
+
+    const res = await dismiss(mortgage.id, "simulator");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ simulatorDismissed: true, paidOffDismissed: false });
+    // One dismissal covers every loan (YNAB: x-142 Loan Old, then Loan New).
+    expect(await banners(other.id)).toEqual({ simulatorDismissed: true, paidOffDismissed: false });
+
+    expect((await dismiss(other.id, "paidOff")).status).toBe(200);
+    expect(await banners(other.id)).toEqual({ simulatorDismissed: true, paidOffDismissed: true });
+    expect(await banners(mortgage.id)).toEqual({
+      simulatorDismissed: true,
+      paidOffDismissed: false,
+    });
+
+    // Outsiders, other account types and unknown banners are refused.
+    const outsider = await signUp(app);
+    expect(
+      (
+        await send("POST", `${base}/accounts/${other.id}/loan/banners/dismiss`, outsider.cookie, {
+          banner: "paidOff",
+        })
+      ).status,
+    ).toBe(404);
+    expect((await dismiss(checking.id, "paidOff")).status).toBe(400);
+    expect((await dismiss(other.id, "confetti")).status).toBe(400);
+  });
+});

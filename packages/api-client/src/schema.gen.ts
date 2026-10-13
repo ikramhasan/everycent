@@ -741,6 +741,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a loan page banner for the whole plan
+         * @description `simulator` hides the payoff simulator banner on every loan; `paidOff` hides this loan's "Another debt bites the dust". Kept on the plan, as YNAB keeps them (checked 2026-10-14).
+         */
+        post: operations["dismissLoanBanner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/transactions": {
         parameters: {
             query?: never;
@@ -1146,7 +1166,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Every change to assigned money in a month, newest first
+         * @description Behind YNAB's per-category history ("Changes to your assigned amount this month"): all of the month's moves, however old.
+         */
+        get: operations["listMonthMoves"];
         put?: never;
         /**
          * Move assigned money between categories, or to and from Ready to Assign
@@ -1823,6 +1847,7 @@ export interface components {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 escrowAmount: string | null;
             }[];
+            banners: components["schemas"]["LoanBanners"];
         };
         LoanCharge: {
             /** @description The month's full charge: the estimate, or what was set */
@@ -1836,6 +1861,13 @@ export interface components {
              * @description When it was set (edited or reconciled)
              */
             editedAt: string | null;
+        };
+        /** @description YNAB keeps these as plan settings, so they follow the plan to every device and member */
+        LoanBanners: {
+            /** @description The payoff simulator banner was dismissed; one dismissal covers every loan */
+            simulatorDismissed: boolean;
+            /** @description This loan's "Another debt bites the dust" banner was dismissed */
+            paidOffDismissed: boolean;
         };
         SetLoanCharge: {
             /** @description YYYY-MM */
@@ -1862,6 +1894,10 @@ export interface components {
             date: string;
             /** @default  */
             memo: string;
+        };
+        DismissLoanBanner: {
+            /** @enum {string} */
+            banner: "simulator" | "paidOff";
         };
         TransactionList: {
             /** @description One page, in the requested order */
@@ -2734,8 +2770,25 @@ export interface components {
             amount: string;
             /** Format: date-time */
             movedAt: string;
-            /** @description Who moved it; null if they left the budget */
+            /** @description Set on the moves of an Auto-Assign, which YNAB lists together as one entry; null otherwise */
+            autoAssign: {
+                /** @description Shared by every move of one Auto-Assign */
+                batchId: string;
+                /**
+                 * @description The Auto-Assign option used
+                 * @enum {string}
+                 */
+                method: "underfunded" | "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "reduceOverfunding" | "resetAvailable" | "resetAssigned";
+            } | null;
+            /** @description Who moved it; null if their user was deleted */
+            userId: string | null;
+            /** @description Who moved it; null if their user was deleted */
             userName: string | null;
+            /**
+             * @description The mover's role on the budget now; null once they've left it
+             * @enum {string|null}
+             */
+            memberRole: "owner" | "editor" | null;
         };
         ExpectedIncome: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -5663,6 +5716,69 @@ export interface operations {
             };
         };
     };
+    dismissLoanBanner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissLoanBanner"];
+            };
+        };
+        responses: {
+            /** @description The loan's banners */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanBanners"];
+                };
+            };
+            /** @description Not a loan account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listTransactions: {
         parameters: {
             query?: {
@@ -7163,6 +7279,57 @@ export interface operations {
                 };
             };
             /** @description The caller's role can't change the plan, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMonthMoves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's moves */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyMoveList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -1,5 +1,6 @@
 import { newId } from "@everycent/db";
-import { categoryAssignment, moneyMove } from "@everycent/db/schema";
+import { budgetMember, categoryAssignment, moneyMove, user } from "@everycent/db/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
 
@@ -1280,7 +1281,10 @@ describe("budget months", () => {
       deletion: boolean;
       month: string;
       amount: string;
+      autoAssign: { batchId: string; method: string } | null;
+      userId: string | null;
       userName: string | null;
+      memberRole: string | null;
     };
 
     async function moveSetup() {
@@ -1412,6 +1416,94 @@ describe("budget months", () => {
       await old(33);
       await old(35);
       expect((await moves()).map((m) => m.amount)).toEqual(["2000", "33"]);
+    });
+
+    it("marks one Auto-Assign's moves as a batch with its method (YNAB: x-142 A–C)", async () => {
+      const { cookie, base, put, moves, rent, phone } = await moveSetup();
+      await put(rent.id, "2026-09", "3000");
+      await put(phone.id, "2026-10", "200");
+      const res = await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+        option: "assignedLastMonth",
+        categoryIds: [rent.id, phone.id],
+        today: TODAY,
+      });
+      expect(res.status).toBe(200);
+      const [first, second, plain] = await moves();
+      // Rent gets September's 30.00, Phone gives back its 2.00: one batch, both directions.
+      expect([first, second]).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "assigned", toCategoryId: rent.id, amount: "3000" }),
+          expect.objectContaining({ kind: "removed", fromCategoryId: phone.id, amount: "200" }),
+        ]),
+      );
+      expect(first?.autoAssign).toEqual({
+        batchId: expect.any(String),
+        method: "assignedLastMonth",
+      });
+      expect(second?.autoAssign).toEqual(first?.autoAssign);
+      expect(plain).toMatchObject({ kind: "assigned", toCategoryId: phone.id, autoAssign: null });
+
+      // Another Auto-Assign is another batch.
+      await send("POST", `${base}/months/2026-10/auto-assign`, cookie, {
+        option: "resetAssigned",
+        categoryIds: [rent.id],
+        today: TODAY,
+      });
+      const [reset] = await moves();
+      expect(reset?.autoAssign?.method).toBe("resetAssigned");
+      expect(reset?.autoAssign?.batchId).not.toBe(first?.autoAssign?.batchId);
+    });
+
+    it("lists a month's moves however old, with who moved them", async () => {
+      const { cookie, base, put, rent, phone, readyToAssignCategoryId } = await moveSetup();
+      const budgetId = base.split("/").at(-1) ?? "";
+      await put(rent.id, "2026-10", "2000");
+      await put(rent.id, "2026-09", "700");
+      await db.insert(moneyMove).values({
+        id: newId(),
+        budgetId,
+        fromCategoryId: readyToAssignCategoryId,
+        toCategoryId: phone.id,
+        month: "2026-10-01",
+        amount: 90n,
+        currency: "USD",
+        createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+      });
+      // A second member moves money too, then leaves the budget.
+      const partner = await signUp(app, { name: "Pat" });
+      const [partnerUser] = await db.select().from(user).where(eq(user.email, partner.email));
+      await db.insert(budgetMember).values({
+        id: newId(),
+        budgetId,
+        userId: partnerUser?.id ?? "",
+        role: "editor",
+      });
+      expect((await put(phone.id, "2026-10", "500")).status).toBe(200);
+      const monthMoves = async () =>
+        (await json<{ moves: Move[] }>(await send("GET", `${base}/months/2026-10/moves`, cookie)))
+          .moves;
+      // `put` signs in as the owner, so the partner's own request goes through their cookie.
+      expect(
+        (
+          await send("PUT", `${base}/months/2026-10/categories/${phone.id}`, partner.cookie, {
+            assigned: "600",
+            today: TODAY,
+          })
+        ).status,
+      ).toBe(200);
+
+      expect(await monthMoves()).toMatchObject([
+        { toCategoryId: phone.id, amount: "100", userName: "Pat", memberRole: "editor" },
+        { toCategoryId: phone.id, amount: "500", userName: "Test User", memberRole: "owner" },
+        { toCategoryId: rent.id, amount: "2000" },
+        { toCategoryId: phone.id, amount: "90", userId: null, memberRole: null },
+      ]);
+
+      await db.delete(budgetMember).where(eq(budgetMember.userId, partnerUser?.id ?? ""));
+      const [left] = await monthMoves();
+      expect(left).toMatchObject({ userName: "Pat", memberRole: null });
+      expect(left?.userId).toBe(partnerUser?.id);
+      expect((await send("GET", `${base}/months/2026-10/moves`, partner.cookie)).status).toBe(404);
     });
 
     it("refuses bad moves", async () => {

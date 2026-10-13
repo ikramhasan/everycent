@@ -2465,11 +2465,15 @@
               ]
             },
             "description": "The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner"
+          },
+          "banners": {
+            "$ref": "#/components/schemas/LoanBanners"
           }
         },
         "required": [
           "months",
-          "terms"
+          "terms",
+          "banners"
         ]
       },
       "LoanCharge": {
@@ -2508,6 +2512,24 @@
           "status",
           "editedAt"
         ]
+      },
+      "LoanBanners": {
+        "type": "object",
+        "properties": {
+          "simulatorDismissed": {
+            "type": "boolean",
+            "description": "The payoff simulator banner was dismissed; one dismissal covers every loan"
+          },
+          "paidOffDismissed": {
+            "type": "boolean",
+            "description": "This loan's \"Another debt bites the dust\" banner was dismissed"
+          }
+        },
+        "required": [
+          "simulatorDismissed",
+          "paidOffDismissed"
+        ],
+        "description": "YNAB keeps these as plan settings, so they follow the plan to every device and member"
       },
       "SetLoanCharge": {
         "type": "object",
@@ -2569,6 +2591,21 @@
           "fromAccountId",
           "amount",
           "date"
+        ]
+      },
+      "DismissLoanBanner": {
+        "type": "object",
+        "properties": {
+          "banner": {
+            "type": "string",
+            "enum": [
+              "simulator",
+              "paidOff"
+            ]
+          }
+        },
+        "required": [
+          "banner"
         ]
       },
       "TransactionList": {
@@ -6142,12 +6179,62 @@
             "type": "string",
             "format": "date-time"
           },
+          "autoAssign": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "batchId": {
+                "type": "string",
+                "description": "Shared by every move of one Auto-Assign"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "underfunded",
+                  "assignedLastMonth",
+                  "spentLastMonth",
+                  "averageAssigned",
+                  "averageSpent",
+                  "reduceOverfunding",
+                  "resetAvailable",
+                  "resetAssigned"
+                ],
+                "description": "The Auto-Assign option used"
+              }
+            },
+            "required": [
+              "batchId",
+              "method"
+            ],
+            "description": "Set on the moves of an Auto-Assign, which YNAB lists together as one entry; null otherwise"
+          },
+          "userId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who moved it; null if their user was deleted"
+          },
           "userName": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Who moved it; null if they left the budget"
+            "description": "Who moved it; null if their user was deleted"
+          },
+          "memberRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "owner",
+              "editor",
+              null
+            ],
+            "description": "The mover's role on the budget now; null once they've left it"
           }
         },
         "required": [
@@ -6161,7 +6248,10 @@
           "month",
           "amount",
           "movedAt",
-          "userName"
+          "autoAssign",
+          "userId",
+          "userName",
+          "memberRole"
         ]
       },
       "ExpectedIncome": {
@@ -10183,6 +10273,101 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss": {
+      "post": {
+        "operationId": "dismissLoanBanner",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Dismiss a loan page banner for the whole plan",
+        "description": "`simulator` hides the payoff simulator banner on every loan; `paidOff` hides this loan's \"Another debt bites the dust\". Kept on the plan, as YNAB keeps them (checked 2026-10-14).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissLoanBanner"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The loan's banners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanBanners"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a loan account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/transactions": {
       "get": {
         "operationId": "listTransactions",
@@ -12578,6 +12763,82 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listMonthMoves",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Every change to assigned money in a month, newest first",
+        "description": "Behind YNAB's per-category history (\"Changes to your assigned amount this month\"): all of the month's moves, however old.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's moves",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMoveList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

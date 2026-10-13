@@ -1,4 +1,4 @@
-import { type BudgetMonth, isBudgetMonth } from "@everycent/engine";
+import { addMonths, type BudgetMonth, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +29,7 @@ import {
 } from "@/components/move-money";
 import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
-import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
+import { RecentMoves } from "@/components/recent-moves";
 import { TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { UpcomingTransactions } from "@/components/upcoming-transactions";
@@ -63,6 +63,13 @@ import {
   toMoney,
   useCollapsedGroups,
 } from "@/lib/months";
+import {
+  categoriesWithMoves,
+  HISTORY_MONTHS_BACK,
+  invalidateMoves,
+  monthMovesQueryOptions,
+} from "@/lib/moves";
+import { sessionQueryOptions } from "@/lib/session";
 import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
@@ -101,12 +108,21 @@ function BudgetPage() {
   const { progressBars, setProgressBars } = useProgressBars();
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [editAssigned, setEditAssigned] = useState<string | undefined>();
+  // The category a link or Recent Moves opened, scrolled to once its month is on screen.
+  const [scrollTo, setScrollTo] = useState<{ id: string } | undefined>();
   useEffect(() => {
     if (!search.category) return;
     setSelected(new Set([search.category]));
     setEditAssigned(search.assign ? search.category : undefined);
+    setScrollTo({ id: search.category });
     void navigate({ search: { month: search.month }, replace: true });
   }, [search.category, search.assign]);
+  // YNAB's per-category history covers the current and later months and three months back.
+  const monthMoves = useQuery({
+    ...monthMovesQueryOptions(budget.id, month),
+    enabled: month >= addMonths(today, -HISTORY_MONTHS_BACK),
+  });
+  const session = useQuery(sessionQueryOptions);
   const queryClient = useQueryClient();
   const assignMutation = $api.useMutation(
     "put",
@@ -172,6 +188,13 @@ function BudgetPage() {
     return map;
   }, [categories.data]);
   const visible = useMemo(() => new Set(listed.keys()), [listed]);
+  const names = useMemo(
+    () =>
+      new Map(
+        (categories.data?.groups ?? []).flatMap((g) => g.categories.map((c) => [c.id, c.name])),
+      ),
+    [categories.data],
+  );
   const shown = useMemo(
     () =>
       figures.data && filter !== "all" ? filteredIds(filter, figures.data, visible) : undefined,
@@ -230,10 +253,7 @@ function BudgetPage() {
     }
 
     async function refreshBudget() {
-      await Promise.all([
-        invalidateMonths(queryClient),
-        queryClient.invalidateQueries({ queryKey: movesQueryOptions(budget.id).queryKey }),
-      ]);
+      await Promise.all([invalidateMonths(queryClient), invalidateMoves(queryClient)]);
     }
 
     return {
@@ -245,6 +265,16 @@ function BudgetPage() {
       progressBars,
       editAssigned,
       onEditAssignedStarted: () => setEditAssigned(undefined),
+      scrollTo,
+      moves: monthMoves.data && {
+        moves: monthMoves.data.moves,
+        withMoves: categoriesWithMoves(monthMoves.data.moves),
+        name: (id, deleted) =>
+          deleted ??
+          (id ? (listed.get(id)?.name ?? names.get(id) ?? "Deleted category") : "Ready to Assign"),
+        formatDate,
+        currentUserId: session.data?.user.id,
+      },
       emptyView: {
         message: filter === "all" ? "" : EMPTY_VIEW[filter],
         onViewAll: () => setFilter("all"),
@@ -338,6 +368,11 @@ function BudgetPage() {
     today,
     progressBars,
     editAssigned,
+    scrollTo,
+    monthMoves.data,
+    session.data,
+    listed,
+    names,
   ]);
 
   const fixThisMonths = useFixThisMonths({
@@ -417,12 +452,7 @@ function BudgetPage() {
             return updated;
           };
           const refresh = async () => {
-            await Promise.all([
-              invalidateMonths(queryClient),
-              queryClient.invalidateQueries({
-                queryKey: movesQueryOptions(budget.id).queryKey,
-              }),
-            ]);
+            await Promise.all([invalidateMonths(queryClient), invalidateMoves(queryClient)]);
           };
           try {
             const updated = await apply();
@@ -563,6 +593,11 @@ function BudgetPage() {
                       categories={categories.data}
                       format={listFigures.format}
                       formatDate={formatDate}
+                      onOpenCategory={(categoryId, m) =>
+                        void navigate({
+                          search: { month: m === today ? undefined : m, category: categoryId },
+                        })
+                      }
                     />
                   )}
                   <ProgressBarsToggle

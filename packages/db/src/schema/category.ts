@@ -1,4 +1,5 @@
 import {
+  AUTO_ASSIGN_OPTIONS,
   type CurrencyCode,
   TARGET_BEHAVIORS,
   TARGET_CADENCES,
@@ -143,6 +144,13 @@ export const moneyMove = pgTable(
     toCategoryName: text(),
     /** Logged by deleting a category (YNAB shows these with a trash icon, under "Moved"). */
     deletion: boolean().notNull().default(false),
+    /**
+     * Shared by the moves of one Auto-Assign (YNAB groups them under a lightning icon as "N
+     * categories"); null for every other move.
+     */
+    autoAssignBatchId: text(),
+    /** The Auto-Assign option behind the batch (YNAB's "Method: Assigned Last Month"). */
+    autoAssignMethod: text({ enum: AUTO_ASSIGN_OPTIONS }),
     /** First day of the month the money moved in, YYYY-MM-01. */
     month: date({ mode: "string" }).notNull(),
     /** Minor units, always positive. */

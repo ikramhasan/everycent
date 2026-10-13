@@ -44,6 +44,11 @@ export const budget = pgTable("budget", {
    */
   expectedIncome: bigint({ mode: "bigint" }),
   expectedIncomeCurrency: char({ length: 3 }).$type<CurrencyCode>(),
+  /**
+   * YNAB's plan setting `dismissed_loan_account_payoff_simulator_banner`: one dismissal hides the
+   * loan payoff simulator banner on every loan, for everyone on the plan (checked 2026-10-14).
+   */
+  loanSimulatorBannerDismissed: boolean().notNull().default(false),
   ...timestamps,
 });
 
