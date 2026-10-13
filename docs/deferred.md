@@ -161,8 +161,9 @@ before starting a roadmap phase** and remove an entry once it's done.
   a reconciliation out of balance ask first (phase 9, docs/verify.md "Reconciliation").
 - The Reconcile popover leaves out YNAB's "How do I find my account balance?" link and the
   difference step's help-doc box: everycent has no help center yet.
-- Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
-  stay in the autocomplete.
+- Payee auto-categorization uses the payee's latest categorized transaction; YNAB's Manage
+  Payees offers "based on the last 3 transactions", "Always use my choice" and "Do not
+  auto-categorize" (EVERYCENT-61). Import renaming rules are EVERYCENT-62.
 - shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
   UI's Autocomplete (payee field) with the combobox styling. Replace it if shadcn adds one.
 - Editing an existing transaction is cell by cell (as YNAB does); a transaction can be moved to
@@ -210,8 +211,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   device's date (checked 2026-10-12, EVERYCENT-5; see `docs/verify.md`).
 - Entered-on-their-date transactions are stored unapproved, as YNAB does, but the register has
   no approve/unapproved styling yet (EVERYCENT-65).
-- Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
-  what YNAB does is EVERYCENT-115.
 - Duplicating a transfer selected from both sides (All Accounts) selects the copy's own side
   only; YNAB selects both sides of the copy.
 - Bulk Categorize's un-split warning counts selected transactions only; selected scheduled splits
@@ -244,9 +243,12 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Budgets and sharing (phase 16)
 
-- Invitations: the organization plugin's `budget_invitation` table exists but nothing uses it.
-  Email delivery now exists (`deps.email`, `apps/api/src/lib/email`); invites add a template and
-  an `EmailKind`.
+- Sharing is per budget (YNAB Together shares plans within a subscription group; everycent has
+  no subscriptions): the owner invites, and a budget has at most 6 people, pending invitations
+  included, as a YNAB Together group does. Invitations last 14 days; YNAB also emails a reminder
+  3 days before expiry, which needs a background job (EVERYCENT-125).
+- The invitation email names only the inviter's address: budget and display names are free
+  text, shown on the invitation page instead.
 - There is no viewer role yet (YNAB has none; the roadmap lists it as an extra).
 - `session.active_organization_id` (added by the plugin) is unused; the current budget lives in the
   URL.
@@ -268,9 +270,13 @@ before starting a roadmap phase** and remove an entry once it's done.
   newcomer can't sign in unconfirmed and the change doesn't happen), but the message could say
   why; Better Auth's verify endpoint doesn't report it distinctly (EVERYCENT-124, with `TRUSTED_PROXIES`
   at deploy and durable sends).
+- Two-step verification (YNAB's, from its help center and setup page): an authenticator app and
+  one emergency backup code; turning it on signs out other devices; turning it off asks for a
+  code. Unlike YNAB, set-up first asks for the password (Better Auth's enable endpoint requires
+  it). The backup code works once and can't be regenerated (YNAB documents no way either; its
+  answer is to contact support). No "remember this device" (YNAB has none).
 - The breach check (Have I Been Pwned) fails closed: if its API is down, sign-up, reset and
   change-password refuse with "Failed to check password" until it's back.
-- Checked checkboxes app-wide miss their checked style (EVERYCENT-123).
 
 ## Libraries
 

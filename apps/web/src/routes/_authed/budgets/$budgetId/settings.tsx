@@ -21,6 +21,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
+import { BudgetMembers } from "@/components/budget-members";
+import { useManagePayees } from "@/components/manage-payees";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, budgetQueryOptions, invalidateBudgets } from "@/lib/budgets";
@@ -37,6 +39,7 @@ function BudgetSettingsPage() {
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}");
   const freshStart = $api.useMutation("post", "/v1/budgets/{budgetId}/fresh-start");
+  const managePayees = useManagePayees();
   const path = { budgetId: budget.id };
 
   async function handleSave({
@@ -106,6 +109,22 @@ function BudgetSettingsPage() {
             pendingLabel="Saving…"
             onSubmit={handleSave}
           />
+        </CardContent>
+      </Card>
+
+      <BudgetMembers />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payees</CardTitle>
+          <CardDescription>
+            Rename, combine, hide or delete the payees your transactions use.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={() => managePayees?.()}>
+            Manage payees
+          </Button>
         </CardContent>
       </Card>
 

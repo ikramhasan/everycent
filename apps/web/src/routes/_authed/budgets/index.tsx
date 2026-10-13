@@ -42,7 +42,22 @@ function AllBudgetsPage() {
         </Empty>
       ) : (
         <>
-          <BudgetGrid budgets={budgets.data.budgets.filter((b) => !b.archivedAt)} />
+          {/* YNAB's plan list: "Your Plans", then "Plans Shared With You". */}
+          <BudgetGrid
+            budgets={budgets.data.budgets.filter((b) => !b.archivedAt && b.role === "owner")}
+          />
+          <section className="grid gap-3">
+            <h2 className="font-medium text-muted-foreground text-sm">Budgets shared with you</h2>
+            {budgets.data.budgets.some((b) => !b.archivedAt && b.role !== "owner") ? (
+              <BudgetGrid
+                budgets={budgets.data.budgets.filter((b) => !b.archivedAt && b.role !== "owner")}
+              />
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                No budgets have been shared with you yet.
+              </p>
+            )}
+          </section>
           {budgets.data.budgets.some((b) => b.archivedAt) && (
             <section className="grid gap-3">
               <h2 className="font-medium text-muted-foreground text-sm">

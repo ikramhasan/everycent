@@ -68,7 +68,9 @@ web app and through the API, reading `date_next` after each Enter Now (EVERYCENT
   shows in the other account (amount negated) and can be edited there; a scheduled split's
   transfer line shows in its account with no repeat icon and can't be deleted there.
 - **Closed accounts** (help center): schedules stop occurring and new ones can't be added; Enter
-  Now still works. Whether missed dates catch up on reopening is EVERYCENT-115.
+  Now still works. While closed, `date_next` stays put and nothing is entered (S10 Closed,
+  daily from 10/12, still 10/12 on 10/13); reopening enters every missed date (10/12 and 10/13)
+  and moves on (10/14). As built (EVERYCENT-115, 2026-10-13).
 
 ## Scheduled transactions in the plan (phase 10b) (settled 2026-10-12)
 
@@ -187,6 +189,49 @@ Built in EVERYCENT-3 and EVERYCENT-113.
 - **Edit Account → Working Balance** (open, non-loan accounts; a closed account's dialog has
   none): changing it adds a cleared "Manual Balance Adjustment", dated today, no memo, Inflow:
   Ready to Assign on budget accounts. Taken as typed: a card's "70" made it +$70.
+
+## Manage Payees (EVERYCENT-60) (settled 2026-10-13)
+
+Checked in YNAB plan "C5 First FS2" (payees P9 Alpha/Beta/Gamma/Delta, memo `x-p9`) and its
+fresh start "C9 Payees FS":
+
+- Plan menu → **Manage Payees**: search, groups Payees / Transfer Payees / Hidden Payees with
+  group checkboxes and a selected count, "Select N Unused Payees", the dialog's own Undo/Redo,
+  Done. The payee field's dropdown links to it too. Built (Budget settings → Payees, and the
+  payee field's "Manage Payees").
+- One payee: name field ("Payee name cannot be empty"; "Another payee already exists with this
+  name" for an exact match; YNAB allows a case-only difference, everycent keeps payee names
+  unique case aside, as the payee field matches them), "Show N Transactions" (Account, Date,
+  Category, Memo, Amount, newest first, scheduled included; Uncategorized shows blank), Hide /
+  Unhide, Delete. Built.
+- Several: "N Payees Selected", Combine and Rename (name prefilled with the first one ticked; a
+  name another payee already has merges into that payee), Hide All, Delete All. Built.
+- Delete: unused payees go at once; used ones ask for a new payee ([No Payee] or another used
+  payee, hidden ones included). Categories don't change. Built.
+- A payee is used if a transaction or a scheduled transaction uses it. Built.
+- Hidden payees aren't suggested; typing one's exact name shows "1 matching payee is hidden" and
+  saving uses it (it stays hidden). Fresh start keeps hidden payees hidden. Built.
+- Transfer payees can't be edited or deleted (only YNAB's import renaming rules, EVERYCENT-62).
+- Out of scope here: the Categorization section (EVERYCENT-61) and Renaming rules (EVERYCENT-62).
+
+## Sharing and account settings (Cycle 9) (settled 2026-10-13)
+
+From YNAB's help center ("YNAB Together", "Two-Step Verification", "Keyboard Shortcuts"), the
+YNAB Together terms, and the test account's Account Settings (options switched back afterwards):
+
+- **Sharing** (EVERYCENT-86, -87): a group is the manager plus up to 5 people; invites (first
+  name, email) last 14 days with a reminder 3 days before (EVERYCENT-125); Resend / Cancel
+  Invite; removed or leaving people lose access; after "Transfer Plan" the old owner keeps
+  access. Built per budget (everycent has no subscription groups).
+- **Two-step verification** (EVERYCENT-48): authenticator app, one emergency backup code,
+  enabling signs out other devices, "Turn Off" asks for the 6-digit code. Built (set-up also
+  asks for the password: Better Auth requires it).
+- **Per-user settings** (EVERYCENT-51): only First Name, "Open last used plan by default" (off:
+  the plan list, "Your Plans" / "Plans Shared With You") and "Enable keyboard shortcuts" (off:
+  Cmd+Z stops too). Built. No per-user locale, formats or first day of week in YNAB.
+- **Delete account** (EVERYCENT-50): confirmed with the password; "any budgets that you owned
+  will be unshared and deleted. Any budgets that were shared with you will no longer be
+  shared." Built.
 
 ## Budget screen (phase 6a)
 

@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { useShortcutsEnabled } from "./preferences";
 
 export interface UndoCommand {
   /** Short description shown in the Undo/Redo button tooltip. */
@@ -93,7 +94,9 @@ function isEditing(target: EventTarget | null) {
 
 export function useUndoShortcuts(onError: (error: unknown) => void) {
   const history = useUndo();
+  const enabled = useShortcutsEnabled();
   useEffect(() => {
+    if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditing(event.target) || event.altKey || (!event.metaKey && !event.ctrlKey)) return;
       const undo = event.key.toLowerCase() === "z" && !event.shiftKey;
@@ -105,5 +108,5 @@ export function useUndoShortcuts(onError: (error: unknown) => void) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [history, onError]);
+  }, [history, onError, enabled]);
 }

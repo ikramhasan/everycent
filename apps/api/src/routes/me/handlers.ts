@@ -1,18 +1,31 @@
-import { session } from "@everycent/db/schema";
+import { sql } from "@everycent/db";
+import {
+  budget,
+  budgetMember,
+  session,
+  twoFactor,
+  userPreference,
+  user as userTable,
+  verification,
+} from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { APIError } from "better-auth/api";
 import Bowser from "bowser";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
 import { consumePasswordCheck } from "../../lib/throttle";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
   changeEmail,
+  deleteAccount,
+  disableTwoFactor,
   getMe,
+  getPreferences,
   listSessions,
   revokeOtherSessions,
   revokeSession,
+  updatePreferences,
 } from "./routes";
 
 type Handler<R extends RouteConfig> = RouteHandler<R, AppEnv & AuthedEnv>;
@@ -25,6 +38,7 @@ export const getMeHandler: Handler<typeof getMe> = (c) => {
       name: user.name,
       email: user.email,
       emailVerified: user.emailVerified,
+      twoFactorEnabled: user.twoFactorEnabled ?? false,
       image: user.image ?? null,
       createdAt: user.createdAt.toISOString(),
     },
@@ -112,5 +126,90 @@ export const revokeSessionHandler: Handler<typeof revokeSession> = async (c) => 
 
 export const revokeOtherSessionsHandler: Handler<typeof revokeOtherSessions> = async (c) => {
   await c.var.deps.auth.api.revokeOtherSessions({ headers: c.req.raw.headers });
+  return c.body(null, 204);
+};
+
+export const disableTwoFactorHandler: Handler<typeof disableTwoFactor> = async (c) => {
+  const { db, auth } = c.var.deps;
+  const { code } = c.req.valid("json");
+  const me = c.var.user;
+  if (!me.twoFactorEnabled) {
+    throw new AppError(400, "TWO_FACTOR_NOT_ENABLED", "Two-step verification isn't on");
+  }
+  await consumePasswordCheck(db, me.id);
+  try {
+    // With a session, the plugin only checks the code against the stored secret.
+    await auth.api.verifyTOTP({ body: { code }, headers: c.req.raw.headers });
+  } catch (e) {
+    if (e instanceof APIError && e.statusCode < 500) {
+      throw new AppError(
+        403,
+        "INVALID_CODE",
+        "That code isn't right. Codes change every 30 seconds.",
+      );
+    }
+    throw e;
+  }
+  // What the plugin's own disable does, minus its password check (YNAB asks for a code instead).
+  await db.transaction(async (tx) => {
+    await tx.update(userTable).set({ twoFactorEnabled: false }).where(eq(userTable.id, me.id));
+    await tx.delete(twoFactor).where(eq(twoFactor.userId, me.id));
+  });
+  return c.body(null, 204);
+};
+
+async function preferencesOf(db: AppEnv["Variables"]["deps"]["db"], userId: string) {
+  const [row] = await db
+    .select({
+      openLastBudget: userPreference.openLastBudget,
+      keyboardShortcuts: userPreference.keyboardShortcuts,
+    })
+    .from(userPreference)
+    .where(eq(userPreference.userId, userId));
+  return row ?? { openLastBudget: true, keyboardShortcuts: true };
+}
+
+export const getPreferencesHandler: Handler<typeof getPreferences> = async (c) =>
+  c.json(await preferencesOf(c.var.deps.db, c.var.user.id), 200);
+
+export const updatePreferencesHandler: Handler<typeof updatePreferences> = async (c) => {
+  const { db } = c.var.deps;
+  const input = c.req.valid("json");
+  await db
+    .insert(userPreference)
+    .values({ userId: c.var.user.id, ...input })
+    .onConflictDoUpdate({
+      target: userPreference.userId,
+      set: { ...input, updatedAt: sql`now()` },
+    });
+  return c.json(await preferencesOf(db, c.var.user.id), 200);
+};
+
+export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => {
+  const { db, auth } = c.var.deps;
+  const { password } = c.req.valid("json");
+  const me = c.var.user;
+  await consumePasswordCheck(db, me.id);
+  try {
+    await auth.api.verifyPassword({ body: { password }, headers: c.req.raw.headers });
+  } catch (e) {
+    if (e instanceof APIError && e.statusCode < 500) {
+      throw new AppError(403, "INVALID_PASSWORD", "That password isn't right");
+    }
+    throw e;
+  }
+  await db.transaction(async (tx) => {
+    // YNAB: "any budgets that you owned will be unshared and deleted. Any budgets that were
+    // shared with you will no longer be shared." Deleting a budget cascades to everything in it.
+    const owned = tx
+      .select({ id: budgetMember.budgetId })
+      .from(budgetMember)
+      .where(and(eq(budgetMember.userId, me.id), eq(budgetMember.role, "owner")));
+    await tx.delete(budget).where(inArray(budget.id, owned));
+    // Reset-password tokens are stored with the user's id as their value.
+    await tx.delete(verification).where(eq(verification.value, me.id));
+    // Memberships, sessions, logins, options and two-step verification cascade from the user.
+    await tx.delete(userTable).where(eq(userTable.id, me.id));
+  });
   return c.body(null, 204);
 };

@@ -4,7 +4,16 @@ import {
   DATE_FORMATS,
   NUMBER_FORMATS,
 } from "@everycent/engine";
-import { bigint, char, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  char,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { timestamps } from "./columns";
 
@@ -57,7 +66,13 @@ export const budgetMember = pgTable(
   ],
 );
 
-/** Required by the plugin; unused until sharing lands (roadmap phase 16). */
+export const INVITATION_STATUSES = ["pending", "accepted", "canceled"] as const;
+export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
+
+/**
+ * An invitation to share a budget (YNAB Together's "Invite Member"). The plugin requires the
+ * table; everycent's own `/v1` routes manage it (the plugin's endpoints are blocked).
+ */
 export const budgetInvitation = pgTable(
   "budget_invitation",
   {
@@ -66,8 +81,12 @@ export const budgetInvitation = pgTable(
       .notNull()
       .references(() => budget.id, { onDelete: "cascade" }),
     email: text().notNull(),
+    /** The invitee's first name, as the owner typed it (YNAB's "To"). */
+    name: text().notNull().default(""),
     role: text(),
-    status: text().notNull().default("pending"),
+    status: text({ enum: INVITATION_STATUSES }).notNull().default("pending"),
+    /** SHA-256 of the emailed link's token; a resend replaces it. */
+    tokenHash: text().unique(),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
     inviterId: text()
       .notNull()
@@ -86,5 +105,9 @@ export const userPreference = pgTable("user_preference", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   lastBudgetId: text().references(() => budget.id, { onDelete: "set null" }),
+  /** YNAB's "Open last used plan by default": off opens the budget list instead. */
+  openLastBudget: boolean().notNull().default(true),
+  /** YNAB's "Enable keyboard shortcuts" (undo/redo included). */
+  keyboardShortcuts: boolean().notNull().default(true),
   ...timestamps,
 });

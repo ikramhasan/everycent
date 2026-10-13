@@ -11,7 +11,8 @@ export type EmailKind =
   | "change-email-verify"
   | "reset-password"
   | "existing-account"
-  | "password-changed";
+  | "password-changed"
+  | "budget-invitation";
 
 export interface EmailMessage {
   kind: EmailKind;

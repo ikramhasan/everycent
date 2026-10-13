@@ -2,7 +2,7 @@ import { html } from "hono/html";
 import type { EmailKind, EmailMessage } from "./sender";
 
 /**
- * Auth emails. They carry no user-entered text except email addresses, so a display name can't be
+ * Auth and sharing emails. They carry no user-entered text except email addresses, so a display name can't be
  * used to slip a phishing line into a message we sign. Interpolations go through hono's `html`,
  * which escapes them.
  *
@@ -110,5 +110,18 @@ export const emails = {
       intro: "The password for your everycent account was just changed.",
       action: { label: "Reset your password", url: `${webOrigin}/forgot-password` },
       outro: "If this was you, there's nothing to do. If it wasn't, reset your password now.",
+    }),
+
+  /**
+   * An invitation to share a budget. Only the inviter's address is named: budget and display names
+   * are free text, so they're shown on the invitation page after the link is opened.
+   */
+  budgetInvitation: (to: string, inviterEmail: string, webOrigin: string, token: string) =>
+    render("budget-invitation", to, {
+      subject: "You're invited to share a budget on everycent",
+      intro: `${inviterEmail} invited you to share a budget on everycent. You'll be able to see and edit its accounts, transactions and plan.`,
+      action: { label: "View invitation", url: link(webOrigin, "/invitation", { token }) },
+      outro:
+        "The invitation expires in 14 days. If you don't know who sent it, you can ignore this email.",
     }),
 };

@@ -45,7 +45,9 @@ function renderEditor(accountId = "checking") {
             account("savings", "savings"),
             account("brokerage", "asset"),
           ]}
-          payees={[{ id: "p1", name: "Market", lastCategoryId: "groceries" }]}
+          payees={[
+            { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: "groceries" },
+          ]}
           categories={[
             { id: "rta", name: "Ready to Assign", group: "Inflow" },
             { id: "groceries", name: "Groceries", group: "Everyday" },

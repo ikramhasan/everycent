@@ -84,6 +84,8 @@ describe("fresh start", () => {
       categoryId: bills?.categories[1]?.id,
     });
     expect(spend.status).toBe(201);
+    const costco = await json<{ payeeId: string }>(spend);
+    await send("PATCH", `${base}/payees/${costco.payeeId}`, owner.cookie, { hidden: true });
 
     const res = await freshStart(budget.id, owner.cookie);
     expect(res.status).toBe(201);
@@ -127,12 +129,13 @@ describe("fresh start", () => {
     expect(visaTxns).toEqual([
       expect.objectContaining({ amount: "0", payeeName: "Starting Balance", date: TODAY }),
     ]);
-    // Payees come along; with no transactions yet there's no category to suggest.
+    // Payees come along, hidden ones still hidden ("C9 Payees FS", 2026-10-13); with no
+    // transactions yet there's no category to suggest.
     const payees = await json<{ payees: unknown[] }>(
       await send("GET", `${freshBase}/payees`, owner.cookie),
     );
     expect(payees.payees).toEqual([
-      { id: expect.any(String), name: "Costco", lastCategoryId: null },
+      { id: expect.any(String), name: "Costco", hidden: true, useCount: 0, lastCategoryId: null },
     ]);
 
     const freshGroups = (

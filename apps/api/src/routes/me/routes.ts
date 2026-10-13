@@ -8,6 +8,7 @@ export const UserSchema = z
     name: z.string(),
     email: z.email(),
     emailVerified: z.boolean(),
+    twoFactorEnabled: z.boolean().describe("Two-step verification is on"),
     image: z.string().nullable(),
     createdAt: z.iso.datetime(),
   })
@@ -147,5 +148,117 @@ export const revokeOtherSessions = createRoute({
     204: { description: "Signed out" },
     401: jsonError("Not signed in"),
     403: unverified,
+  },
+});
+
+export const disableTwoFactor = createRoute({
+  method: "post",
+  path: "/me/two-factor/disable",
+  operationId: "disableTwoFactor",
+  tags: ["Users"],
+  summary: "Turn off two-step verification with a code from the verification app",
+  description:
+    'As YNAB\'s "Turn Off" asks: the current 6-digit code (`INVALID_CODE` when wrong). Attempts ' +
+    "share the password-check limit (`RATE_LIMITED`).",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") })
+            .openapi("DisableTwoFactor"),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Turned off" },
+    400: jsonError("Invalid input, or two-step verification isn't on (`TWO_FACTOR_NOT_ENABLED`)"),
+    401: jsonError("Not signed in"),
+    403: jsonError("Wrong code (`INVALID_CODE`), or the email isn't confirmed"),
+    429: jsonError("Too many attempts (`RATE_LIMITED`)"),
+  },
+});
+
+const PreferencesSchema = z
+  .object({
+    openLastBudget: z
+      .boolean()
+      .describe("Open the last used budget at start (else the budget list), as YNAB's option"),
+    keyboardShortcuts: z.boolean().describe("Keyboard shortcuts, undo and redo included"),
+  })
+  .openapi("Preferences");
+
+export const getPreferences = createRoute({
+  method: "get",
+  path: "/me/preferences",
+  operationId: "getPreferences",
+  tags: ["Users"],
+  summary: "The account's options (YNAB's Account Settings → Options)",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: { description: "Options", content: { "application/json": { schema: PreferencesSchema } } },
+    401: jsonError("Not signed in"),
+    403: unverified,
+  },
+});
+
+export const updatePreferences = createRoute({
+  method: "patch",
+  path: "/me/preferences",
+  operationId: "updatePreferences",
+  tags: ["Users"],
+  summary: "Change the account's options",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: PreferencesSchema.partial().openapi("UpdatePreferences") },
+      },
+    },
+  },
+  responses: {
+    200: { description: "Saved", content: { "application/json": { schema: PreferencesSchema } } },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: unverified,
+  },
+});
+
+export const deleteAccount = createRoute({
+  method: "post",
+  path: "/me/delete",
+  operationId: "deleteMyAccount",
+  tags: ["Users"],
+  summary: "Permanently delete the account and its data",
+  description:
+    "As YNAB does: confirmed with the password (`INVALID_PASSWORD`; attempts share the " +
+    "password-check limit), it deletes every budget the account owns, shared ones included, and " +
+    "removes the account from budgets others shared with it. Logins, sessions, options and " +
+    "two-step verification go too. Can't be undone.",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ password: z.string().min(1).max(200) }).openapi("DeleteAccount"),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Deleted; the session is gone too" },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("Wrong password (`INVALID_PASSWORD`), or the email isn't confirmed"),
+    429: jsonError("Too many attempts (`RATE_LIMITED`)"),
   },
 });

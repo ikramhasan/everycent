@@ -8,6 +8,7 @@ import {
 } from "@everycent/ui/components/empty";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
+import { ManagePayeesProvider } from "@/components/manage-payees";
 import { BudgetProvider } from "@/lib/budget-context";
 import { apiErrorCode, budgetQueryOptions } from "@/lib/budgets";
 import { UndoProvider } from "@/lib/undo";
@@ -36,7 +37,9 @@ function BudgetLayout() {
   return (
     <BudgetProvider budget={budget}>
       <UndoProvider>
-        <Outlet />
+        <ManagePayeesProvider>
+          <Outlet />
+        </ManagePayeesProvider>
       </UndoProvider>
     </BudgetProvider>
   );

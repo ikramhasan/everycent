@@ -3,7 +3,6 @@ import { bulkUpdateTransactionsHandler, summarizeSelectionHandler } from "./bulk
 import {
   createTransactionHandler,
   deleteTransactionHandler,
-  listPayeesHandler,
   listTransactionsHandler,
   updateTransactionHandler,
 } from "./handlers";
@@ -11,7 +10,6 @@ import {
   bulkUpdateTransactions,
   createTransaction,
   deleteTransaction,
-  listPayees,
   listTransactions,
   summarizeSelection,
   updateTransaction,
@@ -24,5 +22,4 @@ export const transactionsRouter = createRouter()
   .openapi(bulkUpdateTransactions, bulkUpdateTransactionsHandler)
   .openapi(createTransaction, createTransactionHandler)
   .openapi(updateTransaction, updateTransactionHandler)
-  .openapi(deleteTransaction, deleteTransactionHandler)
-  .openapi(listPayees, listPayeesHandler);
+  .openapi(deleteTransaction, deleteTransactionHandler);

@@ -1,7 +1,9 @@
-import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { UndoProvider, useUndo } from "./undo";
+import { preferencesQueryOptions } from "./preferences";
+import { UndoProvider, useUndo, useUndoShortcuts } from "./undo";
 
 const wrapper = ({ children }: { children: ReactNode }) => <UndoProvider>{children}</UndoProvider>;
 
@@ -48,5 +50,34 @@ describe("UndoProvider", () => {
     await expect(act(() => result.current.undo())).rejects.toThrow("no");
     expect(result.current.undoLabel).toBe("failed");
     expect(result.current.redoLabel).toBeNull();
+  });
+
+  it("answers Cmd/Ctrl+Z only while keyboard shortcuts are on", async () => {
+    for (const keyboardShortcuts of [true, false]) {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(preferencesQueryOptions().queryKey, {
+        openLastBudget: true,
+        keyboardShortcuts,
+      });
+      const command = { label: "edit", undo: vi.fn(), redo: vi.fn() };
+      const { result } = renderHook(
+        () => {
+          useUndoShortcuts(() => {});
+          return useUndo();
+        },
+        {
+          wrapper: ({ children }) => (
+            <QueryClientProvider client={queryClient}>
+              <UndoProvider>{children}</UndoProvider>
+            </QueryClientProvider>
+          ),
+        },
+      );
+      act(() => result.current.record(command));
+      await act(async () => {
+        fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+      });
+      expect(command.undo).toHaveBeenCalledTimes(keyboardShortcuts ? 1 : 0);
+    }
   });
 });

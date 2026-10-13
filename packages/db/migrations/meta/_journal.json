@@ -148,6 +148,34 @@
       "when": 1791873018301,
       "tag": "0020_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791878204096,
+      "tag": "0021_opposite_surge",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791879746800,
+      "tag": "0022_confused_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791903763770,
+      "tag": "0023_open_toad",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791904387511,
+      "tag": "0024_cuddly_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

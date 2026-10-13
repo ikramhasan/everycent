@@ -11,7 +11,9 @@ import { categoriesRouter } from "./routes/categories";
 import { flagsRouter } from "./routes/flags";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
+import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
+import { payeesRouter } from "./routes/payees";
 import { scheduledRouter } from "./routes/scheduled";
 import { transactionsRouter } from "./routes/transactions";
 import type { AppDeps } from "./types";
@@ -42,6 +44,13 @@ export function createApp(deps: AppDeps) {
     "/api/auth/revoke-session",
     "/api/auth/revoke-sessions",
     "/api/auth/revoke-other-sessions",
+    // Two-step verification: set up with /two-factor/enable + /verify-totp, signed in with
+    // /verify-totp or /verify-backup-code. Turning it off is /v1/me/two-factor (a code, as YNAB
+    // asks); YNAB has no email codes or regenerated backup codes.
+    "/api/auth/two-factor/disable",
+    "/api/auth/two-factor/send-otp",
+    "/api/auth/two-factor/verify-otp",
+    "/api/auth/two-factor/generate-backup-codes",
   ]) {
     app.all(path, notFound);
   }
@@ -50,9 +59,11 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", healthRouter);
   app.route("/v1", meRouter);
   app.route("/v1", budgetsRouter);
+  app.route("/v1", membersRouter);
   app.route("/v1", categoriesRouter);
   app.route("/v1", accountsRouter);
   app.route("/v1", transactionsRouter);
+  app.route("/v1", payeesRouter);
   app.route("/v1", scheduledRouter);
   app.route("/v1", flagsRouter);
   app.route("/v1", monthsRouter);
