@@ -5,6 +5,7 @@ import {
   deleteAccountHandler,
   listAccountsHandler,
   moveAccountHandler,
+  previewReconcileAccountHandler,
   reconcileAccountHandler,
   reopenAccountHandler,
   updateAccountHandler,
@@ -17,6 +18,7 @@ import {
   getLoanActivity,
   listAccounts,
   moveAccount,
+  previewReconcileAccount,
   reconcileAccount,
   recordLoanPayment,
   reopenAccount,
@@ -29,6 +31,7 @@ export const accountsRouter = createRouter()
   .openapi(createAccount, createAccountHandler)
   .openapi(updateAccount, updateAccountHandler)
   .openapi(moveAccount, moveAccountHandler)
+  .openapi(previewReconcileAccount, previewReconcileAccountHandler)
   .openapi(reconcileAccount, reconcileAccountHandler)
   .openapi(closeAccount, closeAccountHandler)
   .openapi(reopenAccount, reopenAccountHandler)

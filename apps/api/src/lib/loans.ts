@@ -10,13 +10,22 @@ import {
   type LoanLine,
   type LoanMonth,
   type LoanTerms,
+  type LoanTermsChange,
+  loanCharges,
   loanMonths,
+  loanTermsEntries,
   monthOf,
+  termsFor,
+  withLoanTerms,
 } from "@everycent/engine";
-import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "./ledger";
 
 export const LOAN_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "loan");
+const CASH_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "cash");
+const CREDIT_TYPES = ACCOUNT_TYPES.filter((t) => accountFamily(t) === "credit");
+const PAYING_TYPES = [...CASH_TYPES, ...CREDIT_TYPES];
 
 type AccountRow = typeof budgetAccount.$inferSelect;
 
@@ -92,8 +101,8 @@ async function loanTransactions(db: Db, accountIds: string[], today: string) {
   });
 }
 
-async function termsByAccount(db: Db, accounts: AccountRow[]) {
-  const ids = accounts.map((a) => a.id);
+/** The loans' stored `loan_terms` entries, by account id. */
+async function storedTerms(db: Db, ids: string[]) {
   const rows = ids.length
     ? await db.select().from(loanTerms).where(inArray(loanTerms.accountId, ids))
     : [];
@@ -108,6 +117,14 @@ async function termsByAccount(db: Db, accounts: AccountRow[]) {
     });
     byAccount.set(r.accountId, list);
   }
+  return byAccount;
+}
+
+async function termsByAccount(db: Db, accounts: AccountRow[]) {
+  const byAccount = await storedTerms(
+    db,
+    accounts.map((a) => a.id),
+  );
   // Loans from before 7f have only the account's columns: they apply to every month.
   for (const a of accounts) {
     if (!byAccount.has(a.id)) {
@@ -145,14 +162,17 @@ export async function loanStates(
   db: Db,
   accounts: AccountRow[],
   today: string,
+  /** Terms to use instead of the stored ones, by account id (a preview). */
+  termsOverride?: ReadonlyMap<string, LoanTerms[]>,
 ): Promise<Map<string, LoanState>> {
   const loans = accounts.filter((a) => accountFamily(a.type) === "loan");
   const ids = loans.map((a) => a.id);
-  const [lines, terms, overrides] = await Promise.all([
+  const [lines, stored, overrides] = await Promise.all([
     loanTransactions(db, ids, today),
     termsByAccount(db, loans),
     overridesByAccount(db, ids),
   ]);
+  const terms = new Map([...stored, ...(termsOverride ?? [])]);
   const states = new Map<string, LoanState>();
   for (const loan of loans) {
     const own = lines.filter((l) => l.accountId === loan.id).map((l) => l.line);
@@ -232,8 +252,14 @@ export async function setLoanCharge(
  * (YNAB, 2026-10-13: July's capped escrow stayed −$100.00; a month with nothing applied kept no
  * interest line).
  */
-export async function freezeLoanCharges(db: Db, account: AccountRow, today: string) {
-  const state = (await loanStates(db, [account], today)).get(account.id);
+export async function freezeLoanCharges(
+  db: Db,
+  account: AccountRow,
+  today: string,
+  /** The months to fix, if not the loan's current ones. */
+  from?: LoanState,
+) {
+  const state = from ?? (await loanStates(db, [account], today)).get(account.id);
   for (const m of state?.months ?? []) {
     for (const kind of ["interest", "escrow"] as const) {
       const charge = m[kind];
@@ -254,21 +280,102 @@ export async function saveLoanTerms(
   account: Pick<AccountRow, "id" | "currency" | "interestRate" | "minimumPayment" | "escrowAmount">,
   today: string,
 ) {
+  await saveLoanTermsEntry(db, account, { ...account, month: monthOf(today) });
+}
+
+/** Writes one `loan_terms` entry, replacing that month's. */
+async function saveLoanTermsEntry(
+  db: Db,
+  account: Pick<AccountRow, "id" | "currency">,
+  entry: LoanTerms,
+) {
   const values = {
-    interestRate: account.interestRate,
-    minimumPayment: account.minimumPayment,
-    escrowAmount: account.escrowAmount,
+    interestRate: entry.interestRate,
+    minimumPayment: entry.minimumPayment,
+    escrowAmount: entry.escrowAmount,
   };
   await db
     .insert(loanTerms)
     .values({
       id: newId(),
       accountId: account.id,
-      month: firstOfMonth(monthOf(today)),
+      month: firstOfMonth(entry.month),
       currency: account.currency,
       ...values,
     })
     .onConflictDoUpdate({ target: [loanTerms.accountId, loanTerms.month], set: values });
+}
+
+/** What Update Balance's interest rate / escrow check does to a loan (EVERYCENT-126). */
+export interface LoanTermsCheck {
+  /** The loan as it is. */
+  before: LoanState;
+  /** The `loan_terms` entries to write; empty when nothing changes. */
+  entries: LoanTerms[];
+  /** How much more the new terms charge through `today` (minor units; positive adds debt). */
+  extraCharges: bigint;
+}
+
+/**
+ * Works out Update Balance's check step without writing anything. YNAB (2026-10-14, "ihni7's
+ * Plan", x-126-Mort): the new rate or escrow applies "for October and going forward", and the
+ * Difference it then shows re-estimates October with it ($98.75 became $181.88 for 6% → 7%, the
+ * month's interest going from $498.75 to $581.88) while earlier months keep theirs. Months before
+ * the change keep their terms here too: if no entry covers them yet, the old terms are pinned
+ * from the start (otherwise they'd take the first entry, the changed one).
+ */
+export async function checkLoanTerms(
+  db: Db,
+  account: AccountRow,
+  today: string,
+  change: LoanTermsChange,
+): Promise<LoanTermsCheck> {
+  const month = monthOf(today);
+  const before = (await loanStates(db, [account], today)).get(account.id);
+  if (!before) throw new Error(`Loan state missing for ${account.id}`);
+  const changed = loanTermsEntries(before.terms, month, change);
+  const old = termsFor(before.terms, month);
+  if (changed.length === 0 || !old) return { before, entries: [], extraCharges: 0n };
+  const pinned = before.terms.some((t) => t.month < month)
+    ? []
+    : [{ ...old, month: EARLIEST_MONTH }];
+  const entries = [...pinned, ...changed];
+  const preview = new Map([[account.id, withLoanTerms(before.terms, entries)]]);
+  const after = (await loanStates(db, [account], today, preview)).get(account.id);
+  if (!after) throw new Error(`Loan state missing for ${account.id}`);
+  return { before, entries, extraCharges: loanCharges(after.months) - loanCharges(before.months) };
+}
+
+/** Writes what `checkLoanTerms` worked out, and this month's terms to the account. */
+export async function applyLoanTerms(
+  db: Db,
+  account: AccountRow,
+  today: string,
+  check: LoanTermsCheck,
+) {
+  if (check.entries.length === 0) return;
+  // A loan from before 7f keeps its terms for earlier months (they're only on the account).
+  await keepEarlierTerms(db, account);
+  for (const entry of check.entries) await saveLoanTermsEntry(db, account, entry);
+  const now = termsFor(withLoanTerms(check.before.terms, check.entries), monthOf(today));
+  await db
+    .update(budgetAccount)
+    .set({ interestRate: now?.interestRate ?? null, escrowAmount: now?.escrowAmount ?? null })
+    .where(eq(budgetAccount.id, account.id));
+}
+
+/**
+ * The terms in effect in `today`'s month, by loan id (loans with `loan_terms` entries). A change
+ * not kept going forward ends next month, so the account's own columns can be out of date.
+ */
+export async function currentLoanTerms(db: Db, accountIds: string[], today: string) {
+  const month = monthOf(today);
+  const result = new Map<string, LoanTerms>();
+  for (const [id, list] of await storedTerms(db, accountIds)) {
+    const now = termsFor(list, month);
+    if (now) result.set(id, now);
+  }
+  return result;
 }
 
 /**
@@ -308,4 +415,40 @@ export async function lastLoanPayments(db: Db, budgetId: string, today: string) 
     )
     .groupBy(transaction.accountId);
   return new Map(rows.map((r) => [r.accountId, r.date]));
+}
+
+/**
+ * For each loan, the cash or credit account of the payment into it that was entered last (not
+ * the latest-dated one): Record Payment starts there. YNAB (2026-10-14, "L7 Loans FS"): the
+ * default followed the newest payment per loan, from Record Payment or a register transfer, even
+ * one back-dated to before the others.
+ *
+ * For each credit card, the cash account it was last paid from: a card's Record Payment prefills
+ * it (YNAB, 2026-10-14: "Payment from F Cash" after paying x-130 Card from F Cash). Money from
+ * another card is a balance transfer ("Transfer from F Card" in YNAB's payee list), not counted.
+ */
+export async function lastPaymentSources(db: Db, budgetId: string) {
+  const loan = alias(budgetAccount, "paid_to");
+  const from = alias(budgetAccount, "paid_from");
+  const rows = await db
+    .selectDistinctOn([transaction.accountId], {
+      accountId: transaction.accountId,
+      fromAccountId: from.id,
+    })
+    .from(transaction)
+    .innerJoin(loan, eq(loan.id, transaction.accountId))
+    .innerJoin(payee, eq(payee.id, transaction.payeeId))
+    .innerJoin(from, eq(from.id, payee.transferAccountId))
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        or(
+          and(inArray(loan.type, LOAN_TYPES), inArray(from.type, PAYING_TYPES)),
+          and(inArray(loan.type, CREDIT_TYPES), inArray(from.type, CASH_TYPES)),
+        ),
+        sql`${transaction.amount} > 0`,
+      ),
+    )
+    .orderBy(transaction.accountId, desc(transaction.createdAt), desc(transaction.id));
+  return new Map(rows.map((r) => [r.accountId, r.fromAccountId]));
 }

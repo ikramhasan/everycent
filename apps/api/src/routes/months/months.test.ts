@@ -22,6 +22,7 @@ type Month = {
   firstMonth: string;
   lastMonth: string;
   readyToAssign: string;
+  readyToAssignBreakdown: Record<string, string>;
   overdraft: boolean;
   assignedInFuture: string;
   futureShortfall: { month: string; readyToAssign: string } | null;
@@ -1672,6 +1673,53 @@ describe("budget months", () => {
 
     // YNAB plan "x132 Order", 2026-10-14 (EVERYCENT-132): a card with a payment target is funded
     // before a card with only its Underfunded alert, even when listed below it.
+    // YNAB plan "x132 Order", 2026-10-14 (EVERYCENT-131): Card A's payment category, $3.00
+    // assigned in September and $7.00 in October, $4.00 of funded spending in October. November's
+    // Auto-Assign: Assigned Last Month $7.00, Paid Last Month $0.00, Average Assigned $5.00, Average
+    // Paid $0.00. Funded spending isn't assigned money, and the average starts at the first month
+    // with money in the category.
+    it("leaves funded spending out of a payment category's Auto-Assign amounts", async () => {
+      const ctx = await cards();
+      const { put, month, create, rent, visa } = ctx;
+      await put(visa.paymentCategoryId, "2026-09", "300");
+      await put(visa.paymentCategoryId, "2026-10", "700");
+      await put(rent.id, "2026-10", "500");
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-400", categoryId: rent.id });
+      const nov = await month("2026-11");
+      expect(nov.byCategory(visa.paymentCategoryId)?.autoAssign).toMatchObject({
+        assignedLastMonth: "700",
+        spentLastMonth: "0",
+        averageAssigned: "500",
+        averageSpent: "0",
+      });
+    });
+
+    // YNAB's Ready to Assign Breakdown, 2026-10-14 (EVERYCENT-138).
+    it("breaks Ready to Assign down line by line", async () => {
+      const ctx = await cards();
+      const { month, put, spend, create, rent, phone, amex } = ctx;
+      const ctxReadyToAssign = ctx.readyToAssignCategoryId;
+      // September: $1,000.00 in (August), $20.00 assigned, $5.00 of cash overspending.
+      await put(rent.id, "2026-09", "2000");
+      await spend({ date: "2026-09-05", amount: "-500", categoryId: phone.id });
+      // October: $30.00 assigned, Amex paid $8.00 above zero, $5.00 in; $50.00 in November.
+      await put(rent.id, "2026-10", "3000");
+      await create({ date: "2026-10-01", amount: "-800", transferAccountId: amex.id });
+      await spend({ date: "2026-10-01", amount: "500", categoryId: ctxReadyToAssign });
+      await put(rent.id, "2026-11", "5000");
+      const oct = await month("2026-10");
+      expect(oct.readyToAssignBreakdown).toEqual({
+        leftOver: "98000",
+        inflows: "500",
+        debtInflows: "800",
+        cashOverspending: "-500",
+        assigned: "-3000",
+        assignedInFuture: "-5000",
+        total: "90800",
+      });
+      expect(oct.readyToAssign).toBe("90800");
+    });
+
     it("funds card payment targets before plain card alerts", async () => {
       const ctx = await cards(1000n);
       const { put, month, rent, visa, amex } = ctx;

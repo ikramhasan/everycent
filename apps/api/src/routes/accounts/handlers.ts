@@ -8,7 +8,13 @@ import {
   scheduledTransaction,
   transaction,
 } from "@everycent/db/schema";
-import { accountFamily, hasPaymentCategory, isOnBudget, rateThousandths } from "@everycent/engine";
+import {
+  accountFamily,
+  hasPaymentCategory,
+  isOnBudget,
+  type LoanTerms,
+  rateThousandths,
+} from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNull, lte, max, ne, or, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -28,9 +34,14 @@ import {
   ZERO_BALANCES,
 } from "../../lib/ledger";
 import {
+  applyLoanTerms,
+  checkLoanTerms,
+  currentLoanTerms,
   freezeLoanCharges,
   keepEarlierTerms,
+  LOAN_TYPES,
   lastLoanPayments,
+  lastPaymentSources,
   saveLoanTerms,
 } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
@@ -43,6 +54,7 @@ import type {
   deleteAccount,
   listAccounts,
   moveAccount,
+  previewReconcileAccount,
   reconcileAccount,
   reopenAccount,
   updateAccount,
@@ -57,6 +69,9 @@ function toAccountJson(
   paymentCategoryId: string | null,
   hasHistory: boolean,
   lastPaymentDate: string | null,
+  lastPaymentFromAccountId: string | null,
+  /** A loan's terms this month, when it has `loan_terms` entries. */
+  terms?: LoanTerms,
 ) {
   return {
     id: a.id,
@@ -65,9 +80,9 @@ function toAccountJson(
     note: a.note,
     closed: a.closed,
     currency: a.currency,
-    interestRate: a.interestRate,
-    minimumPayment: a.minimumPayment?.toString() ?? null,
-    escrowAmount: a.escrowAmount?.toString() ?? null,
+    interestRate: terms ? terms.interestRate : a.interestRate,
+    minimumPayment: (terms ? terms.minimumPayment : a.minimumPayment)?.toString() ?? null,
+    escrowAmount: (terms ? terms.escrowAmount : a.escrowAmount)?.toString() ?? null,
     paymentCategoryId,
     hasHistory,
     balances: {
@@ -78,6 +93,7 @@ function toAccountJson(
     lastReconciledAt: a.lastReconciledAt?.toISOString() ?? null,
     pairedCategoryId: a.pairedCategoryId,
     lastPaymentDate,
+    lastPaymentFromAccountId,
   };
 }
 
@@ -105,6 +121,12 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     );
   const history = new Set(withHistory.map((r) => r.accountId));
   const lastPayments = await lastLoanPayments(db, budgetId, today);
+  const paidFrom = await lastPaymentSources(db, budgetId);
+  const terms = await currentLoanTerms(
+    db,
+    accounts.filter((a) => LOAN_TYPES.includes(a.type)).map((a) => a.id),
+    today,
+  );
   return accounts.map((a) =>
     toAccountJson(
       a,
@@ -112,6 +134,8 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       paymentByAccount.get(a.id) ?? null,
       history.has(a.id),
       lastPayments.get(a.id) ?? null,
+      paidFrom.get(a.id) ?? null,
+      terms.get(a.id),
     ),
   );
 }
@@ -399,9 +423,64 @@ async function insertAdjustment(
   });
 }
 
+type ReconcileBody = {
+  balance: string;
+  date: string;
+  loanTerms?: {
+    interestRate?: { rate: string | null; keepGoingForward: boolean };
+    escrowAmount?: { amount: string | null; keepGoingForward: boolean };
+  };
+};
+
+/** What a reconcile would do: the adjustment, and for a loan the terms check (EVERYCENT-126). */
+async function planReconcile(db: Db, account: AccountRow, body: ReconcileBody) {
+  const { balance, date, loanTerms } = body;
+  const loan = accountFamily(account.type) === "loan";
+  if (loanTerms && !loan) {
+    throw new AppError(400, "BAD_REQUEST", "Only loans have an interest rate and escrow check");
+  }
+  if (loanTerms?.escrowAmount && !hasEscrow(account.type)) {
+    throw new AppError(400, "BAD_REQUEST", "Only mortgages have escrow");
+  }
+  const { interestRate, escrowAmount } = loanTerms ?? {};
+  const check = loanTerms
+    ? await checkLoanTerms(db, account, date, {
+        interestRate: interestRate && {
+          value: interestRate.rate,
+          keep: interestRate.keepGoingForward,
+        },
+        escrowAmount: escrowAmount && {
+          value: escrowAmount.amount === null ? null : BigInt(escrowAmount.amount),
+          keep: escrowAmount.keepGoingForward,
+        },
+      })
+    : null;
+  const balances =
+    (await accountBalances(db, account.budgetId, date)).get(account.id) ?? ZERO_BALANCES;
+  // YNAB's loan Update Balance asks about the whole balance ("Is your current balance at your
+  // lender −$97,980.25?"), interest and escrow included, and after its check step counts this
+  // month's charges on the new terms (YNAB, 2026-10-14: $98.75 became $181.88 at 6% → 7%).
+  const current = loan ? balances.working - (check?.extraCharges ?? 0n) : balances.cleared;
+  return { loan, check, adjustment: BigInt(balance) - current };
+}
+
+export const previewReconcileAccountHandler: RouteHandler<
+  typeof previewReconcileAccount,
+  Env
+> = async (c) => {
+  const { budgetId, accountId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const account = await findAccount(db, budgetId, accountId);
+  const { adjustment } = await planReconcile(db, account, body);
+  return c.json({ adjustment: adjustment.toString() }, 200);
+};
+
 export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { balance, date } = c.req.valid("json");
+  const body = c.req.valid("json");
+  const { date } = body;
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create", "update"] });
   await db.transaction(async (tx) => {
@@ -411,11 +490,8 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
       .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)))
       .for("update");
     if (!account) throw new AppError(404, "NOT_FOUND", "Account not found");
-    const loan = accountFamily(account.type) === "loan";
-    const balances = (await accountBalances(tx, budgetId, date)).get(accountId) ?? ZERO_BALANCES;
-    // YNAB's loan Update Balance asks about the whole balance ("Is your current balance at your
-    // lender −$97,980.25?"), interest and escrow included.
-    const difference = BigInt(balance) - (loan ? balances.working : balances.cleared);
+    const { loan, check, adjustment: difference } = await planReconcile(tx, account, body);
+    if (check) await applyLoanTerms(tx, account, date, check);
     if (difference !== 0n) {
       // YNAB (2026-10-11, "Onboarding Check"): dated today, reconciled, Inflow: Ready to Assign
       // on budget accounts (a card's too), none on tracking accounts.
@@ -440,7 +516,10 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
           lte(transaction.date, date),
         ),
       );
-    if (loan) await freezeLoanCharges(tx, account, date);
+    // YNAB fixes the months at what they had before the check step's new terms: x-126-Mort's
+    // October interest stayed "Reconciled −$498.75" at 7%, so the balance ended −$99,316.87, not
+    // the −$99,400.00 entered (2026-10-14; Design notes, EVERYCENT-126).
+    if (loan) await freezeLoanCharges(tx, account, date, check?.before);
     await tx
       .update(budgetAccount)
       .set({ lastReconciledAt: sql`now()` })

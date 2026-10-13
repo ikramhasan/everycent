@@ -1,8 +1,116 @@
 import { addMonths } from "@everycent/engine";
+import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { CircleCheck, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleMinus, CirclePlus, Info, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { type BudgetMonthData, monthName } from "@/lib/months";
+
+type Breakdown = BudgetMonthData["readyToAssignBreakdown"];
+
+/**
+ * The lines of YNAB's "Ready to Assign Breakdown" for `month`, in its order: what adds to Ready to
+ * Assign, then what takes from it. Lines at zero are left out (YNAB, 2026-10-14: November with no
+ * inflows listed only the left over and the overspending).
+ */
+export function breakdownSections(b: Breakdown, month: string) {
+  const last = monthName(addMonths(month, -1));
+  const name = monthName(month);
+  const keep = (lines: { label: string; amount: string }[]) =>
+    lines.filter((l) => l.amount !== "0");
+  return {
+    plus: keep([
+      { label: `Ready to Assign left over from ${last}`, amount: b.leftOver },
+      { label: `Inflow: Ready to Assign transactions in ${name}`, amount: b.inflows },
+      { label: "Inflow from Debt Account", amount: b.debtInflows },
+    ]),
+    minus: keep([
+      { label: `Cash overspending in ${last}`, amount: b.cashOverspending },
+      { label: `Assigned in ${name}`, amount: b.assigned },
+      { label: "Assigned in Future", amount: b.assignedInFuture },
+    ]),
+  };
+}
+
+const sum = (lines: { amount: string }[]) =>
+  lines.reduce((total, l) => total + BigInt(l.amount), 0n).toString();
+
+/** YNAB writes positive breakdown amounts with a plus sign. */
+const signed = (format: (minorUnits: string) => string, amount: string) =>
+  `${BigInt(amount) > 0n ? "+" : ""}${format(amount)}`;
+
+/**
+ * YNAB's "Ready to Assign Breakdown", opened from the banner's amount (seen 2026-10-14). The help
+ * links ("how to fix this", "YNAB Checkup") wait for everycent's help content (EVERYCENT-117).
+ */
+function BreakdownContent({
+  breakdown,
+  month,
+  format,
+}: {
+  breakdown: Breakdown;
+  month: string;
+  format: (minorUnits: string) => string;
+}) {
+  const { plus, minus } = breakdownSections(breakdown, month);
+  const total = BigInt(breakdown.total);
+  const section = (
+    lines: { label: string; amount: string }[],
+    icon: ReactNode,
+    label: string,
+    subtotalClass?: string,
+  ) =>
+    lines.length > 0 && (
+      <section aria-label={label} className="grid gap-1 border-b pb-2">
+        <div className="flex items-center justify-between">
+          {icon}
+          <span className={cn("tabular-nums", subtotalClass)}>{signed(format, sum(lines))}</span>
+        </div>
+        {lines.map((l) => (
+          <div key={l.label} className="flex justify-between gap-3">
+            <span>{l.label}</span>
+            <span className="tabular-nums">{signed(format, l.amount)}</span>
+          </div>
+        ))}
+      </section>
+    );
+  return (
+    <div className="grid gap-3 text-sm">
+      <h2 className="font-medium">Ready to Assign Breakdown</h2>
+      <div className="grid gap-2 rounded-md bg-muted/60 p-3">
+        {section(
+          plus,
+          <CirclePlus className="size-4 text-green-700 dark:text-green-400" aria-hidden />,
+          "Added",
+          "text-green-700 dark:text-green-400",
+        )}
+        {section(minus, <CircleMinus className="size-4" aria-hidden />, "Taken")}
+        <div className="flex justify-between gap-3 font-semibold">
+          <span>Total Ready to Assign</span>
+          <span
+            className={cn(
+              "tabular-nums",
+              total > 0n && "text-green-700 dark:text-green-400",
+              total < 0n && "text-destructive",
+            )}
+          >
+            = {signed(format, breakdown.total)}
+          </span>
+        </div>
+        <p className="text-muted-foreground">
+          {total > 0n
+            ? "Give these dollars a job by assigning them to one or more categories!"
+            : total === 0n
+              ? "Nice work! Every dollar has a job."
+              : "You have assigned more than you have."}
+        </p>
+      </div>
+      <p className="flex gap-2 rounded-md bg-blue-50 p-3 text-blue-950 dark:bg-blue-950/40 dark:text-blue-50">
+        <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+        Ready to Assign is money that hasn't yet been assigned to a category.
+      </p>
+    </div>
+  );
+}
 
 /**
  * YNAB's Ready to Assign banner: green with money to assign, grey once it's all assigned, red when
@@ -15,6 +123,7 @@ export function ReadyToAssignBanner({
   format,
   action,
   assign,
+  breakdown,
 }: {
   amount: string;
   overdraft: boolean;
@@ -23,11 +132,21 @@ export function ReadyToAssignBanner({
   action?: ReactNode;
   /** YNAB's Assign button, while there's money to assign. */
   assign?: ReactNode;
+  /** The month's breakdown, opened by clicking the amount. */
+  breakdown?: { lines: Breakdown; month: string };
 }) {
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   const negativeLabel = overdraft
     ? "Overdraft? We can help with that!"
     : "You assigned more than you have";
+  const summary = (
+    <>
+      <span className="font-semibold text-2xl tabular-nums">{format(amount)}</span>
+      <span className="text-sm">
+        {sign > 0 ? "Ready to Assign" : sign === 0 ? "All Money Assigned" : negativeLabel}
+      </span>
+    </>
+  );
   return (
     <output
       aria-live="polite"
@@ -38,12 +157,24 @@ export function ReadyToAssignBanner({
         sign < 0 && "bg-red-200 text-red-950 dark:bg-red-900/60 dark:text-red-50",
       )}
     >
-      <span className="grid">
-        <span className="font-semibold text-2xl tabular-nums">{format(amount)}</span>
-        <span className="text-sm">
-          {sign > 0 ? "Ready to Assign" : sign === 0 ? "All Money Assigned" : negativeLabel}
-        </span>
-      </span>
+      {breakdown ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="View Ready to Assign Breakdown"
+              className="grid cursor-pointer text-left"
+            >
+              {summary}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="center" className="w-96">
+            <BreakdownContent breakdown={breakdown.lines} month={breakdown.month} format={format} />
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <span className="grid">{summary}</span>
+      )}
       {sign > 0 && assign}
       {sign === 0 && <CircleCheck className="size-6" aria-hidden />}
       {sign < 0 && !overdraft && action}

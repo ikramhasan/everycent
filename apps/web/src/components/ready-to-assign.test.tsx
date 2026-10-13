@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { ReadyToAssignBanner } from "./ready-to-assign";
+import { breakdownSections, ReadyToAssignBanner } from "./ready-to-assign";
 
 const format = (a: string) => `$${Number(a) / 100}`;
 
@@ -40,5 +41,48 @@ describe("ReadyToAssignBanner", () => {
     );
     expect(screen.getByText("Overdraft? We can help with that!")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Fix This" })).not.toBeInTheDocument();
+  });
+});
+
+// YNAB, 2026-10-14: October in "x132 Order" and in "ihni7's Plan".
+describe("Ready to Assign Breakdown", () => {
+  const october = {
+    leftOver: "-200",
+    inflows: "1500",
+    debtInflows: "0",
+    cashOverspending: "0",
+    assigned: "-1200",
+    assignedInFuture: "-100",
+    total: "0",
+  };
+
+  it("lists the lines in YNAB's words, leaving out lines at zero", () => {
+    expect(breakdownSections(october, "2026-10")).toEqual({
+      plus: [
+        { label: "Ready to Assign left over from September", amount: "-200" },
+        { label: "Inflow: Ready to Assign transactions in October", amount: "1500" },
+      ],
+      minus: [
+        { label: "Assigned in October", amount: "-1200" },
+        { label: "Assigned in Future", amount: "-100" },
+      ],
+    });
+  });
+
+  it("opens from the amount with the subtotals, total and message", async () => {
+    render(
+      <ReadyToAssignBanner
+        amount="0"
+        overdraft={false}
+        format={format}
+        breakdown={{ lines: october, month: "2026-10" }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "View Ready to Assign Breakdown" }));
+    expect(screen.getByText("Ready to Assign Breakdown")).toBeInTheDocument();
+    expect(screen.getByText("+$13")).toBeInTheDocument();
+    expect(screen.getByText("$-13")).toBeInTheDocument();
+    expect(screen.getByText("= $0")).toBeInTheDocument();
+    expect(screen.getByText("Nice work! Every dollar has a job.")).toBeInTheDocument();
   });
 });

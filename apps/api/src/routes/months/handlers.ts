@@ -46,6 +46,7 @@ import {
   periodRollover,
   progressBar,
   readyToAssign,
+  readyToAssignBreakdown,
   spendingFunding,
   type TargetNeed,
   targetNeed,
@@ -186,7 +187,7 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
     .where(eq(category.budgetId, budgetId));
   const byAccount = new Map(rows.flatMap((p) => (p.accountId ? [[p.accountId, p.id]] : [])));
   const readyToAssignId = rows.find((r) => r.internalKind === "ready_to_assign")?.id;
-  const cards = applyCardLedger(
+  const { credit: cards, debt } = applyCardLedger(
     history,
     await cardLines(db, budgetId, cutoff),
     readyToAssignId,
@@ -199,7 +200,7 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
   );
   const creditOverspent = addFundedSpending(cards, history, byAccount, skip);
   await addPayments(db, budgetId, cutoff, history, byAccount);
-  return { history, paymentAccounts: byAccount, creditOverspent };
+  return { history, paymentAccounts: byAccount, creditOverspent, debt };
 }
 
 /**
@@ -398,6 +399,9 @@ function applyCardLedger(
   const credit = new Map<string, Map<BudgetMonth, CardActivity[]>>();
   // A sending card's line id → what it paid from above zero.
   const paidFromCash = new Map<string, bigint>();
+  // month → what the cards' balances above zero added to Ready to Assign ("Inflow from Debt
+  // Account" in YNAB's breakdown).
+  const debt = new Map<BudgetMonth, bigint>();
   const received: PlacedCardLine[] = [];
   for (const [accountId, own] of byAccount) {
     const byId = new Map(own.map((l) => [l.id, l]));
@@ -407,6 +411,9 @@ function applyCardLedger(
       if (line.kind === "creditTransfer") {
         if (line.amount < 0n) paidFromCash.set(line.id, effect.paidFromCash);
         else received.push(line);
+      }
+      if (effect.readyToAssign !== 0n) {
+        debt.set(month, (debt.get(month) ?? 0n) + effect.readyToAssign);
       }
       // Inflows to Ready to Assign were counted in full as income; count what the ledger says.
       const counted = line.kind === "readyToAssign" && line.categoryId ? line.amount : 0n;
@@ -446,7 +453,7 @@ function applyCardLedger(
     if (!paymentId || paid === 0n) continue;
     push(paymentId, { month: monthOf(line.date), assigned: 0n, activity: -paid, payments: -paid });
   }
-  return credit;
+  return { credit, debt };
 }
 
 /**
@@ -588,7 +595,11 @@ async function monthState(
   const { start, end } = monthBounds(month);
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
-  const { history, paymentAccounts, creditOverspent } = await budgetHistory(db, budgetId, cutoff);
+  const { history, paymentAccounts, creditOverspent, debt } = await budgetHistory(
+    db,
+    budgetId,
+    cutoff,
+  );
   const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts);
 
   const range = await monthRange(db, budgetId, today);
@@ -792,7 +803,16 @@ async function monthState(
     .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)));
 
   const rta = readyToAssign({ month, income, assigned, overspent });
+  const debtIncome = [...debt].map(([m, amount]) => ({ month: m, amount }));
+  const breakdown = readyToAssignBreakdown({
+    month,
+    income,
+    debt: debtIncome,
+    assigned,
+    overspent,
+  });
   return {
+    breakdown,
     range,
     listed,
     groupRows,
@@ -850,6 +870,15 @@ export async function budgetMonthJson(
       listed.map((l) => l.figures),
     ),
     assignedInFuture: rta.assignedInFuture.toString(),
+    readyToAssignBreakdown: {
+      leftOver: state.breakdown.leftOver.toString(),
+      inflows: state.breakdown.inflows.toString(),
+      debtInflows: state.breakdown.debtInflows.toString(),
+      cashOverspending: state.breakdown.cashOverspending.toString(),
+      assigned: state.breakdown.assigned.toString(),
+      assignedInFuture: state.breakdown.assignedInFuture.toString(),
+      total: state.breakdown.total.toString(),
+    },
     futureMonths: [...future]
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
