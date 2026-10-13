@@ -2450,6 +2450,8 @@ export interface components {
             pastDue: boolean;
             /** @description Snoozed this month: it asks for nothing more (Underfunded leaves it out) */
             snoozed: boolean;
+            /** @description Payment targets: a month before the card's account was opened; it asks for nothing (underfunded 0) */
+            beforeOpening: boolean;
         } | null;
         /** @description What each Auto-Assign option would set the category's Assigned to this month: enough to meet its target and cover overspending (underfunded, when there's enough Ready to Assign), last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), less what's above its target (reduceOverfunding), Available reset to zero, or zero */
         AutoAssignAmounts: {

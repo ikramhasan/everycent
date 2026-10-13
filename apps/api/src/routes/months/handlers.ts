@@ -649,6 +649,16 @@ async function monthState(
     )
     .groupBy(transaction.accountId);
   const register = new Map(cardMonth.map((r) => [r.accountId, r]));
+  // Each card's opening month: the month of its first transaction (the Starting Balance).
+  const openedRows = await db
+    .select({ accountId: transaction.accountId, date: min(transaction.date) })
+    .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
+    .where(and(eq(transaction.budgetId, budgetId), inArray(budgetAccount.type, CREDIT_TYPES)))
+    .groupBy(transaction.accountId);
+  const openedMonth = new Map(
+    openedRows.flatMap((r) => (r.date ? [[r.accountId, monthOf(r.date)] as const] : [])),
+  );
   const accountOf = new Map([...paymentAccounts].map(([accountId, id]) => [id, accountId]));
   const paymentOf = (categoryId: string, figures: CategoryMonth) => {
     const accountId = accountOf.get(categoryId);
@@ -665,6 +675,19 @@ async function monthState(
     return { accountId, balance, owed, underfunded, fromOverspending };
   };
 
+  // A payment target asks nothing in months before its card was opened (YNAB, 2026-10-12, Card E3
+  // opened Oct 8: September's "Pay Specific Amount Monthly $30.00" read "Assign $0.00 to meet your
+  // target", Amount to Assign $30.00, To Go $0.00).
+  const beforeOpening = (
+    accountId: string | undefined,
+    need: TargetNeed | null,
+    m: BudgetMonth = month,
+  ): TargetNeed | null => {
+    const opened = accountId && openedMonth.get(accountId);
+    if (!need || !opened || m >= opened) return need;
+    return { ...need, underfunded: 0n, monthAmount: 0n };
+  };
+
   const listed: {
     categoryId: string;
     figures: CategoryMonth;
@@ -673,6 +696,8 @@ async function monthState(
     snoozed: boolean;
     bar: ProgressBar | null;
     payment: ReturnType<typeof paymentOf>;
+    /** A payment category in a month before its card was opened. */
+    beforeOpening: boolean;
     funding: CategoryFunding;
     upcoming: CategoryUpcoming | null;
     hidden: boolean;
@@ -706,7 +731,10 @@ async function monthState(
     const payment = paymentOf(cat.id, figures);
     // A payment target pays toward what the card owes; next month starts from the same balance.
     const owed = payment?.owed ?? 0n;
-    const need = target && targetNeed(entries, target, month, monthOf(today), owed);
+    const need = beforeOpening(
+      payment?.accountId,
+      target && targetNeed(entries, target, month, monthOf(today), owed),
+    );
     // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
     const snoozed = !payment && snoozedNow.has(cat.id);
     const coming = upcoming.get(cat.id) ?? null;
@@ -720,7 +748,11 @@ async function monthState(
     if (target && !isHidden) {
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
-        targetNeed(entries, target, nextMonth, monthOf(today), owed)?.monthAmount ?? 0n;
+        beforeOpening(
+          payment?.accountId,
+          targetNeed(entries, target, nextMonth, monthOf(today), owed),
+          nextMonth,
+        )?.monthAmount ?? 0n;
     }
     listed.push({
       categoryId: cat.id,
@@ -743,6 +775,7 @@ async function monthState(
             target ? periodRollover(entries, target, month) : 0n,
           ),
       payment,
+      beforeOpening: !!payment && (openedMonth.get(payment.accountId) ?? month) > month,
       funding,
       upcoming: coming,
       hidden: isHidden,
@@ -853,6 +886,7 @@ export async function budgetMonthJson(
           // Only a one-time target's due date can be before the month it's shown in.
           pastDue: l.need.dueDate !== null && monthOf(l.need.dueDate) < month,
           snoozed: l.snoozed,
+          beforeOpening: l.beforeOpening,
         },
         bar: l.bar && {
           tone: l.bar.tone,

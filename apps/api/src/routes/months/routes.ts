@@ -108,6 +108,12 @@ const TargetNeedSchema = z
     snoozed: z
       .boolean()
       .describe("Snoozed this month: it asks for nothing more (Underfunded leaves it out)"),
+    beforeOpening: z
+      .boolean()
+      .describe(
+        "Payment targets: a month before the card's account was opened; it asks for nothing " +
+          "(underfunded 0)",
+      ),
   })
   .nullable()
   .describe(

@@ -5285,6 +5285,10 @@
           "snoozed": {
             "type": "boolean",
             "description": "Snoozed this month: it asks for nothing more (Underfunded leaves it out)"
+          },
+          "beforeOpening": {
+            "type": "boolean",
+            "description": "Payment targets: a month before the card's account was opened; it asks for nothing (underfunded 0)"
           }
         },
         "required": [
@@ -5293,7 +5297,8 @@
           "underfunded",
           "dueDate",
           "pastDue",
-          "snoozed"
+          "snoozed",
+          "beforeOpening"
         ],
         "description": "The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month"
       },
