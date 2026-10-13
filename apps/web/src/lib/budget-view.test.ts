@@ -48,6 +48,7 @@ const month: BudgetMonthData = {
     total: "0",
   },
   futureMonths: [],
+  nextMonthTargets: null,
   futureShortfall: null,
   note: "",
   targets: { month: "0", nextMonth: "0", expectedIncome: null },

@@ -23,11 +23,12 @@ type Month = {
   lastMonth: string;
   readyToAssign: string;
   readyToAssignBreakdown: Record<string, string>;
+  futureMonths: { month: string; assigned: string; targets: unknown }[];
+  nextMonthTargets: unknown;
   overdraft: boolean;
   assignedInFuture: string;
   futureShortfall: { month: string; readyToAssign: string } | null;
   note: string;
-  futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
     payment:
@@ -1692,6 +1693,27 @@ describe("budget months", () => {
         averageAssigned: "500",
         averageSpent: "0",
       });
+    });
+
+    // YNAB "x132 Order", 2026-10-14 (EVERYCENT-143): Groceries' $5.00 monthly target with $3.00
+    // assigned in November drew a part-filled pie by November, and a check at $5.00.
+    it("tells each later month's targets for the panel's pie or check", async () => {
+      const ctx = await setup();
+      const { put, month, groceries, rent } = ctx;
+      await target(ctx, groceries.id, { amount: "500" });
+      await put(groceries.id, "2026-11", "300");
+      let oct = await month("2026-10");
+      expect(oct.futureMonths).toEqual([
+        { month: "2026-11", assigned: "300", targets: { needed: "500", funded: "300" } },
+      ]);
+      await put(groceries.id, "2026-11", "500");
+      await put(rent.id, "2026-12", "100"); // December: assigned, but no targets ask there
+      oct = await month("2026-10");
+      expect(oct.futureMonths.map((m) => m.targets)).toEqual([
+        { needed: "500", funded: "500" },
+        { needed: "500", funded: "0" },
+      ]);
+      expect(oct.nextMonthTargets).toEqual({ needed: "500", funded: "500" });
     });
 
     // YNAB's Ready to Assign Breakdown, 2026-10-14 (EVERYCENT-138).

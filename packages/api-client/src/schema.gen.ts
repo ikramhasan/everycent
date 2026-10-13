@@ -2468,7 +2468,21 @@ export interface components {
                 month: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 assigned: string;
+                /** @description A later month's targets for YNAB's pie or check; null when it has none */
+                targets: {
+                    /** @description What the month's targets need, all together */
+                    needed: string;
+                    /** @description How much of that is funded (each target counts up to its need) */
+                    funded: string;
+                } | null;
             }[];
+            /** @description Next month's targets, for the panel's row when nothing is assigned there yet */
+            nextMonthTargets: {
+                /** @description What the month's targets need, all together */
+                needed: string;
+                /** @description How much of that is funded (each target counts up to its need) */
+                funded: string;
+            } | null;
             /** @description The month's note (YNAB's "Enter a note…"); empty for none */
             note: string;
             /** @description The first later month whose Ready to Assign is negative, if any */

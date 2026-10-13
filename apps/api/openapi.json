@@ -5272,14 +5272,61 @@
                   "type": "string",
                   "pattern": "^(0|-?[1-9]\\d*)$",
                   "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "targets": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "needed": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "What the month's targets need, all together"
+                    },
+                    "funded": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "How much of that is funded (each target counts up to its need)"
+                    }
+                  },
+                  "required": [
+                    "needed",
+                    "funded"
+                  ],
+                  "description": "A later month's targets for YNAB's pie or check; null when it has none"
                 }
               },
               "required": [
                 "month",
-                "assigned"
+                "assigned",
+                "targets"
               ]
             },
             "description": "The later months with money assigned, in order"
+          },
+          "nextMonthTargets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "needed": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What the month's targets need, all together"
+              },
+              "funded": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "How much of that is funded (each target counts up to its need)"
+              }
+            },
+            "required": [
+              "needed",
+              "funded"
+            ],
+            "description": "Next month's targets, for the panel's row when nothing is assigned there yet"
           },
           "note": {
             "type": "string",
@@ -5393,6 +5440,7 @@
           "assignedInFuture",
           "readyToAssignBreakdown",
           "futureMonths",
+          "nextMonthTargets",
           "note",
           "futureShortfall",
           "categories",

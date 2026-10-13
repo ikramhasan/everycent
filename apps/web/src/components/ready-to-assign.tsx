@@ -197,7 +197,7 @@ export function FutureMonthsPanel({
 }) {
   const months = data.futureMonths.length
     ? data.futureMonths
-    : [{ month: addMonths(data.month, 1), assigned: "0" }];
+    : [{ month: addMonths(data.month, 1), assigned: "0", targets: data.nextMonthTargets }];
   return (
     <section aria-label="Assigned in Future Months" className="grid gap-2 rounded-lg border p-4">
       <div className="flex items-center justify-between gap-2 font-semibold text-sm">
@@ -218,11 +218,54 @@ export function FutureMonthsPanel({
       <ul className="grid gap-1 text-sm">
         {months.map((m) => (
           <li key={m.month} className="flex justify-between gap-2">
-            <span>{monthName(m.month)}</span>
+            <span className="flex items-center gap-1.5">
+              {m.targets && <TargetPie targets={m.targets} />}
+              {monthName(m.month)}
+            </span>
             <span className="tabular-nums">{format(m.assigned)}</span>
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * How much of a later month's targets is funded, by the month in Assigned in Future Months: a blue
+ * pie filling up, a check once they're all funded; no icon for a month without targets (YNAB,
+ * 2026-10-14, "x132 Order": Groceries' $5.00 target with $3.00 in November, then $5.00).
+ */
+export function TargetPie({ targets }: { targets: { needed: string; funded: string } }) {
+  const needed = BigInt(targets.needed);
+  const funded = BigInt(targets.funded);
+  if (funded >= needed) {
+    return (
+      <CircleCheck
+        className="size-4 shrink-0 text-blue-600 dark:text-blue-400"
+        aria-label="Targets funded"
+      />
+    );
+  }
+  const percent = Number((funded * 100n) / needed);
+  const r = 6;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="size-4 shrink-0 -rotate-90 text-blue-600 dark:text-blue-400"
+      role="img"
+      aria-label={`${percent}% of targets funded`}
+    >
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle
+        cx="8"
+        cy="8"
+        r={r / 2}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={r}
+        strokeDasharray={`${(c / 2) * (percent / 100)} ${c / 2}`}
+      />
+    </svg>
   );
 }

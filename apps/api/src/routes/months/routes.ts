@@ -82,6 +82,14 @@ const PaymentSchema = z
   .describe("Set on a credit account's payment category")
   .openapi("PaymentDetails");
 
+const FutureTargetsSchema = z
+  .object({
+    needed: zMinorUnits.describe("What the month's targets need, all together"),
+    funded: zMinorUnits.describe("How much of that is funded (each target counts up to its need)"),
+  })
+  .nullable()
+  .describe("A later month's targets for YNAB's pie or check; null when it has none");
+
 const TargetNeedSchema = z
   .object({
     needed: zMinorUnits.describe(
@@ -247,8 +255,17 @@ const MonthSchema = z
       })
       .describe("YNAB's Ready to Assign Breakdown, line by line"),
     futureMonths: z
-      .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
+      .array(
+        z.object({
+          month: zBudgetMonth,
+          assigned: zMinorUnits,
+          targets: FutureTargetsSchema,
+        }),
+      )
       .describe("The later months with money assigned, in order"),
+    nextMonthTargets: FutureTargetsSchema.describe(
+      "Next month's targets, for the panel's row when nothing is assigned there yet",
+    ),
     note: z.string().describe("The month's note (YNAB's \"Enter a note…\"); empty for none"),
     futureShortfall: z
       .object({ month: zBudgetMonth, readyToAssign: zMinorUnits })
