@@ -71,7 +71,12 @@ import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
-import { type CategoryUpcoming, enterDueScheduled, upcomingByCategory } from "../../lib/scheduled";
+import {
+  type CategoryUpcoming,
+  enterDueScheduled,
+  entryDate,
+  upcomingByCategory,
+} from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -896,7 +901,8 @@ export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = a
   const query = c.req.valid("query");
   const today = query.today ?? serverToday();
   const { budget } = await loadBudgetAccess(c, budgetId);
-  if (query.today) await enterDueScheduled(c.var.deps.db, budgetId, query.today);
+  if (query.today)
+    await enterDueScheduled(c.var.deps.db, budgetId, entryDate(c.var.deps, query.today));
   return c.json(await budgetMonthJson(c.var.deps.db, budget, month, today), 200);
 };
 

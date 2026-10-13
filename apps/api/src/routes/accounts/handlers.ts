@@ -26,7 +26,7 @@ import {
   ZERO_BALANCES,
 } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
-import { enterDueScheduled } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -142,7 +142,8 @@ export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async
   const query = c.req.valid("query");
   const today = query.today ?? serverToday();
   await loadBudgetAccess(c, budgetId);
-  if (query.today) await enterDueScheduled(c.var.deps.db, budgetId, query.today);
+  if (query.today)
+    await enterDueScheduled(c.var.deps.db, budgetId, entryDate(c.var.deps, query.today));
   return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
 };
 

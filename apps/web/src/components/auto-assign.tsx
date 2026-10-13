@@ -122,7 +122,6 @@ function listsOption(option: AutoAssignOption, amount: bigint, one: boolean) {
   return true;
 }
 
-/** Cards Underfunded flags: their payment categories wait on this month's credit overspending. */
 /**
  * Cards Underfunded lists apart: credit overspending, or uncategorized transactions this month
  * (YNAB, 2026-10-12, "C5 First": F Card with an uncategorized $5.00 was listed; moved to September,

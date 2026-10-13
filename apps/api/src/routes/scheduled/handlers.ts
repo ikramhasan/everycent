@@ -9,6 +9,7 @@ import {
   enterDueScheduled,
   enterIfPast,
   enterNow,
+  entryDate,
   type ScheduleInput,
   scheduledRowMatches,
   scheduledRows,
@@ -61,7 +62,7 @@ export const listScheduledTransactionsHandler: RouteHandler<
   const { accountId, q, from, to, today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  await enterDueScheduled(db, budgetId, today);
+  await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   const terms = q ? parseSearch(q, budget) : [];
   const names = await db
     .select({ color: flagName.color, name: flagName.name })
@@ -119,7 +120,7 @@ export const createScheduledTransactionHandler: RouteHandler<
       },
       from,
     );
-    return { id, entered: await enterIfPast(tx, id, today) };
+    return { id, entered: await enterIfPast(tx, id, entryDate(c.var.deps, today)) };
   });
   return c.json(
     {
@@ -206,7 +207,9 @@ export const updateScheduledTransactionHandler: RouteHandler<
       },
       { id, accountId: schedule.accountId, transferAccountId },
     );
-    return enterIfPast(tx, id, today);
+    // Only a new date enters what's past (YNAB's rule for saving a past date); other edits leave
+    // the schedule's occurrences alone, as for those waiting in a closed account.
+    return body.date !== undefined ? enterIfPast(tx, id, entryDate(c.var.deps, today)) : null;
   });
   return c.json(
     {

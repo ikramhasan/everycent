@@ -12,7 +12,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
-import { enterDueScheduled } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { queryRegister, queryRegisterRow } from "./register-query";
@@ -58,7 +58,7 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
-  if (today && !cursor) await enterDueScheduled(db, budgetId, today);
+  if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
   const page = await queryRegister(db, budgetId, filter, { sort, dir, limit, cursor }, budget);
   return c.json(page, 200);

@@ -69,19 +69,22 @@ export const bulkUpdateScheduledTransactionsHandler: RouteHandler<
   );
 
   const result = await db.transaction(async (tx) => {
-    const all = await scheduledRows(tx, budgetId);
-    const byId = new Map(all.map((r) => [r.id, r]));
     // The selected rows, each schedule once, in the order given.
-    const picked: { row: ScheduledRowJson; own: ScheduledRowJson }[] = [];
-    const seen = new Set<string>();
-    for (const id of ids) {
-      const row = byId.get(id);
-      const own = row && byId.get(row.scheduledTransactionId);
-      if (!row || !own || seen.has(own.id)) continue;
-      if (row.kind === "splitTransfer" && action.type !== "enterNow") continue;
-      seen.add(own.id);
-      picked.push({ row, own });
-    }
+    const pick = (all: ScheduledRowJson[]) => {
+      const byId = new Map(all.map((r) => [r.id, r]));
+      const picked: { row: ScheduledRowJson; own: ScheduledRowJson }[] = [];
+      const seen = new Set<string>();
+      for (const id of ids) {
+        const row = byId.get(id);
+        const own = row && byId.get(row.scheduledTransactionId);
+        if (!row || !own || seen.has(own.id)) continue;
+        if (row.kind === "splitTransfer" && action.type !== "enterNow") continue;
+        seen.add(own.id);
+        picked.push({ row, own });
+      }
+      return picked;
+    };
+    let picked = pick(await scheduledRows(tx, budgetId));
     if (picked.length > 0) {
       await tx
         .select({ id: scheduledTransaction.id })
@@ -97,6 +100,9 @@ export const bulkUpdateScheduledTransactionsHandler: RouteHandler<
         )
         .orderBy(scheduledTransaction.id)
         .for("update");
+      // Read again under the lock: the rows are rewritten from what they hold now, not from
+      // before another request (entering what came due, say) committed.
+      picked = pick(await scheduledRows(tx, budgetId));
     }
 
     const applied: ScheduledRowJson[] = [];

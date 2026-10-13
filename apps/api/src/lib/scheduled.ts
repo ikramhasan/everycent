@@ -38,8 +38,15 @@ import {
   type LineInput,
   syncLines,
 } from "../routes/transactions/splits";
+import type { AppDeps } from "../types";
 import { AppError } from "./errors";
-import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "./ledger";
+import {
+  type Db,
+  findOrCreatePayee,
+  insertTransaction,
+  serverToday,
+  transferPayeeId,
+} from "./ledger";
 
 export type ScheduleRow = typeof scheduledTransaction.$inferSelect;
 
@@ -169,6 +176,25 @@ async function advance(tx: Db, schedule: ScheduleRow, current: string) {
       .where(eq(scheduledTransaction.id, schedule.id));
   }
   return next;
+}
+
+const shiftDay = (date: string, days: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * The user's `today` as far as entering schedules goes: held within a day of the server's UTC date
+ * (time zones run from −12h to +14h), so a wrong device clock or a made-up `today` can't enter
+ * years of occurrences at once.
+ */
+export function entryDate(deps: Pick<AppDeps, "serverDate">, today: string) {
+  const server = deps.serverDate ? deps.serverDate() : serverToday();
+  if (server === null) return today;
+  const earliest = shiftDay(server, -1);
+  const latest = shiftDay(server, 1);
+  return today < earliest ? earliest : today > latest ? latest : today;
 }
 
 /**

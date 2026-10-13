@@ -14,7 +14,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, internalCategoryId, internalPayeeId, serverToday } from "../../lib/ledger";
-import { enterDueScheduled } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type { listMonthActivity } from "./routes";
@@ -79,7 +79,7 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
   const today = userToday ?? serverToday();
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
-  if (userToday) await enterDueScheduled(db, budgetId, userToday);
+  if (userToday) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, userToday));
 
   const { ids, cardAccountId, cardCategoryId } = await categoryIds(db, budgetId, query);
   const startingBalance = await internalPayeeId(db, budgetId, "starting_balance");

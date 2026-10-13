@@ -586,6 +586,11 @@ describe("scheduled transactions", () => {
     expect(closed.status).toBe(200);
     expect(await ctx.register(old.id, TODAY)).toEqual([]);
     expect((await ctx.list(`today=${TODAY}`))[0]?.dateNext).toBe("2026-10-05");
+    // Editing only its memo enters nothing; it keeps waiting from the 5th.
+    const edited = await ctx.patch(s?.id ?? "", { memo: "still waiting" });
+    expect(edited.enteredTransactionId).toBeNull();
+    expect(edited.scheduledTransaction?.dateNext).toBe("2026-10-05");
+    expect(await ctx.register(old.id, TODAY)).toEqual([]);
     const { transaction } = await ctx.enterNow(s?.id ?? "");
     expect(transaction.date).toBe(TODAY);
   });
@@ -746,5 +751,45 @@ describe("scheduled transactions", () => {
         ctx.xfer.id,
       ]);
     });
+  });
+});
+
+describe("the user's today", () => {
+  const bounded = createTestApp({ serverDate: () => TODAY });
+  afterAll(bounded.close);
+
+  it("is held within a day of the server's date before it enters schedules", async () => {
+    const { cookie } = await signUp(bounded.app);
+    const budget = await createBudget(bounded.app, cookie);
+    const base = `/v1/budgets/${budget.id}`;
+    const call = (method: string, path: string, body?: unknown) =>
+      bounded.app.request(path, {
+        method,
+        headers: { cookie, "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    const account = await json<Account>(
+      await call("POST", `${base}/accounts`, {
+        name: "Checking",
+        type: "checking",
+        balance: "0",
+        date: START,
+      }),
+    );
+    const created = await call("POST", `${base}/scheduled-transactions`, {
+      accountId: account.id,
+      frequency: "daily",
+      date: "2026-10-12",
+      amount: "-100",
+      payeeName: "Daily",
+      today: TODAY,
+    });
+    expect(created.status).toBe(201);
+    // A device clock in 2100 enters only through the server's tomorrow, the 12th.
+    const res = await call("GET", `${base}/transactions?accountId=${account.id}&today=2100-01-01`);
+    const { transactions } = await json<{ transactions: Txn[] }>(res);
+    expect(transactions.filter((t) => t.payeeName === "Daily").map((t) => t.date)).toEqual([
+      "2026-10-12",
+    ]);
   });
 });

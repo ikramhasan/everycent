@@ -327,10 +327,12 @@ export function useTargetActions(budgetId: string, record?: (command: UndoComman
     }
     /** Puts a category's target back exactly as it was (or removes it), for undo and redo. */
     const putBack = async (categoryId: string, target: CategoryTarget | null) => {
-      await run(
+      const ok = await run(
         () => restore.mutateAsync({ params: { path: { budgetId, categoryId } }, body: { target } }),
         "Couldn't restore the target.",
       );
+      // UndoProvider keeps the command where it was only when undo/redo throws.
+      if (!ok) throw new Error("Couldn't restore the target.");
     };
     // YNAB's Undo covers creating, editing and deleting a target, start month included (checked
     // 2026-10-12, docs/verify.md).
