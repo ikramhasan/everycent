@@ -183,7 +183,7 @@ export function AvailableButton({
           </button>
         )}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
+      <PopoverContent align="end" className="w-80">
         {overspent ? (
           <PickSourceForm
             key={month}

@@ -168,7 +168,7 @@ export function ReadyToAssignBanner({
               {summary}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="center" className="w-96">
+          <PopoverContent align="end" className="w-96">
             <BreakdownContent breakdown={breakdown.lines} month={breakdown.month} format={format} />
           </PopoverContent>
         </Popover>
