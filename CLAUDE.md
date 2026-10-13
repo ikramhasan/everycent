@@ -25,6 +25,10 @@ transactions and run the actions you're checking. Look before asking the user, a
 found (as a comment on the Plane ticket, then on the matching "YNAB findings" page). The same browser is how you
 check your own UI changes in the running app.
 
+**Close the browser when you're done.** As soon as a browser check is finished, close every tab
+and window you opened for it (including ones a tool opened for you), so none are left running.
+Leave the user's own tabs alone, and keep one open only if the user asked to see it.
+
 **Use the YNAB API to set up and read cases.** Clicking through YNAB's UI to build test data is
 slow (payee/category autocomplete, cell-by-cell editing). The test account has a personal access
 token in `.env` as `YNAB_TOKEN` (gitignored; never print or commit it). With it you can create
