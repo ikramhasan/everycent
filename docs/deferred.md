@@ -211,8 +211,6 @@ before starting a roadmap phase** and remove an entry once it's done.
   device's date (checked 2026-10-12, EVERYCENT-5; see `docs/verify.md`).
 - Entered-on-their-date transactions are stored unapproved, as YNAB does, but the register has
   no approve/unapproved styling yet (EVERYCENT-65).
-- Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
-  what YNAB does is EVERYCENT-115.
 - Duplicating a transfer selected from both sides (All Accounts) selects the copy's own side
   only; YNAB selects both sides of the copy.
 - Bulk Categorize's un-split warning counts selected transactions only; selected scheduled splits

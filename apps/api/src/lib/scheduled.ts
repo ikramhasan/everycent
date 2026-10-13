@@ -201,7 +201,8 @@ export function entryDate(deps: Pick<AppDeps, "serverDate">, today: string) {
  * Enters every occurrence due by the user's `today` (YNAB enters each missed one, dated its own
  * date and unapproved; checked 2026-10-11) and moves each schedule past it. Idempotent and safe to
  * run from concurrent requests: due schedules are locked, and ones another request holds are
- * skipped (that request enters them). Schedules in closed accounts wait (EVERYCENT-115).
+ * skipped (that request enters them). Schedules in closed accounts wait and catch up on every
+ * missed date once the account is reopened, as YNAB does (EVERYCENT-115).
  */
 export async function enterDueScheduled(db: Database, budgetId: string, today: string) {
   const due = and(

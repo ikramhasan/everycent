@@ -595,6 +595,27 @@ describe("scheduled transactions", () => {
     expect(transaction.date).toBe(TODAY);
   });
 
+  it("catches up every missed date when a closed account is reopened (YNAB, EVERYCENT-115)", async () => {
+    const ctx = await setup();
+    const old = await ctx.addAccount("Old", "checking", "0");
+    await ctx.schedule({
+      accountId: old.id,
+      frequency: "daily",
+      date: "2026-10-05",
+      amount: "-100",
+      payeeName: "Daily",
+      today: "2026-10-01",
+    });
+    await send("POST", `${ctx.base}/accounts/${old.id}/close`, ctx.cookie, { date: START });
+    expect(await ctx.register(old.id, "2026-10-07")).toEqual([]);
+    const reopened = await send("POST", `${ctx.base}/accounts/${old.id}/reopen`, ctx.cookie);
+    expect(reopened.status).toBe(200);
+    // The next read enters the 5th, 6th and 7th, and the schedule moves on to the 8th.
+    const entered = await ctx.register(old.id, "2026-10-07");
+    expect(entered.map((t) => t.date).sort()).toEqual(["2026-10-05", "2026-10-06", "2026-10-07"]);
+    expect((await ctx.list("today=2026-10-07"))[0]?.dateNext).toBe("2026-10-08");
+  });
+
   it("moves schedules with a deleted category and drops transfers to a deleted account", async () => {
     const ctx = await setup();
     const checking = await ctx.addAccount("Checking", "checking");

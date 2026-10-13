@@ -68,7 +68,9 @@ web app and through the API, reading `date_next` after each Enter Now (EVERYCENT
   shows in the other account (amount negated) and can be edited there; a scheduled split's
   transfer line shows in its account with no repeat icon and can't be deleted there.
 - **Closed accounts** (help center): schedules stop occurring and new ones can't be added; Enter
-  Now still works. Whether missed dates catch up on reopening is EVERYCENT-115.
+  Now still works. While closed, `date_next` stays put and nothing is entered (S10 Closed,
+  daily from 10/12, still 10/12 on 10/13); reopening enters every missed date (10/12 and 10/13)
+  and moves on (10/14). As built (EVERYCENT-115, 2026-10-13).
 
 ## Scheduled transactions in the plan (phase 10b) (settled 2026-10-12)
 
