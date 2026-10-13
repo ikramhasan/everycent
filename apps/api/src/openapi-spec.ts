@@ -4,6 +4,7 @@ import { createApp } from "./app";
 import { parseEnv } from "./env";
 import { createAuth } from "./lib/auth";
 import { buildOpenApiDocument } from "./lib/docs";
+import { MemoryEmailSender } from "./lib/email/sender";
 
 export const OPENAPI_FILE = fileURLToPath(new URL("../openapi.json", import.meta.url));
 
@@ -20,7 +21,8 @@ export function generateOpenApiDocument() {
     WEB_ORIGIN: "http://localhost:5173",
   });
   const { db } = createDb(env.DATABASE_URL, { max: 1 });
-  return buildOpenApiDocument(createApp({ db, env, auth: createAuth(db, env) }));
+  const email = new MemoryEmailSender();
+  return buildOpenApiDocument(createApp({ db, env, email, auth: createAuth(db, env, email) }));
 }
 
 export function serializeOpenApi(doc: unknown): string {

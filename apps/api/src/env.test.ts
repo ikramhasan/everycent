@@ -25,3 +25,25 @@ describe("parseEnv", () => {
     ).toThrow(/DATABASE_URL[\s\S]*BETTER_AUTH_SECRET|BETTER_AUTH_SECRET[\s\S]*DATABASE_URL/);
   });
 });
+
+describe("parseEnv: email", () => {
+  it("treats empty email settings as unset outside production", () => {
+    const env = parseEnv({ ...valid, RESEND_API_KEY: "", FROM_EMAIL: "" });
+    expect(env.RESEND_API_KEY).toBeUndefined();
+    expect(env.FROM_EMAIL).toBeUndefined();
+  });
+
+  it("requires the Resend key and sender in production", () => {
+    expect(() => parseEnv({ ...valid, NODE_ENV: "production" })).toThrow(
+      /RESEND_API_KEY[\s\S]*FROM_EMAIL/,
+    );
+    expect(
+      parseEnv({ ...valid, NODE_ENV: "production", RESEND_API_KEY: "re_x", FROM_EMAIL: "a.dev" })
+        .NODE_ENV,
+    ).toBe("production");
+  });
+
+  it("rejects a key that isn't a Resend key", () => {
+    expect(() => parseEnv({ ...valid, RESEND_API_KEY: "sk_live_x" })).toThrow(/RESEND_API_KEY/);
+  });
+});

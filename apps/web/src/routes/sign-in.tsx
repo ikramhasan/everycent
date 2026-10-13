@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AuthCard } from "@/components/auth-card";
 import { SignInForm } from "@/components/sign-in-form";
 import { authClient } from "@/lib/auth-client";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
@@ -35,9 +36,17 @@ function SignInPage() {
       }
     >
       <SignInForm
+        forgotPassword={
+          <Link
+            to="/forgot-password"
+            className="text-muted-foreground text-sm underline-offset-4 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        }
         onSubmit={async (values) => {
           const { error } = await authClient.signIn.email(values);
-          if (error) return error.message ?? "Sign in failed";
+          if (error) return authErrorMessage(error, error.message ?? "Sign in failed");
           await refreshSession(queryClient);
           await navigate({ href: safeRedirect(search.redirect) });
           return null;

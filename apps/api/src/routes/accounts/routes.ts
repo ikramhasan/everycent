@@ -80,6 +80,7 @@ export const listAccounts = createRoute({
   responses: {
     200: ok("Accounts in sidebar order", AccountListSchema),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
@@ -118,7 +119,9 @@ export const createAccount = createRoute({
     201: ok("Created", AccountSchema),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -163,7 +166,9 @@ export const updateAccount = createRoute({
     200: ok("Updated", AccountSchema),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -198,7 +203,9 @@ export const reconcileAccount = createRoute({
     200: ok("Reconciled", AccountSchema),
     400: jsonError("Invalid input, or a loan account"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't change transactions"),
+    403: jsonError(
+      "The caller's role can't change transactions, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -228,7 +235,9 @@ export const moveAccount = createRoute({
     200: ok("Accounts in their new order", AccountListSchema),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -252,7 +261,9 @@ export const closeAccount = createRoute({
     200: ok("Closed", AccountSchema),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -269,7 +280,9 @@ export const reopenAccount = createRoute({
   responses: {
     200: ok("Reopened", AccountSchema),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -286,7 +299,9 @@ export const deleteAccount = createRoute({
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't manage accounts"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: jsonError("ACCOUNT_HAS_HISTORY: close the account instead"),
   },

@@ -8,6 +8,8 @@ export const Route = createFileRoute("/_authed")({
     if (!session) {
       throw redirect({ to: "/sign-in", search: { redirect: location.href } });
     }
+    // Only sessions from before confirmation was required can be unconfirmed; the API refuses them.
+    if (!session.user.emailVerified) throw redirect({ to: "/verify-email" });
     return { session };
   },
   component: AuthedLayout,

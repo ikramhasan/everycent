@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { timestamps } from "./columns";
 
 // Better Auth core tables. Field names must match Better Auth's model fields exactly;
@@ -63,3 +63,22 @@ export const verification = pgTable(
   },
   (t) => [index("verification_identifier_idx").on(t.identifier)],
 );
+
+/** Better Auth's rate limiter (`rateLimit.storage: "database"`), so limits hold across restarts and instances. */
+export const rateLimit = pgTable("rate_limit", {
+  id: text().primaryKey(),
+  key: text().notNull().unique(),
+  count: integer().notNull(),
+  /** Epoch milliseconds, as Better Auth writes it. */
+  lastRequest: bigint({ mode: "number" }).notNull(),
+});
+
+/**
+ * Counters for limits Better Auth doesn't cover (per-recipient email sends, password checks on
+ * our own routes), kept by rate-limiter-flexible's Drizzle store. Its column names are fixed.
+ */
+export const throttle = pgTable("throttle", {
+  key: text().primaryKey(),
+  points: integer().notNull().default(0),
+  expire: timestamp({ withTimezone: true }),
+});

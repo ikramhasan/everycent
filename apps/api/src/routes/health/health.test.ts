@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { createTestApp, testEnv } from "../../../test/helpers";
 import { createApp } from "../../app";
 import { createAuth } from "../../lib/auth";
+import { MemoryEmailSender } from "../../lib/email/sender";
 
 const { app, close } = createTestApp();
 afterAll(close);
@@ -18,9 +19,13 @@ describe("GET /v1/health", () => {
     const env = testEnv();
     const broken = createDb("postgres://nobody:nothing@127.0.0.1:1/none", { max: 1 });
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const res = await createApp({ db: broken.db, env, auth: createAuth(broken.db, env) }).request(
-      "/v1/health",
-    );
+    const email = new MemoryEmailSender();
+    const res = await createApp({
+      db: broken.db,
+      env,
+      email,
+      auth: createAuth(broken.db, env, email),
+    }).request("/v1/health");
     spy.mockRestore();
     await broken.close();
     expect(res.status).toBe(503);

@@ -138,6 +138,14 @@ behaviour you haven't confirmed.
 - **Bundling workspace packages.** `apps/api`'s `tsdown.config.ts` uses `deps.alwaysBundle:
   [/^@everycent\//]` (tsdown 0.23 renamed `noExternal` to `deps.alwaysBundle`) since workspace
   packages ship TS source and must be bundled into the built server.
+- **Auth emails and links.** Emails come from `c.var.deps.email` (`apps/api/src/lib/email`);
+  their links go to the web app with the token in the URL fragment (`#token=`), and pages act
+  only on a click, so a mail scanner opening a link changes nothing. Never put Better Auth's own
+  `/api/auth/...` link URLs in an email. Accounts need a confirmed email to sign in; the test
+  helper `signUp` confirms through the emailed link and signs in, and `emailsTo(app, to, kind)`
+  reads the in-memory outbox. Change-email and the session list/revoke go through `/v1/me/*`
+  (password check, no tokens to the browser); the matching Better Auth endpoints are blocked
+  in `app.ts`.
 - **Demo seed user.** `pnpm db:seed` creates `demo@everycent.dev` / `everycent-demo` (see
   `apps/api/src/scripts/seed.ts`) — a public dev-only constant, safe to show in docs.
 

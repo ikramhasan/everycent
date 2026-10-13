@@ -2,7 +2,7 @@ import { Button } from "@everycent/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Spinner } from "@everycent/ui/components/spinner";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 export interface SignInValues {
   email: string;
@@ -11,8 +11,11 @@ export interface SignInValues {
 
 export function SignInForm({
   onSubmit,
+  forgotPassword,
 }: {
   onSubmit: (values: SignInValues) => Promise<string | null>;
+  /** Shown beside the password label. */
+  forgotPassword?: ReactNode;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -37,7 +40,10 @@ export function SignInForm({
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </Field>
       <Field>
-        <FieldLabel htmlFor="password">Password</FieldLabel>
+        <div className="flex items-center justify-between">
+          <FieldLabel htmlFor="password">Password</FieldLabel>
+          {forgotPassword}
+        </div>
         <Input
           id="password"
           name="password"

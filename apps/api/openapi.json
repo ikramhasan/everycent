@@ -97,6 +97,115 @@
           "createdAt"
         ]
       },
+      "ChangeEmailResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "approval_sent"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "ChangeEmail": {
+        "type": "object",
+        "properties": {
+          "newEmail": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The account's current password"
+          }
+        },
+        "required": [
+          "newEmail",
+          "password"
+        ]
+      },
+      "SessionList": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "The session making this request"
+          },
+          "browser": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "e.g. Chrome; null when the user agent is unknown"
+          },
+          "os": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "e.g. macOS"
+          },
+          "deviceType": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile",
+              "tablet",
+              "other"
+            ]
+          },
+          "ipAddress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this device signed in"
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last time the session was refreshed (about daily)"
+          }
+        },
+        "required": [
+          "id",
+          "current",
+          "browser",
+          "os",
+          "deviceType",
+          "ipAddress",
+          "createdAt",
+          "lastActiveAt"
+        ]
+      },
       "BudgetList": {
         "type": "object",
         "properties": {
@@ -4900,6 +5009,245 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/email": {
+      "post": {
+        "operationId": "changeEmail",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Start changing the account's email address",
+        "description": "Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link).",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmail"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Approval link sent to the current address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeEmailResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input (VALIDATION_ERROR), or the new address is the current one (SAME_EMAIL)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Wrong password (INVALID_PASSWORD), or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many password attempts (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Devices signed in to the account, current one first",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "revokeOtherSessions",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Sign out every device except this one",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Sign out another device",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "400": {
+            "description": "That's this device: sign out instead (CURRENT_SESSION)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session for this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -4929,6 +5277,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -4990,6 +5348,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -5029,6 +5397,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5112,7 +5490,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't update this budget",
+            "description": "The caller's role can't update this budget, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5169,7 +5547,7 @@
             }
           },
           "403": {
-            "description": "Only the owner can delete a budget",
+            "description": "Only the owner can delete a budget, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5256,7 +5634,7 @@
             }
           },
           "403": {
-            "description": "Only the owner can make a fresh start",
+            "description": "Only the owner can make a fresh start, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5323,6 +5701,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5406,7 +5794,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5502,7 +5890,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5606,7 +5994,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5701,7 +6089,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5805,7 +6193,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5909,7 +6297,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6004,7 +6392,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6108,7 +6496,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6213,7 +6601,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6295,7 +6683,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6398,7 +6786,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6503,7 +6891,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't edit categories",
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6589,6 +6977,16 @@
               }
             }
           },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such budget or account, or the caller isn't a member",
             "content": {
@@ -6665,7 +7063,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6760,7 +7158,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6825,7 +7223,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6929,7 +7327,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7024,7 +7422,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7119,7 +7517,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7193,7 +7591,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't manage accounts",
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7383,6 +7781,16 @@
               }
             }
           },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such budget, account or transaction, or the caller isn't a member",
             "content": {
@@ -7466,7 +7874,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7551,6 +7959,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7649,7 +8067,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7744,7 +8162,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7820,7 +8238,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7887,6 +8305,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8006,6 +8434,16 @@
               }
             }
           },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such budget, account or scheduled transaction, or not a member",
             "content": {
@@ -8082,7 +8520,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8179,7 +8617,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8274,7 +8712,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8339,7 +8777,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8424,7 +8862,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8481,6 +8919,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8582,7 +9030,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change transactions",
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8672,6 +9120,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8777,7 +9235,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't assign money",
+            "description": "The caller's role can't assign money, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8875,7 +9333,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't change the plan",
+            "description": "The caller's role can't change the plan, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8973,7 +9431,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't assign money",
+            "description": "The caller's role can't assign money, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -9071,7 +9529,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't assign money",
+            "description": "The caller's role can't assign money, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -9193,6 +9651,16 @@
               }
             }
           },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such budget, category or group, or the caller isn't a member",
             "content": {
@@ -9242,6 +9710,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -9328,7 +9806,7 @@
             }
           },
           "403": {
-            "description": "The caller's role can't assign money in this budget",
+            "description": "The caller's role can't assign money in this budget, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {

@@ -23,7 +23,15 @@ import {
 } from "@everycent/ui/components/sidebar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronsUpDown, Landmark, LayoutGrid, LogOut, Settings, Wallet } from "lucide-react";
+import {
+  ChevronsUpDown,
+  Landmark,
+  LayoutGrid,
+  LogOut,
+  Settings,
+  UserCog,
+  Wallet,
+} from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
@@ -154,6 +162,11 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                 >
                   <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/account">
+                      <UserCog /> Account settings
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={signOut}>
                     <LogOut /> Sign out
                   </DropdownMenuItem>

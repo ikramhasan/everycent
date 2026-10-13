@@ -18,8 +18,11 @@
     "@hono/zod-openapi": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
+    "bowser": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "rate-limiter-flexible": "catalog:",
+    "resend": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

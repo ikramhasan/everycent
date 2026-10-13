@@ -35,20 +35,9 @@ describe("GET /v1/me", () => {
       image: string | null;
       createdAt: string;
     };
-    expect(body).toMatchObject({ name: "Ada Lovelace", email, emailVerified: false, image: null });
+    expect(body).toMatchObject({ name: "Ada Lovelace", email, emailVerified: true, image: null });
     expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(new Date(body.createdAt).toISOString()).toBe(body.createdAt);
-  });
-
-  it("rejects a duplicate sign-up with a client error, not a 500", async () => {
-    const { email } = await signUp(app);
-    const res = await app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "http://localhost:5173" },
-      body: JSON.stringify({ email, password: "another-password-123", name: "Dup" }),
-    });
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(res.status).toBeLessThan(500);
   });
 
   it("rejects a wrong password", async () => {

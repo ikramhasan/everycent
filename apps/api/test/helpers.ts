@@ -2,7 +2,13 @@ import { createDb, type Database, sql } from "@everycent/db";
 import type { App } from "../src/app";
 import { createApp } from "../src/app";
 import { type Env, parseEnv } from "../src/env";
-import { createAuth } from "../src/lib/auth";
+import { type AuthOptions, createAuth } from "../src/lib/auth";
+import {
+  type EmailKind,
+  type EmailMessage,
+  MemoryEmailSender,
+  ThrottledEmailSender,
+} from "../src/lib/email/sender";
 import { loadRootEnv } from "../src/load-env";
 import type { AppDeps } from "../src/types";
 
@@ -19,12 +25,66 @@ export function testEnv(): Env {
   });
 }
 
-export function createTestApp({ serverDate = () => null }: Pick<AppDeps, "serverDate"> = {}) {
+const outboxes = new WeakMap<App, MemoryEmailSender>();
+
+export function createTestApp({
+  serverDate = () => null,
+  ...authOptions
+}: Pick<AppDeps, "serverDate"> & AuthOptions = {}) {
   const env = testEnv();
   const { db, close } = createDb(env.DATABASE_URL, { max: 2 });
+  // Real throttling over an in-memory outbox, so tests can read what was sent.
+  const outbox = new MemoryEmailSender();
+  const email = new ThrottledEmailSender(outbox, db);
   // Tests pick their own `today`, so the server's date doesn't bound it unless a test sets one.
-  const app = createApp({ db, env, auth: createAuth(db, env), serverDate });
-  return { app, db, env, close };
+  const app = createApp({
+    db,
+    env,
+    email,
+    auth: createAuth(db, env, email, authOptions),
+    serverDate,
+  });
+  outboxes.set(app, outbox);
+  return { app, db, env, outbox, close };
+}
+
+/** Every email `app` sent to `to` (optionally of one kind), oldest first. */
+export function emailsTo(app: App, to: string, kind?: EmailKind): EmailMessage[] {
+  const outbox = outboxes.get(app);
+  if (!outbox) throw new Error("not an app from createTestApp");
+  return outbox.outbox.filter((m) => m.to === to && (!kind || m.kind === kind));
+}
+
+/** `value`, or a failed test when it's missing. */
+export function one<T>(value: T | undefined, what = "value"): T {
+  if (value === undefined) throw new Error(`expected a ${what}`);
+  return value;
+}
+
+/** The token in an email's link (links carry it in the URL fragment). */
+export function linkToken(maybeMessage: EmailMessage | undefined): string {
+  const message = one(maybeMessage, "sent email");
+  const url = message.text.match(/https?:\/\/\S+#\S+/)?.[0];
+  if (!url) throw new Error(`no link with a token in "${message.subject}"`);
+  const token = new URLSearchParams(new URL(url).hash.slice(1)).get("token");
+  if (!token) throw new Error(`no token in ${url}`);
+  return token;
+}
+
+const ORIGIN = { origin: "http://localhost:5173" };
+
+/** Signs in with email and password; returns the session cookie. */
+export async function signIn(app: App, email: string, password: string): Promise<string> {
+  const res = await app.request("/api/auth/sign-in/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ORIGIN },
+    body: JSON.stringify({ email, password }),
+  });
+  if (res.status !== 200) throw new Error(`sign-in failed: ${res.status} ${await res.text()}`);
+  return res.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .join("; ");
 }
 
 /** Empties every table in the public schema (future tables included automatically). */
@@ -40,26 +100,29 @@ export async function resetDatabase(db: Database): Promise<void> {
   `);
 }
 
+/**
+ * Signs up, confirms the address through the emailed link and signs in, the way a person would
+ * (sign-up alone gives no session until the email is confirmed).
+ */
 export async function signUp(
   app: App,
   input: { email?: string; password?: string; name?: string } = {},
-): Promise<{ cookie: string; email: string }> {
+): Promise<{ cookie: string; email: string; password: string }> {
   const email = input.email ?? `user-${crypto.randomUUID()}@example.com`;
+  const password = input.password ?? "correct-horse-battery";
   const res = await app.request("/api/auth/sign-up/email", {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "http://localhost:5173" },
-    body: JSON.stringify({
-      email,
-      password: input.password ?? "correct-horse-battery",
-      name: input.name ?? "Test User",
-    }),
+    headers: { "content-type": "application/json", ...ORIGIN },
+    body: JSON.stringify({ email, password, name: input.name ?? "Test User" }),
   });
   if (res.status !== 200) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`);
-  const cookie = res.headers
-    .getSetCookie()
-    .map((c) => c.split(";")[0])
-    .join("; ");
-  return { cookie, email };
+  const sent = emailsTo(app, email, "verify-email").at(-1);
+  if (!sent) throw new Error(`no verification email for ${email}`);
+  const verified = await app.request(
+    `/api/auth/verify-email?token=${encodeURIComponent(linkToken(sent))}`,
+  );
+  if (verified.status !== 200) throw new Error(`verify failed: ${verified.status}`);
+  return { cookie: await signIn(app, email, password), email, password };
 }
 
 export interface TestBudget {

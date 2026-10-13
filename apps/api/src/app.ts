@@ -34,6 +34,17 @@ export function createApp(deps: AppDeps) {
   // Budgets are organization-plugin records, but clients must go through /v1/budgets (our
   // validation, error shape and OpenAPI contract), so the plugin's own endpoints stay hidden.
   app.all("/api/auth/organization/*", notFound);
+  // Replaced by /v1/me routes: change-email needs the current password there, and the session
+  // routes return ids instead of the raw session tokens these endpoints hand to the browser.
+  for (const path of [
+    "/api/auth/change-email",
+    "/api/auth/list-sessions",
+    "/api/auth/revoke-session",
+    "/api/auth/revoke-sessions",
+    "/api/auth/revoke-other-sessions",
+  ]) {
+    app.all(path, notFound);
+  }
   app.on(["GET", "POST"], "/api/auth/*", (c) => c.var.deps.auth.handler(c.req.raw));
 
   app.route("/v1", healthRouter);
