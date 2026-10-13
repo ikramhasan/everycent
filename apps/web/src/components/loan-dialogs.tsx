@@ -863,10 +863,16 @@ export function PairCategoryFields({
   list,
   value,
   onChange,
+  newName = "",
 }: {
   list: CategoryList;
   value: PairChoice;
   onChange: (choice: PairChoice) => void;
+  /**
+   * The new category's starting name (Update to a Loan Account prefills the account's, YNAB
+   * 2026-10-14).
+   */
+  newName?: string;
 }) {
   const [mode, setMode] = useState<"existing" | "new">(
     value && "name" in value ? "new" : "existing",
@@ -888,7 +894,7 @@ export function PairCategoryFields({
         value={mode}
         onValueChange={(v) => {
           setMode(v as "existing" | "new");
-          onChange(null);
+          onChange(v === "new" && newName ? { name: newName, groupId: "" } : null);
         }}
         aria-label="Which category do you want to pair your loan with?"
       >

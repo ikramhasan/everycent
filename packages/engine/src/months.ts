@@ -29,6 +29,31 @@ export function addMonths(month: BudgetMonth, count: number): BudgetMonth {
   return `${String(y).padStart(4, "0")}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
+/**
+ * An account's balance at the end of each month from its first transaction's month through its
+ * last's, newest first (YNAB's "Original Tracking Account History" on a loan made from a tracking
+ * account lists them so). Empty without transactions.
+ */
+export function monthEndBalances(
+  entries: ReadonlyArray<{ date: string; amount: bigint }>,
+): Array<{ month: BudgetMonth; endBalance: bigint }> {
+  if (entries.length === 0) return [];
+  const byMonth = new Map<BudgetMonth, bigint>();
+  for (const e of entries) {
+    const month = monthOf(e.date);
+    byMonth.set(month, (byMonth.get(month) ?? 0n) + e.amount);
+  }
+  const months = [...byMonth.keys()].sort();
+  const last = months[months.length - 1] as BudgetMonth;
+  const result: Array<{ month: BudgetMonth; endBalance: bigint }> = [];
+  let balance = 0n;
+  for (let month = months[0] as BudgetMonth; month <= last; month = addMonths(month, 1)) {
+    balance += byMonth.get(month) ?? 0n;
+    result.push({ month, endBalance: balance });
+  }
+  return result.reverse();
+}
+
 /** First and last calendar day of a month, YYYY-MM-DD. */
 export function monthBounds(month: BudgetMonth): { start: string; end: string } {
   const [year, m] = month.split("-").map(Number) as [number, number];

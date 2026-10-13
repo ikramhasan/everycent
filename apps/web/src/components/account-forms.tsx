@@ -32,7 +32,7 @@ const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
 
 const RATE = /^\d{1,3}(\.\d{1,3})?$/;
 
-interface LoanValues {
+export interface LoanValues {
   interestRate: string;
   minimumPayment: string;
   escrowAmount: string;
@@ -47,7 +47,11 @@ type LoanResult =
     }
   | { ok: false; error: string };
 
-function parseLoan(values: LoanValues, settings: MoneySettings, type: AccountType): LoanResult {
+export function parseLoan(
+  values: LoanValues,
+  settings: MoneySettings,
+  type: AccountType,
+): LoanResult {
   const rate = values.interestRate.trim().replace(/%$/, "").replace(",", ".");
   if (rate && !RATE.test(rate)) return { ok: false, error: "Enter the interest rate like 6.125" };
   const amounts: Record<"minimumPayment" | "escrowAmount", string | null> = {
@@ -73,7 +77,7 @@ const ESCROW_HINT =
  * required by your lender" and, for a mortgage, whether it includes escrow; Edit Account has
  * Minimum Monthly Payment, Interest Rate (%) and, for a mortgage, Monthly Escrow or Fee Amount.
  */
-function LoanFields({
+export function LoanFields({
   values,
   onChange,
   type,

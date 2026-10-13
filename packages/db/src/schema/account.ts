@@ -54,6 +54,13 @@ export const budgetAccount = pgTable(
      * payments come out of. One loan per category; deleting the category unpairs it.
      */
     pairedCategoryId: text().references((): AnyPgColumn => category.id, { onDelete: "set null" }),
+    /**
+     * A tracking liability updated to a loan account (YNAB's "Update to a Loan Account"): the new
+     * loan. The original stays closed with its history, which the loan's page shows.
+     */
+    migratedToAccountId: text().references((): AnyPgColumn => budgetAccount.id, {
+      onDelete: "set null",
+    }),
     ...timestamps,
   },
   (t) => [

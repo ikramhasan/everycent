@@ -1852,6 +1852,20 @@
               "null"
             ],
             "description": "Record Payment's source: for a loan, the cash or credit account of the payment into it entered last; for a credit card, the cash account it was last paid from"
+          },
+          "migratedToAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A tracking liability updated to a loan account: the new loan"
+          },
+          "migratedFromAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A loan made by updating a tracking liability: the original (closed) account"
           }
         },
         "required": [
@@ -1870,7 +1884,9 @@
           "lastReconciledAt",
           "pairedCategoryId",
           "lastPaymentDate",
-          "lastPaymentFromAccountId"
+          "lastPaymentFromAccountId",
+          "migratedToAccountId",
+          "migratedFromAccountId"
         ]
       },
       "AccountBalances": {
@@ -2313,6 +2329,88 @@
           "date"
         ]
       },
+      "UpdateToLoanAccountResult": {
+        "type": "object",
+        "properties": {
+          "loan": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "original": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "loan",
+          "original"
+        ]
+      },
+      "UpdateToLoanAccount": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "The loan's nickname"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "cash",
+              "credit_card",
+              "line_of_credit",
+              "mortgage",
+              "auto_loan",
+              "student_loan",
+              "personal_loan",
+              "medical_debt",
+              "other_debt",
+              "asset",
+              "liability"
+            ],
+            "description": "A loan type (mortgage, auto_loan, …)"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Today's balance; negative for money owed"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today"
+          },
+          "interestRate": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,3})?$",
+            "description": "Annual interest rate in percent (loan accounts)"
+          },
+          "minimumPayment": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "escrowAmount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Mortgages only"
+          },
+          "pairedCategoryId": {
+            "type": "string",
+            "description": "Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category."
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "balance",
+          "date",
+          "pairedCategoryId"
+        ],
+        "additionalProperties": false
+      },
       "LoanActivity": {
         "type": "object",
         "properties": {
@@ -2465,11 +2563,51 @@
               ]
             },
             "description": "The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner"
+          },
+          "originalHistory": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "accountId": {
+                "type": "string"
+              },
+              "months": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "month": {
+                      "type": "string",
+                      "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                      "description": "YYYY-MM"
+                    },
+                    "endBalance": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                    }
+                  },
+                  "required": [
+                    "month",
+                    "endBalance"
+                  ]
+                },
+                "description": "Each month's ending balance, newest first"
+              }
+            },
+            "required": [
+              "accountId",
+              "months"
+            ],
+            "description": "A loan made by updating a tracking liability: the original account's month-end balances (YNAB's \"Original Tracking Account History\")"
           }
         },
         "required": [
           "months",
-          "terms"
+          "terms",
+          "originalHistory"
         ]
       },
       "LoanCharge": {
@@ -9860,6 +9998,101 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
+      "post": {
+        "operationId": "updateToLoanAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
+        "description": "Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms and the paired category. The original account keeps its transactions and is closed: a cleared Manual Balance Adjustment (memo \"Closed Account\") zeroes its working balance, \" (Original)\" is added to its name, and its scheduled transactions (and those transferring to it) are deleted. Only open tracking liabilities that weren't updated before.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateToLoanAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new loan and the closed original",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateToLoanAccountResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not an open tracking liability, already updated, not a loan type, or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
