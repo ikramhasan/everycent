@@ -341,7 +341,7 @@ export function LoanPage({
         ) : (
           <LoanProgressCard
             plan={plan}
-            onShare={() => setOpen({ kind: "share" })}
+            onShare={account.closed ? undefined : () => setOpen({ kind: "share" })}
             onSimulate={account.closed ? undefined : () => setOpen({ kind: "simulator" })}
             onIncreaseTarget={account.pairedCategoryId ? openPairedCategory : undefined}
             onIncreaseMinimum={account.closed ? undefined : onEdit}

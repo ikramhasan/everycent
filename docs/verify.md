@@ -753,7 +753,8 @@ category `Bills: L7 Mortgage Pay`, memos `x-l7-*`. Starting balances were backda
 API to get past months.
 
 - **Interest estimate:** the balance at the end of the previous month × rate ÷ 12, rounded half
-  up to the cent with exact math ($100,000 → $427.08, $99,677.08 → $425.70, $10,001 at 6% →
+  up twice, to the milliunit and then the cent (2026-10-14: $2,074.97 at 6%, exactly $10.37485,
+  was charged $10.38 on L7 Half; 7f had rounded once), with exact math ($100,000 → $427.08, $99,677.08 → $425.70, $10,001 at 6% →
   $50.01, $7 at 6% → $0.04). The month's own activity is left out (a $100 credit on the 1st or
   the 2nd didn't change October's $420.25); in the loan's first month the starting balance counts.
 - **Charges only with payments.** A month without payments gets no interest or escrow ("No
@@ -808,13 +809,86 @@ API to get past months.
   "Edited on October 13".
 - **Fresh start** ("C9 Payees FS" → "L7 Loans FS") keeps a loan's pairing and its current rate,
   payment and escrow (keyed by the new month).
-- **Not in 7f:** Payoff Date, the progress chart, Share Your Progress, the Payoff Simulator and the
-  paired inspector's paid-off message ("You did it! You paid off your loan in 3 months. You saved
-  $2.10 in interest and paid it off 4 months earlier. Time to celebrate!", which needs the
-  minimum-payment projection) are 7g; Debt Payment targets come after it.
+- **Not in 7f:** the loan planner, settled and built in 7g (below).
 - **Record Payment's From Account** started on F Card in every case (the plan's only card, last in
   its Cash Accounts / Credit Accounts list, even after adding "AA L7 Test"); everycent starts on
   the last account in the list. The exact rule wasn't confirmed.
+
+## Loan planner (phase 7g) (settled 2026-10-14)
+
+Checked in "L7 Loans FS" (EVERYCENT-38, -39): loans `G7 Loan` ($10,000, 6%, $200, paired `Bills:
+G7 Loan Pay`) and `G7 Off` ($100, 12%, $20, started July 1, paid off, paired `G7 Off Pay`), plus
+`L7 Half` and `L7 Mortgage`; memos `x-g7-*`. The chart's numbers were read from its billboard.js
+series (`path.bb-line.__data__`).
+
+- **Payoff:** the closed-form annuity, n = −ln(1 − iP/A) ÷ ln(1 + i) with i = rate ÷ 1200, on
+  today's balance with payments from next month; Payoff Date = this month + ⌈n⌉ ($10,000 at $200:
+  57.68 → Aug 2031, "4 yrs, 10 mos"; after a $200 October payment, Jul 2031). 0%: n = P ÷ A.
+  Interest Remaining = n·A − P, half up ($1,536.03, $966.62, $1,185.05, $284.28, $1,805.95);
+  Remaining to Pay = principal + interest. Escrow comes off the payment first ($100,000 at 6% with
+  $900 and $150 escrow: Mar 2045, "18 yrs, 5 mos"; a $900 target the same).
+- **Can't pay off:** a payment that isn't above the month's interest (rounded) + $0.01: "$50.00 is
+  less than your estimated monthly interest.", "We can't estimate a payoff date for this payment
+  amount.", "The 6% interest rate on your loan will increase your debt by $50.01 per month. Paying
+  less than this amount means your loan will never be fully paid."; Payoff Date "--".
+- **Payment for a date:** the annuity payment over k months, rounded up to the cent (Dec 2027 →
+  $741.37). This month: "We can't estimate a monthly payment for this Payoff date." / "Payoff date
+  is too far in the future." Months before this one are disabled in the picker.
+- **Chart:** a month-by-month schedule with interest rounded twice (milliunit, then cent): all 60
+  points of $10,000 at $200 matched only that way. Lines: Past Balance (solid), Current Track
+  (minimum, or the target), and with a target Original Payment Schedule and Minimum Payment; a
+  target below the minimum draws Current Track yellow; paid off, Past Balance is green and filled.
+  The original schedule pays the minimum from the first month with a payment, on what was owed at
+  its start. Clicking a Past Balance point opens "July 2026 / Original Payment Schedule / Past
+  Balance / Base the Original Payment Schedule on this Past Balance"; basing it on August moved the
+  line's start, but payments still began at the first month with a payment (September).
+- **One-time extra this month:** with no payment yet this month the simulation also pays this
+  month's minimum and interest (G7 Loan: $1,000 extra → $8,850 from November, Jan 2031, interest
+  $50.00 + $1,177.59 = $1,227.59); after a payment this month only the extra comes off.
+- **Messages:** "The minimum payment of $200.00 will pay off this loan in 4 yrs, 10 mos"; "We
+  estimate the interest charges for this loan will be greater than the minimum payment. [Increase
+  your minimum monthly payment] to at least $10.19 to pay off this loan."; with a target: "Your
+  monthly target of $300.00 saves you $543.08 in interest over the remainder of your loan, and
+  you'll pay the loan off 1 yr, 9 mos sooner." (minimum vs target from today's balance); at 0%
+  "You'll pay off your loan 1 yr, 4 mos sooner if you continue to pay $300.00 each month."; equal
+  "Your monthly target of $200.00 keeps you on track to pay off this loan in 4 yrs, 8 mos"; below
+  the minimum (yellow) "… may increase the time to pay your loan off by 1 yr, 11 mos and you may
+  owe an additional $616.69 in interest." (at 0% without the interest part); below the interest
+  "We estimate the interest charges for this loan will be greater than your monthly target.
+  [Increase your target] to at least $48.74, or to the account minimum of $200.00".
+- **Paid off:** "You did it! You paid off your loan in 3 months !!" / "You saved $2.10 in interest
+  and paid it off 4 months earlier. Time to celebrate!" (months = this month − the first month;
+  earlier = the original schedule's zero month − this month: 4 with an August payment, 5 with
+  September; saved = the original's formula interest − interest charged). No payments: "… in 0
+  months . Time to celebrate!!". Banner "Another debt bites the dust. This calls for confetti.
+  We're loading the cannon." [Let's Celebrate]. The paired inspector runs the lines together and
+  drops Open Payoff Simulator.
+- **Loan page:** "Balance Remaining $9,745 (97.5%)" (whole units; % of the starting balance, or
+  of the most owed when it started at $0, one decimal, half up); "Make a plan to crush your debts
+  with the loan payoff simulator" [Try It Now]; a starting balance that isn't the oldest
+  transaction shows "We found an error with the starting balance of this account. …" instead of
+  the card. Durations: "1 month", "10 months", "1 year", "2 years", "1 yr, 1 mo", "4 yrs, 10 mos".
+- **Simulator:** Required Minimum Payment; Monthly Payment with "$200.00 is your minimum monthly
+  payment." / "is your current monthly target." / "is less than your minimum monthly payment." /
+  "Copy and go to my plan" (copies the amount, opens the plan with the paired category's Assigned
+  being edited); "You have 58 payments remaining on your loan." / "Your original payoff date is
+  Aug 2031"; "One time extra in Oct"; Reset all changes; the box "Paying the minimum every month"
+  (Interest/Time Remaining), "Paying +$100.00 extra every month" / "+$1,000.00 extra this month"
+  (Savings), "Paying -$25.00 less than minimum every month" (Additional; "Your lender may also
+  charge fees, which would further increase your time and interest costs."); Done.
+- **Share Your Progress ("Download and Share"):** Portrait (4:5), Vertical Story (9:16), Landscape
+  (16:9), Square (1:1); Show Tagline ("Never worrying about this debt again."), Show Amounts (off
+  hides the amounts and axis labels and leads with "3% Paid Off", whole %, half up); Download
+  Image. The help center: not for closed loans, and only for loans paid off after July 12, 2026.
+- **Monthly Debt Payment target:** only on a category paired with a loan ("Debt Payment Target";
+  the loan page's "Create Debt Payment Target"). The form: the box above (vs the minimum), Monthly
+  Payment ↔ Payoff Date (starts at the minimum), Every (Last Day of Month, 1st–31st), Summary
+  (Minimum Payment, Time Remaining one month less than the box, Remaining to Pay, Principal,
+  Interest (6%)), Delete, Cancel, Save Target. API `goal_type: DEBT`. Inspector "Monthly Debt
+  Payment", "$300.00 Needed Each Month", "By the End of the Month"; row "$300.00 needed by the
+  31st". It asks like a monthly set aside ($100 assigned → $200 to go; a $50 payment didn't
+  change it; November asked $300 again with $50 carried in) and counts in the month's targets.
+  The loan's Payoff Date and Current Track then follow the target.
 
 ## Monthly targets (phase 8a)
 

@@ -238,7 +238,8 @@ export function LoanProgressCard({
   onBaseOriginal,
 }: {
   plan: LoanPlan;
-  onShare: () => void;
+  /** Undefined for a closed loan (YNAB: sharing "isn't available if you've closed your loan"). */
+  onShare?: () => void;
   onSimulate?: () => void;
   onIncreaseTarget?: () => void;
   onIncreaseMinimum?: () => void;
@@ -280,9 +281,11 @@ export function LoanProgressCard({
               </p>
             </div>
             <div className="flex flex-wrap gap-1">
-              <Button variant="ghost" size="sm" onClick={onShare}>
-                <Image /> Share Your Progress
-              </Button>
+              {onShare && (
+                <Button variant="ghost" size="sm" onClick={onShare}>
+                  <Image /> Share Your Progress
+                </Button>
+              )}
               {!progress.paidOff && onSimulate && (
                 <Button variant="ghost" size="sm" onClick={onSimulate}>
                   <LineChart /> Open Payoff Simulator
