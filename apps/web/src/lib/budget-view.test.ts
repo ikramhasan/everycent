@@ -7,6 +7,7 @@ import {
   isCaution,
   matchesFilter,
   overspentCount,
+  overspentOnlyCredit,
   summarize,
   targetMark,
   UNCATEGORIZED,
@@ -108,6 +109,19 @@ describe("budget views", () => {
     expect([...filteredIds("overspent", month, visible)]).toEqual(["power", UNCATEGORIZED]);
     expect([...filteredIds("available", month, visible)]).toEqual(["rent", "food"]);
     expect(overspentCount(month, visible)).toBe(2);
+  });
+
+  // support.ynab.com "Focused Views": yellow when all overspending is credit, red with any cash.
+  it("tells when all overspending is credit", () => {
+    const credit = (m: typeof month) => ({
+      ...m,
+      categories: m.categories.map((c) => ({ ...c, cashOverspent: "0" })),
+      uncategorized: m.uncategorized && { ...m.uncategorized, cashOverspent: "0" },
+    });
+    expect(overspentOnlyCredit(credit(month), visible)).toBe(true);
+    const cash = credit(month);
+    if (cash.uncategorized) cash.uncategorized.cashOverspent = "-100";
+    expect(overspentOnlyCredit(cash, visible)).toBe(false);
   });
 
   it("works out what a category carried in", () => {

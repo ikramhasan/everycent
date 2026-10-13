@@ -13,6 +13,7 @@ const FIXED: readonly BudgetFilter[] = ["all", "overspent"];
 export function BudgetFilterBar({
   filter,
   overspent,
+  onlyCredit = false,
   onChange,
   order = ["underfunded", "overfunded", "available", "snoozed"],
   custom = [],
@@ -22,6 +23,8 @@ export function BudgetFilterBar({
   filter: string;
   /** How many categories are overspent this month. */
   overspent: number;
+  /** All of it is credit overspending: YNAB draws the view yellow instead of red. */
+  onlyCredit?: boolean;
   onChange: (filter: string) => void;
   /** The rearrangeable views in order: preset keys and custom view ids. */
   order?: readonly string[];
@@ -61,7 +64,9 @@ export function BudgetFilterBar({
               value={f}
               className={
                 f === "overspent" && overspent > 0
-                  ? "text-destructive data-[state=on]:text-destructive"
+                  ? onlyCredit
+                    ? "text-yellow-700 data-[state=on]:text-yellow-700 dark:text-yellow-400 dark:data-[state=on]:text-yellow-400"
+                    : "text-destructive data-[state=on]:text-destructive"
                   : undefined
               }
             >

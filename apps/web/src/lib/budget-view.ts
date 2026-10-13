@@ -76,6 +76,18 @@ export function filteredIds(
   return ids;
 }
 
+/**
+ * Whether all of the month's overspending is credit overspending, which YNAB draws the Overspent
+ * view in yellow for; any cash overspending makes it red (support.ynab.com "Focused Views").
+ */
+export function overspentOnlyCredit(month: BudgetMonthData, visible: ReadonlySet<string>) {
+  const cash = [
+    ...month.categories.filter((c) => visible.has(c.categoryId)),
+    ...(month.uncategorized ? [month.uncategorized] : []),
+  ].some((c) => c.cashOverspent !== "0");
+  return !cash && overspentCount(month, visible) > 0;
+}
+
 /** How many categories are overspent this month (YNAB's "3 Overspent"). */
 export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<string>) {
   return filteredIds("overspent", month, visible).size;

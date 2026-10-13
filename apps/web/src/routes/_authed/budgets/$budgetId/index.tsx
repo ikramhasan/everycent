@@ -45,6 +45,7 @@ import {
   isCaution,
   isPresetFilter,
   overspentCount,
+  overspentOnlyCredit,
   summarize,
   UNCATEGORIZED,
   useBudgetFilter,
@@ -609,6 +610,7 @@ function BudgetPage() {
               <BudgetFilterBar
                 filter={customView ? filter : preset}
                 overspent={overspentCount(listFigures.month, visible)}
+                onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
                 onChange={setFilter}
                 order={views.data?.order}
                 custom={views.data?.views}
