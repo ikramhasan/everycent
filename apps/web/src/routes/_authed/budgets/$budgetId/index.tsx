@@ -301,6 +301,26 @@ function BudgetPage() {
         move: (fromCategoryId, toCategoryId, amount) =>
           moveIn(data.month, fromCategoryId, toCategoryId, amount),
         moveIn,
+        moveFrom: (fromMonth, fromCategoryId, toCategoryId, amount) => {
+          // To the month on screen from `fromMonth`; undone the other way round.
+          const mutate = (to: BudgetMonth, from: BudgetMonth, fromId: string, toId: string) =>
+            moveMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month: to } },
+              body: {
+                fromCategoryId: fromId,
+                toCategoryId: toId,
+                amount: amount.toString(),
+                fromMonth: from,
+                today: todayIso(),
+              },
+            });
+          return save(
+            () => mutate(data.month, fromMonth, fromCategoryId, toCategoryId),
+            () => mutate(fromMonth, data.month, toCategoryId, fromCategoryId),
+            "money move",
+            "Couldn't move the money.",
+          );
+        },
       },
     };
 
@@ -339,6 +359,27 @@ function BudgetPage() {
     progressBars,
     editAssigned,
   ]);
+
+  // "Cover overspending from" offers the months Fix This does (YNAB, 2026-10-14).
+  const coverMonths = useFixThisMonths({
+    budgetId: budget.id,
+    month,
+    current: today,
+    data: figures.data,
+    categories: categories.data,
+    always: true,
+    unassign: async (m, categoryId, amount) => {
+      const move = listFigures?.move;
+      if (move) await move.moveIn(m, categoryId, move.readyToAssignId, amount);
+    },
+  });
+  const coverFigures = useMemo(
+    () =>
+      listFigures?.move && coverMonths
+        ? { ...listFigures, move: { ...listFigures.move, coverMonths } }
+        : listFigures,
+    [listFigures, coverMonths],
+  );
 
   const fixThisMonths = useFixThisMonths({
     budgetId: budget.id,
@@ -551,7 +592,7 @@ function BudgetPage() {
             <CategoryList
               data={categories.data}
               actions={actions}
-              figures={listFigures}
+              figures={coverFigures}
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
               toolbar={

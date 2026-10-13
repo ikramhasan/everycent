@@ -1298,6 +1298,24 @@ describe("budget months", () => {
       return { ...ctx, move, moves };
     }
 
+    // YNAB "x132 Order", 2026-10-14 (EVERYCENT-140): Transportation −$2.00 in October covered from
+    // November's Groceries ($5.00 assigned there) left Groceries at $3.00 in November.
+    it("covers overspending from a later month's assigned money", async () => {
+      const { put, spend, month, groceries, phone, cookie, base } = await moveSetup();
+      await put(groceries.id, "2026-11", "500");
+      await spend({ date: "2026-10-01", amount: "-200", categoryId: phone.id });
+      const res = await send("POST", `${base}/months/2026-10/moves`, cookie, {
+        fromCategoryId: groceries.id,
+        toCategoryId: phone.id,
+        amount: "200",
+        fromMonth: "2026-11",
+        today: TODAY,
+      });
+      expect(res.status).toBe(200);
+      expect((await month("2026-10")).byCategory(phone.id)).toMatchObject(t("200", "-200", "0"));
+      expect((await month("2026-11")).byCategory(groceries.id)?.assigned).toBe("300");
+    });
+
     it("moves assigned money between categories", async () => {
       const { put, move, month, rent, phone } = await moveSetup();
       await put(rent.id, "2026-10", "5000");

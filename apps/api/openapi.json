@@ -5986,6 +5986,11 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Positive"
           },
+          "fromMonth": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "Take the money from the first category's Assigned in this month instead (covering overspending from a later month); defaults to `month`"
+          },
           "today": {
             "type": "string",
             "format": "date",

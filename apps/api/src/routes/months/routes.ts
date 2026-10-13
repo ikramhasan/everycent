@@ -435,6 +435,12 @@ export const moveMoney = createRoute({
               fromCategoryId: z.string(),
               toCategoryId: z.string(),
               amount: zMinorUnits.describe("Positive"),
+              fromMonth: zBudgetMonth
+                .optional()
+                .describe(
+                  "Take the money from the first category's Assigned in this month instead " +
+                    "(covering overspending from a later month); defaults to `month`",
+                ),
               today: Today.optional(),
             })
             .openapi("MoveMoney"),

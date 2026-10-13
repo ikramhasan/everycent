@@ -1061,22 +1061,31 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
 
 export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) => {
   const { budgetId, month } = c.req.valid("param");
-  const { fromCategoryId, toCategoryId, amount, today = serverToday() } = c.req.valid("json");
+  const {
+    fromCategoryId,
+    toCategoryId,
+    amount,
+    fromMonth = month,
+    today = serverToday(),
+  } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
   const from = await moneyCategory(db, budgetId, fromCategoryId);
   const to = await moneyCategory(db, budgetId, toCategoryId);
-  if (from.id === to.id) {
+  if (from.id === to.id && fromMonth === month) {
     throw new AppError(400, "BAD_REQUEST", "Money has to move to another category");
   }
   const value = BigInt(amount);
   if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Move a positive amount");
   await assertMonthInRange(db, budgetId, month, today);
+  if (fromMonth !== month) await assertMonthInRange(db, budgetId, fromMonth, today);
 
-  // Moving money changes what each side has assigned; Ready to Assign follows from that.
+  // Moving money changes what each side has assigned; Ready to Assign follows from that. Covering
+  // from a later month takes it off that month's Assigned (YNAB, 2026-10-14, "x132 Order": $2.00
+  // from November's Groceries left it at $3.00 and October's Transportation at $2.00).
   await db.transaction(async (tx) => {
-    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, month, -value);
+    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, fromMonth, -value);
     if (!to.readyToAssign) await adjustAssigned(tx, budget, to.id, month, value);
     await logMove(tx, budget, {
       userId: c.var.user.id,

@@ -28,6 +28,15 @@ export interface MoveActions {
     toCategoryId: string,
     amount: bigint,
   ) => Promise<void>;
+  /** The months "Cover overspending from" offers (YNAB: those Fix This offers). */
+  coverMonths?: FixThisMonths;
+  /** Covers in the month on screen from a category's Assigned in `fromMonth`. */
+  moveFrom?: (
+    fromMonth: BudgetMonth,
+    fromCategoryId: string,
+    toCategoryId: string,
+    amount: bigint,
+  ) => Promise<void>;
 }
 
 type Format = (minorUnits: string) => string;
@@ -145,8 +154,18 @@ export function AvailableButton({
 }) {
   const [open, setOpen] = useState(false);
   const overspent = amount.startsWith("-");
+  const months = actions.coverMonths;
+  const [month, setMonth] = useState(months?.initial);
+  const later = months && month && month !== months.initial;
+  const sources = later ? months.optionsFor(month) : actions.options;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setMonth(months?.initial);
+      }}
+    >
       <PopoverTrigger asChild>
         {trigger ?? (
           <button
@@ -167,15 +186,41 @@ export function AvailableButton({
       <PopoverContent align="end" className="w-72">
         {overspent ? (
           <PickSourceForm
+            key={month}
             label="Cover overspending from"
-            options={actions.options.filter((o) => o.id !== categoryId && BigInt(o.available) > 0n)}
+            aside={
+              // YNAB, 2026-10-14 ("x132 Order"): with money assigned in November, October's cover
+              // offers Oct 2026 and Nov 2026; November lists what's assigned there.
+              months &&
+              months.months.length > 1 && (
+                <NativeSelect
+                  size="sm"
+                  aria-label="Month"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value as BudgetMonth)}
+                >
+                  {months.months.map((m) => (
+                    <NativeSelectOption key={m.month} value={m.month} disabled={m.disabled}>
+                      {monthLabel(m.month)}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )
+            }
+            options={(sources ?? []).filter(
+              (o) => (later || o.id !== categoryId) && BigInt(o.available) > 0n,
+            )}
             format={format}
             onCancel={() => setOpen(false)}
             onPick={async (source) => {
               setOpen(false);
               // YNAB covers as much as the source has, up to the overspending.
               const amountToCover = minAmount(BigInt(source.available), -BigInt(amount));
-              await actions.move(source.id, categoryId, amountToCover);
+              if (later && actions.moveFrom) {
+                await actions.moveFrom(month, source.id, categoryId, amountToCover);
+              } else {
+                await actions.move(source.id, categoryId, amountToCover);
+              }
             }}
           />
         ) : (

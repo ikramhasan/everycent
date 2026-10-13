@@ -2681,6 +2681,8 @@ export interface components {
             toCategoryId: string;
             /** @description Positive */
             amount: string;
+            /** @description Take the money from the first category's Assigned in this month instead (covering overspending from a later month); defaults to `month` */
+            fromMonth?: string;
             /**
              * Format: date
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
