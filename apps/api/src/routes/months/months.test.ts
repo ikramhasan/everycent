@@ -1672,6 +1672,27 @@ describe("budget months", () => {
 
     // YNAB plan "x132 Order", 2026-10-14 (EVERYCENT-132): a card with a payment target is funded
     // before a card with only its Underfunded alert, even when listed below it.
+    // YNAB plan "x132 Order", 2026-10-14 (EVERYCENT-131): Card A's payment category, $3.00
+    // assigned in September and $7.00 in October, $4.00 of funded spending in October. November's
+    // Auto-Assign: Assigned Last Month $7.00, Paid Last Month $0.00, Average Assigned $5.00, Average
+    // Paid $0.00. Funded spending isn't assigned money, and the average starts at the first month
+    // with money in the category.
+    it("leaves funded spending out of a payment category's Auto-Assign amounts", async () => {
+      const ctx = await cards();
+      const { put, month, create, rent, visa } = ctx;
+      await put(visa.paymentCategoryId, "2026-09", "300");
+      await put(visa.paymentCategoryId, "2026-10", "700");
+      await put(rent.id, "2026-10", "500");
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-400", categoryId: rent.id });
+      const nov = await month("2026-11");
+      expect(nov.byCategory(visa.paymentCategoryId)?.autoAssign).toMatchObject({
+        assignedLastMonth: "700",
+        spentLastMonth: "0",
+        averageAssigned: "500",
+        averageSpent: "0",
+      });
+    });
+
     it("funds card payment targets before plain card alerts", async () => {
       const ctx = await cards(1000n);
       const { put, month, rent, visa, amex } = ctx;
