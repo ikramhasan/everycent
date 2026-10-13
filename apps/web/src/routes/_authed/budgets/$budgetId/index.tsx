@@ -3,13 +3,14 @@ import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
+import { type ViewDialog, ViewDialogs, ViewsMenu } from "@/components/budget-views";
 import {
   CategoryInspector,
   MonthSummary,
@@ -42,12 +43,14 @@ import {
   EMPTY_VIEW,
   filteredIds,
   isCaution,
+  isPresetFilter,
   overspentCount,
   summarize,
   UNCATEGORIZED,
   useBudgetFilter,
   useProgressBars,
 } from "@/lib/budget-view";
+import { MAX_CUSTOM_VIEWS, useViewActions, viewsQueryOptions } from "@/lib/budget-views";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
@@ -98,6 +101,14 @@ function BudgetPage() {
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
   const { filter, setFilter } = useBudgetFilter(budget.id);
+  const views = useQuery(viewsQueryOptions(budget.id));
+  const viewActions = useViewActions(budget.id);
+  const [viewDialog, setViewDialog] = useState<ViewDialog>(null);
+  // The custom view on, if the stored view is one; an unknown id (a deleted view) shows All.
+  const customView = isPresetFilter(filter)
+    ? undefined
+    : views.data?.views.find((v) => v.id === filter);
+  const preset = isPresetFilter(filter) ? filter : "all";
   const { progressBars, setProgressBars } = useProgressBars();
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [editAssigned, setEditAssigned] = useState<string | undefined>();
@@ -174,8 +185,13 @@ function BudgetPage() {
   const visible = useMemo(() => new Set(listed.keys()), [listed]);
   const shown = useMemo(
     () =>
-      figures.data && filter !== "all" ? filteredIds(filter, figures.data, visible) : undefined,
-    [figures.data, filter, visible],
+      // A custom view keeps its categories that aren't hidden (YNAB, 2026-10-14).
+      customView
+        ? new Set(customView.categoryIds.filter((id) => visible.has(id)))
+        : figures.data && preset !== "all"
+          ? filteredIds(preset, figures.data, visible)
+          : undefined,
+    [figures.data, preset, customView, visible],
   );
   // A category that leaves the view (or the list) leaves the selection too.
   const selection = useMemo<ReadonlySet<string>>(
@@ -245,10 +261,16 @@ function BudgetPage() {
       progressBars,
       editAssigned,
       onEditAssignedStarted: () => setEditAssigned(undefined),
-      emptyView: {
-        message: filter === "all" ? "" : EMPTY_VIEW[filter],
-        onViewAll: () => setFilter("all"),
-      },
+      emptyView: customView
+        ? {
+            message: `There are no categories selected for ${customView.name}.`,
+            onViewAll: () => setFilter("all"),
+            onEdit: () => setViewDialog({ kind: "edit", view: customView }),
+          }
+        : {
+            message: preset === "all" ? "" : EMPTY_VIEW[preset],
+            onViewAll: () => setFilter("all"),
+          },
       selection: {
         selected: selection,
         toggle: (id) => {
@@ -351,7 +373,8 @@ function BudgetPage() {
     budget,
     queryClient,
     shown,
-    filter,
+    preset,
+    customView,
     setFilter,
     selection,
     history,
@@ -584,9 +607,45 @@ function BudgetPage() {
           <div className="grid gap-3">
             {listFigures && (
               <BudgetFilterBar
-                filter={filter}
+                filter={customView ? filter : preset}
                 overspent={overspentCount(listFigures.month, visible)}
                 onChange={setFilter}
+                order={views.data?.order}
+                custom={views.data?.views}
+                menu={
+                  views.data && (
+                    <ViewsMenu
+                      full={views.data.views.length >= MAX_CUSTOM_VIEWS}
+                      onManage={() => setViewDialog({ kind: "manage" })}
+                      onNew={() =>
+                        setViewDialog({
+                          kind: "edit",
+                          view: null,
+                          // Categories selected on the budget start checked (YNAB, 2026-10-14).
+                          preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
+                        })
+                      }
+                    />
+                  )
+                }
+              />
+            )}
+            {views.data && (
+              <ViewDialogs
+                dialog={viewDialog}
+                onDialogChange={setViewDialog}
+                order={views.data.order}
+                views={views.data.views}
+                categories={categories.data}
+                actions={viewActions}
+                onCreated={(view) => {
+                  // YNAB switches to a new view and clears the selection.
+                  setFilter(view.id);
+                  setSelected(new Set());
+                }}
+                onDeleted={(viewId) => {
+                  if (filter === viewId) setFilter("all");
+                }}
               />
             )}
             <CategoryList
@@ -595,6 +654,7 @@ function BudgetPage() {
               figures={coverFigures}
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
+              addGroupDisabled={Boolean(customView)}
               toolbar={
                 <div className="flex flex-1 items-center gap-1">
                   <UndoRedoButtons />
@@ -605,6 +665,15 @@ function BudgetPage() {
                       format={listFigures.format}
                       formatDate={formatDate}
                     />
+                  )}
+                  {customView && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setViewDialog({ kind: "edit", view: customView })}
+                    >
+                      <Pencil /> Edit View
+                    </Button>
                   )}
                   <ProgressBarsToggle
                     on={progressBars}

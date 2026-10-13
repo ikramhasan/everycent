@@ -44,6 +44,12 @@ export const budget = pgTable("budget", {
    */
   expectedIncome: bigint({ mode: "bigint" }),
   expectedIncomeCurrency: char({ length: 3 }).$type<CurrencyCode>(),
+  /**
+   * The order of the views Manage Views can rearrange: preset keys (`PRESET_BUDGET_VIEWS`) and
+   * `budget_view` ids, shared by everyone on the budget. Null until first rearranged; entries it
+   * lacks go last (see the views route).
+   */
+  viewOrder: text().array(),
   ...timestamps,
 });
 

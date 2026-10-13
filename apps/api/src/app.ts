@@ -16,6 +16,7 @@ import { monthsRouter } from "./routes/months";
 import { payeesRouter } from "./routes/payees";
 import { scheduledRouter } from "./routes/scheduled";
 import { transactionsRouter } from "./routes/transactions";
+import { viewsRouter } from "./routes/views";
 import type { AppDeps } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -66,6 +67,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", payeesRouter);
   app.route("/v1", scheduledRouter);
   app.route("/v1", flagsRouter);
+  app.route("/v1", viewsRouter);
   app.route("/v1", monthsRouter);
 
   registerDocs(app);
