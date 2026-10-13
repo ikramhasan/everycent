@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@everycent/ui/components/tabs";
 import { cn } from "@everycent/ui/lib/utils";
 import { CalendarDays, ChevronDown, CircleCheck, Zap } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactElement, type ReactNode, useState } from "react";
 import type { TargetMark } from "@/lib/budget-view";
 import { type MoneyOption, minAmount, monthLabel } from "@/lib/months";
 import { CategoryField } from "./register-fields";
@@ -127,6 +127,7 @@ export function AvailableButton({
   actions,
   caution = false,
   target,
+  trigger,
 }: {
   categoryId: string;
   categoryName: string;
@@ -135,25 +136,29 @@ export function AvailableButton({
   actions: MoveActions;
   caution?: boolean;
   target?: TargetMark;
+  /** Opens the popover instead of the pill (a paired loan's Cover Payment). */
+  trigger?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const overspent = amount.startsWith("-");
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}`}
-          className="max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <AvailablePill
-            amount={amount}
-            format={format}
-            caution={caution}
-            target={target}
-            className="hover:brightness-95"
-          />
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}`}
+            className="max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <AvailablePill
+              amount={amount}
+              format={format}
+              caution={caution}
+              target={target}
+              className="hover:brightness-95"
+            />
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72">
         {overspent ? (

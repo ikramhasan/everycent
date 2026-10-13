@@ -11,9 +11,10 @@ import {
   scheduledSubTransaction,
   scheduledTransaction,
 } from "@everycent/db/schema";
-import { formatDate, monthOf } from "@everycent/engine";
+import { accountFamily, formatDate, monthOf } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { insertStartingBalance, internalCategoryId, type Tx, transferPayeeId } from "./ledger";
+import { saveLoanTerms } from "./loans";
 
 type BudgetRow = typeof budget.$inferSelect;
 
@@ -185,6 +186,22 @@ export async function copyIntoFreshStart(
         // still asked F D for the Saturdays from the 12th).
         startDay: monthOf(target.startMonth) === monthOf(date) ? target.startDay : null,
       });
+    }
+  }
+
+  // Loans keep their paired category and their current terms (YNAB, 2026-10-13: "C9 Payees FS"
+  // → "L7 Loans FS" kept L7 Neg paired with L7 Mortgage Pay and each loan's rate, payment and
+  // escrow, keyed by the fresh start's month).
+  for (const a of accounts) {
+    const id = accountIds.get(a.id);
+    if (!id || accountFamily(a.type) !== "loan") continue;
+    await saveLoanTerms(tx, { ...a, id }, date);
+    const paired = a.pairedCategoryId ? categoryIds.get(a.pairedCategoryId) : undefined;
+    if (paired) {
+      await tx
+        .update(budgetAccount)
+        .set({ pairedCategoryId: paired })
+        .where(eq(budgetAccount.id, id));
     }
   }
 

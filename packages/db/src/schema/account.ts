@@ -1,4 +1,10 @@
-import { ACCOUNT_TYPES, type CurrencyCode, SCHEDULE_FREQUENCIES } from "@everycent/engine";
+import {
+  ACCOUNT_TYPES,
+  type CurrencyCode,
+  LOAN_CHARGE_KINDS,
+  LOAN_CHARGE_STATUSES,
+  SCHEDULE_FREQUENCIES,
+} from "@everycent/engine";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -43,9 +49,62 @@ export const budgetAccount = pgTable(
     escrowAmount: bigint({ mode: "bigint" }),
     /** When the account was last reconciled (YNAB's "Reconciled 9 days ago"); null if never. */
     lastReconciledAt: timestamp({ withTimezone: true }),
+    /**
+     * Loan accounts: the plan category paired with it (YNAB's "Paired Plan Category"), which its
+     * payments come out of. One loan per category; deleting the category unpairs it.
+     */
+    pairedCategoryId: text().references((): AnyPgColumn => category.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [index("budget_account_budget_id_idx").on(t.budgetId)],
+  (t) => [
+    index("budget_account_budget_id_idx").on(t.budgetId),
+    uniqueIndex("budget_account_paired_category_idx").on(t.pairedCategoryId),
+  ],
+);
+
+/**
+ * A loan's interest rate, minimum payment and escrow from `month` on, as YNAB keeps them per month
+ * (a change applies "for October and going forward"). The account's own columns hold the latest.
+ */
+export const loanTerms = pgTable(
+  "loan_terms",
+  {
+    id: text().primaryKey(),
+    accountId: text()
+      .notNull()
+      .references(() => budgetAccount.id, { onDelete: "cascade" }),
+    /** First day of the month, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    interestRate: numeric({ precision: 6, scale: 3 }),
+    minimumPayment: bigint({ mode: "bigint" }),
+    escrowAmount: bigint({ mode: "bigint" }),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("loan_terms_account_month_idx").on(t.accountId, t.month)],
+);
+
+/**
+ * A loan month's interest or escrow set by hand (YNAB's "Edited on October 13") or fixed by
+ * Update Balance ("Reconciled"). Months without a row are estimated from the loan's terms.
+ */
+export const loanCharge = pgTable(
+  "loan_charge",
+  {
+    id: text().primaryKey(),
+    accountId: text()
+      .notNull()
+      .references(() => budgetAccount.id, { onDelete: "cascade" }),
+    /** First day of the month, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    kind: text({ enum: LOAN_CHARGE_KINDS }).notNull(),
+    /** Minor units added to the debt (positive). */
+    amount: bigint({ mode: "bigint" }).notNull(),
+    currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    status: text({ enum: LOAN_CHARGE_STATUSES }).notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("loan_charge_account_month_kind_idx").on(t.accountId, t.month, t.kind)],
 );
 
 /** Payees YNAB creates itself and people can't rename or merge. */

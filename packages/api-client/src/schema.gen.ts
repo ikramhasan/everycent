@@ -582,7 +582,7 @@ export interface paths {
         head?: never;
         /**
          * Rename an account, edit its note, type or loan details, or set its working balance
-         * @description A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for loans or closed accounts.
+         * @description A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for closed accounts. A loan's interest rate, minimum payment and escrow apply from `date`'s month on.
          */
         patch: operations["updateAccount"];
         trace?: never;
@@ -615,7 +615,7 @@ export interface paths {
         put?: never;
         /**
          * Reconcile an account against the bank's balance
-         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). Loans aren't reconciled.
+         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied.
          */
         post: operations["reconcileAccount"];
         delete?: never;
@@ -655,6 +655,66 @@ export interface paths {
         put?: never;
         /** Reopen a closed account (and show its payment category again) */
         post: operations["reopenAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A loan's month-by-month activity: payments, interest, escrow and balances
+         * @description Interest is estimated each month that has payments as the previous month's balance × rate ÷ 12 (rounded half up); escrow comes first, then interest, both capped by the month's payments. Amounts set by hand or fixed by Update Balance apply in full.
+         */
+        get: operations["getLoanActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a loan month's total interest or escrow
+         * @description Replaces the month's estimate (or earlier amount) and applies in full, payments or not, as YNAB's Edit Interest, Edit Escrow and Add Interest do; zero is YNAB's Delete Interest. Months run from the loan's first through today's.
+         */
+        put: operations["setLoanCharge"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a loan payment (YNAB's Record Payment)
+         * @description A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.
+         */
+        post: operations["recordLoanPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1580,6 +1640,13 @@ export interface components {
              * @description When the account was last reconciled; null if never
              */
             lastReconciledAt: string | null;
+            /** @description Loan accounts: the plan category paired with it (its payments' category) */
+            pairedCategoryId: string | null;
+            /**
+             * Format: date
+             * @description Loan accounts: the date of the latest payment up to today
+             */
+            lastPaymentDate: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
@@ -1615,6 +1682,8 @@ export interface components {
             minimumPayment?: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             escrowAmount?: string;
+            /** @description Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category. */
+            pairedCategoryId?: string;
         };
         UpdateAccount: {
             name?: string;
@@ -1630,11 +1699,13 @@ export interface components {
             minimumPayment?: string | null;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             escrowAmount?: string | null;
+            /** @description Null unpairs */
+            pairedCategoryId?: string | null;
             /** @description The balance the account should have; negative for money owed */
             workingBalance?: string;
             /**
              * Format: date
-             * @description The user's today: the adjustment's date, and the day the working balance is read at. Defaults to the server's UTC date.
+             * @description The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to the server's UTC date.
              */
             date?: string;
         };
@@ -1643,7 +1714,7 @@ export interface components {
             beforeAccountId: string | null;
         };
         ReconcileAccount: {
-            /** @description The bank's current cleared balance, signed like the account's (negative for money owed) */
+            /** @description The bank's current cleared balance (a loan's: what's owed), signed like the account's (negative for money owed) */
             balance: string;
             /**
              * Format: date
@@ -1657,6 +1728,79 @@ export interface components {
              * @description Calendar date, YYYY-MM-DD
              */
             date: string;
+        };
+        LoanActivity: {
+            /** @description From the loan's first month through today's, oldest first */
+            months: {
+                /** @description YYYY-MM */
+                month: string;
+                /** @description Balance at the end of the previous month */
+                startBalance: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                endBalance: string;
+                /** @description Total of the month's payments */
+                payments: string;
+                interest: components["schemas"]["LoanCharge"];
+                escrow: components["schemas"]["LoanCharge"];
+                transactions: {
+                    id: string;
+                    /**
+                     * Format: date
+                     * @description Calendar date, YYYY-MM-DD
+                     */
+                    date: string;
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    amount: string;
+                    memo: string;
+                    /** @enum {string} */
+                    kind: "payment" | "starting_balance" | "other";
+                    /** @description Internal payee kind (e.g. a balance adjustment), if any */
+                    payeeKind: string | null;
+                    /** @description Payments: the paying account */
+                    fromAccountId: string | null;
+                    /** @description Payments: the paying side's id */
+                    otherSideId: string | null;
+                }[];
+            }[];
+        };
+        LoanCharge: {
+            /** @description The month's full charge: the estimate, or what was set */
+            total: string;
+            /** @description The part the month's payments covered (all of a set amount) */
+            applied: string;
+            /** @enum {string} */
+            status: "estimated" | "edited" | "reconciled";
+            /**
+             * Format: date-time
+             * @description When it was set (edited or reconciled)
+             */
+            editedAt: string | null;
+        };
+        SetLoanCharge: {
+            /** @description YYYY-MM */
+            month: string;
+            /** @enum {string} */
+            kind: "interest" | "escrow";
+            /** @description Minor units added to the debt; not negative */
+            amount: string;
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            today: string;
+        };
+        RecordLoanPayment: {
+            /** @description A budget (cash or credit) account */
+            fromAccountId: string;
+            /** @description What's paid; positive */
+            amount: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date: string;
+            /** @default  */
+            memo: string;
         };
         TransactionList: {
             /** @description One page, in the requested order */
@@ -5008,7 +5152,7 @@ export interface operations {
                     "application/json": components["schemas"]["Account"];
                 };
             };
-            /** @description Invalid input, or a loan account */
+            /** @description Invalid input */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5140,6 +5284,194 @@ export interface operations {
                 };
             };
             /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLoanActivity: {
+        parameters: {
+            query?: {
+                /** @description The user's today */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The loan's months */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActivity"];
+                };
+            };
+            /** @description Not a loan account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setLoanCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLoanCharge"];
+            };
+        };
+        responses: {
+            /** @description The loan's months */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActivity"];
+                };
+            };
+            /** @description Not a loan, a negative amount, or a month outside the loan's */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    recordLoanPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordLoanPayment"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Not a loan, not a budget account to pay from, or not a positive amount */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;

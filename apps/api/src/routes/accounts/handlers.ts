@@ -2,11 +2,12 @@ import { newId } from "@everycent/db";
 import {
   budgetAccount,
   category,
+  categoryGroup,
   payee,
   scheduledTransaction,
   transaction,
 } from "@everycent/db/schema";
-import { accountFamily, hasPaymentCategory, isOnBudget } from "@everycent/engine";
+import { accountFamily, hasPaymentCategory, isOnBudget, rateThousandths } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNull, lte, max, ne, or, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -25,6 +26,7 @@ import {
   transferPayeeName,
   ZERO_BALANCES,
 } from "../../lib/ledger";
+import { freezeLoanCharges, lastLoanPayments, saveLoanTerms } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -48,6 +50,7 @@ function toAccountJson(
   balances: AccountBalances,
   paymentCategoryId: string | null,
   hasHistory: boolean,
+  lastPaymentDate: string | null,
 ) {
   return {
     id: a.id,
@@ -67,6 +70,8 @@ function toAccountJson(
       working: balances.working.toString(),
     },
     lastReconciledAt: a.lastReconciledAt?.toISOString() ?? null,
+    pairedCategoryId: a.pairedCategoryId,
+    lastPaymentDate,
   };
 }
 
@@ -93,17 +98,24 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       ),
     );
   const history = new Set(withHistory.map((r) => r.accountId));
+  const lastPayments = await lastLoanPayments(db, budgetId, today);
   return accounts.map((a) =>
     toAccountJson(
       a,
       balances.get(a.id) ?? ZERO_BALANCES,
       paymentByAccount.get(a.id) ?? null,
       history.has(a.id),
+      lastPayments.get(a.id) ?? null,
     ),
   );
 }
 
-async function accountJson(db: Db, budgetId: string, accountId: string, today = serverToday()) {
+export async function accountJson(
+  db: Db,
+  budgetId: string,
+  accountId: string,
+  today = serverToday(),
+) {
   const found = (await listAccountJson(db, budgetId, today)).find((a) => a.id === accountId);
   if (!found) throw new AppError(404, "NOT_FOUND", "Account not found");
   return found;
@@ -134,6 +146,39 @@ function assertLoanFields(
   }
 }
 
+/**
+ * Pairs `categoryId` with the loan, moving it from any other loan (YNAB, 2026-10-13: pairing
+ * L7 Neg with L7 Mortgage's category unpaired the mortgage).
+ */
+async function pairCategory(tx: Db, account: AccountRow, categoryId: string | null) {
+  if (categoryId !== null) {
+    if (accountFamily(account.type) !== "loan") {
+      throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
+    }
+    const [row] = await tx
+      .select({
+        internalKind: category.internalKind,
+        linked: category.linkedAccountId,
+        kind: categoryGroup.kind,
+      })
+      .from(category)
+      .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
+      .where(and(eq(category.id, categoryId), eq(category.budgetId, account.budgetId)));
+    if (!row) throw new AppError(400, "BAD_REQUEST", "No such category in this budget");
+    if (row.internalKind || row.linked || row.kind) {
+      throw new AppError(400, "BAD_REQUEST", "A loan can't be paired with that category");
+    }
+    await tx
+      .update(budgetAccount)
+      .set({ pairedCategoryId: null })
+      .where(and(eq(budgetAccount.pairedCategoryId, categoryId), ne(budgetAccount.id, account.id)));
+  }
+  await tx
+    .update(budgetAccount)
+    .set({ pairedCategoryId: categoryId })
+    .where(eq(budgetAccount.id, account.id));
+}
+
 const optionalBigInt = (v: string | null | undefined) =>
   v === undefined ? undefined : v === null ? null : BigInt(v);
 
@@ -162,23 +207,33 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   }
   assertLoanFields(body.type, body);
 
+  if (body.pairedCategoryId !== undefined && accountFamily(body.type) !== "loan") {
+    throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
+  }
   const accountId = newId();
   await db.transaction(async (tx) => {
     const [last] = await tx
       .select({ value: max(budgetAccount.sortOrder) })
       .from(budgetAccount)
       .where(eq(budgetAccount.budgetId, budgetId));
-    await tx.insert(budgetAccount).values({
-      id: accountId,
-      budgetId,
-      name: body.name,
-      type: body.type,
-      sortOrder: (last?.value ?? -1) + 1,
-      currency: budget.currency,
-      interestRate: body.interestRate ?? null,
-      minimumPayment: optionalBigInt(body.minimumPayment) ?? null,
-      escrowAmount: optionalBigInt(body.escrowAmount) ?? null,
-    });
+    const [created] = await tx
+      .insert(budgetAccount)
+      .values({
+        id: accountId,
+        budgetId,
+        name: body.name,
+        type: body.type,
+        sortOrder: (last?.value ?? -1) + 1,
+        currency: budget.currency,
+        interestRate: body.interestRate ?? null,
+        minimumPayment: optionalBigInt(body.minimumPayment) ?? null,
+        escrowAmount: optionalBigInt(body.escrowAmount) ?? null,
+      })
+      .returning();
+    if (created && accountFamily(created.type) === "loan") {
+      await saveLoanTerms(tx, created, body.date);
+      if (body.pairedCategoryId) await pairCategory(tx, created, body.pairedCategoryId);
+    }
     if (hasPaymentCategory(body.type)) {
       await createPaymentCategory(tx, budgetId, accountId, body.name);
     }
@@ -209,7 +264,6 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
   );
   const account = await findAccount(db, budgetId, accountId);
   if (workingBalance !== undefined) {
-    assertAdjustable(account);
     // A closed account's Edit Account has no Working Balance in YNAB.
     if (account.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to change its balance");
@@ -226,6 +280,13 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     );
   }
   assertLoanFields(type, body);
+  // Edit Account sends every field; only a real change starts new terms.
+  const rate = (v: string | null) => (v === null ? null : rateThousandths(v));
+  const termsChanged =
+    (body.interestRate !== undefined && rate(body.interestRate) !== rate(account.interestRate)) ||
+    (body.minimumPayment !== undefined &&
+      optionalBigInt(body.minimumPayment) !== account.minimumPayment) ||
+    (body.escrowAmount !== undefined && optionalBigInt(body.escrowAmount) !== account.escrowAmount);
 
   await db.transaction(async (tx) => {
     const fields = {
@@ -238,7 +299,18 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     };
     // Drizzle refuses an update with nothing to set (a working balance alone).
     if (Object.values(fields).some((v) => v !== undefined)) {
-      await tx.update(budgetAccount).set(fields).where(eq(budgetAccount.id, accountId));
+      const [updated] = await tx
+        .update(budgetAccount)
+        .set(fields)
+        .where(eq(budgetAccount.id, accountId))
+        .returning();
+      // YNAB keeps a loan's terms per month: a change applies "for October and going forward".
+      if (updated && termsChanged && accountFamily(updated.type) === "loan") {
+        await saveLoanTerms(tx, updated, date);
+      }
+    }
+    if (body.pairedCategoryId !== undefined) {
+      await pairCategory(tx, account, body.pairedCategoryId);
     }
     // A payment category and the transfer payee are named after their account.
     if (body.name !== undefined) {
@@ -269,13 +341,6 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
-
-/** YNAB has no Reconcile or Working Balance for loans (their balance follows the loan's terms). */
-function assertAdjustable(account: AccountRow) {
-  if (accountFamily(account.type) === "loan") {
-    throw new AppError(400, "BAD_REQUEST", "Loan accounts can't be reconciled or adjusted");
-  }
-}
 
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
 async function insertAdjustment(
@@ -316,9 +381,11 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
       .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)))
       .for("update");
     if (!account) throw new AppError(404, "NOT_FOUND", "Account not found");
-    assertAdjustable(account);
-    const cleared = (await accountBalances(tx, budgetId, date)).get(accountId)?.cleared ?? 0n;
-    const difference = BigInt(balance) - cleared;
+    const loan = accountFamily(account.type) === "loan";
+    const balances = (await accountBalances(tx, budgetId, date)).get(accountId) ?? ZERO_BALANCES;
+    // YNAB's loan Update Balance asks about the whole balance ("Is your current balance at your
+    // lender −$97,980.25?"), interest and escrow included.
+    const difference = BigInt(balance) - (loan ? balances.working : balances.cleared);
     if (difference !== 0n) {
       // YNAB (2026-10-11, "Onboarding Check"): dated today, reconciled, Inflow: Ready to Assign
       // on budget accounts (a card's too), none on tracking accounts.
@@ -330,17 +397,20 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
         cleared: "reconciled",
       });
     }
-    // Future-dated transactions aren't in the cleared balance yet, so they stay unlocked.
+    // Future-dated transactions aren't in the cleared balance yet, so they stay unlocked. A
+    // loan's are all reconciled, uncleared ones too (YNAB, 2026-10-13), and its months' interest
+    // and escrow are fixed.
     await tx
       .update(transaction)
       .set({ cleared: "reconciled" })
       .where(
         and(
           eq(transaction.accountId, accountId),
-          eq(transaction.cleared, "cleared"),
+          loan ? ne(transaction.cleared, "reconciled") : eq(transaction.cleared, "cleared"),
           lte(transaction.date, date),
         ),
       );
+    if (loan) await freezeLoanCharges(tx, account, date);
     await tx
       .update(budgetAccount)
       .set({ lastReconciledAt: sql`now()` })
@@ -400,8 +470,12 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
       });
     }
     // The payment category stays visible with whatever is set aside (YNAB, 2026-10-11: Card Y
-    // kept $6 after closing); hiding it is up to the user.
-    await tx.update(budgetAccount).set({ closed: true }).where(eq(budgetAccount.id, accountId));
+    // kept $6 after closing); hiding it is up to the user. A loan's paired category is unpaired
+    // (YNAB's help center, "Loan Accounts").
+    await tx
+      .update(budgetAccount)
+      .set({ closed: true, pairedCategoryId: null })
+      .where(eq(budgetAccount.id, accountId));
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };

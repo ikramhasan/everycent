@@ -91,7 +91,7 @@ and fresh start (after phase 5 core).
 - [x] Budget account types: cash, checking, savings
 - [x] Credit accounts: credit card, line of credit
 - [x] Loan accounts: mortgage, auto loan, student loan, personal loan, medical debt, other debt
-      (interest rate, minimum payment, escrow — stored; used by the phase 7 loan features)
+      (interest rate, minimum payment and escrow, kept per month; see phase 7f)
 - [x] Tracking (off-budget) accounts: asset, liability
 - [x] Starting balance transaction on creation
 - [x] Per-account currency — stored; only the budget currency is accepted until phase 11
@@ -166,8 +166,7 @@ and fresh start (after phase 5 core).
 
 ### 7. Credit cards & debt
 
-7a–7d are built and merged; 7e–7g (positive balances and closing, loan activity, loan planner)
-were deferred until after phase 8, which is now done — see `docs/deferred.md`.
+7a–7f are built; 7g (the loan planner) is next — see `docs/deferred.md`.
 
 - [x] Spending on a credit card moves funds into its payment category automatically
 - [x] Credit overspending (becomes new debt, shown yellow)
@@ -175,14 +174,16 @@ were deferred until after phase 8, which is now done — see `docs/deferred.md`.
 - [x] Existing credit card debt handling (starting negative balance, paying down debt)
 - [x] Credit card payment transfers reduce the payment category
 - [x] Credit card returns / refunds
-- [ ] Positive card balances, closing a card (7e, deferred)
-- [ ] Loan accounts: principal vs interest split, escrow, extra payments (7f, deferred)
+- [x] Positive card balances, closing a card (7e)
+- [x] Loan accounts (7f): payments split into escrow, interest and principal; monthly interest
+      estimated from the previous month's balance (exact, half-up); editable and recorded
+      interest and escrow; credits, charges, Update Balance; paired plan category
 - [ ] Loan planner: payoff date, interest saved with extra payments (7g, deferred)
 
 ### 8. Targets (goals)
 
-Done and merged (8a–8f). Loan debt targets wait for 7f; scheduled-transaction funding waits for
-phase 10 — see `docs/deferred.md` and `docs/verify.md`.
+Done and merged (8a–8f). Loan debt targets come with the loan planner (7g) — see
+`docs/deferred.md` and `docs/verify.md`.
 
 - [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
       (every N months/years), by a specific date; refill vs set aside another
@@ -190,7 +191,7 @@ phase 10 — see `docs/deferred.md` and `docs/verify.md`.
 - [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
       another" covers it
 - [x] Credit card payment targets: Pay Specific Amount Monthly, Pay Off Balance by Date (8e)
-- [ ] Loan debt payment targets, with interest (wait for 7f's loan activity)
+- [ ] Loan debt payment targets, with interest (with 7g's loan planner)
 - [x] Target progress bars and status (funded, underfunded, overspent, on track)
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)

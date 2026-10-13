@@ -24,6 +24,8 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
+import { PairCategoryDialog } from "@/components/loan-dialogs";
+import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
 import { accountsQueryOptions } from "@/lib/accounts";
@@ -75,14 +77,18 @@ function AccountPage() {
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [pairing, setPairing] = useState(false);
+  const categories = useQuery(categoriesQueryOptions(budget.id));
+  const pairCategory = usePairCategory(budget.id);
   /** The bank's balance while reconciling against it (the banner over the register). */
   const [reconcilingTo, setReconcilingTo] = useState<bigint | null>(null);
 
   const account = accounts.data?.accounts.find((a) => a.id === accountId);
   const path = { budgetId: budget.id, accountId };
   const show = (amount: string | bigint) => formatAmount(money(BigInt(amount), budget.currency));
-  // YNAB has no Reconcile for loans: their balance follows the loan.
-  const reconcilable = account !== undefined && accountFamily(account.type) !== "loan";
+  const isLoan = account !== undefined && accountFamily(account.type) === "loan";
+  // A loan's reconcile is its page's Update Balance (YNAB).
+  const reconcilable = account !== undefined && !isLoan;
 
   // A reconciliation in progress belongs to the account it started on.
   useEffect(() => setReconcilingTo(null), [accountId]);
@@ -192,6 +198,185 @@ function AccountPage() {
     void closeNow();
   }
 
+  function confirmDialog() {
+    if (!account) return null;
+    return (
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm === "close" ? "Close Account" : `Delete “${account.name}”?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm === "delete"
+                ? "Only accounts with no transactions besides their starting balance can be deleted. This can't be undone."
+                : `Before you can close this account, the balance will have to be zeroed out. An adjustment transaction will be created for ${show((-working).toString())}.`}
+            </AlertDialogDescription>
+            {confirm === "close" && working > 0n && isOnBudget(account.type) && (
+              <Alert>
+                <Info aria-hidden />
+                <AlertDescription>
+                  The money in this account will be removed from your plan. If you would like to
+                  keep it in your plan, you can transfer it to another account before closing this
+                  one.
+                </AlertDescription>
+              </Alert>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={confirm === "delete" ? "destructive" : "default"}
+              onClick={async () => {
+                const action = confirm;
+                setConfirm(null);
+                setEditing(false);
+                if (action === "delete") return handleDelete();
+                await closeNow();
+              }}
+            >
+              {confirm === "delete" ? "Delete account" : "Adjust Balance & Close"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
+
+  const editDialog = (
+    <Dialog open={editing} onOpenChange={setEditing}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit account</DialogTitle>
+        </DialogHeader>
+        <EditAccountForm
+          key={`${account.id}-${editing}`}
+          settings={budget}
+          initial={account}
+          workingBalance={account.closed ? null : BigInt(account.balances.working)}
+          onSubmit={handleSave}
+        />
+        {isLoan && !account.closed && (
+          <section className="grid gap-2 border-t pt-4" aria-label="Paired Plan Category">
+            <h3 className="font-medium text-sm">Paired Plan Category</h3>
+            <p className="text-muted-foreground text-sm">
+              Pairing a category helps you create realistic payoff plans, and keep track of your
+              progress.
+            </p>
+            {account.pairedCategoryId ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-self-start"
+                onClick={() =>
+                  run(
+                    () =>
+                      update.mutateAsync({ params: { path }, body: { pairedCategoryId: null } }),
+                    "Category unpaired",
+                    "Couldn't unpair the category.",
+                  )
+                }
+              >
+                Unpair Category
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="justify-self-start"
+                disabled={!categories.data}
+                onClick={() => setPairing(true)}
+              >
+                Pair with a Plan Category
+              </Button>
+            )}
+          </section>
+        )}
+        {/* YNAB: an open account offers Close, or Delete while it has only its starting
+            balance; a closed one offers Re-open and Delete, disabled while it has history. */}
+        <div className="flex flex-wrap gap-2 border-t pt-4">
+          {account.closed && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                run(
+                  () => reopen.mutateAsync({ params: { path } }),
+                  "Account reopened",
+                  "Couldn't reopen the account.",
+                )
+              }
+            >
+              Re-open
+            </Button>
+          )}
+          {!account.closed && account.hasHistory && (
+            <Button variant="outline" size="sm" onClick={handleClose}>
+              Close Account
+            </Button>
+          )}
+          {(account.closed || !account.hasHistory) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A disabled button gets no pointer events; the wrapper shows the tooltip. */}
+                <span className="inline-flex" tabIndex={account.hasHistory ? 0 : undefined}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    disabled={account.hasHistory}
+                    onClick={() => setConfirm("delete")}
+                  >
+                    {account.closed ? "Delete" : "Delete Account"}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {account.hasHistory && (
+                <TooltipContent className="max-w-xs">
+                  If you want to delete this account, first delete all of the transactions in it and
+                  transfers pointing to it. Be cautious, as this will potentially change your plan
+                  values.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const pairDialog = pairing && categories.data && (
+    <PairCategoryDialog
+      open
+      onOpenChange={setPairing}
+      list={categories.data}
+      onSave={async (choice) => {
+        try {
+          const pairedCategoryId = await pairCategory(choice);
+          await update.mutateAsync({ params: { path }, body: { pairedCategoryId } });
+          await refresh();
+          return null;
+        } catch (error) {
+          return apiErrorMessage(error, "Couldn't pair the category.");
+        }
+      }}
+    />
+  );
+
+  if (isLoan) {
+    return (
+      <>
+        <LoanPage
+          account={account}
+          accounts={accounts.data?.accounts ?? []}
+          onEdit={() => setEditing(true)}
+        />
+        {editDialog}
+        {pairDialog}
+        {confirmDialog()}
+      </>
+    );
+  }
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -267,111 +452,9 @@ function AccountPage() {
         onSearchChange={onSearchChange}
       />
 
-      <Dialog open={editing} onOpenChange={setEditing}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit account</DialogTitle>
-          </DialogHeader>
-          <EditAccountForm
-            key={`${account.id}-${editing}`}
-            settings={budget}
-            initial={account}
-            workingBalance={
-              account.closed || !reconcilable ? null : BigInt(account.balances.working)
-            }
-            onSubmit={handleSave}
-          />
-          {/* YNAB: an open account offers Close, or Delete while it has only its starting
-              balance; a closed one offers Re-open and Delete, disabled while it has history. */}
-          <div className="flex flex-wrap gap-2 border-t pt-4">
-            {account.closed && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  run(
-                    () => reopen.mutateAsync({ params: { path } }),
-                    "Account reopened",
-                    "Couldn't reopen the account.",
-                  )
-                }
-              >
-                Re-open
-              </Button>
-            )}
-            {!account.closed && account.hasHistory && (
-              <Button variant="outline" size="sm" onClick={handleClose}>
-                Close Account
-              </Button>
-            )}
-            {(account.closed || !account.hasHistory) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* A disabled button gets no pointer events; the wrapper shows the tooltip. */}
-                  <span className="inline-flex" tabIndex={account.hasHistory ? 0 : undefined}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive"
-                      disabled={account.hasHistory}
-                      onClick={() => setConfirm("delete")}
-                    >
-                      {account.closed ? "Delete" : "Delete Account"}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {account.hasHistory && (
-                  <TooltipContent className="max-w-xs">
-                    If you want to delete this account, first delete all of the transactions in it
-                    and transfers pointing to it. Be cautious, as this will potentially change your
-                    plan values.
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {editDialog}
 
-      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirm === "close" ? "Close Account" : `Delete “${account.name}”?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirm === "delete"
-                ? "Only accounts with no transactions besides their starting balance can be deleted. This can't be undone."
-                : `Before you can close this account, the balance will have to be zeroed out. An adjustment transaction will be created for ${show((-working).toString())}.`}
-            </AlertDialogDescription>
-            {confirm === "close" && working > 0n && isOnBudget(account.type) && (
-              <Alert>
-                <Info aria-hidden />
-                <AlertDescription>
-                  The money in this account will be removed from your plan. If you would like to
-                  keep it in your plan, you can transfer it to another account before closing this
-                  one.
-                </AlertDescription>
-              </Alert>
-            )}
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant={confirm === "delete" ? "destructive" : "default"}
-              onClick={async () => {
-                const action = confirm;
-                setConfirm(null);
-                setEditing(false);
-                if (action === "delete") return handleDelete();
-                await closeNow();
-              }}
-            >
-              {confirm === "delete" ? "Delete account" : "Adjust Balance & Close"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {confirmDialog()}
     </div>
   );
 }

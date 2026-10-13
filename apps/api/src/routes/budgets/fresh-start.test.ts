@@ -20,6 +20,7 @@ type Account = {
   note: string;
   closed: boolean;
   paymentCategoryId: string | null;
+  pairedCategoryId: string | null;
   balances: { working: string };
 };
 type Category = {
@@ -62,7 +63,6 @@ describe("fresh start", () => {
     const { owner, budget, base, addAccount } = await setup();
     const checking = await addAccount({ name: "Checking", type: "checking", balance: "250000" });
     const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "-37500" });
-    await addAccount({ name: "Mortgage", type: "mortgage", balance: "-100000", interestRate: "6" });
     const old = await json<Account>(
       await send("POST", `${base}/accounts/${checking.id}/close`, owner.cookie, { date: TODAY }),
     );
@@ -72,6 +72,14 @@ describe("fresh start", () => {
       await json<{ groups: Group[] }>(await send("GET", `${base}/categories`, owner.cookie))
     ).groups;
     const bills = groups.find((g) => g.name === "Bills");
+    // A loan keeps its paired category (YNAB, 2026-10-13: "L7 Loans FS").
+    await addAccount({
+      name: "Mortgage",
+      type: "mortgage",
+      balance: "-100000",
+      interestRate: "6",
+      pairedCategoryId: bills?.categories[2]?.id,
+    });
     await send("PATCH", `${base}/categories/${bills?.categories[0]?.id}`, owner.cookie, {
       note: "Due on the 1st",
       hidden: true,
@@ -142,6 +150,9 @@ describe("fresh start", () => {
       await json<{ groups: Group[] }>(await send("GET", `${freshBase}/categories`, owner.cookie))
     ).groups;
     expect(freshGroups.map((g) => g.name)).toEqual(groups.map((g) => g.name));
+    const pairedName = bills?.categories[2]?.name;
+    const newPaired = freshGroups.flatMap((g) => g.categories).find((c) => c.name === pairedName);
+    expect(accounts.find((a) => a.name === "Mortgage")?.pairedCategoryId).toBe(newPaired?.id);
     const freshBills = freshGroups.find((g) => g.name === "Bills");
     expect(freshBills?.categories[0]).toMatchObject({ note: "Due on the 1st", hidden: true });
     // The payment category follows the new card, not the archived one.

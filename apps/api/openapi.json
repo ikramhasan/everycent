@@ -1799,6 +1799,21 @@
             ],
             "format": "date-time",
             "description": "When the account was last reconciled; null if never"
+          },
+          "pairedCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Loan accounts: the plan category paired with it (its payments' category)"
+          },
+          "lastPaymentDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Loan accounts: the date of the latest payment up to today"
           }
         },
         "required": [
@@ -1814,7 +1829,9 @@
           "paymentCategoryId",
           "hasHistory",
           "balances",
-          "lastReconciledAt"
+          "lastReconciledAt",
+          "pairedCategoryId",
+          "lastPaymentDate"
         ]
       },
       "AccountBalances": {
@@ -2057,6 +2074,10 @@
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "pairedCategoryId": {
+            "type": "string",
+            "description": "Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category."
           }
         },
         "required": [
@@ -2121,6 +2142,13 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
           },
+          "pairedCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null unpairs"
+          },
           "workingBalance": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
@@ -2129,7 +2157,7 @@
           "date": {
             "type": "string",
             "format": "date",
-            "description": "The user's today: the adjustment's date, and the day the working balance is read at. Defaults to the server's UTC date."
+            "description": "The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to the server's UTC date."
           }
         },
         "additionalProperties": false
@@ -2155,7 +2183,7 @@
           "balance": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "The bank's current cleared balance, signed like the account's (negative for money owed)"
+            "description": "The bank's current cleared balance (a loan's: what's owed), signed like the account's (negative for money owed)"
           },
           "date": {
             "type": "string",
@@ -2178,6 +2206,220 @@
           }
         },
         "required": [
+          "date"
+        ]
+      },
+      "LoanActivity": {
+        "type": "object",
+        "properties": {
+          "months": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                  "description": "YYYY-MM"
+                },
+                "startBalance": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Balance at the end of the previous month"
+                },
+                "endBalance": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "payments": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Total of the month's payments"
+                },
+                "interest": {
+                  "$ref": "#/components/schemas/LoanCharge"
+                },
+                "escrow": {
+                  "$ref": "#/components/schemas/LoanCharge"
+                },
+                "transactions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Calendar date, YYYY-MM-DD"
+                      },
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^(0|-?[1-9]\\d*)$",
+                        "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                      },
+                      "memo": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "payment",
+                          "starting_balance",
+                          "other"
+                        ]
+                      },
+                      "payeeKind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Internal payee kind (e.g. a balance adjustment), if any"
+                      },
+                      "fromAccountId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Payments: the paying account"
+                      },
+                      "otherSideId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Payments: the paying side's id"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "date",
+                      "amount",
+                      "memo",
+                      "kind",
+                      "payeeKind",
+                      "fromAccountId",
+                      "otherSideId"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "month",
+                "startBalance",
+                "endBalance",
+                "payments",
+                "interest",
+                "escrow",
+                "transactions"
+              ]
+            },
+            "description": "From the loan's first month through today's, oldest first"
+          }
+        },
+        "required": [
+          "months"
+        ]
+      },
+      "LoanCharge": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The month's full charge: the estimate, or what was set"
+          },
+          "applied": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The part the month's payments covered (all of a set amount)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "estimated",
+              "edited",
+              "reconciled"
+            ]
+          },
+          "editedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When it was set (edited or reconciled)"
+          }
+        },
+        "required": [
+          "total",
+          "applied",
+          "status",
+          "editedAt"
+        ]
+      },
+      "SetLoanCharge": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "YYYY-MM"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "interest",
+              "escrow"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Minor units added to the debt; not negative"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today"
+          }
+        },
+        "required": [
+          "month",
+          "kind",
+          "amount",
+          "today"
+        ]
+      },
+      "RecordLoanPayment": {
+        "type": "object",
+        "properties": {
+          "fromAccountId": {
+            "type": "string",
+            "description": "A budget (cash or credit) account"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "What's paid; positive"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          }
+        },
+        "required": [
+          "fromAccountId",
+          "amount",
           "date"
         ]
       },
@@ -8711,7 +8953,7 @@
           }
         ],
         "summary": "Rename an account, edit its note, type or loan details, or set its working balance",
-        "description": "A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for loans or closed accounts.",
+        "description": "A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for closed accounts. A loan's interest rate, minimum payment and escrow apply from `date`'s month on.",
         "parameters": [
           {
             "schema": {
@@ -8975,7 +9217,7 @@
           }
         ],
         "summary": "Reconcile an account against the bank's balance",
-        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). Loans aren't reconciled.",
+        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied.",
         "parameters": [
           {
             "schema": {
@@ -9016,7 +9258,7 @@
             }
           },
           "400": {
-            "description": "Invalid input, or a loan account",
+            "description": "Invalid input",
             "content": {
               "application/json": {
                 "schema": {
@@ -9206,6 +9448,292 @@
           },
           "403": {
             "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan": {
+      "get": {
+        "operationId": "getLoanActivity",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "A loan's month-by-month activity: payments, interest, escrow and balances",
+        "description": "Interest is estimated each month that has payments as the previous month's balance × rate ÷ 12 (rounded half up); escrow comes first, then interest, both capped by the month's payments. Amounts set by hand or fixed by Update Balance apply in full.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today"
+            },
+            "required": false,
+            "description": "The user's today",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The loan's months",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a loan account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/charges": {
+      "put": {
+        "operationId": "setLoanCharge",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set a loan month's total interest or escrow",
+        "description": "Replaces the month's estimate (or earlier amount) and applies in full, payments or not, as YNAB's Edit Interest, Edit Escrow and Add Interest do; zero is YNAB's Delete Interest. Months run from the loan's first through today's.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLoanCharge"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The loan's months",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a loan, a negative amount, or a month outside the loan's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/payments": {
+      "post": {
+        "operationId": "recordLoanPayment",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Record a loan payment (YNAB's Record Payment)",
+        "description": "A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordLoanPayment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a loan, not a budget account to pay from, or not a positive amount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {

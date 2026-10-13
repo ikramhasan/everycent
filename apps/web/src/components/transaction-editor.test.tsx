@@ -27,6 +27,8 @@ const account = (id: string, type: Account["type"]): Account => ({
   paymentCategoryId: null,
   hasHistory: false,
   lastReconciledAt: null,
+  pairedCategoryId: null,
+  lastPaymentDate: null,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 

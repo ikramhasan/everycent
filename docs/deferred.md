@@ -103,8 +103,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Credit lifecycle and loans (phase 7e–7g)
 
-7e is built (2026-10-11, EVERYCENT-2); 7f–7g (loans) wait. `docs/verify.md` ("Credit lifecycle
-(phase 7e)") has what YNAB showed and what's still open.
+7e is built (2026-10-11, EVERYCENT-2) and 7f (2026-10-13, EVERYCENT-37); 7g (the loan planner)
+waits. `docs/verify.md` ("Credit lifecycle (phase 7e)", "Loan activity (phase 7f)") has what YNAB
+showed.
 
 - **Positive card balances (7e)** are built: `cardLedger` walks each card's lines by date and
   splits them at zero, including transfers between two cards and a split's lines in their order
@@ -114,13 +115,23 @@ before starting a roadmap phase** and remove an entry once it's done.
   Account" memo; a zero-balance account closes without a dialog. Edit account offers Close, or
   Delete while an account has only its starting balance; a closed account offers Re-open and
   Delete (disabled with YNAB's tooltip while it has history).
-- **Working Balance** in Edit account adds a cleared Manual Balance Adjustment (EVERYCENT-113);
-  loans don't have it until 7f decides what a loan's edit dialog holds.
+- **Working Balance** in Edit account adds a cleared Manual Balance Adjustment (EVERYCENT-113); a
+  loan's is YNAB's "Today's Balance".
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
-- **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
-  accounts store rate, minimum payment and escrow, unused. Phase 8's loan debt-payment targets
-  need 7f, so they wait too.
+- **Loan activity (7f)** is built: a loan's page (figures, Update Balance, Add Activity, paired
+  category, Account Activity by month), interest and escrow worked out per month by
+  `loanMonths` (engine) and counted in balances, Edit/Delete/Add Interest and Edit Escrow,
+  credits and charges, Record Payment (loan page and the paired category's inspector), pairing
+  (Add Account's optional step, Edit Account, Get Started), terms kept per month (`loan_terms`),
+  and fresh start keeping pairing and terms.
+- **Not built in 7f:** Update Balance's interest-rate/escrow check step (YNAB's result didn't add
+  up; EVERYCENT-126). Record Payment's From Account starts on the last account in its list, as YNAB
+  did with one card (its rule wasn't confirmed).
+- **Loan planner (7g):** Payoff Date, the progress chart, Share Your Progress, the Payoff
+  Simulator, the paired inspector's paid-off message ("You did it! You paid off your loan in 3
+  months. You saved $2.10 in interest and paid it off 4 months earlier."), and Debt Payment
+  targets (phase 8's last target type).
 - Lines of credit are treated as credit cards, as YNAB does (re-checked 2026-10-11, docs/verify.md).
 
 ## Onboarding and fresh start
@@ -238,8 +249,8 @@ before starting a roadmap phase** and remove an entry once it's done.
   tracking). YNAB doesn't allow changing an account's type at all (support.ynab.com "Changing an
   Account Type"; its Edit Account dialog has no type field), so cross-family changes aren't
   planned.
-- Loan accounts store interest rate, minimum payment and escrow, but nothing uses them until the
-  loan features (phase 7f–7g, deferred).
+- Loan accounts keep interest rate, minimum payment and escrow per month (7f); the payoff planner
+  that projects with them is 7g.
 
 ## Budgets and sharing (phase 16)
 

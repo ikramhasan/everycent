@@ -17,6 +17,7 @@ import {
   PaymentInspector,
 } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
+import { PairedLoanSection, PairedWith, usePairedLoan } from "@/components/loan-inspector";
 import { MonthNav } from "@/components/month-nav";
 import { MonthNote } from "@/components/month-note";
 import {
@@ -617,6 +618,7 @@ function Inspector({
   const history = useUndo();
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
+  const pairedLoan = usePairedLoan(only);
   if (only === UNCATEGORIZED && month.uncategorized) {
     return (
       <CategoryInspector
@@ -726,6 +728,19 @@ function Inspector({
         name={category.name}
         totals={breakdown(totals)}
         format={format}
+        pairedWith={pairedLoan && <PairedWith loan={pairedLoan} />}
+        loan={
+          pairedLoan &&
+          month.month === figures.currentMonth && (
+            <PairedLoanSection
+              loan={pairedLoan}
+              categoryId={only}
+              categoryName={category.name}
+              available={totals.available}
+              move={figures.move}
+            />
+          )
+        }
         available={available}
         upcoming={upcoming}
         note={category.note}

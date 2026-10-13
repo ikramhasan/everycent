@@ -14,11 +14,26 @@ import { invalidateMonths } from "./months";
 export function useCreateAccount(budgetId: string) {
   const queryClient = useQueryClient();
   const create = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts");
-  return async (values: NewAccountValues): Promise<{ id: string } | { error: string }> => {
+  const createCategory = $api.useMutation("post", "/v1/budgets/{budgetId}/categories");
+  return async ({
+    pairing,
+    ...values
+  }: NewAccountValues): Promise<{ id: string } | { error: string }> => {
     try {
+      // A loan paired with a new category (YNAB's "Create a new category") gets it first.
+      const pairedCategoryId = !pairing
+        ? undefined
+        : "categoryId" in pairing
+          ? pairing.categoryId
+          : (
+              await createCategory.mutateAsync({
+                params: { path: { budgetId } },
+                body: { name: pairing.name.trim(), groupId: pairing.groupId },
+              })
+            ).id;
       const created = await create.mutateAsync({
         params: { path: { budgetId } },
-        body: { ...values, date: todayIso() },
+        body: { ...values, date: todayIso(), pairedCategoryId },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),

@@ -262,10 +262,16 @@ export function CategoryInspector({
   uncategorized = false,
   target,
   upcoming,
+  pairedWith,
+  loan,
 }: {
   name: string;
   totals: Breakdown;
   format: Format;
+  /** A paired loan's "Paired with … Account" line, under the name. */
+  pairedWith?: ReactNode;
+  /** A paired loan's payment section (YNAB's Available for Payment and Record Payment). */
+  loan?: ReactNode;
   /** The Available pill (it opens the move and cover popovers). */
   available: ReactNode;
   note: string;
@@ -281,7 +287,11 @@ export function CategoryInspector({
   const cashShortfall = format((-totals.cashOverspent).toString());
   return (
     <Panel label={`${name} inspector`}>
-      <h2 className="truncate font-semibold">{name}</h2>
+      <div className="grid gap-0.5">
+        <h2 className="truncate font-semibold">{name}</h2>
+        {pairedWith}
+      </div>
+      {loan}
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-sm">Available Balance</span>
         {available}
@@ -301,7 +311,7 @@ export function CategoryInspector({
         <Line label="Credit Spending" value={totals.creditActivity} format={format} />
       </dl>
       {upcoming}
-      {overspent && (
+      {overspent && !loan && (
         <OverspentMessage
           totals={totals}
           uncategorized={uncategorized}

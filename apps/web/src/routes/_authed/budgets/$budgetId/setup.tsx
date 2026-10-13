@@ -113,6 +113,7 @@ function SetupPage() {
           <CardContent className="grid gap-4">
             <AddAccountForm
               settings={budget}
+              categories={categories.data}
               onSubmit={async (values) => {
                 const result = await createAccount(values);
                 if ("error" in result) return result.error;
