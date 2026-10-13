@@ -1,5 +1,5 @@
-import { budgetAccount } from "@everycent/db/schema";
-import { accountFamily, isOnBudget, monthOf } from "@everycent/engine";
+import { budgetAccount, transaction } from "@everycent/db/schema";
+import { accountFamily, isOnBudget, monthEndBalances, monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -43,6 +43,33 @@ async function loanState(db: Db, account: AccountRow, today: string) {
   return state;
 }
 
+/** The tracking liability `loan` was made from, as month-end balances (or null). */
+async function originalHistory(db: Db, loan: AccountRow) {
+  const [original] = await db
+    .select({ id: budgetAccount.id })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.migratedToAccountId, loan.id));
+  if (!original) return null;
+  const entries = await db
+    .select({ date: transaction.date, amount: transaction.amount })
+    .from(transaction)
+    .where(eq(transaction.accountId, original.id));
+  return {
+    accountId: original.id,
+    months: monthEndBalances(entries).map((m) => ({
+      month: m.month,
+      endBalance: m.endBalance.toString(),
+    })),
+  };
+}
+
+async function loanActivity(db: Db, account: AccountRow, today: string) {
+  return {
+    ...activityJson(await loanState(db, account, today)),
+    originalHistory: await originalHistory(db, account),
+  };
+}
+
 function activityJson(state: LoanState) {
   const charge = (
     month: string,
@@ -83,7 +110,7 @@ export const getLoanActivityHandler: RouteHandler<typeof getLoanActivity, Env> =
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
   const account = await findLoan(db, budgetId, accountId);
-  return c.json(activityJson(await loanState(db, account, today)), 200);
+  return c.json(await loanActivity(db, account, today), 200);
 };
 
 export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> = async (c) => {
@@ -100,7 +127,7 @@ export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> 
     throw new AppError(400, "BAD_REQUEST", "That month is outside the loan's activity");
   }
   await setLoanCharge(db, account, { month, kind, amount: value, status: "edited" });
-  return c.json(activityJson(await loanState(db, account, today)), 200);
+  return c.json(await loanActivity(db, account, today), 200);
 };
 
 export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, Env> = async (c) => {

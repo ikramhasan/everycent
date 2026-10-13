@@ -197,6 +197,13 @@
       "when": 1791931430184,
       "tag": "0027_classy_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791934193230,
+      "tag": "0028_greedy_komodo",
+      "breakpoints": true
     }
   ]
 }

@@ -67,6 +67,7 @@ import { AvailablePill } from "./move-money";
 import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
 import { ShareProgressDialog } from "./share-progress";
+import { OriginalHistory } from "./update-to-loan";
 
 type Open =
   | { kind: "payment" }
@@ -446,6 +447,22 @@ export function LoanPage({
           ))
         )}
       </section>
+
+      {loan.data?.originalHistory && (
+        <OriginalHistory
+          months={loan.data.originalHistory.months}
+          format={format}
+          onGoToAccount={() =>
+            void navigate({
+              to: "/budgets/$budgetId/accounts/$accountId",
+              params: {
+                budgetId: budget.id,
+                accountId: loan.data?.originalHistory?.accountId ?? account.id,
+              },
+            })
+          }
+        />
+      )}
 
       {open?.kind === "payment" && (
         <RecordPaymentDialog

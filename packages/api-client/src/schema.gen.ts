@@ -681,6 +681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)
+         * @description Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms and the paired category. The original account keeps its transactions and is closed: a cleared Manual Balance Adjustment (memo "Closed Account") zeroes its working balance, " (Original)" is added to its name, and its scheduled transactions (and those transferring to it) are deleted. Only open tracking liabilities that weren't updated before.
+         */
+        post: operations["updateToLoanAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/loan": {
         parameters: {
             query?: never;
@@ -1729,6 +1749,10 @@ export interface components {
             lastPaymentDate: string | null;
             /** @description Record Payment's source: for a loan, the cash or credit account of the payment into it entered last; for a credit card, the cash account it was last paid from */
             lastPaymentFromAccountId: string | null;
+            /** @description A tracking liability updated to a loan account: the new loan */
+            migratedToAccountId: string | null;
+            /** @description A loan made by updating a tracking liability: the original (closed) account */
+            migratedFromAccountId: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
@@ -1832,6 +1856,34 @@ export interface components {
              */
             date: string;
         };
+        UpdateToLoanAccountResult: {
+            loan: components["schemas"]["Account"];
+            original: components["schemas"]["Account"];
+        };
+        UpdateToLoanAccount: {
+            /** @description The loan's nickname */
+            name: string;
+            /**
+             * @description A loan type (mortgage, auto_loan, …)
+             * @enum {string}
+             */
+            type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            /** @description Today's balance; negative for money owed */
+            balance: string;
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            date: string;
+            /** @description Annual interest rate in percent (loan accounts) */
+            interestRate?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            minimumPayment?: string;
+            /** @description Mortgages only */
+            escrowAmount?: string;
+            /** @description Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category. */
+            pairedCategoryId: string;
+        };
         LoanActivity: {
             /** @description From the loan's first month through today's, oldest first */
             months: {
@@ -1876,6 +1928,17 @@ export interface components {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 escrowAmount: string | null;
             }[];
+            /** @description A loan made by updating a tracking liability: the original account's month-end balances (YNAB's "Original Tracking Account History") */
+            originalHistory: {
+                accountId: string;
+                /** @description Each month's ending balance, newest first */
+                months: {
+                    /** @description YYYY-MM */
+                    month: string;
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    endBalance: string;
+                }[];
+            } | null;
         };
         LoanCharge: {
             /** @description The month's full charge: the estimate, or what was set */
@@ -5539,6 +5602,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateToLoanAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateToLoanAccount"];
+            };
+        };
+        responses: {
+            /** @description The new loan and the closed original */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateToLoanAccountResult"];
+                };
+            };
+            /** @description Not an open tracking liability, already updated, not a loan type, or invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not signed in */

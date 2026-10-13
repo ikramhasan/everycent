@@ -5,6 +5,7 @@ import {
   categoryGroup,
   categoryTarget,
   payee,
+  scheduledSubTransaction,
   scheduledTransaction,
   transaction,
 } from "@everycent/db/schema";
@@ -58,6 +59,7 @@ import type {
   reconcileAccount,
   reopenAccount,
   updateAccount,
+  updateToLoanAccount,
 } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
@@ -71,7 +73,8 @@ function toAccountJson(
   lastPaymentDate: string | null,
   lastPaymentFromAccountId: string | null,
   /** A loan's terms this month, when it has `loan_terms` entries. */
-  terms?: LoanTerms,
+  terms: LoanTerms | undefined,
+  migratedFromAccountId: string | null,
 ) {
   return {
     id: a.id,
@@ -94,6 +97,8 @@ function toAccountJson(
     pairedCategoryId: a.pairedCategoryId,
     lastPaymentDate,
     lastPaymentFromAccountId,
+    migratedToAccountId: a.migratedToAccountId,
+    migratedFromAccountId,
   };
 }
 
@@ -127,6 +132,9 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     accounts.filter((a) => LOAN_TYPES.includes(a.type)).map((a) => a.id),
     today,
   );
+  const migratedFrom = new Map(
+    accounts.flatMap((a) => (a.migratedToAccountId ? [[a.migratedToAccountId, a.id]] : [])),
+  );
   return accounts.map((a) =>
     toAccountJson(
       a,
@@ -136,6 +144,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       lastPayments.get(a.id) ?? null,
       paidFrom.get(a.id) ?? null,
       terms.get(a.id),
+      migratedFrom.get(a.id) ?? null,
     ),
   );
 }
@@ -241,6 +250,63 @@ export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async
   return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
 };
 
+type NewAccount = {
+  name: string;
+  type: AccountRow["type"];
+  balance: string;
+  date: string;
+  interestRate?: string;
+  minimumPayment?: string;
+  escrowAmount?: string;
+  pairedCategoryId?: string;
+};
+
+/** Adds an account at the end of the sidebar with its Starting Balance; returns its id. */
+async function insertAccount(
+  tx: Db,
+  budgetId: string,
+  currency: AccountRow["currency"],
+  body: NewAccount,
+) {
+  const accountId = newId();
+  const [last] = await tx
+    .select({ value: max(budgetAccount.sortOrder) })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.budgetId, budgetId));
+  const [created] = await tx
+    .insert(budgetAccount)
+    .values({
+      id: accountId,
+      budgetId,
+      name: body.name,
+      type: body.type,
+      sortOrder: (last?.value ?? -1) + 1,
+      currency,
+      interestRate: body.interestRate ?? null,
+      minimumPayment: optionalBigInt(body.minimumPayment) ?? null,
+      // Only mortgages have escrow (YNAB's forms); other loans would be charged it unseen.
+      escrowAmount: hasEscrow(body.type) ? (optionalBigInt(body.escrowAmount) ?? null) : null,
+    })
+    .returning();
+  if (created && accountFamily(created.type) === "loan") {
+    await saveLoanTerms(tx, created, body.date);
+    if (body.pairedCategoryId) await pairCategory(tx, created, body.pairedCategoryId);
+  }
+  if (hasPaymentCategory(body.type)) {
+    await createPaymentCategory(tx, budgetId, accountId, body.name);
+  }
+  await transferPayeeId(tx, { id: accountId, budgetId, name: body.name });
+  await insertStartingBalance(tx, {
+    budgetId,
+    accountId,
+    type: body.type,
+    amount: BigInt(body.balance),
+    currency,
+    date: body.date,
+  });
+  return accountId;
+}
+
 export const createAccountHandler: RouteHandler<typeof createAccount, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -259,46 +325,106 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   if (body.pairedCategoryId !== undefined && accountFamily(body.type) !== "loan") {
     throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
   }
-  const accountId = newId();
-  await db.transaction(async (tx) => {
-    const [last] = await tx
-      .select({ value: max(budgetAccount.sortOrder) })
-      .from(budgetAccount)
-      .where(eq(budgetAccount.budgetId, budgetId));
-    const [created] = await tx
-      .insert(budgetAccount)
-      .values({
-        id: accountId,
-        budgetId,
-        name: body.name,
-        type: body.type,
-        sortOrder: (last?.value ?? -1) + 1,
-        currency: budget.currency,
-        interestRate: body.interestRate ?? null,
-        minimumPayment: optionalBigInt(body.minimumPayment) ?? null,
-        // Only mortgages have escrow (YNAB's forms); other loans would be charged it unseen.
-        escrowAmount: hasEscrow(body.type) ? (optionalBigInt(body.escrowAmount) ?? null) : null,
-      })
-      .returning();
-    if (created && accountFamily(created.type) === "loan") {
-      await saveLoanTerms(tx, created, body.date);
-      if (body.pairedCategoryId) await pairCategory(tx, created, body.pairedCategoryId);
-    }
-    if (hasPaymentCategory(body.type)) {
-      await createPaymentCategory(tx, budgetId, accountId, body.name);
-    }
-    await transferPayeeId(tx, { id: accountId, budgetId, name: body.name });
-
-    await insertStartingBalance(tx, {
-      budgetId,
-      accountId,
-      type: body.type,
-      amount: BigInt(body.balance),
-      currency: budget.currency,
-      date: body.date,
-    });
-  });
+  const accountId = await db.transaction((tx) =>
+    insertAccount(tx, budgetId, budget.currency, body),
+  );
   return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
+};
+
+/**
+ * YNAB's "Update to a Loan Account" (web, 2026-10-14, x-145 HELOC in "ihni7's Plan"): a new loan
+ * whose only transaction is a cleared Starting Balance dated today, its terms and paired
+ * category; the tracking liability keeps its history but is closed with a cleared "Closed
+ * Account" Manual Balance Adjustment of its working balance, renamed "… (Original)", and its
+ * scheduled transactions (the transfer scheduled from Brac into it too) are gone. Ready to Assign
+ * doesn't move: both accounts are off budget.
+ */
+export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount, Env> = async (
+  c,
+) => {
+  const { budgetId, accountId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, {
+    account: ["create", "update"],
+    transaction: ["create"],
+  });
+  if (accountFamily(body.type) !== "loan") {
+    throw new AppError(400, "BAD_REQUEST", "Choose a loan type");
+  }
+  const loanId = await db.transaction(async (tx) => {
+    const [original] = await tx
+      .select()
+      .from(budgetAccount)
+      .where(and(eq(budgetAccount.id, accountId), eq(budgetAccount.budgetId, budgetId)))
+      .for("update");
+    if (!original) throw new AppError(404, "NOT_FOUND", "Account not found");
+    // YNAB offers it on tracking liabilities only (not assets or budget accounts).
+    if (original.type !== "liability") {
+      throw new AppError(400, "BAD_REQUEST", "Only tracking liabilities can be updated to a loan");
+    }
+    if (original.migratedToAccountId) {
+      throw new AppError(400, "BAD_REQUEST", "This account was already updated to a loan account");
+    }
+    if (original.closed) {
+      throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to update it");
+    }
+    // Rename first, so the loan can take the original's name and the payees stay distinct.
+    const originalName = `${original.name} (Original)`.slice(0, 100);
+    await tx
+      .update(budgetAccount)
+      .set({ name: originalName })
+      .where(eq(budgetAccount.id, original.id));
+    await tx
+      .update(payee)
+      .set({ name: transferPayeeName(originalName) })
+      .where(eq(payee.transferAccountId, original.id));
+
+    const loanId = await insertAccount(tx, budgetId, budget.currency, body);
+
+    const working =
+      (await accountBalances(tx, budgetId, body.date)).get(original.id)?.working ?? 0n;
+    if (working !== 0n) {
+      await insertAdjustment(tx, original, {
+        date: body.date,
+        amount: -working,
+        kind: "manual_balance_adjustment",
+        memo: "Closed Account",
+        cleared: "cleared",
+      });
+    }
+    // "Cancel all Scheduled Transactions tied to the tracking account": its own, and those
+    // transferring into it (a split line included).
+    const transferPayees = tx
+      .select({ id: payee.id })
+      .from(payee)
+      .where(eq(payee.transferAccountId, original.id));
+    await tx
+      .delete(scheduledTransaction)
+      .where(
+        or(
+          eq(scheduledTransaction.accountId, original.id),
+          inArray(scheduledTransaction.payeeId, transferPayees),
+          inArray(
+            scheduledTransaction.id,
+            tx
+              .select({ id: scheduledSubTransaction.scheduledTransactionId })
+              .from(scheduledSubTransaction)
+              .where(inArray(scheduledSubTransaction.payeeId, transferPayees)),
+          ),
+        ),
+      );
+    await tx
+      .update(budgetAccount)
+      .set({ closed: true, migratedToAccountId: loanId })
+      .where(eq(budgetAccount.id, original.id));
+    return loanId;
+  });
+  const [loan, original] = await Promise.all([
+    accountJson(db, budgetId, loanId, body.date),
+    accountJson(db, budgetId, accountId, body.date),
+  ]);
+  return c.json({ loan, original }, 201);
 };
 
 export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = async (c) => {

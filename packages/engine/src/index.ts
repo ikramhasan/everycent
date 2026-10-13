@@ -130,6 +130,7 @@ export {
   type MonthAmount,
   type MonthFigures,
   monthBounds,
+  monthEndBalances,
   monthOf,
   type ReadyToAssign,
   type ReadyToAssignBreakdown,

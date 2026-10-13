@@ -40,6 +40,8 @@ const account = (
   pairedCategoryId: null,
   lastPaymentDate: null,
   lastPaymentFromAccountId: null,
+  migratedToAccountId: null,
+  migratedFromAccountId: null,
   balances: { cleared, uncleared: "0", working: cleared },
   ...extra,
 });

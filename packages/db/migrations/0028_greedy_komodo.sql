@@ -1,0 +1,2 @@
+ALTER TABLE "budget_account" ADD COLUMN "migrated_to_account_id" text;--> statement-breakpoint
+ALTER TABLE "budget_account" ADD CONSTRAINT "budget_account_migrated_to_account_id_budget_account_id_fk" FOREIGN KEY ("migrated_to_account_id") REFERENCES "public"."budget_account"("id") ON DELETE set null ON UPDATE no action;
