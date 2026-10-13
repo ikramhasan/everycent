@@ -10,6 +10,8 @@ export const user = pgTable("user", {
   email: text().notNull().unique(),
   emailVerified: boolean().notNull().default(false),
   image: text(),
+  /** Added by the two-factor plugin. */
+  twoFactorEnabled: boolean().default(false),
   ...timestamps,
 });
 
@@ -82,3 +84,26 @@ export const throttle = pgTable("throttle", {
   points: integer().notNull().default(0),
   expire: timestamp({ withTimezone: true }),
 });
+
+/**
+ * The two-factor plugin's TOTP secret and backup codes (both encrypted by Better Auth). One row per
+ * user with two-step verification set up; `verified` turns true once a first code is confirmed.
+ */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text().primaryKey(),
+    secret: text().notNull(),
+    backupCodes: text().notNull(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean().default(true),
+    failedVerificationCount: integer().default(0),
+    lockedUntil: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    index("two_factor_user_id_idx").on(t.userId),
+    index("two_factor_secret_idx").on(t.secret),
+  ],
+);

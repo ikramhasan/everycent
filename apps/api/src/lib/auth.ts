@@ -3,7 +3,7 @@ import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
-import { haveIBeenPwned, organization } from "better-auth/plugins";
+import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
 import type { EmailMessage, EmailSender } from "./email/sender";
@@ -178,6 +178,14 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       // Refuses passwords found in known breaches (sign-up, change, reset). Only the first five
       // characters of the password's SHA-1 leave the server. Off in tests: it calls the network.
       haveIBeenPwned({ enabled: env.NODE_ENV !== "test" }),
+      // YNAB's Two-Step Verification: an authenticator app plus one emergency backup code. No
+      // "remember this device" (YNAB has none). Turning it off goes through /v1/me/two-factor,
+      // which asks for a code as YNAB does, instead of the plugin's password-based endpoint.
+      twoFactor({
+        issuer: "everycent",
+        backupCodeOptions: { amount: 1, length: 10 },
+        schema: { twoFactor: { modelName: "twoFactor" } },
+      }),
       // Budgets are organizations. Its HTTP endpoints are blocked in app.ts; our /v1/budgets
       // routes call auth.api.* instead so everything goes through our validation.
       organization({

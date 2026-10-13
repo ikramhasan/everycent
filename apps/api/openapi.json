@@ -77,6 +77,10 @@
           "emailVerified": {
             "type": "boolean"
           },
+          "twoFactorEnabled": {
+            "type": "boolean",
+            "description": "Two-step verification is on"
+          },
           "image": {
             "type": [
               "string",
@@ -93,6 +97,7 @@
           "name",
           "email",
           "emailVerified",
+          "twoFactorEnabled",
           "image",
           "createdAt"
         ]
@@ -204,6 +209,18 @@
           "ipAddress",
           "createdAt",
           "lastActiveAt"
+        ]
+      },
+      "DisableTwoFactor": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "code"
         ]
       },
       "BudgetList": {
@@ -5844,6 +5861,76 @@
           },
           "404": {
             "description": "No such session for this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/two-factor/disable": {
+      "post": {
+        "operationId": "disableTwoFactor",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Turn off two-step verification with a code from the verification app",
+        "description": "As YNAB's \"Turn Off\" asks: the current 6-digit code (`INVALID_CODE` when wrong). Attempts share the password-check limit (`RATE_LIMITED`).",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableTwoFactor"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Turned off"
+          },
+          "400": {
+            "description": "Invalid input, or two-step verification isn't on (`TWO_FACTOR_NOT_ENABLED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Wrong code (`INVALID_CODE`), or the email isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts (`RATE_LIMITED`)",
             "content": {
               "application/json": {
                 "schema": {

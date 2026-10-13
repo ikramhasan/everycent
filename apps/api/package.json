@@ -26,6 +26,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@everycent/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "tsdown": "catalog:",

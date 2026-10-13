@@ -8,6 +8,7 @@ export const UserSchema = z
     name: z.string(),
     email: z.email(),
     emailVerified: z.boolean(),
+    twoFactorEnabled: z.boolean().describe("Two-step verification is on"),
     image: z.string().nullable(),
     createdAt: z.iso.datetime(),
   })
@@ -147,5 +148,37 @@ export const revokeOtherSessions = createRoute({
     204: { description: "Signed out" },
     401: jsonError("Not signed in"),
     403: unverified,
+  },
+});
+
+export const disableTwoFactor = createRoute({
+  method: "post",
+  path: "/me/two-factor/disable",
+  operationId: "disableTwoFactor",
+  tags: ["Users"],
+  summary: "Turn off two-step verification with a code from the verification app",
+  description:
+    'As YNAB\'s "Turn Off" asks: the current 6-digit code (`INVALID_CODE` when wrong). Attempts ' +
+    "share the password-check limit (`RATE_LIMITED`).",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") })
+            .openapi("DisableTwoFactor"),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Turned off" },
+    400: jsonError("Invalid input, or two-step verification isn't on (`TWO_FACTOR_NOT_ENABLED`)"),
+    401: jsonError("Not signed in"),
+    403: jsonError("Wrong code (`INVALID_CODE`), or the email isn't confirmed"),
+    429: jsonError("Too many attempts (`RATE_LIMITED`)"),
   },
 });

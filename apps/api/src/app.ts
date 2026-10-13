@@ -44,6 +44,13 @@ export function createApp(deps: AppDeps) {
     "/api/auth/revoke-session",
     "/api/auth/revoke-sessions",
     "/api/auth/revoke-other-sessions",
+    // Two-step verification: set up with /two-factor/enable + /verify-totp, signed in with
+    // /verify-totp or /verify-backup-code. Turning it off is /v1/me/two-factor (a code, as YNAB
+    // asks); YNAB has no email codes or regenerated backup codes.
+    "/api/auth/two-factor/disable",
+    "/api/auth/two-factor/send-otp",
+    "/api/auth/two-factor/verify-otp",
+    "/api/auth/two-factor/generate-backup-codes",
   ]) {
     app.all(path, notFound);
   }

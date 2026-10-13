@@ -272,6 +272,11 @@ before starting a roadmap phase** and remove an entry once it's done.
   newcomer can't sign in unconfirmed and the change doesn't happen), but the message could say
   why; Better Auth's verify endpoint doesn't report it distinctly (EVERYCENT-124, with `TRUSTED_PROXIES`
   at deploy and durable sends).
+- Two-step verification (YNAB's, from its help center and setup page): an authenticator app and
+  one emergency backup code; turning it on signs out other devices; turning it off asks for a
+  code. Unlike YNAB, set-up first asks for the password (Better Auth's enable endpoint requires
+  it). The backup code works once and can't be regenerated (YNAB documents no way either; its
+  answer is to contact support). No "remember this device" (YNAB has none).
 - The breach check (Have I Been Pwned) fails closed: if its API is down, sign-up, reset and
   change-password refuse with "Failed to check password" until it's back.
 

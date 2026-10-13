@@ -25,6 +25,7 @@ import { Monitor, Smartphone, Tablet } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
@@ -42,6 +43,7 @@ function AccountPage() {
       <h1 className="font-semibold text-2xl tracking-tight">Account settings</h1>
       <EmailCard email={session.user.email} />
       <PasswordCard />
+      <TwoFactorCard />
       <DevicesCard />
     </div>
   );

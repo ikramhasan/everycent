@@ -27,6 +27,7 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-qr-code": "catalog:",
     "sonner": "catalog:",
     "zod": "catalog:"
   },

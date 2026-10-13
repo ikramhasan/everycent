@@ -93,6 +93,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/two-factor/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn off two-step verification with a code from the verification app
+         * @description As YNAB's "Turn Off" asks: the current 6-digit code (`INVALID_CODE` when wrong). Attempts share the password-check limit (`RATE_LIMITED`).
+         */
+        post: operations["disableTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets": {
         parameters: {
             query?: never;
@@ -1125,6 +1145,8 @@ export interface components {
             /** Format: email */
             email: string;
             emailVerified: boolean;
+            /** @description Two-step verification is on */
+            twoFactorEnabled: boolean;
             image: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -1163,6 +1185,9 @@ export interface components {
              * @description Last time the session was refreshed (about daily)
              */
             lastActiveAt: string;
+        };
+        DisableTwoFactor: {
+            code: string;
         };
         BudgetList: {
             budgets: components["schemas"]["Budget"][];
@@ -2662,6 +2687,64 @@ export interface operations {
             };
             /** @description No such session for this account */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    disableTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableTwoFactor"];
+            };
+        };
+        responses: {
+            /** @description Turned off */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid input, or two-step verification isn't on (`TWO_FACTOR_NOT_ENABLED`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Wrong code (`INVALID_CODE`), or the email isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many attempts (`RATE_LIMITED`) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
