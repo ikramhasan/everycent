@@ -161,8 +161,9 @@ before starting a roadmap phase** and remove an entry once it's done.
   a reconciliation out of balance ask first (phase 9, docs/verify.md "Reconciliation").
 - The Reconcile popover leaves out YNAB's "How do I find my account balance?" link and the
   difference step's help-doc box: everycent has no help center yet.
-- Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
-  stay in the autocomplete.
+- Payee auto-categorization uses the payee's latest categorized transaction; YNAB's Manage
+  Payees offers "based on the last 3 transactions", "Always use my choice" and "Do not
+  auto-categorize" (EVERYCENT-61). Import renaming rules are EVERYCENT-62.
 - shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
   UI's Autocomplete (payee field) with the combobox styling. Replace it if shadcn adds one.
 - Editing an existing transaction is cell by cell (as YNAB does); a transaction can be moved to

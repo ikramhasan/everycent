@@ -188,6 +188,30 @@ Built in EVERYCENT-3 and EVERYCENT-113.
   none): changing it adds a cleared "Manual Balance Adjustment", dated today, no memo, Inflow:
   Ready to Assign on budget accounts. Taken as typed: a card's "70" made it +$70.
 
+## Manage Payees (EVERYCENT-60) (settled 2026-10-13)
+
+Checked in YNAB plan "C5 First FS2" (payees P9 Alpha/Beta/Gamma/Delta, memo `x-p9`) and its
+fresh start "C9 Payees FS":
+
+- Plan menu → **Manage Payees**: search, groups Payees / Transfer Payees / Hidden Payees with
+  group checkboxes and a selected count, "Select N Unused Payees", the dialog's own Undo/Redo,
+  Done. The payee field's dropdown links to it too. Built (Budget settings → Payees, and the
+  payee field's "Manage Payees").
+- One payee: name field ("Payee name cannot be empty"; "Another payee already exists with this
+  name" for an exact match; YNAB allows a case-only difference, everycent keeps payee names
+  unique case aside, as the payee field matches them), "Show N Transactions" (Account, Date,
+  Category, Memo, Amount, newest first, scheduled included; Uncategorized shows blank), Hide /
+  Unhide, Delete. Built.
+- Several: "N Payees Selected", Combine and Rename (name prefilled with the first one ticked; a
+  name another payee already has merges into that payee), Hide All, Delete All. Built.
+- Delete: unused payees go at once; used ones ask for a new payee ([No Payee] or another used
+  payee, hidden ones included). Categories don't change. Built.
+- A payee is used if a transaction or a scheduled transaction uses it. Built.
+- Hidden payees aren't suggested; typing one's exact name shows "1 matching payee is hidden" and
+  saving uses it (it stays hidden). Fresh start keeps hidden payees hidden. Built.
+- Transfer payees can't be edited or deleted (only YNAB's import renaming rules, EVERYCENT-62).
+- Out of scope here: the Categorization section (EVERYCENT-61) and Renaming rules (EVERYCENT-62).
+
 ## Budget screen (phase 6a)
 
 Checked in YNAB's web app on 2026-10-02 and built as found: Activity leaves out future-dated

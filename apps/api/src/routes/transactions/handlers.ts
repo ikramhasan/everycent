@@ -1,14 +1,11 @@
-import { sql } from "@everycent/db";
 import {
   type ClearedState,
-  category,
   type FlagColor,
-  payee,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
@@ -19,7 +16,6 @@ import { queryRegister, queryRegisterRow } from "./register-query";
 import type {
   createTransaction,
   deleteTransaction,
-  listPayees,
   listTransactions,
   updateTransaction,
 } from "./routes";
@@ -372,29 +368,3 @@ async function updateSplitTransferSide(
     .where(eq(transaction.id, existing.id));
   return account.id;
 }
-
-export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c) => {
-  const { budgetId } = c.req.valid("param");
-  const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
-  // YNAB suggests the category last used with a payee; Uncategorized isn't worth remembering.
-  const last = sql<string | null>`(
-    select t.category_id from ${transaction} t
-    join ${category} c on c.id = t.category_id
-    where t.payee_id = ${payee}.id and c.internal_kind is distinct from 'uncategorized'
-    order by t.date desc, t.created_at desc, t.id desc
-    limit 1
-  )`;
-  const payees = await db
-    .select({ id: payee.id, name: payee.name, lastCategoryId: last })
-    .from(payee)
-    .where(
-      and(
-        eq(payee.budgetId, budgetId),
-        isNull(payee.internalKind),
-        isNull(payee.transferAccountId),
-      ),
-    )
-    .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
-  return c.json({ payees }, 200);
-};

@@ -105,8 +105,8 @@ describe("CellEditor", () => {
 
   it("opens the whole payee list, as YNAB does, and narrows it once you type", async () => {
     const payees = [
-      { id: "p1", name: "Market", lastCategoryId: null },
-      { id: "p2", name: "Bakery", lastCategoryId: null },
+      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
+      { id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null },
     ];
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
@@ -119,8 +119,25 @@ describe("CellEditor", () => {
     expect(onCommit).toHaveBeenCalledWith("Bakery", "stay", null);
   });
 
+  it("leaves hidden payees out of the list, but typing one's name uses it", async () => {
+    const payees = [
+      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
+      { id: "p2", name: "Trip Cafe", hidden: true, useCount: 1, lastCategoryId: null },
+    ];
+    const { onCommit } = renderCell("payee", txn, payees);
+    const user = userEvent.setup();
+    const options = () => screen.getAllByRole("option").map((o) => o.textContent);
+    expect(options()).toEqual(["Market", "Savings"]);
+    await user.keyboard("trip cafe");
+    // No "Create payee": the name is a hidden payee's.
+    expect(screen.queryAllByRole("option")).toEqual([]);
+    expect(screen.getByText("1 matching payee is hidden")).toBeTruthy();
+    await user.keyboard("{Enter}");
+    expect(onCommit).toHaveBeenCalledWith("trip cafe", "stay", null);
+  });
+
   it("keeps the payee when Enter is pressed without picking", async () => {
-    const payees = [{ id: "p2", name: "Bakery", lastCategoryId: null }];
+    const payees = [{ id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null }];
     const { onCommit } = renderCell("payee", txn, payees);
     await userEvent.setup().keyboard("{Enter}");
     expect(onCommit).toHaveBeenCalledWith("Market", "stay", null);

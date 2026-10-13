@@ -41,6 +41,7 @@ import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import { type CategoryOption, categoryLabel, type Payee, transferLabel } from "@/lib/transactions";
+import { useManagePayees } from "./manage-payees";
 
 /**
  * True when a key belongs to a field's open suggestion list rather than to the row: Esc closes
@@ -228,8 +229,15 @@ export function PayeeField({
   autoFocus?: boolean;
 }) {
   const trimmed = value.trim();
+  const managePayees = useManagePayees();
+  // Hidden payees aren't suggested, but typing one's exact name still uses it (YNAB).
+  const hiddenMatch = payees.some(
+    (p) => p.hidden && p.name.toLowerCase() === trimmed.toLowerCase(),
+  );
   const groups = useMemo<PayeeGroup[]>(() => {
-    const known: PayeeItem[] = payees.map((p) => ({ id: p.id, label: p.name, kind: "payee" }));
+    const known: PayeeItem[] = payees
+      .filter((p) => !p.hidden)
+      .map((p) => ({ id: p.id, label: p.name, kind: "payee" }));
     const toAccounts: PayeeItem[] = transfers.map((a) => ({
       id: `transfer:${a.id}`,
       label: transferLabel(a.name),
@@ -243,11 +251,11 @@ export function PayeeField({
     return [
       { value: "Payees", items: known },
       { value: "Transfers", items: toAccounts },
-      ...(trimmed && !exact
+      ...(trimmed && !exact && !hiddenMatch
         ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
         : []),
     ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, trimmed]);
+  }, [payees, transfers, trimmed, hiddenMatch]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
@@ -327,6 +335,23 @@ export function PayeeField({
             </AutocompleteGroup>
           )}
         </AutocompleteList>
+        {hiddenMatch && (
+          <p className="px-2 py-1.5 text-muted-foreground text-xs">1 matching payee is hidden</p>
+        )}
+        {managePayees && (
+          <button
+            type="button"
+            className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
+            // Keep focus in the field until the dialog takes it.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setOpen(false);
+              managePayees();
+            }}
+          >
+            Manage Payees
+          </button>
+        )}
       </AutocompleteContent>
     </Autocomplete>
   );

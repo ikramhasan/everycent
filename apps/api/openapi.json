@@ -2872,6 +2872,14 @@
           "name": {
             "type": "string"
           },
+          "hidden": {
+            "type": "boolean",
+            "description": "Left out of the payee field's suggestions; typing the exact name still uses it"
+          },
+          "useCount": {
+            "type": "integer",
+            "description": "Transactions and scheduled transactions (split lines included) using the payee"
+          },
           "lastCategoryId": {
             "type": [
               "string",
@@ -2883,8 +2891,429 @@
         "required": [
           "id",
           "name",
+          "hidden",
+          "useCount",
           "lastCategoryId"
         ]
+      },
+      "PayeeTransactionList": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeTransaction"
+            }
+          }
+        },
+        "required": [
+          "transactions"
+        ]
+      },
+      "PayeeTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The transaction, split line or scheduled transaction"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "transaction",
+              "scheduled"
+            ]
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "A scheduled transaction's next date"
+          },
+          "categoryName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null when uncategorized or none"
+          },
+          "memo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "ISO 4217 currency code"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "accountId",
+          "accountName",
+          "date",
+          "categoryName",
+          "memo",
+          "amount",
+          "currency"
+        ]
+      },
+      "SetPayeesHidden": {
+        "type": "object",
+        "properties": {
+          "payeeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "hidden": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "payeeIds",
+          "hidden"
+        ]
+      },
+      "CombinedPayees": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PayeeChange"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "payee": {
+                "$ref": "#/components/schemas/Payee"
+              }
+            },
+            "required": [
+              "payee"
+            ]
+          }
+        ]
+      },
+      "PayeeSnapshot": {
+        "type": "object",
+        "properties": {
+          "payees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "hidden": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "hidden"
+              ]
+            },
+            "maxItems": 1000,
+            "description": "Each payee as it was"
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeUses"
+            },
+            "maxItems": 1000,
+            "description": "The rows that pointed at each payee"
+          }
+        },
+        "required": [
+          "payees",
+          "uses"
+        ],
+        "description": "What changed, for `restorePayees` to undo it"
+      },
+      "PayeeUses": {
+        "type": "object",
+        "properties": {
+          "payeeId": {
+            "type": "string"
+          },
+          "transactionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subTransactionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scheduledTransactionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scheduledSubTransactionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "payeeId",
+          "transactionIds",
+          "subTransactionIds",
+          "scheduledTransactionIds",
+          "scheduledSubTransactionIds"
+        ]
+      },
+      "PayeeChange": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/PayeeSnapshot"
+          }
+        },
+        "required": [
+          "snapshot"
+        ]
+      },
+      "CombinePayees": {
+        "type": "object",
+        "properties": {
+          "payeeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "payeeIds",
+          "name"
+        ]
+      },
+      "DeletePayees": {
+        "type": "object",
+        "properties": {
+          "payeeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "replacementPayeeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "payeeIds"
+        ]
+      },
+      "UpdatePayee": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "hidden": {
+            "type": "boolean"
+          }
+        }
       },
       "ScheduledTransactionList": {
         "type": "object",
@@ -8272,15 +8701,15 @@
     },
     "/v1/budgets/{budgetId}/payees": {
       "get": {
-        "operationId": "listPayees",
         "tags": [
-          "Transactions"
+          "Payees"
         ],
         "security": [
           {
             "cookieAuth": []
           }
         ],
+        "operationId": "listPayees",
         "summary": "The budget's payees, by name (built-in and transfer ones left out)",
         "parameters": [
           {
@@ -8324,7 +8753,573 @@
             }
           },
           "404": {
-            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/transactions": {
+      "get": {
+        "operationId": "listPayeeTransactions",
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Everything using these payees: transactions, split lines and scheduled ones",
+        "description": "Newest first, as Manage Payees' \"Show N Transactions\" lists them.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Comma-separated payee ids"
+            },
+            "required": true,
+            "description": "Comma-separated payee ids",
+            "name": "payeeIds",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeTransactionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/hide": {
+      "post": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "setPayeesHidden",
+        "summary": "Hide or unhide several payees",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPayeesHidden"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A transfer or built-in payee (`PAYEE_LOCKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/combine": {
+      "post": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "combinePayees",
+        "summary": "Combine payees into one, under a name",
+        "description": "Every transaction and scheduled transaction using them moves to one payee called `name`: the payee that already has that name (one of these or another), else the first of `payeeIds`, renamed. The others are deleted. Categories don't change.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CombinePayees"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Combined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombinedPayees"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A transfer or built-in payee (`PAYEE_LOCKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/delete": {
+      "post": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "deletePayees",
+        "summary": "Delete payees, moving their transactions to another payee or none",
+        "description": "Transactions and scheduled transactions using them move to `replacementPayeeId` (null for no payee). The replacement can't be one of the deleted payees, a transfer or a built-in payee (`INVALID_REPLACEMENT`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePayees"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A transfer or built-in payee (`PAYEE_LOCKED`), or a bad replacement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/restore": {
+      "post": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "restorePayees",
+        "summary": "Put payees back as a snapshot describes them (undoing a combine or delete)",
+        "description": "Recreates or renames each payee and points the listed rows back at it. Rows that no longer exist are skipped. A name another payee has taken since fails with `PAYEE_NAME_TAKEN`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayeeSnapshot"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Restored"
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name taken (`PAYEE_NAME_TAKEN`) or a transfer/built-in payee (`PAYEE_LOCKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/{payeeId}": {
+      "patch": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "updatePayee",
+        "summary": "Rename, hide or unhide a payee",
+        "description": "Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "payeeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePayee"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payee"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name taken (`PAYEE_NAME_TAKEN`) or a transfer/built-in payee (`PAYEE_LOCKED`)",
             "content": {
               "application/json": {
                 "schema": {

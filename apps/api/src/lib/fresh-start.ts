@@ -95,10 +95,10 @@ export async function copyIntoFreshStart(
     });
   }
 
-  // People's payees; the internal ones are recreated on first use, transfer ones came with the
+  // People's payees, hidden ones still hidden (YNAB); the internal ones are recreated on first use, transfer ones came with the
   // accounts.
   const payees = await tx
-    .select({ id: payee.id, name: payee.name })
+    .select({ id: payee.id, name: payee.name, hidden: payee.hidden })
     .from(payee)
     .where(
       and(eq(payee.budgetId, old.id), isNull(payee.internalKind), isNull(payee.transferAccountId)),
@@ -107,7 +107,7 @@ export async function copyIntoFreshStart(
     const copies = payees.map((p) => {
       const id = newId();
       payeeIds.set(p.id, id);
-      return { id, budgetId: newBudgetId, name: p.name };
+      return { id, budgetId: newBudgetId, name: p.name, hidden: p.hidden };
     });
     await tx.insert(payee).values(copies);
   }

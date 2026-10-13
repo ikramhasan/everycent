@@ -328,34 +328,6 @@ export const deleteTransaction = createRoute({
   },
 });
 
-const PayeeSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    lastCategoryId: z
-      .string()
-      .nullable()
-      .describe("Category of the payee's latest categorized transaction, suggested for the next"),
-  })
-  .openapi("Payee");
-
-export const listPayees = createRoute({
-  method: "get",
-  path: "/budgets/{budgetId}/payees",
-  operationId: "listPayees",
-  tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
-  summary: "The budget's payees, by name (built-in and transfer ones left out)",
-  request: { params: BudgetParams },
-  responses: {
-    200: ok("Payees", z.object({ payees: z.array(PayeeSchema) }).openapi("PayeeList")),
-    401: jsonError("Not signed in"),
-    403: jsonError("The account's email address isn't confirmed"),
-    404: notFound,
-  },
-});
-
 const RegisterFilterSchema = z
   .object({
     accountId: z.string().optional(),

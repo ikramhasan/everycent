@@ -70,6 +70,8 @@ export const payee = pgTable(
      * left out of the unique name index (two accounts may share a name).
      */
     transferAccountId: text().references(() => budgetAccount.id, { onDelete: "cascade" }),
+    /** Hidden payees aren't suggested in the payee field, but typing the exact name still uses them. */
+    hidden: boolean().notNull().default(false),
     ...timestamps,
   },
   (t) => [
