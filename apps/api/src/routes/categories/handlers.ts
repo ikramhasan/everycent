@@ -242,14 +242,21 @@ async function pairedWithLoan(db: Db, categoryId: string) {
 
 /**
  * A category paired with a loan takes only YNAB's "Monthly Debt Payment" target (its inspector
- * offers just that form), and only such categories take it (YNAB, 2026-10-13).
+ * offers just that form), and only such categories take a new one (YNAB, 2026-10-13). One left
+ * on a category whose loan was unpaired or closed can still be edited: YNAB keeps it, asking as
+ * before, with an "Amount to Pay" form and "Pair with a Loan" (2026-10-14).
  */
-async function checkDebtTarget(db: Db, categoryId: string, cadence: string) {
+async function checkDebtTarget(
+  db: Db,
+  categoryId: string,
+  cadence: string,
+  existing: { cadence: string } | null | undefined,
+) {
   const paired = await pairedWithLoan(db, categoryId);
   if (paired && cadence !== "debt_monthly") {
     throw managedError("A category paired with a loan takes a Monthly Debt Payment target");
   }
-  if (!paired && cadence === "debt_monthly") {
+  if (!paired && cadence === "debt_monthly" && existing?.cadence !== "debt_monthly") {
     throw managedError("Only a category paired with a loan takes a Monthly Debt Payment target");
   }
 }
@@ -271,9 +278,9 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   if (!row.linkedAccountId && paymentTarget) {
     throw managedError("Only credit card payment categories take payment targets");
   }
-  await checkDebtTarget(db, categoryId, body.cadence);
-  const start = `${body.month}-01`;
   const existing = await findTarget(db, categoryId);
+  await checkDebtTarget(db, categoryId, body.cadence, existing);
+  const start = `${body.month}-01`;
   const repeat = body.cadence === "custom" ? body.repeat : null;
   const dueDate =
     body.cadence === "yearly"
@@ -368,7 +375,10 @@ export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTa
   if (Boolean(row.linkedAccountId) !== paymentTarget) {
     throw managedError("Payment categories take only payment targets, other categories none");
   }
-  if (!row.linkedAccountId) await checkDebtTarget(db, categoryId, snapshot.cadence);
+  if (!row.linkedAccountId) {
+    // Undo puts back exactly what was there, an unpaired debt target included.
+    await checkDebtTarget(db, categoryId, snapshot.cadence, snapshot);
+  }
   const values = {
     cadence: snapshot.cadence,
     behavior: snapshot.behavior,

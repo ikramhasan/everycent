@@ -1,4 +1,5 @@
 import {
+  accountFamily,
   addMonths,
   type BudgetMonth,
   effectivePayment,
@@ -7,14 +8,30 @@ import {
   payoffProjection,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@everycent/ui/components/dialog";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { cn } from "@everycent/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { toast } from "sonner";
+import { accountsQueryOptions } from "@/lib/accounts";
+import { $api } from "@/lib/api";
+import { useBudget } from "@/lib/budget-context";
+import { apiErrorMessage } from "@/lib/budgets";
 import { formatDuration, type LoanPlan } from "@/lib/loan-planner";
 import { formatRate } from "@/lib/loans";
 import { type CategoryTarget, ordinal, type TargetInput } from "@/lib/targets";
+import { AddAccountDialog } from "./add-account-dialog";
+import { useLoanRefresh } from "./loan-page";
 import { PayoffMonthPicker } from "./payoff-simulator";
 
 /** YNAB's Every list on this form: Last Day of Month, then 1st to 31st (2026-10-13). */
@@ -37,9 +54,15 @@ export function DebtTargetEditor({
   onSave,
   onCancel,
   onDelete,
+  unpairedCategoryId,
 }: {
   target: CategoryTarget | null;
   plan: LoanPlan | null;
+  /**
+   * A category whose loan was unpaired or closed, keeping its debt target: YNAB's "Amount to Pay"
+   * form with "Pair with a Loan" (2026-10-14).
+   */
+  unpairedCategoryId?: string;
   format: (minorUnits: string) => string;
   parse: (text: string) => bigint | string;
   toInput: (amount: string) => string;
@@ -150,10 +173,10 @@ export function DebtTargetEditor({
       <h3 className="font-semibold text-sm">Debt Payment Target</h3>
       <form onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] gap-3">
         {box}
-        <div className="grid grid-cols-2 gap-2">
+        <div className={cn("grid gap-2", !unpairedCategoryId && "grid-cols-2")}>
           <div className="grid gap-1 text-sm">
             <label htmlFor="debt-target-amount" className="font-medium">
-              Monthly Payment
+              {unpairedCategoryId ? "Amount to Pay" : "Monthly Payment"}
             </label>
             <Input
               id="debt-target-amount"
@@ -164,17 +187,17 @@ export function DebtTargetEditor({
               aria-invalid={error ? true : undefined}
             />
           </div>
-          <div className="grid gap-1 text-sm">
-            <span className="font-medium">Payoff Date</span>
-            {plan && (
+          {plan && (
+            <div className="grid gap-1 text-sm">
+              <span className="font-medium">Payoff Date</span>
               <PayoffMonthPicker
                 label="Payoff Date"
                 value={payoffMonth}
                 min={addMonths(plan.current, 1)}
                 onChange={pickMonth}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
         <div className="grid gap-1 rounded-md bg-muted/60 p-3 text-sm">
           <label htmlFor="debt-target-every" className="font-medium">
@@ -193,6 +216,7 @@ export function DebtTargetEditor({
             ))}
           </NativeSelect>
         </div>
+        {unpairedCategoryId && <PairWithLoan categoryId={unpairedCategoryId} onPaired={onCancel} />}
         {plan && byPayment && (
           <dl className="grid gap-1 text-sm">
             <p className="font-semibold">Summary</p>
@@ -242,5 +266,87 @@ function SummaryRow({ label, value, indent }: { label: string; value: string; in
       <dt>{label}</dt>
       <dd className="font-semibold tabular-nums">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * YNAB's "Pair with a Loan" on an unpaired debt target (2026-10-14): "Select an existing loan or
+ * add a new one", the loans not paired with a category and their balances, and Add a New Loan.
+ * Pairing starts the target again from the loan's minimum (G7 Loan Pay: $40.00 → $200.00).
+ */
+function PairWithLoan({ categoryId, onPaired }: { categoryId: string; onPaired: () => void }) {
+  const { budget, formatAmount } = useBudget();
+  const accounts = useQuery(accountsQueryOptions(budget.id));
+  const refresh = useLoanRefresh(budget.id);
+  const pair = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const loans = (accounts.data?.accounts ?? []).filter(
+    (a) => accountFamily(a.type) === "loan" && !a.closed && !a.pairedCategoryId,
+  );
+  async function choose(accountId: string) {
+    try {
+      await pair.mutateAsync({
+        params: { path: { budgetId: budget.id, accountId } },
+        body: { pairedCategoryId: categoryId },
+      });
+      await refresh();
+      setOpen(false);
+      // Pairing resets the target to the loan's minimum; the form's old amount is stale.
+      onPaired();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Couldn't pair the loan."));
+    }
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 p-3 text-left text-sm"
+      >
+        <span className="grid flex-1 gap-0.5">
+          <span className="font-medium text-primary">Pair with a Loan</span>
+          <span>See your payoff progress, interest payments, and payoff date</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-primary" aria-hidden />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Pair with a Loan</DialogTitle>
+            <DialogDescription>Select an existing loan or add a new one</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {loans.map((loan) => (
+              <button
+                key={loan.id}
+                type="button"
+                disabled={pair.isPending}
+                onClick={() => void choose(loan.id)}
+                className="flex justify-between gap-3 rounded-md bg-muted/60 px-3 py-2.5 text-sm hover:bg-muted"
+              >
+                <span className="truncate">{loan.name}</span>
+                <span className="tabular-nums">
+                  {formatAmount({
+                    amount: -BigInt(loan.balances.working),
+                    currency: budget.currency,
+                  })}
+                </span>
+              </button>
+            ))}
+            <Button
+              onClick={() => {
+                setOpen(false);
+                setAdding(true);
+              }}
+            >
+              Add a New Loan
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {adding && <AddAccountDialog budget={budget} open onOpenChange={setAdding} />}
+    </>
   );
 }

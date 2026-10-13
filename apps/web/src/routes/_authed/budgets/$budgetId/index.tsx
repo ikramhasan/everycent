@@ -244,6 +244,7 @@ function BudgetPage() {
       shown,
       progressBars,
       editAssigned,
+      onEditAssignedStarted: () => setEditAssigned(undefined),
       emptyView: {
         message: filter === "all" ? "" : EMPTY_VIEW[filter],
         onViewAll: () => setFilter("all"),
@@ -781,7 +782,14 @@ function Inspector({
                   : (amount) => assign.assign(only, BigInt(totals.assigned) + amount)
               }
               snoozeLocked={month.month !== figures.currentMonth}
-              debt={pairedLoan ? { plan: loanPlan } : undefined}
+              debt={
+                pairedLoan
+                  ? { plan: loanPlan }
+                  : // A loan unpaired or closed leaves its debt target (YNAB, 2026-10-14).
+                    category.target?.cadence === "debt_monthly"
+                    ? { plan: null, unpairedCategoryId: only }
+                    : undefined
+              }
               onSnooze={
                 month.month === figures.currentMonth
                   ? async (snoozed) => {

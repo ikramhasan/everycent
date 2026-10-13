@@ -889,6 +889,16 @@ series (`path.bb-line.__data__`).
   31st". It asks like a monthly set aside ($100 assigned → $200 to go; a $50 payment didn't
   change it; November asked $300 again with $50 carried in) and counts in the month's targets.
   The loan's Payoff Date and Current Track then follow the target.
+- **Pairing and the target (2026-10-14):** unpairing G7 Loan ("Unpairing will remove this loan's
+  information, payoff calculations, and payoff simulator from G7 Loan Pay's inspector …") kept
+  the category's debt target (API `DEBT`, still counted in October's Targets). Its editor became
+  "Amount to Pay", Every, "Pair with a Loan — See your payoff progress, interest payments, and
+  payoff date" (a dialog: "Select an existing loan or add a new one", the unpaired loans with
+  their balances, Add a New Loan), Delete, Cancel, Save Target. Re-pairing from there set the
+  target to the loan's minimum ($40.00 → $200.00). Choosing a category with another target in
+  the pairing dialog warns "Pairing this category will remove the current goal. Don't worry
+  though, we'll take you to your plan so you can create a new one!" (not saved). Closing a loan
+  unpairs it (help center), so its target stays the same way.
 
 ## Monthly targets (phase 8a)
 

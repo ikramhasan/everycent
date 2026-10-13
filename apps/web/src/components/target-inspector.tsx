@@ -123,7 +123,7 @@ export function TargetSection({
    * For a category paired with a loan: YNAB's Debt Payment Target takes the place of the usual
    * form, with the loan's plan (null while it loads).
    */
-  debt?: { plan: LoanPlan | null };
+  debt?: { plan: LoanPlan | null; unpairedCategoryId?: string };
 }) {
   const [editing, setEditing] = useState(false);
   const title = debt ? "Debt Payment Target" : "Target";
@@ -132,6 +132,7 @@ export function TargetSection({
       <DebtTargetEditor
         target={target}
         plan={debt.plan}
+        unpairedCategoryId={debt.unpairedCategoryId}
         format={format}
         parse={parse}
         toInput={toInput}

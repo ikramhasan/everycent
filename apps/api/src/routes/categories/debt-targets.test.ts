@@ -79,7 +79,13 @@ async function setup() {
     });
     expect(res.status, await res.clone().text()).toBe(201);
   };
-  return { pay, other, setTarget, assign, row, payLoan };
+  const pairLoan = (categoryId: string | null) =>
+    send("PATCH", `${base}/accounts/${loan.id}`, cookie, { pairedCategoryId: categoryId });
+  const target = async (categoryId: string) =>
+    (await json<{ groups: Group[] }>(await send("GET", `${base}/categories`, cookie))).groups
+      .flatMap((g) => g.categories)
+      .find((c) => c.id === categoryId)?.target ?? null;
+  return { pay, other, setTarget, assign, row, payLoan, pairLoan, target };
 }
 
 describe("Monthly Debt Payment targets (YNAB, 2026-10-13, G7 Loan Pay)", () => {
@@ -126,5 +132,33 @@ describe("Monthly Debt Payment targets (YNAB, 2026-10-13, G7 Loan Pay)", () => {
     });
     expect(monthlyOnPaired.status).toBe(409);
     expect((await json<ErrorBody>(monthlyOnPaired)).error.code).toBe("MANAGED_CATEGORY");
+  });
+
+  it("follows YNAB when the loan is unpaired, re-paired or paired elsewhere (2026-10-14)", async () => {
+    const { pay, other, setTarget, row, pairLoan, target } = await setup();
+    await setTarget(pay.id, { cadence: "debt_monthly", amount: "4000", dueDay: null });
+
+    // Unpaired, the target stays and keeps asking; it can still be edited.
+    expect((await pairLoan(null)).status).toBe(200);
+    expect((await row()).row?.target).toMatchObject({ needed: "4000" });
+    expect(
+      (await setTarget(pay.id, { cadence: "debt_monthly", amount: "5000", dueDay: 15 })).status,
+    ).toBe(200);
+
+    // Re-paired, it starts again from the loan's $200.00 minimum.
+    await pairLoan(pay.id);
+    expect(await target(pay.id)).toMatchObject({ cadence: "debt_monthly", amount: "20000" });
+
+    // Paired with a category that has another target, that target is removed.
+    await setTarget(other.id, {
+      cadence: "monthly",
+      behavior: "set_aside",
+      amount: "3000",
+      dueDay: null,
+    });
+    await pairLoan(other.id);
+    expect(await target(other.id)).toBeNull();
+    // The category it left keeps its debt target.
+    expect((await target(pay.id))?.cadence).toBe("debt_monthly");
   });
 });

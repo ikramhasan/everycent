@@ -24,6 +24,7 @@ export function AssignedCell({
   actions,
   className,
   startEditing = false,
+  onStartedEditing,
 }: {
   categoryId: string;
   categoryName: string;
@@ -33,6 +34,8 @@ export function AssignedCell({
   className?: string;
   /** Opens in edit mode (once), as YNAB's "Copy and go to my plan" leaves it. */
   startEditing?: boolean;
+  /** Told when `startEditing` has been used, so a later remount doesn't open it again. */
+  onStartedEditing?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
@@ -46,7 +49,9 @@ export function AssignedCell({
   }
 
   useEffect(() => {
-    if (startEditing) start();
+    if (!startEditing) return;
+    start();
+    onStartedEditing?.();
   }, [startEditing]);
 
   async function commit() {

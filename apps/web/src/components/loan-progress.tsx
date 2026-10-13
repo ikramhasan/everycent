@@ -24,7 +24,7 @@ import {
 import { longMonth } from "@/lib/loans";
 import { LoanChart, LoanChartLegend, type LoanSeries, SERIES_HINTS } from "./loan-chart";
 
-/** Rounds to whole major units, half up, and drops the decimals ("$9,745"). */
+/** Rounds to whole major units, half up, and drops the decimals ("$9,745", "9.745 €"). */
 export function useWholeFormat() {
   const { budget, formatAmount } = useBudget();
   const spec = NUMBER_FORMAT_SPECS[budget.numberFormat];
@@ -33,7 +33,7 @@ export function useWholeFormat() {
     const half = unit / 2n;
     const whole = ((minorUnits + (minorUnits < 0n ? -half : half)) / unit) * unit;
     return formatAmount({ amount: whole, currency: budget.currency }).replace(
-      new RegExp(`\\${spec.decimal}\\d+$`),
+      new RegExp(`\\${spec.decimal}\\d+`),
       "",
     );
   };

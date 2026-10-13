@@ -215,6 +215,11 @@ export function PayoffSimulator({
   const changed = typed !== base || extra > 0n || pickedMonth !== null;
   const payoffMonth = pickedMonth ?? sim?.payoffMonth ?? null;
 
+  /** Closes the simulator first: opened from the plan's inspector, it would stay open over it. */
+  const goToPlan = (text: string) => {
+    onOpenChange(false);
+    void copyToPlan?.(text);
+  };
   const pickMonth = (month: BudgetMonth) => {
     setPickedMonth(month);
     const months = monthsBetween(current, month);
@@ -244,7 +249,7 @@ export function PayoffSimulator({
       paymentHint = `${format(typed)} is your minimum monthly payment.`;
     else if (minShown !== null && typed < minShown)
       paymentHint = `${format(typed)} is less than your minimum monthly payment.`;
-    else if (copyToPlan) paymentHint = <CopyLink onClick={() => void copyToPlan(toInput(typed))} />;
+    else if (copyToPlan) paymentHint = <CopyLink onClick={() => goToPlan(toInput(typed))} />;
   }
   const dateHint =
     pickedMonth === current
@@ -388,7 +393,7 @@ export function PayoffSimulator({
               />
               <div className="text-muted-foreground text-xs">
                 {extra > 0n && copyToPlan ? (
-                  <CopyLink onClick={() => void copyToPlan(toInput(extra))} />
+                  <CopyLink onClick={() => goToPlan(toInput(extra))} />
                 ) : (
                   "Extra one-off payments can have a large impact on your loan."
                 )}
