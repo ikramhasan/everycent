@@ -1,11 +1,11 @@
 import { newId } from "@everycent/db";
-import { category, categoryGroup, categoryTarget } from "@everycent/db/schema";
+import { budgetAccount, category, categoryGroup, categoryTarget } from "@everycent/db/schema";
 import { monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { serverToday } from "../../lib/ledger";
+import { type Db, serverToday } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -230,6 +230,37 @@ export const moveCategoryHandler: RouteHandler<typeof moveCategory, Env> = async
   return c.json(await listCategoryTree(db, budgetId), 200);
 };
 
+/** Whether a loan is paired with the category (YNAB's "Paired with … Account"). */
+async function pairedWithLoan(db: Db, categoryId: string) {
+  const [loan] = await db
+    .select({ id: budgetAccount.id })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.pairedCategoryId, categoryId))
+    .limit(1);
+  return Boolean(loan);
+}
+
+/**
+ * A category paired with a loan takes only YNAB's "Monthly Debt Payment" target (its inspector
+ * offers just that form), and only such categories take a new one (YNAB, 2026-10-13). One left
+ * on a category whose loan was unpaired or closed can still be edited: YNAB keeps it, asking as
+ * before, with an "Amount to Pay" form and "Pair with a Loan" (2026-10-14).
+ */
+async function checkDebtTarget(
+  db: Db,
+  categoryId: string,
+  cadence: string,
+  existing: { cadence: string } | null | undefined,
+) {
+  const paired = await pairedWithLoan(db, categoryId);
+  if (paired && cadence !== "debt_monthly") {
+    throw managedError("A category paired with a loan takes a Monthly Debt Payment target");
+  }
+  if (!paired && cadence === "debt_monthly" && existing?.cadence !== "debt_monthly") {
+    throw managedError("Only a category paired with a loan takes a Monthly Debt Payment target");
+  }
+}
+
 export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, Env> = async (c) => {
   const { budgetId, categoryId } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -247,8 +278,9 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   if (!row.linkedAccountId && paymentTarget) {
     throw managedError("Only credit card payment categories take payment targets");
   }
-  const start = `${body.month}-01`;
   const existing = await findTarget(db, categoryId);
+  await checkDebtTarget(db, categoryId, body.cadence, existing);
+  const start = `${body.month}-01`;
   const repeat = body.cadence === "custom" ? body.repeat : null;
   const dueDate =
     body.cadence === "yearly"
@@ -263,9 +295,10 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
           : null;
   const values = {
     cadence: body.cadence,
-    // Pay Specific Amount Monthly asks like a monthly set aside; Pay Off by Date reaches a balance.
+    // Pay Specific Amount Monthly and Monthly Debt Payment ask like a monthly set aside; Pay Off
+    // by Date reaches a balance.
     behavior:
-      body.cadence === "payment_monthly"
+      body.cadence === "payment_monthly" || body.cadence === "debt_monthly"
         ? ("set_aside" as const)
         : body.cadence === "payoff_by_date"
           ? ("balance" as const)
@@ -273,7 +306,10 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     // Pay Off by Date pays off what the card owes, so it has no amount of its own (YNAB's API: 0).
     amount: body.cadence === "payoff_by_date" ? 0n : BigInt(body.amount),
     currency: budget.currency,
-    dueDay: body.cadence === "weekly" || body.cadence === "monthly" ? body.dueDay : null,
+    dueDay:
+      body.cadence === "weekly" || body.cadence === "monthly" || body.cadence === "debt_monthly"
+        ? body.dueDay
+        : null,
     dueDate,
     repeatEvery: repeat?.every ?? null,
     repeatUnit: repeat?.unit ?? null,
@@ -338,6 +374,10 @@ export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTa
     snapshot.cadence === "payment_monthly" || snapshot.cadence === "payoff_by_date";
   if (Boolean(row.linkedAccountId) !== paymentTarget) {
     throw managedError("Payment categories take only payment targets, other categories none");
+  }
+  if (!row.linkedAccountId) {
+    // Undo puts back exactly what was there, an unpaired debt target included.
+    await checkDebtTarget(db, categoryId, snapshot.cadence, snapshot);
   }
   const values = {
     cadence: snapshot.cadence,

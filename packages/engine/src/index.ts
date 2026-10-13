@@ -42,6 +42,7 @@ export {
   type CurrencySymbolPosition,
   DATE_FORMATS,
   type DateFormat,
+  NUMBER_FORMAT_SPECS,
   NUMBER_FORMATS,
   type NumberFormat,
   zCurrencySymbolPosition,
@@ -61,6 +62,21 @@ export {
   upcomingShort,
 } from "./funding";
 export { convert } from "./fx";
+export {
+  effectivePayment,
+  type LoanHistoryMonth,
+  type LoanProgress,
+  loanProgress,
+  minimumToPayDown,
+  monthsBetween,
+  type PayoffProjection,
+  type PlannedPayoff,
+  paidOffSavings,
+  paymentForMonths,
+  payoffProjection,
+  payoffSchedule,
+  plannedPayoff,
+} from "./loan-planner";
 export {
   LOAN_CHARGE_KINDS,
   LOAN_CHARGE_STATUSES,
@@ -148,6 +164,7 @@ export {
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,
+  isDebtTarget,
   isPaymentTarget,
   PAYMENT_TARGET_CADENCES,
   periodRollover,

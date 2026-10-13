@@ -769,6 +769,20 @@ export function PairCategoryFields({
               </optgroup>
             ))}
           </NativeSelect>
+          {current &&
+            "categoryId" in current &&
+            (() => {
+              const target = groups
+                .flatMap((g) => g.categories)
+                .find((c) => c.id === current.categoryId)?.target;
+              // YNAB, 2026-10-14: pairing drops any other target (a debt target stays).
+              return target && target.cadence !== "debt_monthly" ? (
+                <FieldDescription>
+                  Pairing this category will remove the current goal. Don't worry though, we'll take
+                  you to your plan so you can create a new one!
+                </FieldDescription>
+              ) : null;
+            })()}
         </Field>
       ) : (
         <>

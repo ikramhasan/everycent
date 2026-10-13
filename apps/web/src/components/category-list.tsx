@@ -90,6 +90,10 @@ export interface CategoryFigures {
   format: (minorUnits: string) => string;
   /** Makes the Assigned column editable. */
   assign?: AssignActions;
+  /** A category whose Assigned starts out being edited (the payoff simulator's "Copy and go"). */
+  editAssigned?: string;
+  /** Called once that edit has opened. */
+  onEditAssignedStarted?: () => void;
   /** Makes Available open YNAB's move and cover popovers. */
   move?: MoveActions;
   /** Makes Activity open the transactions behind it. */
@@ -881,6 +885,8 @@ function CategoryRow({
               amount={totals.assigned}
               format={format}
               actions={assign}
+              startEditing={figures?.editAssigned === category.id}
+              onStartedEditing={figures?.onEditAssignedStarted}
             />
           ) : (
             <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>

@@ -63,7 +63,8 @@ export function progressBar(
     if (need.underfunded > 0n) tone = "underfunded";
     weekly = target.cadence === "weekly";
     const setAsideMonthly =
-      target.behavior === "set_aside" && (weekly || target.cadence === "monthly");
+      target.behavior === "set_aside" &&
+      (weekly || target.cadence === "monthly" || target.cadence === "debt_monthly");
     const carriedIn = setAsideMonthly ? figures.carried : rollover;
     if (carriedIn > 0n) {
       sections.push({ kind: "rollover", size: carriedIn, money: carriedIn, segments: [] });

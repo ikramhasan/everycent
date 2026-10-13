@@ -166,7 +166,7 @@ and fresh start (after phase 5 core).
 
 ### 7. Credit cards & debt
 
-7a–7f are built; 7g (the loan planner) is next — see `docs/deferred.md`.
+7a–7g are built — see `docs/deferred.md` for what's left.
 
 - [x] Spending on a credit card moves funds into its payment category automatically
 - [x] Credit overspending (becomes new debt, shown yellow)
@@ -178,12 +178,14 @@ and fresh start (after phase 5 core).
 - [x] Loan accounts (7f): payments split into escrow, interest and principal; monthly interest
       estimated from the previous month's balance (exact, half-up); editable and recorded
       interest and escrow; credits, charges, Update Balance; paired plan category
-- [ ] Loan planner: payoff date, interest saved with extra payments (7g, deferred)
+- [x] Loan planner (7g): Payoff Date, Your Loan's Progress (chart with past balance, original
+      schedule, minimum and current track; YNAB's messages), the Loan Payoff Simulator (monthly
+      payment ↔ payoff date, one-time extra, "Copy and go to my plan"), Share Your Progress
+      (downloadable picture), the paid-off celebration
 
 ### 8. Targets (goals)
 
-Done and merged (8a–8f). Loan debt targets come with the loan planner (7g) — see
-`docs/deferred.md` and `docs/verify.md`.
+Done (8a–8f, and loan debt targets with 7g) — see `docs/deferred.md` and `docs/verify.md`.
 
 - [x] Needed for spending — weekly (by day), monthly (by date), yearly, custom
       (every N months/years), by a specific date; refill vs set aside another
@@ -191,7 +193,7 @@ Done and merged (8a–8f). Loan debt targets come with the loan planner (7g) —
 - [x] Monthly savings builder: YNAB's target form no longer offers it; monthly "Set aside
       another" covers it
 - [x] Credit card payment targets: Pay Specific Amount Monthly, Pay Off Balance by Date (8e)
-- [ ] Loan debt payment targets, with interest (with 7g's loan planner)
+- [x] Loan Monthly Debt Payment targets on a paired category (7g)
 - [x] Target progress bars and status (funded, underfunded, overspent, on track)
 - [x] Underfunded total + "Assign underfunded" button (Auto-Assign Underfunded and Reduce
       Overfunding, Underfunded/Overfunded views, the month's targets total; 8c)

@@ -78,13 +78,17 @@ export function rateThousandths(rate: string): bigint {
 
 /**
  * One month's interest on `owed` (minor units, positive) at an annual `rate` in percent:
- * owed × rate ÷ 12, rounded half up to the minor unit with exact math (YNAB: $10,001.00 at 6% is
- * $50.01, $7.00 at 6% is $0.04).
+ * owed × rate ÷ 12 with exact math, rounded half up twice as YNAB does: to the milliunit (a
+ * thousandth of the currency's major unit), then to the minor unit. $10,001.00 at 6% is $50.01,
+ * $7.00 at 6% is $0.04, and $2,074.97 at 6% ($10.37485) is $10.38, not $10.37 (YNAB, 2026-10-13).
+ * `exponent` is the currency's (2 for USD); with 3 or more there's one rounding.
  */
-export function monthlyInterest(owed: bigint, rate: string | null): bigint {
+export function monthlyInterest(owed: bigint, rate: string | null, exponent: number): bigint {
   if (owed <= 0n || rate === null) return 0n;
+  const scale = exponent < 3 ? 10n ** BigInt(3 - exponent) : 1n;
   // rate% / 12 = thousandths / (100 × 1000 × 12)
-  return divideRounded(owed * rateThousandths(rate), 1_200_000n, "half-up");
+  const milli = divideRounded(owed * scale * rateThousandths(rate), 1_200_000n, "half-up");
+  return divideRounded(milli, scale, "half-up");
 }
 
 /**
@@ -112,8 +116,10 @@ export function loanMonths(input: {
   terms: readonly LoanTerms[];
   overrides: readonly LoanChargeOverride[];
   through: BudgetMonth;
+  /** The loan currency's exponent (for `monthlyInterest`'s rounding). */
+  exponent: number;
 }): LoanMonth[] {
-  const { lines, terms, overrides, through } = input;
+  const { lines, terms, overrides, through, exponent } = input;
   if (lines.length === 0) return [];
   const first = lines.map((l) => monthOf(l.date)).reduce((a, b) => (a < b ? a : b));
   const last = first > through ? first : through;
@@ -143,7 +149,7 @@ export function loanMonths(input: {
       : { total: escrowTerm, applied: min(escrowTerm, paid), status: "estimated" };
 
     const interestOverride = override.get(`${month}:interest`);
-    const estimate = monthlyInterest(-base, term?.interestRate ?? null);
+    const estimate = monthlyInterest(-base, term?.interestRate ?? null, exponent);
     const left = paid - escrow.applied;
     const interest: LoanCharge = interestOverride
       ? {

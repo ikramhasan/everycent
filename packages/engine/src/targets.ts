@@ -30,6 +30,7 @@ export const TARGET_CADENCES = [
   "custom",
   "payment_monthly",
   "payoff_by_date",
+  "debt_monthly",
 ] as const;
 export type TargetCadence = (typeof TARGET_CADENCES)[number];
 export const zTargetCadence = z.enum(TARGET_CADENCES);
@@ -38,6 +39,15 @@ export const zTargetCadence = z.enum(TARGET_CADENCES);
 export const PAYMENT_TARGET_CADENCES = ["payment_monthly", "payoff_by_date"] as const;
 export const isPaymentTarget = (target: Pick<CategoryTarget, "cadence">) =>
   (PAYMENT_TARGET_CADENCES as readonly string[]).includes(target.cadence);
+
+/**
+ * YNAB's "Monthly Debt Payment" target (API `goal_type: DEBT`), only on a category paired with a
+ * loan: an amount each month, due on `dueDay` (null for the last day), asked like a monthly "Set
+ * aside another…" (YNAB, 2026-10-13, "G7 Loan Pay": $100.00 assigned of $300.00 left $200.00 to
+ * go, a $50.00 payment didn't change that, and the $50.00 carried into November didn't count).
+ */
+export const isDebtTarget = (target: Pick<CategoryTarget, "cadence">) =>
+  target.cadence === "debt_monthly";
 
 /** How a custom target repeats: every N months (1–11) or years (1–2). */
 export const TARGET_REPEAT_UNITS = ["month", "year"] as const;
@@ -48,13 +58,13 @@ export interface CategoryTarget {
   /** Payment targets: set_aside for Pay Specific Amount Monthly, balance for Pay Off by Date. */
   behavior: TargetBehavior;
   /**
-   * Minor units: per week (weekly), per month (monthly, payment_monthly), or per period (yearly,
-   * custom); zero for payoff_by_date, which pays off whatever the card owes.
+   * Minor units: per week (weekly), per month (monthly, payment_monthly, debt_monthly), or per
+   * period (yearly, custom); zero for payoff_by_date, which pays off whatever the card owes.
    */
   amount: bigint;
   /**
-   * Monthly: day of the month it's due (1–31), null for the last day. Weekly: the weekday
-   * (0 = Sunday … 6 = Saturday). Null otherwise. Only changes the wording.
+   * Monthly and debt_monthly: day of the month it's due (1–31), null for the last day. Weekly:
+   * the weekday (0 = Sunday … 6 = Saturday). Null otherwise. Only changes the wording.
    */
   dueDay: number | null;
   /**
@@ -240,7 +250,8 @@ export function targetNeed(
   if (
     target.cadence === "monthly" ||
     target.cadence === "weekly" ||
-    target.cadence === "payment_monthly"
+    target.cadence === "payment_monthly" ||
+    target.cadence === "debt_monthly"
   ) {
     const needed =
       target.cadence === "weekly"

@@ -3,6 +3,7 @@ import {
   budgetAccount,
   category,
   categoryGroup,
+  categoryTarget,
   payee,
   scheduledTransaction,
   transaction,
@@ -153,7 +154,10 @@ function assertLoanFields(
 
 /**
  * Pairs `categoryId` with the loan, moving it from any other loan (YNAB, 2026-10-13: pairing
- * L7 Neg with L7 Mortgage's category unpaired the mortgage).
+ * L7 Neg with L7 Mortgage's category unpaired the mortgage). The category's target follows YNAB
+ * (2026-10-14): any other target is removed ("Pairing this category will remove the current
+ * goal"), and a Monthly Debt Payment target starts again from the loan's minimum (G7 Loan Pay,
+ * $40.00, went to $200.00 when re-paired). Unpairing leaves the target as it is.
  */
 async function pairCategory(tx: Db, account: AccountRow, categoryId: string | null) {
   if (categoryId !== null) {
@@ -177,6 +181,20 @@ async function pairCategory(tx: Db, account: AccountRow, categoryId: string | nu
       .update(budgetAccount)
       .set({ pairedCategoryId: null })
       .where(and(eq(budgetAccount.pairedCategoryId, categoryId), ne(budgetAccount.id, account.id)));
+    if (account.pairedCategoryId !== categoryId) {
+      const [target] = await tx
+        .select({ id: categoryTarget.id, cadence: categoryTarget.cadence })
+        .from(categoryTarget)
+        .where(eq(categoryTarget.categoryId, categoryId));
+      if (target && target.cadence !== "debt_monthly") {
+        await tx.delete(categoryTarget).where(eq(categoryTarget.id, target.id));
+      } else if (target && account.minimumPayment && account.minimumPayment > 0n) {
+        await tx
+          .update(categoryTarget)
+          .set({ amount: account.minimumPayment })
+          .where(eq(categoryTarget.id, target.id));
+      }
+    }
   }
   await tx
     .update(budgetAccount)

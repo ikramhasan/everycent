@@ -66,6 +66,14 @@ function activityJson(state: LoanState) {
         .filter((t) => monthOf(t.date) === m.month)
         .map((t) => ({ ...t, amount: t.amount.toString() })),
     })),
+    terms: [...state.terms]
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((t) => ({
+        month: t.month,
+        interestRate: t.interestRate,
+        minimumPayment: t.minimumPayment?.toString() ?? null,
+        escrowAmount: t.escrowAmount?.toString() ?? null,
+      })),
   };
 }
 

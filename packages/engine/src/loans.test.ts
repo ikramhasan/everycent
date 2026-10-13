@@ -45,14 +45,22 @@ describe("monthlyInterest (YNAB, 2026-10-13)", () => {
     [1_000_100n, "6", 5_001n], // $10,001.00 → $50.01 (50.005 rounds up)
     [700n, "6", 4n], // $7.00 → $0.04 (0.035 rounds up)
     [1_000_100n, "12", 10_001n], // $10,001.00 at 12% → $100.01
+    [207_497n, "6", 1_038n], // $2,074.97 → $10.38: 10.37485 → 10.375 → 10.38 (L7 Half)
+    [974_500n, "6", 4_873n], // $9,745.00 → $48.73 (48.725)
   ])("%s at %s%% → %s", (owed, rate, expected) =>
-    expect(monthlyInterest(owed, rate)).toBe(expected),
+    expect(monthlyInterest(owed, rate, 2)).toBe(expected),
   );
 
+  it("rounds once for currencies with three decimals and twice to whole units", () => {
+    expect(monthlyInterest(2_074_970n, "6", 3)).toBe(10_375n); // 10.37485 → 10.375
+    expect(monthlyInterest(2_075n, "6", 0)).toBe(10n); // 10.375 → 10.375 → 10
+    expect(monthlyInterest(2_100n, "6", 0)).toBe(11n); // 10.5 → 11
+  });
+
   it("is zero without debt or a rate", () => {
-    expect(monthlyInterest(0n, "6")).toBe(0n);
-    expect(monthlyInterest(-500n, "6")).toBe(0n);
-    expect(monthlyInterest(10_000n, null)).toBe(0n);
+    expect(monthlyInterest(0n, "6", 2)).toBe(0n);
+    expect(monthlyInterest(-500n, "6", 2)).toBe(0n);
+    expect(monthlyInterest(10_000n, null, 2)).toBe(0n);
   });
 });
 
@@ -84,6 +92,7 @@ describe("loanMonths", () => {
       terms: mortgage,
       overrides: [],
       through: "2026-10",
+      exponent: 2,
     });
     expect(months.map((m) => m.month)).toEqual(["2026-07", "2026-08", "2026-09", "2026-10"]);
     const [jul, aug, sep, oct] = months;
@@ -105,6 +114,7 @@ describe("loanMonths", () => {
       terms: mortgage,
       overrides: [],
       through: "2026-07",
+      exponent: 2,
     });
     // YNAB: escrow −$150, interest −$350 "$77.08 still due ($427.08 total this month)".
     expect(jul?.escrow.applied).toBe(15_000n);
@@ -116,6 +126,7 @@ describe("loanMonths", () => {
       terms: mortgage,
       overrides: [],
       through: "2026-07",
+      exponent: 2,
     });
     // YNAB: escrow −$100 "$50.00 still due ($150.00 total this month)", no interest.
     expect(small?.escrow).toEqual({ total: 15_000n, applied: 10_000n, status: "estimated" });
@@ -125,7 +136,13 @@ describe("loanMonths", () => {
   it("raises the cap with a later payment in the same month (YNAB's L7 Neg)", () => {
     const lines = [start("2026-08-01", -1_000_100n), pay("2026-09-05", 2_000n)];
     const terms6 = [terms("2026-10", "6")];
-    const once = loanMonths({ lines, terms: terms6, overrides: [], through: "2026-10" });
+    const once = loanMonths({
+      lines,
+      terms: terms6,
+      overrides: [],
+      through: "2026-10",
+      exponent: 2,
+    });
     expect(once[1]?.interest.applied).toBe(2_000n);
     expect(once[1]?.endBalance).toBe(-1_000_100n);
     const twice = loanMonths({
@@ -133,6 +150,7 @@ describe("loanMonths", () => {
       terms: terms6,
       overrides: [],
       through: "2026-10",
+      exponent: 2,
     });
     expect(twice[1]?.interest.applied).toBe(5_001n);
     expect(twice[1]?.endBalance).toBe(-993_101n); // YNAB: −$9,931.01
@@ -148,6 +166,7 @@ describe("loanMonths", () => {
       terms: [terms("2026-07", "5.125")],
       overrides: [],
       through: "2026-10",
+      exponent: 2,
     });
     // Interest on $100,000.00, not $99,900.00.
     expect(months.at(-1)?.interest.total).toBe(42_708n);
@@ -163,6 +182,7 @@ describe("loanMonths", () => {
         { month: "2026-08", kind: "escrow", amount: 0n, status: "reconciled" },
       ],
       through: "2026-09",
+      exponent: 2,
     });
     expect(months[1]?.interest).toEqual({ total: 40_000n, applied: 40_000n, status: "edited" });
     expect(months[1]?.escrow).toEqual({ total: 0n, applied: 0n, status: "reconciled" });
@@ -182,6 +202,7 @@ describe("loanMonths", () => {
       terms: [terms("2026-07", "6"), terms("2026-09", "12")],
       overrides: [],
       through: "2026-09",
+      exponent: 2,
     });
     expect(months[1]?.interest.applied).toBe(5_000n); // $10,000 at 6%
     // September at 12% on what August left: 10,000 + 50 − 1,000 = $9,050.
@@ -189,5 +210,7 @@ describe("loanMonths", () => {
   });
 
   it("is empty without transactions", () =>
-    expect(loanMonths({ lines: [], terms: [], overrides: [], through: "2026-10" })).toEqual([]));
+    expect(
+      loanMonths({ lines: [], terms: [], overrides: [], through: "2026-10", exponent: 2 }),
+    ).toEqual([]));
 });

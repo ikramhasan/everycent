@@ -87,8 +87,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 - 8e added the two credit card payment targets (Pay Specific Amount Monthly, Pay Off Balance by
   Date) with "Create a Debt Payoff Target", the payment inspector's Target section and their place
   in Underfunded, Reduce Overfunding and the month's targets. Not built there: the form's "Making
-  minimum payments?" help link (YNAB's help center; everycent has none), "Cover Overspent
-  Categories", and loan "Monthly Debt Payment" targets (they need 7f's loan activity).
+  minimum payments?" help link (YNAB's help center; everycent has none) and "Cover Overspent
+  Categories". Loan "Monthly Debt Payment" targets came with 7g: asked like a monthly set aside
+  and due like a monthly target in Underfunded.
 - Not yet: YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
 - Underfunded funds upcoming scheduled transactions with the due-date step (10b). Among card
   payments, those with a scheduled payment go first; YNAB then puts card payment targets before
@@ -103,9 +104,9 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 ## Credit lifecycle and loans (phase 7e–7g)
 
-7e is built (2026-10-11, EVERYCENT-2) and 7f (2026-10-13, EVERYCENT-37); 7g (the loan planner)
-waits. `docs/verify.md` ("Credit lifecycle (phase 7e)", "Loan activity (phase 7f)") has what YNAB
-showed.
+7e is built (2026-10-11, EVERYCENT-2), 7f (2026-10-13, EVERYCENT-37) and 7g (2026-10-14,
+EVERYCENT-38, -39). `docs/verify.md` ("Credit lifecycle (phase 7e)", "Loan activity (phase 7f)",
+"Loan planner (phase 7g)") has what YNAB showed.
 
 - **Positive card balances (7e)** are built: `cardLedger` walks each card's lines by date and
   splits them at zero, including transfers between two cards and a split's lines in their order
@@ -128,10 +129,15 @@ showed.
 - **Not built in 7f:** Update Balance's interest-rate/escrow check step (YNAB's result didn't add
   up; EVERYCENT-126). Record Payment's From Account starts on the last account in its list, as YNAB
   did with one card (its rule wasn't confirmed).
-- **Loan planner (7g):** Payoff Date, the progress chart, Share Your Progress, the Payoff
-  Simulator, the paired inspector's paid-off message ("You did it! You paid off your loan in 3
-  months. You saved $2.10 in interest and paid it off 4 months earlier."), and Debt Payment
-  targets (phase 8's last target type).
+- **Loan planner (7g)** is built: Payoff Date, Your Loan's Progress (chart, messages, the
+  Past Balance popover that rebases the original schedule), the Loan Payoff Simulator, Share Your
+  Progress, the banners, the paired inspector's paid-off message and "paid this month", and
+  Monthly Debt Payment targets. Projections use YNAB's closed-form annuity with exact decimals
+  (decimal.js), so where YNAB's floats land a cent off (one payment of exactly $10,050.00 showed
+  $10,050.01) everycent gives the exact figure.
+- **Not built in 7g:** YNAB's rule that sharing is only offered for loans paid off after July 12,
+  2026 (everycent offers it on every open loan); the share picture carries the app's name instead
+  of YNAB's logo. The banners' dismissals are kept per device (YNAB's storage wasn't checked).
 - Lines of credit are treated as credit cards, as YNAB does (re-checked 2026-10-11, docs/verify.md).
 
 ## Onboarding and fresh start
@@ -250,7 +256,7 @@ showed.
   Account Type"; its Edit Account dialog has no type field), so cross-family changes aren't
   planned.
 - Loan accounts keep interest rate, minimum payment and escrow per month (7f); the payoff planner
-  that projects with them is 7g.
+  (7g) projects with this month's.
 
 ## Budgets and sharing (phase 16)
 
