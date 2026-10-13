@@ -52,6 +52,13 @@ export const AccountSchema = z
     lastPaymentDate: IsoDate.nullable().describe(
       "Loan accounts: the date of the latest payment up to today",
     ),
+    lastPaymentFromAccountId: z
+      .string()
+      .nullable()
+      .describe(
+        "Loan accounts: the cash or credit account of the payment into it entered last " +
+          "(Record Payment starts there)",
+      ),
   })
   .openapi("Account");
 

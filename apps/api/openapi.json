@@ -1845,6 +1845,13 @@
             ],
             "format": "date",
             "description": "Loan accounts: the date of the latest payment up to today"
+          },
+          "lastPaymentFromAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Loan accounts: the cash or credit account of the payment into it entered last (Record Payment starts there)"
           }
         },
         "required": [
@@ -1862,7 +1869,8 @@
           "balances",
           "lastReconciledAt",
           "pairedCategoryId",
-          "lastPaymentDate"
+          "lastPaymentDate",
+          "lastPaymentFromAccountId"
         ]
       },
       "AccountBalances": {

@@ -451,6 +451,7 @@ export function LoanPage({
           settings={settings}
           format={format}
           paired={paired ? { name: paired.name, available: pairedAvailable } : null}
+          lastFromAccountId={account.lastPaymentFromAccountId}
           onSave={(input) =>
             save(
               () =>

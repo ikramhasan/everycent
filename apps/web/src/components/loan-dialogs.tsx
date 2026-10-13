@@ -183,6 +183,22 @@ export interface PaymentInput {
 }
 
 /**
+ * Where Record Payment's From Account starts. YNAB (2026-10-14, "L7 Loans FS"): on the account of
+ * the payment into this loan entered last (`lastFromAccountId`, from the API; Record Payment or a
+ * register transfer, even back-dated), and on a loan with none, on the first account in the list
+ * (cash accounts, then credit accounts, in sidebar order). A closed account falls back the same way.
+ */
+export function defaultPaymentSource(
+  accounts: readonly Account[],
+  lastFromAccountId: string | null | undefined,
+): string {
+  const open = (family: "cash" | "credit") =>
+    accounts.filter((a) => !a.closed && accountFamily(a.type) === family);
+  const list = [...open("cash"), ...open("credit")];
+  return (list.find((a) => a.id === lastFromAccountId) ?? list[0])?.id ?? "";
+}
+
+/**
  * YNAB's Record Payment (2026-10-13): Payment Amount, From Account (cash accounts, then credit
  * accounts), Date, Memo; with "You have $X available for payment in <category>." when the loan is
  * paired.
@@ -196,6 +212,7 @@ export function RecordPaymentDialog({
   paired,
   initialAmount,
   fromInspector = false,
+  lastFromAccountId,
   onSave,
 }: {
   open: boolean;
@@ -207,12 +224,15 @@ export function RecordPaymentDialog({
   paired: { name: string; available: bigint } | null;
   initialAmount?: bigint;
   fromInspector?: boolean;
+  /** The loan's `lastPaymentFromAccountId`. */
+  lastFromAccountId?: string | null;
   onSave: (input: PaymentInput) => Promise<string | null>;
 }) {
   const cash = accounts.filter((a) => !a.closed && accountFamily(a.type) === "cash");
   const credit = accounts.filter((a) => !a.closed && accountFamily(a.type) === "credit");
-  // YNAB started on the last account in this list (its only card); its rule wasn't confirmed.
-  const [fromAccountId, setFrom] = useState(() => (credit.at(-1) ?? cash.at(-1))?.id ?? "");
+  const [fromAccountId, setFrom] = useState(() =>
+    defaultPaymentSource(accounts, lastFromAccountId),
+  );
   const [amount, setAmount] = useState(
     initialAmount && initialAmount > 0n ? toMoneyInput(initialAmount, settings) : "",
   );
