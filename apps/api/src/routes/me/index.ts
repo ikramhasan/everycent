@@ -1,6 +1,7 @@
 import { createRouter } from "../../lib/router";
 import {
   changeEmailHandler,
+  deleteAccountHandler,
   disableTwoFactorHandler,
   getMeHandler,
   getPreferencesHandler,
@@ -11,6 +12,7 @@ import {
 } from "./handlers";
 import {
   changeEmail,
+  deleteAccount,
   disableTwoFactor,
   getMe,
   getPreferences,
@@ -28,4 +30,5 @@ export const meRouter = createRouter()
   .openapi(revokeOtherSessions, revokeOtherSessionsHandler)
   .openapi(disableTwoFactor, disableTwoFactorHandler)
   .openapi(getPreferences, getPreferencesHandler)
-  .openapi(updatePreferences, updatePreferencesHandler);
+  .openapi(updatePreferences, updatePreferencesHandler)
+  .openapi(deleteAccount, deleteAccountHandler);

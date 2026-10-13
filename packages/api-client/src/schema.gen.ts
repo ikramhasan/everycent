@@ -131,6 +131,26 @@ export interface paths {
         patch: operations["updatePreferences"];
         trace?: never;
     };
+    "/v1/me/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Permanently delete the account and its data
+         * @description As YNAB does: confirmed with the password (`INVALID_PASSWORD`; attempts share the password-check limit), it deletes every budget the account owns, shared ones included, and removes the account from budgets others shared with it. Logins, sessions, options and two-step verification go too. Can't be undone.
+         */
+        post: operations["deleteMyAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets": {
         parameters: {
             query?: never;
@@ -1218,6 +1238,9 @@ export interface components {
             openLastBudget?: boolean;
             /** @description Keyboard shortcuts, undo and redo included */
             keyboardShortcuts?: boolean;
+        };
+        DeleteAccount: {
+            password: string;
         };
         BudgetList: {
             budgets: components["schemas"]["Budget"][];
@@ -2864,6 +2887,64 @@ export interface operations {
             };
             /** @description The account's email address isn't confirmed */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMyAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccount"];
+            };
+        };
+        responses: {
+            /** @description Deleted; the session is gone too */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Wrong password (`INVALID_PASSWORD`), or the email isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many attempts (`RATE_LIMITED`) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

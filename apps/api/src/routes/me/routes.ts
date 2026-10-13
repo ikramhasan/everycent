@@ -230,3 +230,35 @@ export const updatePreferences = createRoute({
     403: unverified,
   },
 });
+
+export const deleteAccount = createRoute({
+  method: "post",
+  path: "/me/delete",
+  operationId: "deleteMyAccount",
+  tags: ["Users"],
+  summary: "Permanently delete the account and its data",
+  description:
+    "As YNAB does: confirmed with the password (`INVALID_PASSWORD`; attempts share the " +
+    "password-check limit), it deletes every budget the account owns, shared ones included, and " +
+    "removes the account from budgets others shared with it. Logins, sessions, options and " +
+    "two-step verification go too. Can't be undone.",
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ password: z.string().min(1).max(200) }).openapi("DeleteAccount"),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Deleted; the session is gone too" },
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: jsonError("Wrong password (`INVALID_PASSWORD`), or the email isn't confirmed"),
+    429: jsonError("Too many attempts (`RATE_LIMITED`)"),
+  },
+});

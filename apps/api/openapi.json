@@ -253,6 +253,19 @@
           }
         }
       },
+      "DeleteAccount": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
       "BudgetList": {
         "type": "object",
         "properties": {
@@ -6071,6 +6084,76 @@
           },
           "403": {
             "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/delete": {
+      "post": {
+        "operationId": "deleteMyAccount",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Permanently delete the account and its data",
+        "description": "As YNAB does: confirmed with the password (`INVALID_PASSWORD`; attempts share the password-check limit), it deletes every budget the account owns, shared ones included, and removes the account from budgets others shared with it. Logins, sessions, options and two-step verification go too. Can't be undone.",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted; the session is gone too"
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Wrong password (`INVALID_PASSWORD`), or the email isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts (`RATE_LIMITED`)",
             "content": {
               "application/json": {
                 "schema": {

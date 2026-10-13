@@ -212,6 +212,25 @@ fresh start "C9 Payees FS":
 - Transfer payees can't be edited or deleted (only YNAB's import renaming rules, EVERYCENT-62).
 - Out of scope here: the Categorization section (EVERYCENT-61) and Renaming rules (EVERYCENT-62).
 
+## Sharing and account settings (Cycle 9) (settled 2026-10-13)
+
+From YNAB's help center ("YNAB Together", "Two-Step Verification", "Keyboard Shortcuts"), the
+YNAB Together terms, and the test account's Account Settings (options switched back afterwards):
+
+- **Sharing** (EVERYCENT-86, -87): a group is the manager plus up to 5 people; invites (first
+  name, email) last 14 days with a reminder 3 days before (EVERYCENT-125); Resend / Cancel
+  Invite; removed or leaving people lose access; after "Transfer Plan" the old owner keeps
+  access. Built per budget (everycent has no subscription groups).
+- **Two-step verification** (EVERYCENT-48): authenticator app, one emergency backup code,
+  enabling signs out other devices, "Turn Off" asks for the 6-digit code. Built (set-up also
+  asks for the password: Better Auth requires it).
+- **Per-user settings** (EVERYCENT-51): only First Name, "Open last used plan by default" (off:
+  the plan list, "Your Plans" / "Plans Shared With You") and "Enable keyboard shortcuts" (off:
+  Cmd+Z stops too). Built. No per-user locale, formats or first day of week in YNAB.
+- **Delete account** (EVERYCENT-50): confirmed with the password; "any budgets that you owned
+  will be unshared and deleted. Any budgets that were shared with you will no longer be
+  shared." Built.
+
 ## Budget screen (phase 6a)
 
 Checked in YNAB's web app on 2026-10-02 and built as found: Activity leaves out future-dated

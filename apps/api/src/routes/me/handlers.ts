@@ -1,15 +1,24 @@
 import { sql } from "@everycent/db";
-import { session, twoFactor, userPreference, user as userTable } from "@everycent/db/schema";
+import {
+  budget,
+  budgetMember,
+  session,
+  twoFactor,
+  userPreference,
+  user as userTable,
+  verification,
+} from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { APIError } from "better-auth/api";
 import Bowser from "bowser";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
 import { consumePasswordCheck } from "../../lib/throttle";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
   changeEmail,
+  deleteAccount,
   disableTwoFactor,
   getMe,
   getPreferences,
@@ -174,4 +183,33 @@ export const updatePreferencesHandler: Handler<typeof updatePreferences> = async
       set: { ...input, updatedAt: sql`now()` },
     });
   return c.json(await preferencesOf(db, c.var.user.id), 200);
+};
+
+export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => {
+  const { db, auth } = c.var.deps;
+  const { password } = c.req.valid("json");
+  const me = c.var.user;
+  await consumePasswordCheck(db, me.id);
+  try {
+    await auth.api.verifyPassword({ body: { password }, headers: c.req.raw.headers });
+  } catch (e) {
+    if (e instanceof APIError && e.statusCode < 500) {
+      throw new AppError(403, "INVALID_PASSWORD", "That password isn't right");
+    }
+    throw e;
+  }
+  await db.transaction(async (tx) => {
+    // YNAB: "any budgets that you owned will be unshared and deleted. Any budgets that were
+    // shared with you will no longer be shared." Deleting a budget cascades to everything in it.
+    const owned = tx
+      .select({ id: budgetMember.budgetId })
+      .from(budgetMember)
+      .where(and(eq(budgetMember.userId, me.id), eq(budgetMember.role, "owner")));
+    await tx.delete(budget).where(inArray(budget.id, owned));
+    // Reset-password tokens are stored with the user's id as their value.
+    await tx.delete(verification).where(eq(verification.value, me.id));
+    // Memberships, sessions, logins, options and two-step verification cascade from the user.
+    await tx.delete(userTable).where(eq(userTable.id, me.id));
+  });
+  return c.body(null, 204);
 };
