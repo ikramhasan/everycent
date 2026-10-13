@@ -68,6 +68,7 @@ const g7: LoanActivity = {
   months: [month("2026-10", "0", "-980000", "25000", "5000", "-1000000")],
   terms: [{ month: "2026-10", interestRate: "6.000", minimumPayment: "20000", escrowAmount: null }],
   banners: { simulatorDismissed: false, paidOffDismissed: false },
+  originalHistory: null,
 };
 
 describe("loanPlan", () => {
@@ -117,6 +118,7 @@ describe("loanPlan", () => {
       months: [month("2026-10", "0", "0", "1000000", "0", "-1000000")],
       terms: g7.terms,
       banners: g7.banners,
+      originalHistory: null,
     };
     expect(
       loanPlan({ activity: paid, currency: "USD", current: "2026-10", targetAmount: null }),

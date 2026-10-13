@@ -24,11 +24,12 @@ type Month = {
   lastMonth: string;
   readyToAssign: string;
   readyToAssignBreakdown: Record<string, string>;
+  futureMonths: { month: string; assigned: string; targets: unknown }[];
+  nextMonthTargets: unknown;
   overdraft: boolean;
   assignedInFuture: string;
   futureShortfall: { month: string; readyToAssign: string } | null;
   note: string;
-  futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
     payment:
@@ -1301,6 +1302,24 @@ describe("budget months", () => {
       return { ...ctx, move, moves };
     }
 
+    // YNAB "x132 Order", 2026-10-14 (EVERYCENT-140): Transportation −$2.00 in October covered from
+    // November's Groceries ($5.00 assigned there) left Groceries at $3.00 in November.
+    it("covers overspending from a later month's assigned money", async () => {
+      const { put, spend, month, groceries, phone, cookie, base } = await moveSetup();
+      await put(groceries.id, "2026-11", "500");
+      await spend({ date: "2026-10-01", amount: "-200", categoryId: phone.id });
+      const res = await send("POST", `${base}/months/2026-10/moves`, cookie, {
+        fromCategoryId: groceries.id,
+        toCategoryId: phone.id,
+        amount: "200",
+        fromMonth: "2026-11",
+        today: TODAY,
+      });
+      expect(res.status).toBe(200);
+      expect((await month("2026-10")).byCategory(phone.id)).toMatchObject(t("200", "-200", "0"));
+      expect((await month("2026-11")).byCategory(groceries.id)?.assigned).toBe("300");
+    });
+
     it("moves assigned money between categories", async () => {
       const { put, move, month, rent, phone } = await moveSetup();
       await put(rent.id, "2026-10", "5000");
@@ -1784,6 +1803,27 @@ describe("budget months", () => {
         averageAssigned: "500",
         averageSpent: "0",
       });
+    });
+
+    // YNAB "x132 Order", 2026-10-14 (EVERYCENT-143): Groceries' $5.00 monthly target with $3.00
+    // assigned in November drew a part-filled pie by November, and a check at $5.00.
+    it("tells each later month's targets for the panel's pie or check", async () => {
+      const ctx = await setup();
+      const { put, month, groceries, rent } = ctx;
+      await target(ctx, groceries.id, { amount: "500" });
+      await put(groceries.id, "2026-11", "300");
+      let oct = await month("2026-10");
+      expect(oct.futureMonths).toEqual([
+        { month: "2026-11", assigned: "300", targets: { needed: "500", funded: "300" } },
+      ]);
+      await put(groceries.id, "2026-11", "500");
+      await put(rent.id, "2026-12", "100"); // December: assigned, but no targets ask there
+      oct = await month("2026-10");
+      expect(oct.futureMonths.map((m) => m.targets)).toEqual([
+        { needed: "500", funded: "500" },
+        { needed: "500", funded: "0" },
+      ]);
+      expect(oct.nextMonthTargets).toEqual({ needed: "500", funded: "500" });
     });
 
     // YNAB's Ready to Assign Breakdown, 2026-10-14 (EVERYCENT-138).

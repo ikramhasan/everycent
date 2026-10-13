@@ -59,6 +59,13 @@ export const budgetAccount = pgTable(
      * `loan_payoff_celebration_completed_for_account_ids`, per loan, checked 2026-10-14).
      */
     paidOffBannerDismissed: boolean().notNull().default(false),
+    /**
+     * A tracking liability updated to a loan account (YNAB's "Update to a Loan Account"): the new
+     * loan. The original stays closed with its history, which the loan's page shows.
+     */
+    migratedToAccountId: text().references((): AnyPgColumn => budgetAccount.id, {
+      onDelete: "set null",
+    }),
     ...timestamps,
   },
   (t) => [

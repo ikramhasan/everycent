@@ -220,3 +220,32 @@ export const monthNote = pgTable(
   },
   (t) => [uniqueIndex("month_note_budget_month_idx").on(t.budgetId, t.month)],
 );
+
+/**
+ * YNAB's preset views that Manage Views can reorder (All and Overspent stay first and fixed), in
+ * YNAB's default order.
+ */
+export const PRESET_BUDGET_VIEWS = ["underfunded", "overfunded", "available", "snoozed"] as const;
+export type PresetBudgetView = (typeof PRESET_BUDGET_VIEWS)[number];
+
+/** YNAB allows up to 12 custom views per plan. */
+export const MAX_CUSTOM_VIEWS = 12;
+
+/**
+ * A custom view (YNAB's "New Custom View"): a named set of categories, shared by everyone on the
+ * budget. `categoryIds` keeps hidden categories (they come back when unhidden, as in YNAB); ids of
+ * deleted categories are dropped when read. Names are unique per budget, ignoring case.
+ */
+export const budgetView = pgTable(
+  "budget_view",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    categoryIds: text().array().notNull().default(sql`'{}'::text[]`),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("budget_view_budget_name_idx").on(t.budgetId, sql`lower(${t.name})`)],
+);

@@ -18,7 +18,7 @@ import { Skeleton } from "@everycent/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/components/tooltip";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Info, Lock, Pencil } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
+import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -38,6 +39,7 @@ import { todayIso } from "@/lib/dates";
 import { invalidateMonths } from "@/lib/months";
 import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
+import { scheduledQueryPrefix } from "@/lib/scheduled";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
@@ -79,6 +81,11 @@ function AccountPage() {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [pairing, setPairing] = useState(false);
+  const [updatingToLoan, setUpdatingToLoan] = useState(false);
+  const updateToLoan = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan",
+  );
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const pairCategory = usePairCategory(budget.id);
   /** The bank's balance while reconciling against it (the banner over the register). */
@@ -254,6 +261,14 @@ function AccountPage() {
         <DialogHeader>
           <DialogTitle>Edit account</DialogTitle>
         </DialogHeader>
+        {account.migratedToAccountId && (
+          <Alert>
+            <Info aria-hidden />
+            <AlertDescription>
+              This account was previously updated to a loan account.
+            </AlertDescription>
+          </Alert>
+        )}
         <EditAccountForm
           key={`${account.id}-${editing}`}
           settings={budget}
@@ -295,6 +310,14 @@ function AccountPage() {
               </Button>
             )}
           </section>
+        )}
+        {account.type === "liability" && !account.closed && !account.migratedToAccountId && (
+          <UpdateToLoanSection
+            onLearnMore={() => {
+              setEditing(false);
+              setUpdatingToLoan(true);
+            }}
+          />
         )}
         {/* YNAB: an open account offers Close, or Delete while it has only its starting
             balance; a closed one offers Re-open and Delete, disabled while it has history. */}
@@ -367,6 +390,42 @@ function AccountPage() {
     />
   );
 
+  const updateToLoanDialog = updatingToLoan && (
+    <UpdateToLoanDialog
+      open
+      onOpenChange={setUpdatingToLoan}
+      account={account}
+      settings={budget}
+      categories={categories.data}
+      format={(minorUnits) => show(minorUnits)}
+      onSubmit={async ({ pairing: choice, ...values }) => {
+        try {
+          const pairedCategoryId = await pairCategory(choice);
+          const { loan } = await updateToLoan.mutateAsync({
+            params: { path },
+            body: { ...values, pairedCategoryId, date: todayIso() },
+          });
+          // Its scheduled transactions are gone too.
+          await Promise.all([
+            refresh(),
+            queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
+          ]);
+          return { loanId: loan.id };
+        } catch (error) {
+          return { error: apiErrorMessage(error, "Couldn't update the account.") };
+        }
+      }}
+      onDone={(loanId) => {
+        setUpdatingToLoan(false);
+        void navigate({
+          to: "/budgets/$budgetId/accounts/$accountId",
+          params: { budgetId: budget.id, accountId: loanId },
+          search: {},
+        });
+      }}
+    />
+  );
+
   if (isLoan) {
     return (
       <>
@@ -404,7 +463,17 @@ function AccountPage() {
           </p>
           {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {account.migratedToAccountId && (
+            <Button variant="link" size="sm" asChild>
+              <Link
+                to="/budgets/$budgetId/accounts/$accountId"
+                params={{ budgetId: budget.id, accountId: account.migratedToAccountId }}
+              >
+                Go to Loan Account
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil /> Edit account
           </Button>
@@ -480,6 +549,7 @@ function AccountPage() {
       />
 
       {editDialog}
+      {updateToLoanDialog}
 
       {confirmDialog()}
     </div>

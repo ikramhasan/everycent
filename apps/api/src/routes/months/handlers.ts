@@ -723,6 +723,18 @@ async function monthState(
   const overspent: MonthAmount[] = [];
   const nextMonth = addMonths(month, 1);
   const monthTargets = { month: 0n, nextMonth: 0n };
+  // Each later month the panel lists (money assigned there, and always next month): how much its
+  // targets need and how much of that is funded, for YNAB's pie or check by the month.
+  const futureTargets = new Map<BudgetMonth, { needed: bigint; funded: bigint }>([
+    [nextMonth, { needed: 0n, funded: 0n }],
+  ]);
+  for (const entries of history.values()) {
+    for (const e of entries) {
+      if (e.month > month && e.assigned !== 0n && !futureTargets.has(e.month)) {
+        futureTargets.set(e.month, { needed: 0n, funded: 0n });
+      }
+    }
+  }
   for (const cat of categories) {
     const entries = history.get(cat.id) ?? [];
     if (cat.internalKind === "ready_to_assign") {
@@ -759,6 +771,17 @@ async function monthState(
         ? { ...funded, parts: afterStart(funded.parts, firstDay) }
         : funded;
     if (target && !isHidden) {
+      for (const [m, sums] of futureTargets) {
+        const n = beforeOpening(
+          payment?.accountId,
+          targetNeed(entries, target, m, monthOf(today), owed),
+          m,
+        );
+        // A one-time target past its due month asks for nothing there (YNAB: x132 C Target).
+        if (!n || n.needed <= 0n || (n.dueDate && monthOf(n.dueDate) < m)) continue;
+        sums.needed += n.needed;
+        sums.funded += n.funded < 0n ? 0n : n.funded < n.needed ? n.funded : n.needed;
+      }
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
         beforeOpening(
@@ -827,6 +850,7 @@ async function monthState(
     rta,
     register,
     monthTargets,
+    futureTargets,
   };
 }
 
@@ -845,6 +869,13 @@ function futureShortfall(
     if (amount < 0n) return { month: m, readyToAssign: amount.toString() };
   }
   return null;
+}
+
+/** A later month's targets for the panel, or null when it has none. */
+function futureTargetsJson(sums: { needed: bigint; funded: bigint } | undefined) {
+  return sums && sums.needed > 0n
+    ? { needed: sums.needed.toString(), funded: sums.funded.toString() }
+    : null;
 }
 
 /** The budget screen's numbers for `month`, as of the user's `today`. */
@@ -884,7 +915,12 @@ export async function budgetMonthJson(
     futureMonths: [...future]
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
+      .map(([m, amount]) => ({
+        month: m,
+        assigned: amount.toString(),
+        targets: futureTargetsJson(state.futureTargets.get(m)),
+      })),
+    nextMonthTargets: futureTargetsJson(state.futureTargets.get(addMonths(month, 1))),
     note:
       (
         await db
@@ -1027,22 +1063,31 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
 
 export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) => {
   const { budgetId, month } = c.req.valid("param");
-  const { fromCategoryId, toCategoryId, amount, today = serverToday() } = c.req.valid("json");
+  const {
+    fromCategoryId,
+    toCategoryId,
+    amount,
+    fromMonth = month,
+    today = serverToday(),
+  } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
   const from = await moneyCategory(db, budgetId, fromCategoryId);
   const to = await moneyCategory(db, budgetId, toCategoryId);
-  if (from.id === to.id) {
+  if (from.id === to.id && fromMonth === month) {
     throw new AppError(400, "BAD_REQUEST", "Money has to move to another category");
   }
   const value = BigInt(amount);
   if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Move a positive amount");
   await assertMonthInRange(db, budgetId, month, today);
+  if (fromMonth !== month) await assertMonthInRange(db, budgetId, fromMonth, today);
 
-  // Moving money changes what each side has assigned; Ready to Assign follows from that.
+  // Moving money changes what each side has assigned; Ready to Assign follows from that. Covering
+  // from a later month takes it off that month's Assigned (YNAB, 2026-10-14, "x132 Order": $2.00
+  // from November's Groceries left it at $3.00 and October's Transportation at $2.00).
   await db.transaction(async (tx) => {
-    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, month, -value);
+    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, fromMonth, -value);
     if (!to.readyToAssign) await adjustAssigned(tx, budget, to.id, month, value);
     await logMove(tx, budget, {
       userId: c.var.user.id,

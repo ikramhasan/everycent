@@ -26,6 +26,8 @@ const account = (id: string, type: Account["type"], closed = false): Account => 
   pairedCategoryId: null,
   lastPaymentDate: null,
   lastPaymentFromAccountId: null,
+  migratedToAccountId: null,
+  migratedFromAccountId: null,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 

@@ -17,6 +17,7 @@ export function useFixThisMonths({
   data,
   categories,
   unassign,
+  always = false,
 }: {
   budgetId: string;
   month: BudgetMonth;
@@ -25,8 +26,10 @@ export function useFixThisMonths({
   data: BudgetMonthData | undefined;
   categories: CategoryList | undefined;
   unassign: FixThisMonths["unassign"];
+  /** Offer the months whatever Ready to Assign is (covering overspending from a later month). */
+  always?: boolean;
 }): FixThisMonths | undefined {
-  const needed = Boolean(data && BigInt(data.readyToAssign) < 0n && !data.overdraft);
+  const needed = always || Boolean(data && BigInt(data.readyToAssign) < 0n && !data.overdraft);
   const active = needed && month >= current;
   const currentData = useQuery({
     ...monthQueryOptions(budgetId, current),

@@ -1,5 +1,5 @@
-import { budgetAccount, budget as budgetTable } from "@everycent/db/schema";
-import { accountFamily, isOnBudget, monthOf } from "@everycent/engine";
+import { budgetAccount, budget as budgetTable, transaction } from "@everycent/db/schema";
+import { accountFamily, isOnBudget, monthEndBalances, monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -44,6 +44,26 @@ async function loanState(db: Db, account: AccountRow, today: string) {
   return state;
 }
 
+/** The tracking liability `loan` was made from, as month-end balances (or null). */
+async function originalHistory(db: Db, loan: AccountRow) {
+  const [original] = await db
+    .select({ id: budgetAccount.id })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.migratedToAccountId, loan.id));
+  if (!original) return null;
+  const entries = await db
+    .select({ date: transaction.date, amount: transaction.amount })
+    .from(transaction)
+    .where(eq(transaction.accountId, original.id));
+  return {
+    accountId: original.id,
+    months: monthEndBalances(entries).map((m) => ({
+      month: m.month,
+      endBalance: m.endBalance.toString(),
+    })),
+  };
+}
+
 /** The loan page's banners: the simulator one is dismissed plan-wide, the paid-off one per loan. */
 function bannersJson(budget: { loanSimulatorBannerDismissed: boolean }, account: AccountRow) {
   return {
@@ -52,7 +72,20 @@ function bannersJson(budget: { loanSimulatorBannerDismissed: boolean }, account:
   };
 }
 
-function activityJson(state: LoanState, banners: ReturnType<typeof bannersJson>) {
+async function loanActivity(
+  db: Db,
+  budget: { loanSimulatorBannerDismissed: boolean },
+  account: AccountRow,
+  today: string,
+) {
+  return {
+    ...activityJson(await loanState(db, account, today)),
+    banners: bannersJson(budget, account),
+    originalHistory: await originalHistory(db, account),
+  };
+}
+
+function activityJson(state: LoanState) {
   const charge = (
     month: string,
     kind: "interest" | "escrow",
@@ -83,7 +116,6 @@ function activityJson(state: LoanState, banners: ReturnType<typeof bannersJson>)
         minimumPayment: t.minimumPayment?.toString() ?? null,
         escrowAmount: t.escrowAmount?.toString() ?? null,
       })),
-    banners,
   };
 }
 
@@ -93,10 +125,7 @@ export const getLoanActivityHandler: RouteHandler<typeof getLoanActivity, Env> =
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   const account = await findLoan(db, budgetId, accountId);
-  return c.json(
-    activityJson(await loanState(db, account, today), bannersJson(budget, account)),
-    200,
-  );
+  return c.json(await loanActivity(db, budget, account, today), 200);
 };
 
 export const dismissLoanBannerHandler: RouteHandler<typeof dismissLoanBanner, Env> = async (c) => {
@@ -140,10 +169,7 @@ export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> 
     throw new AppError(400, "BAD_REQUEST", "That month is outside the loan's activity");
   }
   await setLoanCharge(db, account, { month, kind, amount: value, status: "edited" });
-  return c.json(
-    activityJson(await loanState(db, account, today), bannersJson(budget, account)),
-    200,
-  );
+  return c.json(await loanActivity(db, budget, account, today), 200);
 };
 
 export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, Env> = async (c) => {

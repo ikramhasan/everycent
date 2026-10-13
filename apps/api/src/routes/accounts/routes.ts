@@ -59,6 +59,14 @@ export const AccountSchema = z
         "Record Payment's source: for a loan, the cash or credit account of the payment into " +
           "it entered last; for a credit card, the cash account it was last paid from",
       ),
+    migratedToAccountId: z
+      .string()
+      .nullable()
+      .describe("A tracking liability updated to a loan account: the new loan"),
+    migratedFromAccountId: z
+      .string()
+      .nullable()
+      .describe("A loan made by updating a tracking liability: the original (closed) account"),
   })
   .openapi("Account");
 
@@ -397,6 +405,55 @@ export const deleteAccount = createRoute({
   },
 });
 
+export const updateToLoanAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/update-to-loan",
+  operationId: "updateToLoanAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
+  description:
+    "Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms " +
+    "and the paired category. The original account keeps its transactions and is closed: a " +
+    'cleared Manual Balance Adjustment (memo "Closed Account") zeroes its working balance, ' +
+    '" (Original)" is added to its name, and its scheduled transactions (and those transferring ' +
+    "to it) are deleted. Only open tracking liabilities that weren't updated before.",
+  request: {
+    params: AccountParams,
+    body: json(
+      z
+        .strictObject({
+          name: Name.describe("The loan's nickname"),
+          type: zAccountType.describe("A loan type (mortgage, auto_loan, …)"),
+          balance: zMinorUnits.describe("Today's balance; negative for money owed"),
+          date: IsoDate.describe("The user's today"),
+          interestRate: InterestRate.optional(),
+          minimumPayment: zMinorUnits.optional(),
+          escrowAmount: zMinorUnits.optional().describe("Mortgages only"),
+          pairedCategoryId: PairedCategoryId,
+        })
+        .openapi("UpdateToLoanAccount"),
+    ),
+  },
+  responses: {
+    201: ok(
+      "The new loan and the closed original",
+      z
+        .object({ loan: AccountSchema, original: AccountSchema })
+        .openapi("UpdateToLoanAccountResult"),
+    ),
+    400: jsonError(
+      "Not an open tracking liability, already updated, not a loan type, or invalid input",
+    ),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
+    404: notFound,
+  },
+});
+
 const LoanChargeSchema = z
   .object({
     total: zMinorUnits.describe("The month's full charge: the estimate, or what was set"),
@@ -461,6 +518,18 @@ const LoanActivitySchema = z
           "(months before the first entry use it), for the payoff planner",
       ),
     banners: LoanBannersSchema,
+    originalHistory: z
+      .object({
+        accountId: z.string(),
+        months: z
+          .array(z.object({ month: zBudgetMonth, endBalance: zMinorUnits }))
+          .describe("Each month's ending balance, newest first"),
+      })
+      .nullable()
+      .describe(
+        "A loan made by updating a tracking liability: the original account's month-end " +
+          'balances (YNAB\'s "Original Tracking Account History")',
+      ),
   })
   .openapi("LoanActivity");
 

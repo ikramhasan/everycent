@@ -681,6 +681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)
+         * @description Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms and the paired category. The original account keeps its transactions and is closed: a cleared Manual Balance Adjustment (memo "Closed Account") zeroes its working balance, " (Original)" is added to its name, and its scheduled transactions (and those transferring to it) are deleted. Only open tracking liabilities that weren't updated before.
+         */
+        post: operations["updateToLoanAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/loan": {
         parameters: {
             query?: never;
@@ -1097,6 +1117,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The budget's custom views and the order of the rearrangeable views */
+        get: operations["listViews"];
+        put?: never;
+        /** Add a custom view; it goes after the existing views */
+        post: operations["createView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/views/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rearrange the preset and custom views (Manage Views) */
+        put: operations["reorderViews"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/views/{viewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a custom view (preset views can't be deleted) */
+        delete: operations["deleteView"];
+        options?: never;
+        head?: never;
+        /** Rename a custom view or change its categories */
+        patch: operations["updateView"];
         trace?: never;
     };
     "/v1/budgets/{budgetId}/months/{month}": {
@@ -1700,6 +1773,10 @@ export interface components {
             lastPaymentDate: string | null;
             /** @description Record Payment's source: for a loan, the cash or credit account of the payment into it entered last; for a credit card, the cash account it was last paid from */
             lastPaymentFromAccountId: string | null;
+            /** @description A tracking liability updated to a loan account: the new loan */
+            migratedToAccountId: string | null;
+            /** @description A loan made by updating a tracking liability: the original (closed) account */
+            migratedFromAccountId: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
@@ -1803,6 +1880,34 @@ export interface components {
              */
             date: string;
         };
+        UpdateToLoanAccountResult: {
+            loan: components["schemas"]["Account"];
+            original: components["schemas"]["Account"];
+        };
+        UpdateToLoanAccount: {
+            /** @description The loan's nickname */
+            name: string;
+            /**
+             * @description A loan type (mortgage, auto_loan, …)
+             * @enum {string}
+             */
+            type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            /** @description Today's balance; negative for money owed */
+            balance: string;
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            date: string;
+            /** @description Annual interest rate in percent (loan accounts) */
+            interestRate?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            minimumPayment?: string;
+            /** @description Mortgages only */
+            escrowAmount?: string;
+            /** @description Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category. */
+            pairedCategoryId: string;
+        };
         LoanActivity: {
             /** @description From the loan's first month through today's, oldest first */
             months: {
@@ -1848,6 +1953,17 @@ export interface components {
                 escrowAmount: string | null;
             }[];
             banners: components["schemas"]["LoanBanners"];
+            /** @description A loan made by updating a tracking liability: the original account's month-end balances (YNAB's "Original Tracking Account History") */
+            originalHistory: {
+                accountId: string;
+                /** @description Each month's ending balance, newest first */
+                months: {
+                    /** @description YYYY-MM */
+                    month: string;
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    endBalance: string;
+                }[];
+            } | null;
         };
         LoanCharge: {
             /** @description The month's full charge: the estimate, or what was set */
@@ -2463,6 +2579,32 @@ export interface components {
         RenameFlag: {
             name: string;
         };
+        BudgetViewList: {
+            /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
+            order: string[];
+            /** @description The custom views (at most 12) */
+            views: components["schemas"]["BudgetView"][];
+        };
+        BudgetView: {
+            id: string;
+            name: string;
+            /** @description The categories in the view, hidden ones included (a view leaves them out) */
+            categoryIds: string[];
+        };
+        CreateBudgetView: {
+            name: string;
+            /** @description Categories of this budget; Ready to Assign and Uncategorized can't be in a view */
+            categoryIds: string[];
+        };
+        ReorderBudgetViews: {
+            /** @description Every preset key and custom view id, once each, in the new order */
+            order: string[];
+        };
+        UpdateBudgetView: {
+            name?: string;
+            /** @description Categories of this budget; Ready to Assign and Uncategorized can't be in a view */
+            categoryIds?: string[];
+        };
         BudgetMonth: {
             /** @description A month, YYYY-MM */
             month: string;
@@ -2504,7 +2646,21 @@ export interface components {
                 month: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 assigned: string;
+                /** @description A later month's targets for YNAB's pie or check; null when it has none */
+                targets: {
+                    /** @description What the month's targets need, all together */
+                    needed: string;
+                    /** @description How much of that is funded (each target counts up to its need) */
+                    funded: string;
+                } | null;
             }[];
+            /** @description Next month's targets, for the panel's row when nothing is assigned there yet */
+            nextMonthTargets: {
+                /** @description What the month's targets need, all together */
+                needed: string;
+                /** @description How much of that is funded (each target counts up to its need) */
+                funded: string;
+            } | null;
             /** @description The month's note (YNAB's "Enter a note…"); empty for none */
             note: string;
             /** @description The first later month whose Ready to Assign is negative, if any */
@@ -2703,6 +2859,8 @@ export interface components {
             toCategoryId: string;
             /** @description Positive */
             amount: string;
+            /** @description Take the money from the first category's Assigned in this month instead (covering overspending from a later month); defaults to `month` */
+            fromMonth?: string;
             /**
              * Format: date
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
@@ -5528,6 +5686,69 @@ export interface operations {
             };
         };
     };
+    updateToLoanAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateToLoanAccount"];
+            };
+        };
+        responses: {
+            /** @description The new loan and the closed original */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateToLoanAccountResult"];
+                };
+            };
+            /** @description Not an open tracking liability, already updated, not a loan type, or invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getLoanActivity: {
         parameters: {
             query?: {
@@ -7097,6 +7318,308 @@ export interface operations {
             };
             /** @description No such budget, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The budget's views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetViewList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBudgetView"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetView"];
+                };
+            };
+            /** @description Invalid input, or a category that isn't the budget's */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change views, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The name is taken (VIEW_NAME_TAKEN) or the budget has 12 custom views (VIEW_LIMIT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    reorderViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderBudgetViews"];
+            };
+        };
+        responses: {
+            /** @description The budget's views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetViewList"];
+                };
+            };
+            /** @description The order isn't exactly the budget's rearrangeable views */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change views, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change views, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or view, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBudgetView"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetView"];
+                };
+            };
+            /** @description Invalid input, or a category that isn't the budget's */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change views, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or view, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The name is taken (VIEW_NAME_TAKEN) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

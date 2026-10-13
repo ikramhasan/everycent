@@ -9,6 +9,7 @@ import {
   reconcileAccountHandler,
   reopenAccountHandler,
   updateAccountHandler,
+  updateToLoanAccountHandler,
 } from "./handlers";
 import {
   dismissLoanBannerHandler,
@@ -30,6 +31,7 @@ import {
   reopenAccount,
   setLoanCharge,
   updateAccount,
+  updateToLoanAccount,
 } from "./routes";
 
 export const accountsRouter = createRouter()
@@ -42,6 +44,7 @@ export const accountsRouter = createRouter()
   .openapi(closeAccount, closeAccountHandler)
   .openapi(reopenAccount, reopenAccountHandler)
   .openapi(deleteAccount, deleteAccountHandler)
+  .openapi(updateToLoanAccount, updateToLoanAccountHandler)
   .openapi(getLoanActivity, getLoanActivityHandler)
   .openapi(setLoanCharge, setLoanChargeHandler)
   .openapi(recordLoanPayment, recordLoanPaymentHandler)

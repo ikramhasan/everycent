@@ -7,6 +7,7 @@ import {
   categoryOverspending,
   isOverdraft,
   monthBounds,
+  monthEndBalances,
   monthOf,
   readyToAssign,
   readyToAssignBreakdown,
@@ -453,5 +454,39 @@ describe("isOverdraft", () => {
   it("never applies to a Ready to Assign that isn't negative", () => {
     expect(isOverdraft(0n, [cat(-5_00n)])).toBe(false);
     expect(isOverdraft(1n, [])).toBe(false);
+  });
+});
+
+describe("monthEndBalances", () => {
+  it("lists each month's ending balance, newest first (YNAB's x-145 HELOC history)", () => {
+    expect(
+      monthEndBalances([
+        { date: "2026-08-01", amount: -500000n },
+        { date: "2026-09-15", amount: 20000n },
+        { date: "2026-10-02", amount: -3000n },
+        { date: "2026-10-14", amount: 483000n },
+      ]),
+    ).toEqual([
+      { month: "2026-10", endBalance: 0n },
+      { month: "2026-09", endBalance: -480000n },
+      { month: "2026-08", endBalance: -500000n },
+    ]);
+  });
+
+  it("carries a balance through months without transactions, across a year", () => {
+    expect(
+      monthEndBalances([
+        { date: "2027-01-03", amount: 5n },
+        { date: "2026-11-30", amount: -10n },
+      ]),
+    ).toEqual([
+      { month: "2027-01", endBalance: -5n },
+      { month: "2026-12", endBalance: -10n },
+      { month: "2026-11", endBalance: -10n },
+    ]);
+  });
+
+  it("is empty without transactions", () => {
+    expect(monthEndBalances([])).toEqual([]);
   });
 });
