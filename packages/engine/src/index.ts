@@ -128,7 +128,9 @@ export {
   monthBounds,
   monthOf,
   type ReadyToAssign,
+  type ReadyToAssignBreakdown,
   readyToAssign,
+  readyToAssignBreakdown,
   splitOverspending,
   zBudgetMonth,
 } from "./months";

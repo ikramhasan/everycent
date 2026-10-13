@@ -227,6 +227,25 @@ const MonthSchema = z
           "than you have\", Fix This) and when Ready to Assign isn't negative",
       ),
     assignedInFuture: zMinorUnits.describe("Money assigned in the months after this one"),
+    readyToAssignBreakdown: z
+      .object({
+        leftOver: zMinorUnits.describe(
+          "Ready to Assign left over from last month, before later months' assigning",
+        ),
+        inflows: zMinorUnits.describe(
+          "Inflows to Ready to Assign this month, card inflows left out",
+        ),
+        debtInflows: zMinorUnits.describe(
+          "What credit accounts' balances above zero added this month (Inflow from Debt Account)",
+        ),
+        cashOverspending: zMinorUnits.describe("Last month's cash overspending (negative)"),
+        assigned: zMinorUnits.describe("This month's assigned money (negative)"),
+        assignedInFuture: zMinorUnits.describe(
+          "What later months' assigning takes from this month (negative, never below zero)",
+        ),
+        total: zMinorUnits.describe("The sum of the lines: Ready to Assign"),
+      })
+      .describe("YNAB's Ready to Assign Breakdown, line by line"),
     futureMonths: z
       .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
       .describe("The later months with money assigned, in order"),

@@ -9,6 +9,7 @@ import {
   monthBounds,
   monthOf,
   readyToAssign,
+  readyToAssignBreakdown,
   splitOverspending,
 } from "./months";
 
@@ -200,6 +201,59 @@ describe("categoryMonth", () => {
         cashActivity: 0n,
         creditActivity: 0n,
       });
+    });
+  });
+});
+
+describe("readyToAssignBreakdown", () => {
+  const a = (month: string, amount: bigint) => ({ month, amount });
+
+  // YNAB "x132 Order", 2026-10-14: $1 in August, $3 assigned in September, $15 in and $12
+  // assigned in October, $3 assigned in November.
+  const plan = {
+    income: [a("2026-08", 100n), a("2026-10", 1500n)],
+    debt: [],
+    assigned: [a("2026-09", 300n), a("2026-10", 1200n), a("2026-11", 300n)],
+    overspent: [],
+  };
+
+  it("lists October's lines, Assigned in Future only down to zero", () => {
+    expect(readyToAssignBreakdown({ ...plan, month: "2026-10" })).toEqual({
+      leftOver: -200n,
+      inflows: 1500n,
+      debtInflows: 0n,
+      cashOverspending: 0n,
+      assigned: -1200n,
+      assignedInFuture: -100n,
+      total: 0n,
+    });
+  });
+
+  it("starts November from October's total before November's assigning", () => {
+    expect(readyToAssignBreakdown({ ...plan, month: "2026-11" })).toMatchObject({
+      leftOver: 100n,
+      assigned: -300n,
+      assignedInFuture: 0n,
+      total: -200n,
+    });
+  });
+
+  it("splits card inflows out and takes last month's cash overspending (ihni7's Plan)", () => {
+    const b = readyToAssignBreakdown({
+      month: "2026-10",
+      income: [a("2026-09", -50806n), a("2026-10", 1208500n + 8900n)],
+      debt: [a("2026-10", 8900n)],
+      assigned: [a("2026-10", 257037n)],
+      overspent: [a("2026-09", -270000n)],
+    });
+    expect(b).toEqual({
+      leftOver: -50806n,
+      inflows: 1208500n,
+      debtInflows: 8900n,
+      cashOverspending: -270000n,
+      assigned: -257037n,
+      assignedInFuture: 0n,
+      total: 639557n,
     });
   });
 });

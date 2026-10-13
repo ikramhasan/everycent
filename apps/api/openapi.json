@@ -5135,6 +5135,56 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Money assigned in the months after this one"
           },
+          "readyToAssignBreakdown": {
+            "type": "object",
+            "properties": {
+              "leftOver": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Ready to Assign left over from last month, before later months' assigning"
+              },
+              "inflows": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Inflows to Ready to Assign this month, card inflows left out"
+              },
+              "debtInflows": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What credit accounts' balances above zero added this month (Inflow from Debt Account)"
+              },
+              "cashOverspending": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Last month's cash overspending (negative)"
+              },
+              "assigned": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "This month's assigned money (negative)"
+              },
+              "assignedInFuture": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What later months' assigning takes from this month (negative, never below zero)"
+              },
+              "total": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The sum of the lines: Ready to Assign"
+              }
+            },
+            "required": [
+              "leftOver",
+              "inflows",
+              "debtInflows",
+              "cashOverspending",
+              "assigned",
+              "assignedInFuture",
+              "total"
+            ],
+            "description": "YNAB's Ready to Assign Breakdown, line by line"
+          },
           "futureMonths": {
             "type": "array",
             "items": {
@@ -5268,6 +5318,7 @@
           "readyToAssign",
           "overdraft",
           "assignedInFuture",
+          "readyToAssignBreakdown",
           "futureMonths",
           "note",
           "futureShortfall",

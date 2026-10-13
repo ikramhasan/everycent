@@ -486,6 +486,10 @@ function BudgetPage() {
             amount={listFigures.month.readyToAssign}
             overdraft={listFigures.month.overdraft}
             format={listFigures.format}
+            breakdown={{
+              lines: listFigures.month.readyToAssignBreakdown,
+              month: listFigures.month.month,
+            }}
             assign={
               listFigures.move && (
                 <AssignButton

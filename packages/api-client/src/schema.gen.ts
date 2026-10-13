@@ -2402,6 +2402,23 @@ export interface components {
             overdraft: boolean;
             /** @description Money assigned in the months after this one */
             assignedInFuture: string;
+            /** @description YNAB's Ready to Assign Breakdown, line by line */
+            readyToAssignBreakdown: {
+                /** @description Ready to Assign left over from last month, before later months' assigning */
+                leftOver: string;
+                /** @description Inflows to Ready to Assign this month, card inflows left out */
+                inflows: string;
+                /** @description What credit accounts' balances above zero added this month (Inflow from Debt Account) */
+                debtInflows: string;
+                /** @description Last month's cash overspending (negative) */
+                cashOverspending: string;
+                /** @description This month's assigned money (negative) */
+                assigned: string;
+                /** @description What later months' assigning takes from this month (negative, never below zero) */
+                assignedInFuture: string;
+                /** @description The sum of the lines: Ready to Assign */
+                total: string;
+            };
             /** @description The later months with money assigned, in order */
             futureMonths: {
                 /** @description A month, YYYY-MM */
