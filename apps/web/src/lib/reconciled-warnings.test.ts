@@ -21,6 +21,7 @@ const base: Transaction = {
   approved: true,
   transferFromSplit: false,
   transferReconciled: false,
+  transferSide: null,
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
@@ -31,6 +32,7 @@ const transfer: Transaction = {
   transferAccountId: "a2",
   transferTransactionId: "t2",
   transferReconciled: true,
+  transferSide: null,
 };
 const name = (id: string) => (id === "a2" ? "Savings" : "Other");
 
@@ -88,6 +90,7 @@ describe("deleteWarning", () => {
           transferAccountId: "a2",
           transferTransactionId: "t3",
           transferReconciled: true,
+          transferSide: null,
         },
       ],
     };

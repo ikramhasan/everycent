@@ -1,7 +1,9 @@
 import { sql } from "@everycent/db";
 import {
   budgetAccount,
+  type ClearedState,
   category,
+  type FlagColor,
   flagName,
   payee,
   subTransaction,
@@ -331,6 +333,11 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       transferAccountId: payee.transferAccountId,
       transferTransactionId: other.id,
       transferReconciled: sql<boolean>`coalesce(${other.cleared} = 'reconciled', false)`,
+      sideMemo: other.memo,
+      sideCleared: other.cleared,
+      sideFlag: other.flag,
+      sideApproved: other.approved,
+      sideCategoryId: other.categoryId,
     })
     .from(subTransaction)
     .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
@@ -341,11 +348,61 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       inArray(subTransaction.transactionId, transactionIds.length ? [...transactionIds] : [""]),
     )
     .orderBy(asc(subTransaction.sortOrder), asc(subTransaction.id));
-  const byTransaction = new Map<string, Omit<(typeof rows)[number], "transactionId">[]>();
-  for (const { transactionId, ...line } of rows) {
+  type Line = Omit<
+    (typeof rows)[number],
+    "transactionId" | "sideMemo" | "sideCleared" | "sideFlag" | "sideApproved" | "sideCategoryId"
+  > & { transferSide: TransferSide | null };
+  const byTransaction = new Map<string, Line[]>();
+  for (const row of rows) {
+    const { transactionId, sideMemo, sideCleared, sideFlag, sideApproved, sideCategoryId, ...l } =
+      row;
+    const line: Line = {
+      ...l,
+      transferSide:
+        l.transferTransactionId && sideCleared !== null
+          ? {
+              memo: sideMemo ?? "",
+              cleared: sideCleared,
+              flag: sideFlag,
+              approved: sideApproved ?? true,
+              categoryId: sideCategoryId,
+            }
+          : null,
+    };
     byTransaction.set(transactionId, [...(byTransaction.get(transactionId) ?? []), line]);
   }
   return byTransaction;
+}
+
+/** A transfer's other side's own state (what an undo needs to bring it back as it was). */
+export interface TransferSide {
+  memo: string;
+  cleared: ClearedState;
+  flag: FlagColor | null;
+  approved: boolean;
+  categoryId: string | null;
+}
+
+/** The other sides of these rows' transfers (not a split line's, which `queryLines` has). */
+async function queryTransferSides(db: Db, rows: readonly Row[]) {
+  const ids = rows.flatMap((r) =>
+    r.transferTransactionId && !r.transferFromSplit ? [r.transferTransactionId] : [],
+  );
+  const sides = new Map<string, TransferSide>();
+  if (ids.length === 0) return sides;
+  const found = await db
+    .select({
+      id: transaction.id,
+      memo: transaction.memo,
+      cleared: transaction.cleared,
+      flag: transaction.flag,
+      approved: transaction.approved,
+      categoryId: transaction.categoryId,
+    })
+    .from(transaction)
+    .where(inArray(transaction.id, ids));
+  for (const { id, ...side } of found) sides.set(id, side);
+  return sides;
 }
 
 /** The register's columns, selected from the CTE. */
@@ -393,9 +450,14 @@ async function toJson(
     db,
     rows.map((row) => row.id),
   );
+  const sides = await queryTransferSides(db, rows);
   return rows.map(({ createdAt: _, ...row }) => ({
     ...row,
     amount: row.amount.toString(),
+    transferSide:
+      row.transferTransactionId && !row.transferFromSplit
+        ? (sides.get(row.transferTransactionId) ?? null)
+        : null,
     subtransactions: (lines.get(row.id) ?? []).map((l) => ({ ...l, amount: l.amount.toString() })),
     matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
     // Postgres returns numeric sums as strings; BigInt normalizes them exactly.

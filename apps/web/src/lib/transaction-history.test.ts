@@ -21,6 +21,7 @@ const transaction: Transaction = {
   transferTransactionId: null,
   transferFromSplit: false,
   transferReconciled: false,
+  transferSide: null,
   subtransactions: [
     {
       id: "s1",
@@ -33,6 +34,7 @@ const transaction: Transaction = {
       transferAccountId: null,
       transferTransactionId: null,
       transferReconciled: false,
+      transferSide: null,
     },
     {
       id: "s2",
@@ -45,6 +47,7 @@ const transaction: Transaction = {
       transferAccountId: "a2",
       transferTransactionId: "t2",
       transferReconciled: false,
+      transferSide: null,
     },
   ],
   runningBalance: "10000",
@@ -70,6 +73,40 @@ describe("transaction history bodies", () => {
       "s1",
       "s2",
     ]);
+  });
+
+  it("brings a transfer's other side back as it was, even to an account closed since", () => {
+    const side = {
+      memo: "their memo",
+      cleared: "reconciled" as const,
+      flag: "red" as const,
+      approved: true,
+      categoryId: "c9",
+    };
+    const transfer = {
+      ...transaction,
+      payeeName: "Transfer : Savings",
+      transferAccountId: "a2",
+      transferTransactionId: "t2",
+      approved: false,
+      transferSide: side,
+      subtransactions: [],
+    };
+    expect(createBodyFromTransaction(transfer)).toMatchObject({
+      transferAccountId: "a2",
+      payeeName: null,
+      approved: false,
+      transferSide: side,
+      restore: true,
+    });
+    // A split's transfer lines keep their other sides' state too.
+    const lines = transaction.subtransactions.map((line) =>
+      line.transferAccountId ? { ...line, transferSide: side } : line,
+    );
+    expect(
+      createBodyFromTransaction({ ...transaction, subtransactions: lines }).subtransactions?.[1],
+    ).toMatchObject({ transferAccountId: "a2", transferSide: side });
+    expect(createBodyFromTransaction(transaction)).not.toHaveProperty("transferSide");
   });
 
   it("keeps a reconciled transaction reconciled", () => {

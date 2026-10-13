@@ -31,6 +31,7 @@ const txn: Transaction = {
   approved: true,
   transferFromSplit: false,
   transferReconciled: false,
+  transferSide: null,
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,

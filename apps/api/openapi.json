@@ -2791,6 +2791,9 @@
             "type": "boolean",
             "description": "Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change)"
           },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSide"
+          },
           "subtransactions": {
             "type": "array",
             "items": {
@@ -2833,10 +2836,63 @@
           "transferTransactionId",
           "transferFromSplit",
           "transferReconciled",
+          "transferSide",
           "subtransactions",
           "runningBalance",
           "matchingLineIds"
         ]
+      },
+      "TransferSide": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "memo": {
+            "type": "string"
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "memo",
+          "cleared",
+          "flag",
+          "approved",
+          "categoryId"
+        ],
+        "description": "Transfers: the other side's own state (null when the other side is a split's line, or for other transactions)"
       },
       "SubTransaction": {
         "type": "object",
@@ -2893,6 +2949,16 @@
           "transferReconciled": {
             "type": "boolean",
             "description": "Transfer lines: the other side is reconciled"
+          },
+          "transferSide": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransferSide"
+              },
+              {
+                "description": "Transfers: the other side's own state, which `createTransaction` takes back as `transferSide` when an undo restores the transfer"
+              }
+            ]
           }
         },
         "required": [
@@ -2905,7 +2971,8 @@
           "memo",
           "transferAccountId",
           "transferTransactionId",
-          "transferReconciled"
+          "transferReconciled",
+          "transferSide"
         ]
       },
       "SelectionSummary": {
@@ -3278,6 +3345,17 @@
             ],
             "default": null,
             "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "False brings back an unapproved transaction (an undo); true if left out"
+          },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSideInput"
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows"
           }
         },
         "required": [
@@ -3323,11 +3401,64 @@
             "type": "string",
             "maxLength": 500,
             "default": ""
+          },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSideInput"
           }
         },
         "required": [
           "amount"
         ]
+      },
+      "TransferSideInput": {
+        "type": "object",
+        "properties": {
+          "memo": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "memo",
+          "cleared",
+          "flag",
+          "approved",
+          "categoryId"
+        ],
+        "description": "Restoring a deleted transfer (an undo): its other side's own state, from the deleted transaction's `transferSide`. Left out, the other side starts uncleared, approved, unflagged and with this side's memo"
       },
       "UpdateTransaction": {
         "type": "object",
@@ -4567,6 +4698,10 @@
             "type": "string",
             "format": "date",
             "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows"
           }
         },
         "required": [
@@ -4703,6 +4838,10 @@
             "type": "string",
             "format": "date",
             "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows"
           }
         },
         "additionalProperties": false
