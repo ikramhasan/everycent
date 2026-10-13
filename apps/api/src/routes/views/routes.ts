@@ -38,16 +38,10 @@ const ViewParams = BudgetParams.extend({
   viewId: z.string().openapi({ param: { name: "viewId", in: "path" } }),
 });
 
-const json = <T extends z.ZodType>(schema: T) => ({
-  required: true,
-  content: { "application/json": { schema } },
-});
+function json<T extends z.ZodType>(schema: T) {
+  return { required: true, content: { "application/json": { schema } } } as const;
+}
 
-const common = {
-  tags: ["Views"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
-};
 const forbidden = jsonError(
   "The caller's role can't change views, or the account's email address isn't confirmed",
 );
@@ -57,7 +51,9 @@ const listResponse = {
 };
 
 export const listViews = createRoute({
-  ...common,
+  tags: ["Views"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/views",
   operationId: "listViews",
@@ -72,7 +68,9 @@ export const listViews = createRoute({
 });
 
 export const createView = createRoute({
-  ...common,
+  tags: ["Views"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/views",
   operationId: "createView",
@@ -95,7 +93,9 @@ export const createView = createRoute({
 });
 
 export const updateView = createRoute({
-  ...common,
+  tags: ["Views"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   method: "patch",
   path: "/budgets/{budgetId}/views/{viewId}",
   operationId: "updateView",
@@ -119,7 +119,9 @@ export const updateView = createRoute({
 });
 
 export const deleteView = createRoute({
-  ...common,
+  tags: ["Views"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   method: "delete",
   path: "/budgets/{budgetId}/views/{viewId}",
   operationId: "deleteView",
@@ -134,7 +136,9 @@ export const deleteView = createRoute({
 });
 
 export const reorderViews = createRoute({
-  ...common,
+  tags: ["Views"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   method: "put",
   path: "/budgets/{budgetId}/views/order",
   operationId: "reorderViews",
