@@ -82,23 +82,33 @@ function Banner({
     <section
       aria-label={title}
       className={cn(
-        "flex flex-wrap items-center gap-4 rounded-lg border px-4 py-3",
+        // Phones stack the text over a full-width button, with × in the corner; wider screens
+        // keep one row.
+        "relative grid gap-3 rounded-lg border px-4 py-3 sm:flex sm:items-center sm:gap-4 sm:pr-14",
         tone === "primary"
           ? "border-primary/40 bg-primary/10"
           : "border-emerald-500/40 bg-emerald-500/15",
       )}
     >
-      <span className="shrink-0 text-primary" aria-hidden>
-        {icon}
-      </span>
-      <div className="grid min-w-0 flex-1 gap-0.5">
-        <p className="font-semibold">{title}</p>
-        <p className="text-sm">{text}</p>
+      <div className="flex min-w-0 flex-1 items-center gap-3 pr-8 sm:gap-4 sm:pr-0">
+        <span className="shrink-0 text-primary [&_svg]:size-6 sm:[&_svg]:size-8" aria-hidden>
+          {icon}
+        </span>
+        <div className="grid min-w-0 gap-0.5">
+          <p className="font-semibold">{title}</p>
+          <p className="text-sm">{text}</p>
+        </div>
       </div>
-      <Button size="sm" onClick={onAction}>
+      <Button size="sm" className="w-full sm:w-auto" onClick={onAction}>
         {action}
       </Button>
-      <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={onDismiss}>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Dismiss"
+        className="absolute top-2 right-2 sm:top-1/2 sm:-translate-y-1/2"
+        onClick={onDismiss}
+      >
         <X />
       </Button>
     </section>
