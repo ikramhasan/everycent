@@ -10,6 +10,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { Check, CircleHelp, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { todayIso } from "@/lib/dates";
+import type { LoanPlan } from "@/lib/loan-planner";
 import {
   type CategoryTarget,
   DUE_DAY_OPTIONS,
@@ -26,11 +27,15 @@ import {
   targetMessage,
   WEEKDAY_OPTIONS,
 } from "@/lib/targets";
+import { DebtTargetEditor } from "./debt-target-editor";
 import { DateField } from "./register-fields";
 
 type Format = (minorUnits: string) => string;
 /** The four tabs of the target form for spending categories. */
-type Cadence = Exclude<CategoryTarget["cadence"], "payment_monthly" | "payoff_by_date">;
+type Cadence = Exclude<
+  CategoryTarget["cadence"],
+  "payment_monthly" | "payoff_by_date" | "debt_monthly"
+>;
 type Behavior = CategoryTarget["behavior"];
 
 const CADENCES: { value: Cadence; label: string }[] = [
@@ -81,6 +86,7 @@ export function TargetSection({
   onSnooze,
   snoozeLocked = false,
   payment,
+  debt,
 }: {
   name: string;
   target: CategoryTarget | null;
@@ -113,8 +119,36 @@ export function TargetSection({
     past: boolean;
     alert: (createTarget: () => void) => ReactNode;
   };
+  /**
+   * For a category paired with a loan: YNAB's Debt Payment Target takes the place of the usual
+   * form, with the loan's plan (null while it loads).
+   */
+  debt?: { plan: LoanPlan | null };
 }) {
   const [editing, setEditing] = useState(false);
+  const title = debt ? "Debt Payment Target" : "Target";
+  if (editing && debt) {
+    return (
+      <DebtTargetEditor
+        target={target}
+        plan={debt.plan}
+        format={format}
+        parse={parse}
+        toInput={toInput}
+        onCancel={() => setEditing(false)}
+        onSave={async (input) => {
+          if (await onSave(input)) setEditing(false);
+        }}
+        onDelete={
+          target
+            ? async () => {
+                if (await onDelete()) setEditing(false);
+              }
+            : undefined
+        }
+      />
+    );
+  }
   if (editing && payment) {
     return (
       <PaymentTargetEditor
@@ -162,7 +196,7 @@ export function TargetSection({
   }
   if (!target || !need) {
     return (
-      <Section>
+      <Section title={title}>
         <p className="font-medium text-sm">How much do you need for {name}?</p>
         <p className="text-muted-foreground text-sm">
           When you create a target, we'll let you know how much money to set aside to stay on track
@@ -185,7 +219,7 @@ export function TargetSection({
       : target.amount,
   );
   return (
-    <Section>
+    <Section title={title}>
       {kind && <p className="font-medium text-sm">{kind}</p>}
       <div className="grid gap-0.5">
         <p className="font-medium text-sm">{targetHeading(target, headingAmount)}</p>
@@ -287,10 +321,10 @@ function SnoozeHelp() {
   );
 }
 
-function Section({ children }: { children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section aria-label="Target" className="grid grid-cols-[minmax(0,1fr)] gap-3 border-t pt-3">
-      <h3 className="font-semibold text-sm">Target</h3>
+    <section aria-label={title} className="grid grid-cols-[minmax(0,1fr)] gap-3 border-t pt-3">
+      <h3 className="font-semibold text-sm">{title}</h3>
       {children}
     </section>
   );

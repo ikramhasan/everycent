@@ -1,6 +1,6 @@
 import { Input } from "@everycent/ui/components/input";
 import { cn } from "@everycent/ui/lib/utils";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export interface AssignActions {
@@ -23,6 +23,7 @@ export function AssignedCell({
   format,
   actions,
   className,
+  startEditing = false,
 }: {
   categoryId: string;
   categoryName: string;
@@ -30,6 +31,8 @@ export function AssignedCell({
   format: (minorUnits: string) => string;
   actions: AssignActions;
   className?: string;
+  /** Opens in edit mode (once), as YNAB's "Copy and go to my plan" leaves it. */
+  startEditing?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
@@ -41,6 +44,10 @@ export function AssignedCell({
     setText(actions.toInput(amount));
     setEditing(true);
   }
+
+  useEffect(() => {
+    if (startEditing) start();
+  }, [startEditing]);
 
   async function commit() {
     if (done.current) return;

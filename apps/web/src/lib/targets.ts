@@ -93,8 +93,16 @@ export const PAYMENT_TARGET_OPTIONS = [
   { value: "payment_monthly", label: "Pay Specific Amount Monthly" },
 ] as const;
 
-/** A payment target's kind, which YNAB's inspector shows above its heading. */
+/** Whether a target is a loan's Monthly Debt Payment (only on a category paired with a loan). */
+export const isDebtTarget = (target: Pick<CategoryTarget, "cadence">) =>
+  target.cadence === "debt_monthly";
+
+/**
+ * A payment or debt target's kind, which YNAB's inspector shows above its heading ("Monthly Debt
+ * Payment", 2026-10-13).
+ */
 export function paymentTargetKind(target: CategoryTarget) {
+  if (isDebtTarget(target)) return "Monthly Debt Payment";
   return PAYMENT_TARGET_OPTIONS.find((o) => o.value === target.cadence)?.label ?? null;
 }
 
@@ -114,6 +122,8 @@ function repeatPhrase(target: Pick<CategoryTarget, "repeatEvery" | "repeatUnit">
  */
 export function targetHeading(target: CategoryTarget, amount: string) {
   if (target.cadence === "payment_monthly") return amount;
+  // YNAB, 2026-10-13 (G7 Loan Pay): "$300.00 Needed Each Month".
+  if (target.cadence === "debt_monthly") return `${amount} Needed Each Month`;
   if (target.cadence === "payoff_by_date") return `Pay off ${amount}`;
   if (target.behavior === "balance") return `Have a Balance of ${amount}`;
   const suffix =
@@ -142,7 +152,7 @@ export function targetDueLine(target: CategoryTarget, need: Pick<TargetNeed, "du
     return target.dueDate ? `By ${shortMonth(target.dueDate)}` : "";
   }
   if (target.cadence === "weekly") return `By ${WEEKDAYS[target.dueDay ?? 0]}`;
-  if (target.cadence === "monthly") {
+  if (target.cadence === "monthly" || target.cadence === "debt_monthly") {
     return target.dueDay === null
       ? "By the End of the Month"
       : `By the ${ordinal(target.dueDay)} of the Month`;
@@ -178,7 +188,11 @@ export function targetRowNote(
   // A one-time target past its due month reads like a met one (YNAB, 2026-10-12: C5 P1 "Funded.
   // Spent $10.00 of $30.00", C5 U1 "Funded"); `categoryRowNote` drops it when nothing's in.
   if (status === "met" || need.pastDue) return { met: true, text: "Funded" };
-  const more = target.behavior === "set_aside" || BigInt(need.funded) > 0n ? " more" : "";
+  // A debt payment reads "$300.00 needed by the 31st" with nothing assigned (YNAB, 2026-10-13).
+  const more =
+    (target.behavior === "set_aside" && !isDebtTarget(target)) || BigInt(need.funded) > 0n
+      ? " more"
+      : "";
   if (status === "onTrack") {
     if (target.behavior === "balance" && !target.dueDate) {
       const toGo = BigInt(need.needed) - BigInt(need.funded);
@@ -187,7 +201,7 @@ export function targetRowNote(
     return { met: false, text: "On Track" };
   }
   const when =
-    target.cadence === "monthly"
+    target.cadence === "monthly" || target.cadence === "debt_monthly"
       ? `by the ${ordinal(dueDayIn(target.dueDay, month))}`
       : need.dueDate && need.dueDate.slice(0, 7) === month && target.behavior !== "balance"
         ? `by ${monthLabel(need.dueDate)} ${ordinal(Number(need.dueDate.slice(8)))}`

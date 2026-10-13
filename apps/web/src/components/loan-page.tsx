@@ -10,7 +10,7 @@ import {
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
   ChevronDown,
@@ -21,8 +21,9 @@ import {
   Lock,
   Pencil,
   Puzzle,
+  TriangleAlert,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -30,6 +31,7 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { type LoanPlan, loanPlan } from "@/lib/loan-planner";
 import {
   chargeNote,
   chargeShown,
@@ -46,6 +48,7 @@ import {
   OTHER_LABELS,
   otherKind,
   paymentStatus,
+  shortMonth,
 } from "@/lib/loans";
 import { invalidateMonths, monthQueryOptions } from "@/lib/months";
 import { transactionsQueryPrefix } from "@/lib/transactions";
@@ -59,8 +62,11 @@ import {
   RecordPaymentDialog,
   UpdateBalanceDialog,
 } from "./loan-dialogs";
+import { LoanBanners, LoanProgressCard } from "./loan-progress";
 import { AvailablePill } from "./move-money";
+import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
+import { ShareProgressDialog } from "./share-progress";
 
 type Open =
   | { kind: "payment" }
@@ -69,6 +75,8 @@ type Open =
   | { kind: "pair" }
   | { kind: "activity"; activity: ActivityKind; line?: LoanLineData }
   | { kind: "charge"; charge: "interest" | "escrow"; month: LoanMonthData }
+  | { kind: "simulator" }
+  | { kind: "share" }
   | null;
 
 /** YNAB's "Updated never" / "Updated 15 minutes ago" (a loan's last Update Balance). */
@@ -104,9 +112,50 @@ export function usePairCategory(budgetId: string) {
 }
 
 /**
- * YNAB's loan account page (checked 2026-10-13, docs/verify.md "Loan activity"): the loan's
- * figures, Update Balance and Add Activity, its paired plan category, and its activity by month.
- * Payoff Date, the progress chart and the Payoff Simulator come with the loan planner (7g).
+ * Whether the starting balance isn't the loan's oldest transaction, which YNAB flags instead of
+ * projecting: "We found an error with the starting balance of this account." (2026-10-13).
+ */
+export function startingBalanceError(months: readonly LoanMonthData[]) {
+  const lines = months.flatMap((m) => m.transactions);
+  const start = lines.find((t) => t.kind === "starting_balance");
+  return start ? lines.some((t) => t.date < start.date) : false;
+}
+
+/**
+ * The loan's plan from its activity and the paired category's Monthly Debt Payment target.
+ * Clicking a Past Balance point moves the original schedule's start (`originalFrom`).
+ */
+export function useLoanPlan(account: Account | undefined, originalFrom?: string): LoanPlan | null {
+  const { budget } = useBudget();
+  const today = todayIso();
+  const loan = useQuery({
+    ...loanQueryOptions(budget.id, account?.id ?? "", today),
+    enabled: account !== undefined,
+  });
+  const categories = useQuery(categoriesQueryOptions(budget.id));
+  const target = categories.data?.groups
+    .flatMap((g) => g.categories)
+    .find((c) => account && c.id === account.pairedCategoryId)?.target;
+  const targetAmount = target?.cadence === "debt_monthly" ? BigInt(target.amount) : null;
+  return useMemo(
+    () =>
+      loan.data && account
+        ? loanPlan({
+            activity: loan.data,
+            currency: budget.currency,
+            current: monthOf(today),
+            targetAmount,
+            originalFrom,
+          })
+        : null,
+    [loan.data, account, budget.currency, today, targetAmount, originalFrom],
+  );
+}
+
+/**
+ * YNAB's loan account page (checked 2026-10-13, docs/verify.md "Loan activity" and "Loan
+ * planner"): the loan's figures with its Payoff Date, the simulator and paid-off banners, Your
+ * Loan's Progress, its paired plan category, and its activity by month.
  */
 export function LoanPage({
   account,
@@ -152,6 +201,16 @@ export function LoanPage({
   );
   const [open, setOpen] = useState<Open>(null);
   const close = (isOpen: boolean) => !isOpen && setOpen(null);
+  const [originalFrom, setOriginalFrom] = useState<string | undefined>();
+  const plan = useLoanPlan(account, originalFrom);
+  const navigate = useNavigate();
+  const openPairedCategory = () =>
+    account.pairedCategoryId &&
+    navigate({
+      to: "/budgets/$budgetId",
+      params: { budgetId: budget.id },
+      search: { category: account.pairedCategoryId },
+    });
 
   /** Runs a change and refreshes; resolves to an error message or null. */
   async function save(work: () => Promise<unknown>, failure: string) {
@@ -249,7 +308,46 @@ export function LoanPage({
             value={account.escrowAmount ? formatText(account.escrowAmount) : "--"}
           />
         )}
+        <Figure
+          label="Payoff Date"
+          value={plan?.payoffMonth ? shortMonth(plan.payoffMonth) : "--"}
+        />
       </dl>
+
+      {plan && (
+        <LoanBanners
+          accountId={account.id}
+          paidOff={plan.progress.paidOff}
+          onSimulate={account.closed ? undefined : () => setOpen({ kind: "simulator" })}
+        />
+      )}
+      {plan &&
+        (startingBalanceError(months) ? (
+          <section
+            className="flex items-start gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm"
+            aria-label="Starting balance error"
+          >
+            <TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-500" aria-hidden />
+            <div className="grid gap-1">
+              <p className="font-semibold">
+                We found an error with the starting balance of this account.
+              </p>
+              <p>
+                The balance you entered when you added this debt account is not showing up as the
+                oldest transaction. Please fix the issue to see your debt paydown estimates.
+              </p>
+            </div>
+          </section>
+        ) : (
+          <LoanProgressCard
+            plan={plan}
+            onShare={() => setOpen({ kind: "share" })}
+            onSimulate={account.closed ? undefined : () => setOpen({ kind: "simulator" })}
+            onIncreaseTarget={account.pairedCategoryId ? openPairedCategory : undefined}
+            onIncreaseMinimum={account.closed ? undefined : onEdit}
+            onBaseOriginal={(m) => setOriginalFrom(m)}
+          />
+        ))}
 
       {paired ? (
         <section className="rounded-lg border" aria-label="Paired Plan Category">
@@ -269,6 +367,22 @@ export function LoanPage({
               <span className="text-muted-foreground text-xs">Available to spend</span>
               <AvailablePill amount={pairedAvailable.toString()} format={formatText} />
             </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-sm">
+            <span className="text-muted-foreground text-xs">Target</span>
+            {paired.target?.cadence === "debt_monthly" ? (
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={openPairedCategory}
+              >
+                {formatText(paired.target.amount)} Needed Each Month
+              </button>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={openPairedCategory}>
+                Create Debt Payment Target
+              </Button>
+            )}
           </div>
         </section>
       ) : (
@@ -464,6 +578,17 @@ export function LoanPage({
             )
           }
         />
+      )}
+      {open?.kind === "simulator" && plan && (
+        <PayoffSimulator
+          open
+          onOpenChange={close}
+          plan={plan}
+          pairedCategoryId={account.pairedCategoryId}
+        />
+      )}
+      {open?.kind === "share" && plan && (
+        <ShareProgressDialog open onOpenChange={close} plan={plan} loanName={account.name} />
       )}
       {open?.kind === "pair" && categories.data && (
         <PairCategoryDialog

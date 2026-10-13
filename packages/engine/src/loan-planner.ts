@@ -187,24 +187,33 @@ export function monthsBetween(a: BudgetMonth, b: BudgetMonth): number {
 export interface LoanProgress {
   /** What's owed today (positive). */
   owed: bigint;
-  /** What was owed when the loan started (its starting balance, positive). */
+  /**
+   * What was owed when the loan started: its starting balance, or with none, the most it has owed
+   * (YNAB: "$2,035 (98.1%)" of $2,074.97 charged after a $0 start).
+   */
   started: bigint;
   /** Whether nothing is owed. */
   paidOff: boolean;
   /** Whether there are payments this month. */
   paidThisMonth: boolean;
+  /** This month's payments (YNAB's "$200.00 paid this month"). */
+  paymentsThisMonth: bigint;
   /** YNAB's "You paid off your loan in N months": this month − the loan's first month. */
   monthsSinceStart: number;
   /**
-   * YNAB's Original Payment Schedule: the minimum payment from the first month with a payment,
-   * on what was owed at its start; null before any payment or without terms that pay it off.
+   * YNAB's Original Payment Schedule: drawn from the loan's first month (or a Past Balance picked
+   * as its base), the minimum payment from the first month with a payment on what was owed at its
+   * start; null before any payment or without terms that pay it off.
    */
   original: {
+    /** Where the line starts. */
+    from: BudgetMonth;
+    /** The month its payments start. */
     month: BudgetMonth;
     owed: bigint;
     payment: bigint;
     projection: PayoffProjection;
-    /** What's owed at the start of each month from `month` on, ending at 0. */
+    /** What's owed at the start of each month from `from` on, ending at 0. */
     balances: bigint[];
   } | null;
   /** Interest charged so far (positive). */
@@ -227,18 +236,32 @@ export function loanProgress(input: {
   } | null;
   month: BudgetMonth;
   exponent: number;
+  /**
+   * A Past Balance month to base the original schedule on (YNAB's "Base the Original Payment
+   * Schedule on this Past Balance"): the line starts there, and its payments at the later of it and
+   * the first month with a payment (G7 Off, paid in September, based on August: $100.00 in August
+   * and September, $81.00 in October).
+   */
+  originalFrom?: BudgetMonth;
 }): LoanProgress {
   const { history, month, exponent } = input;
   const last = history.at(-1);
   const first = history[0];
   const owed = last ? -last.endBalance : 0n;
-  const started = first ? -(first.startBalance + first.opening) : 0n;
+  const opening = first ? -(first.startBalance + first.opening) : 0n;
+  const most = history.reduce((m, h) => (-h.endBalance > m ? -h.endBalance : m), 0n);
+  const started = opening > 0n ? opening : most;
   const interestPaid = history.reduce((s, m) => s + m.interest, 0n);
-  const paidMonth = history.find((m) => m.payments > 0n);
+  const firstPaid = history.find((m) => m.payments > 0n);
+  const from = input.originalFrom ?? first?.month;
+  const paidMonth =
+    firstPaid && from && from > firstPaid.month ? history.find((m) => m.month === from) : firstPaid;
+  // What was owed at the start of a month (the first month's starting balance included).
+  const owedAt = (m: LoanHistoryMonth) => -(m.startBalance + m.opening);
   let original: LoanProgress["original"] = null;
-  if (paidMonth) {
+  if (paidMonth && from) {
     const terms = input.termsFor(paidMonth.month);
-    const startOwed = -(paidMonth.startBalance + paidMonth.opening);
+    const startOwed = owedAt(paidMonth);
     const payment = effectivePayment(terms?.minimumPayment ?? null, terms?.escrowAmount ?? null);
     const rate = terms?.interestRate ?? null;
     const projection =
@@ -246,12 +269,14 @@ export function loanProgress(input: {
     const schedule =
       payment !== null ? payoffSchedule({ owed: startOwed, rate, payment, exponent }) : null;
     if (payment !== null && projection && schedule) {
+      const lead = history.filter((m) => m.month >= from && m.month < paidMonth.month).map(owedAt);
       original = {
+        from: lead.length > 0 ? from : paidMonth.month,
         month: paidMonth.month,
         owed: startOwed,
         payment,
         projection,
-        balances: [startOwed, ...schedule],
+        balances: [...lead, startOwed, ...schedule],
       };
     }
   }
@@ -260,6 +285,7 @@ export function loanProgress(input: {
     started,
     paidOff: owed <= 0n,
     paidThisMonth: last?.month === month && last.payments > 0n,
+    paymentsThisMonth: last?.month === month ? last.payments : 0n,
     monthsSinceStart: first ? Math.max(0, monthsBetween(first.month, month)) : 0,
     original,
     interestPaid,

@@ -42,6 +42,7 @@ export {
   type CurrencySymbolPosition,
   DATE_FORMATS,
   type DateFormat,
+  NUMBER_FORMAT_SPECS,
   NUMBER_FORMATS,
   type NumberFormat,
   zCurrencySymbolPosition,

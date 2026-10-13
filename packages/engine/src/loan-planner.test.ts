@@ -178,8 +178,10 @@ describe("loanProgress and paidOffSavings (YNAB, 2026-10-13, G7 Off)", () => {
       paidOff: true,
       monthsSinceStart: 3,
     });
-    expect(progress.original?.month).toBe("2026-08");
+    expect(progress.original).toMatchObject({ from: "2026-07", month: "2026-08" });
+    // Drawn from July, flat until August's payment.
     expect(progress.original?.balances).toEqual([
+      10_000n,
       10_000n,
       8_100n,
       6_181n,
@@ -236,5 +238,72 @@ describe("loanProgress and paidOffSavings (YNAB, 2026-10-13, G7 Off)", () => {
       monthsSinceStart: 0,
       original: null,
     });
+  });
+});
+
+describe("loanProgress originalFrom", () => {
+  it("draws from a picked month, paying from the later of it and the first payment", () => {
+    const history: LoanHistoryMonth[] = [
+      {
+        month: "2026-08",
+        startBalance: 0n,
+        opening: -10_000n,
+        payments: 0n,
+        interest: 0n,
+        endBalance: -10_000n,
+      },
+      {
+        month: "2026-09",
+        startBalance: -10_000n,
+        opening: 0n,
+        payments: 0n,
+        interest: 0n,
+        endBalance: -10_000n,
+      },
+      {
+        month: "2026-10",
+        startBalance: -10_000n,
+        opening: 0n,
+        payments: 2_000n,
+        interest: 100n,
+        endBalance: -8_100n,
+      },
+    ];
+    const termsFor = () => ({ interestRate: "12", minimumPayment: 2_000n, escrowAmount: null });
+    const base = { history, termsFor, month: "2026-10", exponent: 2 };
+    expect(loanProgress(base).original).toMatchObject({ from: "2026-08", month: "2026-10" });
+    expect(loanProgress({ ...base, originalFrom: "2026-09" }).original).toMatchObject({
+      from: "2026-09",
+      month: "2026-10",
+      owed: 10_000n,
+    });
+    expect(
+      loanProgress({ ...base, originalFrom: "2026-09" }).original?.balances.slice(0, 3),
+    ).toEqual([10_000n, 10_000n, 8_100n]);
+  });
+
+  it("uses the most owed when the starting balance is $0 (YNAB: 98.1% of $2,074.97)", () => {
+    const history: LoanHistoryMonth[] = [
+      {
+        month: "2026-09",
+        startBalance: 0n,
+        opening: 0n,
+        payments: 0n,
+        interest: 0n,
+        endBalance: -207_497n,
+      },
+      {
+        month: "2026-10",
+        startBalance: -207_497n,
+        opening: 0n,
+        payments: 5_000n,
+        interest: 1_038n,
+        endBalance: -203_535n,
+      },
+    ];
+    const termsFor = () => ({ interestRate: "6", minimumPayment: 100n, escrowAmount: null });
+    expect(loanProgress({ history, termsFor, month: "2026-10", exponent: 2 }).started).toBe(
+      207_497n,
+    );
   });
 });

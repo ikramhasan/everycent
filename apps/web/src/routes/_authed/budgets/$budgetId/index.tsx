@@ -18,6 +18,7 @@ import {
 } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
 import { PairedLoanSection, PairedWith, usePairedLoan } from "@/components/loan-inspector";
+import { useLoanPlan } from "@/components/loan-page";
 import { MonthNav } from "@/components/month-nav";
 import { MonthNote } from "@/components/month-note";
 import {
@@ -70,6 +71,10 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
   // The month on screen, YYYY-MM; the current month when absent.
   validateSearch: z.object({
     month: z.string().refine(isBudgetMonth).optional().catch(undefined),
+    // A category to select on arrival, its Assigned being edited with `assign` (the payoff
+    // simulator's "Copy and go to my plan").
+    category: z.string().optional().catch(undefined),
+    assign: z.boolean().optional().catch(undefined),
   }),
   component: BudgetPage,
 });
@@ -78,7 +83,8 @@ function BudgetPage() {
   const { budget, formatAmount, formatDate } = useBudget();
   const navigate = Route.useNavigate();
   const today = currentMonth();
-  const month: BudgetMonth = Route.useSearch().month ?? today;
+  const search = Route.useSearch();
+  const month: BudgetMonth = search.month ?? today;
   useEffect(() => rememberMonth(budget.id, month), [budget.id, month]);
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const figures = useQuery({
@@ -94,6 +100,13 @@ function BudgetPage() {
   const { filter, setFilter } = useBudgetFilter(budget.id);
   const { progressBars, setProgressBars } = useProgressBars();
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [editAssigned, setEditAssigned] = useState<string | undefined>();
+  useEffect(() => {
+    if (!search.category) return;
+    setSelected(new Set([search.category]));
+    setEditAssigned(search.assign ? search.category : undefined);
+    void navigate({ search: { month: search.month }, replace: true });
+  }, [search.category, search.assign]);
   const queryClient = useQueryClient();
   const assignMutation = $api.useMutation(
     "put",
@@ -230,6 +243,7 @@ function BudgetPage() {
       activity: { budgetId: budget.id, formatDate },
       shown,
       progressBars,
+      editAssigned,
       emptyView: {
         message: filter === "all" ? "" : EMPTY_VIEW[filter],
         onViewAll: () => setFilter("all"),
@@ -322,6 +336,7 @@ function BudgetPage() {
     history,
     today,
     progressBars,
+    editAssigned,
   ]);
 
   const fixThisMonths = useFixThisMonths({
@@ -619,6 +634,7 @@ function Inspector({
   const { month, format, assign } = figures;
   const only = selection.size === 1 ? [...selection][0] : undefined;
   const pairedLoan = usePairedLoan(only);
+  const loanPlan = useLoanPlan(pairedLoan);
   if (only === UNCATEGORIZED && month.uncategorized) {
     return (
       <CategoryInspector
@@ -765,6 +781,7 @@ function Inspector({
                   : (amount) => assign.assign(only, BigInt(totals.assigned) + amount)
               }
               snoozeLocked={month.month !== figures.currentMonth}
+              debt={pairedLoan ? { plan: loanPlan } : undefined}
               onSnooze={
                 month.month === figures.currentMonth
                   ? async (snoozed) => {
