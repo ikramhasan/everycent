@@ -4,6 +4,7 @@ import { createApp } from "../src/app";
 import { type Env, parseEnv } from "../src/env";
 import { createAuth } from "../src/lib/auth";
 import { loadRootEnv } from "../src/load-env";
+import type { AppDeps } from "../src/types";
 
 export function testEnv(): Env {
   loadRootEnv();
@@ -18,10 +19,11 @@ export function testEnv(): Env {
   });
 }
 
-export function createTestApp() {
+export function createTestApp({ serverDate = () => null }: Pick<AppDeps, "serverDate"> = {}) {
   const env = testEnv();
   const { db, close } = createDb(env.DATABASE_URL, { max: 2 });
-  const app = createApp({ db, env, auth: createAuth(db, env) });
+  // Tests pick their own `today`, so the server's date doesn't bound it unless a test sets one.
+  const app = createApp({ db, env, auth: createAuth(db, env), serverDate });
   return { app, db, env, close };
 }
 

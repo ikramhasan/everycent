@@ -23,6 +23,18 @@ describe("register view", () => {
       showReconciled: false,
       showRunningBalance: false,
       showFlags: true,
+      scheduledCollapsed: false,
     });
+  });
+});
+
+describe("saved register searches", () => {
+  it("remembers each register's search, and forgets a cleared one", async () => {
+    const { saveSearch, savedSearch } = await import("./register-view");
+    saveSearch("b1", "a1", "Payee: Shop");
+    expect(savedSearch("b1", "a1")).toBe("Payee: Shop");
+    expect(savedSearch("b1", "all")).toBeUndefined();
+    saveSearch("b1", "a1", undefined);
+    expect(savedSearch("b1", "a1")).toBeUndefined();
   });
 });

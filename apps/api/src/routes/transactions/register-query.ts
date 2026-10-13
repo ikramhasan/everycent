@@ -67,6 +67,7 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         memo: transaction.memo,
         cleared: transaction.cleared,
         flag: transaction.flag,
+        approved: transaction.approved,
         transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
         // A split line's transfer points at the split itself.
         transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
@@ -76,6 +77,11 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         transferFromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`.as(
           "transfer_from_split",
         ),
+        transferReconciled: sql<boolean>`exists (
+          select 1 from ${transaction} other_side
+          where other_side.id = ${transaction.transferTransactionId}
+            and other_side.cleared = 'reconciled'
+        )`.as("transfer_reconciled"),
         // As text, so the cursor keeps Postgres's microseconds.
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
         runningBalance: sql<string>`sum(${transaction.amount}) over (
@@ -324,6 +330,7 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       memo: subTransaction.memo,
       transferAccountId: payee.transferAccountId,
       transferTransactionId: other.id,
+      transferReconciled: sql<boolean>`coalesce(${other.cleared} = 'reconciled', false)`,
     })
     .from(subTransaction)
     .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
@@ -357,9 +364,11 @@ function columns(r: Register) {
     memo: r.memo,
     cleared: r.cleared,
     flag: r.flag,
+    approved: r.approved,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,
+    transferReconciled: r.transferReconciled,
     createdAt: r.createdAt,
     runningBalance: r.runningBalance,
   };

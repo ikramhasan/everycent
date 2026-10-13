@@ -2,8 +2,8 @@ import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-gr
 import { BUDGET_FILTERS, type BudgetFilter } from "@/lib/budget-view";
 
 /**
- * YNAB's views above the budget list: All, Overspent (with its count) and Money Available.
- * Underfunded, Overfunded and Snoozed need targets (phase 8).
+ * YNAB's views above the budget list: All, Overspent (with its count), Underfunded, Overfunded and
+ * Money Available and Snoozed.
  */
 export function BudgetFilterBar({
   filter,
@@ -18,7 +18,10 @@ export function BudgetFilterBar({
   const labels: Record<BudgetFilter, string> = {
     all: "All",
     overspent: `${overspent} Overspent`,
+    underfunded: "Underfunded",
+    overfunded: "Overfunded",
     available: "Money Available",
+    snoozed: "Snoozed",
   };
   return (
     <ToggleGroup

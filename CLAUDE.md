@@ -1,6 +1,8 @@
 # everycent — agent guide
 
-Read `README.md` first, then `docs/deferred.md` (known gaps and work deliberately left for later
+Read `README.md` first, then `docs/plane.md` (how work is tracked in Plane: no deferring what you
+can settle, test what you build, a ticket for anything you can't, keep cycles and tickets current,
+single-line HTML), then `docs/deferred.md` (known gaps and work deliberately left for later
 phases — check it before starting a phase, and add to it whenever you defer something), then
 `docs/verify.md` (open questions about how YNAB behaves).
 

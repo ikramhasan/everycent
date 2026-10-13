@@ -129,44 +129,71 @@ function ActivityList({
         ) : activity.isError ? (
           <p className="p-4 text-muted-foreground text-sm">Couldn't load the transactions.</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className={cn("w-full text-sm", card && "table-fixed")}>
+            {card && (
+              // Five columns in the popover's width: the long ones truncate.
+              <colgroup>
+                <col className="w-[7.5rem]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-[9rem]" />
+                <col />
+                <col className="w-[6rem]" />
+              </colgroup>
+            )}
             <thead className="text-muted-foreground text-xs uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Account</th>
-                <th className="px-2 py-2 text-left font-medium">Date</th>
+                {/* A card's window lists its own transactions, so it shows their categories
+                    instead of the account (YNAB's Card T5 and Visa windows, 2026-10-11). */}
+                {!card && <th className="px-4 py-2 text-left font-medium">Account</th>}
+                <th className={cn("py-2 text-left font-medium", card ? "px-4" : "px-2")}>Date</th>
                 <th className="px-2 py-2 text-left font-medium">Payee</th>
+                {card && <th className="px-2 py-2 text-left font-medium">Category</th>}
                 <th className="px-2 py-2 text-left font-medium">Memo</th>
                 <th className="px-4 py-2 text-right font-medium">Amount</th>
               </tr>
             </thead>
             <tbody>
-              {activity.data.transactions.map((t) => (
-                <tr
-                  key={t.id}
-                  className="cursor-pointer border-t hover:bg-muted/60"
-                  onClick={() => openTransaction(t)}
-                >
-                  <td className="max-w-28 truncate px-4 py-1.5">
-                    {/* The row is clickable; this button is the keyboard way in. */}
-                    <button
-                      type="button"
-                      className="max-w-full truncate focus-visible:underline focus-visible:outline-none"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openTransaction(t);
-                      }}
-                    >
-                      {t.accountName}
-                    </button>
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-1.5">{formatDate(t.date)}</td>
-                  <td className="max-w-32 truncate px-2 py-1.5">{t.payeeName}</td>
-                  <td className="max-w-32 truncate px-2 py-1.5 text-muted-foreground">{t.memo}</td>
-                  <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums">
-                    {format(t.amount)}
-                  </td>
-                </tr>
-              ))}
+              {activity.data.transactions.map((t) => {
+                // The row is clickable; this button is the keyboard way in.
+                const open = (label: string) => (
+                  <button
+                    type="button"
+                    className="max-w-full truncate focus-visible:underline focus-visible:outline-none"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTransaction(t);
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+                return (
+                  <tr
+                    key={t.id}
+                    className="cursor-pointer border-t hover:bg-muted/60"
+                    onClick={() => openTransaction(t)}
+                  >
+                    {!card && (
+                      <td className="max-w-28 truncate px-4 py-1.5">{open(t.accountName)}</td>
+                    )}
+                    <td className={cn("whitespace-nowrap py-1.5", card ? "px-4" : "px-2")}>
+                      {card ? open(formatDate(t.date)) : formatDate(t.date)}
+                    </td>
+                    <td className="max-w-32 truncate px-2 py-1.5">{t.payeeName}</td>
+                    {card && (
+                      <td className="truncate px-2 py-1.5" title={t.categoryName ?? ""}>
+                        {t.categoryName}
+                      </td>
+                    )}
+                    <td className="max-w-32 truncate px-2 py-1.5 text-muted-foreground">
+                      {t.memo}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums">
+                      {format(t.amount)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

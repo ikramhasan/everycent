@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_AUTO_ASSIGN } from "@/test/fixtures";
 import {
+  availableMark,
   breakdown,
   filteredIds,
   isCaution,
@@ -24,6 +25,9 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   payment: null,
   target: null,
   autoAssign: NO_AUTO_ASSIGN,
+  bar: null,
+  underfundedParts: [],
+  upcoming: null,
 });
 
 const month: BudgetMonthData = {
@@ -32,8 +36,12 @@ const month: BudgetMonthData = {
   firstMonth: "2026-09",
   lastMonth: "2026-11",
   readyToAssign: "0",
+  overdraft: false,
   assignedInFuture: "0",
   futureMonths: [],
+  futureShortfall: null,
+  note: "",
+  targets: { month: "0", nextMonth: "0", expectedIncome: null },
   categories: [
     cat("rent", "4000", "0", "4000"),
     cat("power", "0", "-2500", "-2500"),
@@ -69,6 +77,21 @@ describe("budget views", () => {
     expect(matchesFilter("available", { available: "1" })).toBe(true);
     expect(matchesFilter("available", { available: "0" })).toBe(false);
     expect(matchesFilter("all", { available: "0" })).toBe(true);
+  });
+
+  it("matches underfunded and overfunded by what Auto-Assign would change", () => {
+    const auto = (assigned: string, underfunded: string, reduceOverfunding: string) => ({
+      available: "0",
+      assigned,
+      autoAssign: { underfunded, reduceOverfunding },
+    });
+    expect(matchesFilter("underfunded", auto("1000", "1500", "1000"))).toBe(true);
+    expect(matchesFilter("underfunded", auto("1000", "1000", "1000"))).toBe(false);
+    expect(matchesFilter("overfunded", auto("1000", "1000", "600"))).toBe(true);
+    expect(matchesFilter("overfunded", auto("1000", "1000", "1000"))).toBe(false);
+    // Uncategorized has no Auto-Assign: it's underfunded while negative, never overfunded.
+    expect(matchesFilter("underfunded", { available: "-200" })).toBe(true);
+    expect(matchesFilter("overfunded", { available: "200" })).toBe(false);
   });
 
   it("leaves hidden categories out and counts Uncategorized", () => {
@@ -108,10 +131,15 @@ describe("targets", () => {
   const need = (underfunded: string, funded = "4000") => ({
     available: "4000",
     cashOverspent: "0",
-    target: { needed: "10000", funded, underfunded, dueDate: null },
+    target: { needed: "10000", funded, underfunded, dueDate: null, pastDue: false, snoozed: false },
   });
   it("is yellow while a target is underfunded, unless cash overspending makes it red", () => {
     expect(isCaution(need("6000"), "2026-10", "2026-10")).toBe(true);
+    // Snoozed: green or grey instead (support.ynab.com "Snooze a Target").
+    const snoozed = need("6000");
+    expect(
+      isCaution({ ...snoozed, target: { ...snoozed.target, snoozed: true } }, "2026-10", "2026-10"),
+    ).toBe(false);
     expect(isCaution(need("0"), "2026-10", "2026-10")).toBe(false);
     expect(
       isCaution(
@@ -121,9 +149,26 @@ describe("targets", () => {
       ),
     ).toBe(false);
   });
+  it("colours a payment category by its target, and red when overpaid", () => {
+    const card = (available: string, underfunded: string, target?: string) => ({
+      available,
+      cashOverspent: "0",
+      payment: { underfunded },
+      target: target === undefined ? null : { ...need(target).target },
+    });
+    // No target: yellow while the balance isn't covered (phase 7c).
+    expect(isCaution(card("0", "12000"), "2026-10", "2026-10")).toBe(true);
+    // Card E1: underfunded target yellow, on track green although the balance isn't covered.
+    expect(isCaution(card("0", "12000", "2084"), "2026-10", "2026-10")).toBe(true);
+    expect(isCaution(card("5000", "7500", "0"), "2026-10", "2026-10")).toBe(false);
+    // Card E2: a payment beyond what was set aside is red, target or not.
+    expect(isCaution(card("-1000", "10000", "3334"), "2026-10", "2026-10")).toBe(false);
+    expect(isCaution(card("-1000", "10000"), "2026-10", "2026-10")).toBe(false);
+  });
   it("marks the pill with the funded share or a check", () => {
-    expect(targetMark(need("6000").target)).toEqual({ met: false, percent: 40 });
-    expect(targetMark(need("0", "15000").target)).toEqual({ met: true });
+    expect(targetMark(need("6000").target)).toEqual({ kind: "underfunded", percent: 40 });
+    expect(targetMark(need("0", "15000").target)).toEqual({ kind: "met" });
+    expect(targetMark({ ...need("6000").target, snoozed: true })).toEqual({ kind: "snoozed" });
     expect(targetMark(null)).toBeUndefined();
   });
 });
@@ -145,5 +190,33 @@ describe("isCaution", () => {
     expect(isCaution(payment("200"), "2026-11", "2026-10")).toBe(true);
     expect(isCaution(payment("200"), "2026-09", "2026-10")).toBe(false);
     expect(isCaution(payment("0"), "2026-10", "2026-10")).toBe(false);
+  });
+});
+
+// YNAB, 2026-10-12 ("Onboarding Check", U10 A–I).
+describe("upcoming scheduled transactions on the pill", () => {
+  const row = (available: string, upcoming: string | null, target?: Record<string, unknown>) => ({
+    available,
+    cashOverspent: "0",
+    upcoming: upcoming === null ? null : { amount: upcoming },
+    target: (target ?? null) as never,
+  });
+  const met = { needed: "4000", funded: "4000", underfunded: "0", snoozed: false };
+  const unmet = { needed: "4000", funded: "0", underfunded: "4000", snoozed: false };
+
+  it("shows a yellow calendar while Available doesn't cover them", () => {
+    expect(isCaution(row("1000", "-3000"), "2026-10", "2026-10")).toBe(true); // U10 B
+    expect(availableMark(row("1000", "-3000"))).toEqual({ kind: "upcoming" });
+    expect(isCaution(row("5000", "-3000"), "2026-10", "2026-10")).toBe(false); // U10 H
+    expect(availableMark(row("5000", "-3000"))).toBeUndefined();
+    expect(availableMark(row("0", "2500"))).toBeUndefined(); // U10 G, an inflow
+  });
+
+  it("puts the calendar over a target's mark, but not over a snooze", () => {
+    expect(availableMark(row("4000", "-6000", met))).toEqual({ kind: "upcoming" }); // U10 I
+    expect(availableMark(row("0", "-3000", unmet))).toEqual({ kind: "upcoming" }); // U10 D
+    const snoozed = { ...unmet, snoozed: true };
+    expect(availableMark(row("0", "-3000", snoozed))).toEqual({ kind: "snoozed" });
+    expect(isCaution(row("0", "-3000", snoozed), "2026-10", "2026-10")).toBe(true);
   });
 });

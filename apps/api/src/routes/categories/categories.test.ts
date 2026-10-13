@@ -207,6 +207,53 @@ describe("categories", () => {
     expect(orphans).toEqual([]);
   });
 
+  it("reports what deleting a category would move (YNAB's delete dialogs)", async () => {
+    const { cookie, base, tree } = await setup();
+    const [rent, electric] = (await tree()).groups[0]?.categories ?? [];
+    if (!rent || !electric) throw new Error("starter data missing");
+    const account = (await (
+      await send("POST", `${base}/accounts`, cookie, {
+        name: "Checking",
+        type: "checking",
+        balance: "10000",
+        date: "2026-10-01",
+      })
+    ).json()) as { id: string };
+    await send("PUT", `${base}/months/2026-10/categories/${rent.id}`, cookie, {
+      assigned: "500",
+      today: "2026-10-02",
+    });
+    const split = await send("POST", `${base}/transactions`, cookie, {
+      accountId: account.id,
+      date: "2026-10-02",
+      amount: "-300",
+      categoryId: null,
+      subtransactions: [
+        { amount: "-100", categoryId: electric.id },
+        { amount: "-200", categoryId: electric.id },
+      ],
+    });
+    expect(split.status).toBe(201);
+    await send("POST", `${base}/transactions`, cookie, {
+      accountId: account.id,
+      date: "2026-10-02",
+      amount: "-50",
+      categoryId: electric.id,
+    });
+    const after = (await tree()).groups[0]?.categories ?? [];
+    expect(after.find((c) => c.id === rent.id)).toMatchObject({
+      hasTransactions: false,
+      transactionCount: 0,
+      hasAssignedMoney: true,
+    });
+    // Split lines count one by one.
+    expect(after.find((c) => c.id === electric.id)).toMatchObject({
+      hasTransactions: true,
+      transactionCount: 3,
+      hasAssignedMoney: false,
+    });
+  });
+
   it("rejects blank names", async () => {
     const { cookie, base } = await setup();
     const res = await send("POST", `${base}/category-groups`, cookie, { name: "  " });

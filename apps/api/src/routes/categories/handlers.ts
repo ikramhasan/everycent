@@ -1,8 +1,11 @@
 import { newId } from "@everycent/db";
 import { category, categoryGroup, categoryTarget } from "@everycent/db/schema";
+import { monthOf } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { AppError } from "../../lib/errors";
+import { serverToday } from "../../lib/ledger";
 import { reorder, writeOrder } from "../../lib/ordering";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -10,10 +13,10 @@ import {
   findCategory,
   findGroup,
   findTarget,
-  hasHistory,
   insertCategory,
   insertGroup,
   listCategoryTree,
+  loadCategoryJson,
   managedError,
   reassignHistory,
   toCategoryJson,
@@ -28,7 +31,9 @@ import type {
   listCategories,
   moveCategory,
   moveCategoryGroup,
+  restoreCategoryTarget,
   setCategoryTarget,
+  snoozeCategoryTarget,
   updateCategory,
   updateCategoryGroup,
 } from "./routes";
@@ -95,6 +100,7 @@ export const deleteCategoryGroupHandler: RouteHandler<typeof deleteCategoryGroup
       budgetId,
       members.map((m) => m.id),
       reassignToCategoryId,
+      c.var.user.id,
     );
     // Its categories cascade.
     await tx.delete(categoryGroup).where(eq(categoryGroup.id, groupId));
@@ -167,10 +173,7 @@ export const updateCategoryHandler: RouteHandler<typeof updateCategory, Env> = a
       .returning();
     if (updated) row = updated;
   }
-  return c.json(
-    toCategoryJson(row, await hasHistory(db, [row.id]), await findTarget(db, row.id)),
-    200,
-  );
+  return c.json(await loadCategoryJson(db, budgetId, row, await findTarget(db, row.id)), 200);
 };
 
 export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = async (c) => {
@@ -183,7 +186,7 @@ export const deleteCategoryHandler: RouteHandler<typeof deleteCategory, Env> = a
     throw managedError("Payment categories can be hidden, but not deleted");
   }
   await db.transaction(async (tx) => {
-    await reassignHistory(tx, budgetId, [categoryId], reassignToCategoryId);
+    await reassignHistory(tx, budgetId, [categoryId], reassignToCategoryId, c.var.user.id);
     await tx.delete(category).where(eq(category.id, categoryId));
   });
   return c.body(null, 204);
@@ -233,32 +236,123 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
-  // Credit card payment targets are their own kinds (phase 8e).
-  if (row.linkedAccountId) throw managedError("Payment categories can't have targets yet");
+  // A card's payment category takes only its own two targets (YNAB's target form there offers just
+  // these), and other categories can't take them.
+  const paymentTarget = body.cadence === "payment_monthly" || body.cadence === "payoff_by_date";
+  if (row.linkedAccountId && !paymentTarget) {
+    throw managedError(
+      "Payment categories take Pay Specific Amount Monthly or Pay Off Balance by Date targets",
+    );
+  }
+  if (!row.linkedAccountId && paymentTarget) {
+    throw managedError("Only credit card payment categories take payment targets");
+  }
   const start = `${body.month}-01`;
   const existing = await findTarget(db, categoryId);
   const repeat = body.cadence === "custom" ? body.repeat : null;
   const dueDate =
     body.cadence === "yearly"
       ? body.dueDate
-      : body.cadence === "custom" && body.dueDate
-        ? // A balance target is due by a month (YNAB: "By Dec 2026").
-          body.behavior === "balance"
-          ? `${body.dueDate.slice(0, 7)}-01`
-          : body.dueDate
-        : null;
+      : body.cadence === "payoff_by_date"
+        ? `${body.dueMonth}-01`
+        : body.cadence === "custom" && body.dueDate
+          ? // A balance target is due by a month (YNAB: "By Dec 2026").
+            body.behavior === "balance"
+            ? `${body.dueDate.slice(0, 7)}-01`
+            : body.dueDate
+          : null;
   const values = {
     cadence: body.cadence,
-    behavior: body.behavior,
-    amount: BigInt(body.amount),
+    // Pay Specific Amount Monthly asks like a monthly set aside; Pay Off by Date reaches a balance.
+    behavior:
+      body.cadence === "payment_monthly"
+        ? ("set_aside" as const)
+        : body.cadence === "payoff_by_date"
+          ? ("balance" as const)
+          : body.behavior,
+    // Pay Off by Date pays off what the card owes, so it has no amount of its own (YNAB's API: 0).
+    amount: body.cadence === "payoff_by_date" ? 0n : BigInt(body.amount),
     currency: budget.currency,
     dueDay: body.cadence === "weekly" || body.cadence === "monthly" ? body.dueDay : null,
     dueDate,
     repeatEvery: repeat?.every ?? null,
     repeatUnit: repeat?.unit ?? null,
-    // YNAB (docs/verify.md): saving from a month before the start moves the start back to it.
-    startMonth: existing && existing.startMonth < start ? existing.startMonth : start,
   };
+  // YNAB (docs/verify.md "Targets overview and history"): a changed target starts in the month
+  // it's saved from, so earlier months show none; saving it unchanged only moves the start back.
+  // A new due day (or weekday) alone isn't a change (2026-10-12, "C5 First": F A moved from the
+  // end of the month to the 15th kept its September start).
+  const unchanged =
+    existing &&
+    existing.cadence === values.cadence &&
+    existing.behavior === values.behavior &&
+    existing.amount === values.amount &&
+    existing.dueDate === values.dueDate &&
+    existing.repeatEvery === values.repeatEvery &&
+    existing.repeatUnit === values.repeatUnit;
+  const startMonth = unchanged && existing.startMonth < start ? existing.startMonth : start;
+  // YNAB, 2026-10-12 ("C5 First", "C4 Clean"): a target created as weekly, or made weekly, in the
+  // current month starts on the day it's saved (its earlier weeks aren't asked for); editing a
+  // weekly target keeps its start day while its start month stays.
+  const today = body.today ?? serverToday();
+  const startDay =
+    values.cadence !== "weekly"
+      ? null
+      : existing?.cadence === "weekly"
+        ? existing.startMonth === startMonth
+          ? existing.startDay
+          : null
+        : body.month === monthOf(today)
+          ? Number(today.slice(8))
+          : null;
+  const [target] = existing
+    ? await db
+        .update(categoryTarget)
+        .set({ ...values, startMonth, startDay })
+        .where(eq(categoryTarget.id, existing.id))
+        .returning()
+    : await db
+        .insert(categoryTarget)
+        .values({ id: newId(), budgetId, categoryId, ...values, startMonth, startDay })
+        .returning();
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
+};
+
+/**
+ * Undo and redo of target edits (YNAB's Undo covers them, docs/verify.md): the target goes back
+ * exactly as it was, start month and start day included, or away when there was none.
+ */
+export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTarget, Env> = async (
+  c,
+) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { target: snapshot } = c.req.valid("json");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  if (!snapshot) {
+    await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
+    return c.json(await loadCategoryJson(db, budgetId, row, null), 200);
+  }
+  const paymentTarget =
+    snapshot.cadence === "payment_monthly" || snapshot.cadence === "payoff_by_date";
+  if (Boolean(row.linkedAccountId) !== paymentTarget) {
+    throw managedError("Payment categories take only payment targets, other categories none");
+  }
+  const values = {
+    cadence: snapshot.cadence,
+    behavior: snapshot.behavior,
+    amount: BigInt(snapshot.amount),
+    currency: budget.currency,
+    dueDay: snapshot.dueDay,
+    dueDate: snapshot.dueDate,
+    repeatEvery: snapshot.repeatEvery,
+    repeatUnit: snapshot.repeatUnit,
+    startMonth: `${snapshot.startMonth}-01`,
+    startDay: snapshot.startDay,
+    snoozedMonth: snapshot.snoozedMonth && `${snapshot.snoozedMonth}-01`,
+  };
+  const existing = await findTarget(db, categoryId);
   const [target] = existing
     ? await db
         .update(categoryTarget)
@@ -269,7 +363,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
         .insert(categoryTarget)
         .values({ id: newId(), budgetId, categoryId, ...values })
         .returning();
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id]), target), 200);
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };
 
 export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarget, Env> = async (
@@ -280,5 +374,33 @@ export const deleteCategoryTargetHandler: RouteHandler<typeof deleteCategoryTarg
   await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
   await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
-  return c.json(toCategoryJson(row, await hasHistory(db, [row.id])), 200);
+  return c.json(await loadCategoryJson(db, budgetId, row, null), 200);
+};
+
+export const snoozeCategoryTargetHandler: RouteHandler<typeof snoozeCategoryTarget, Env> = async (
+  c,
+) => {
+  const { budgetId, categoryId } = c.req.valid("param");
+  const { month, snoozed, today = serverToday() } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  const row = await findCategory(db, budgetId, categoryId);
+  const existing = await findTarget(db, categoryId);
+  if (!existing) throw new AppError(404, "NOT_FOUND", "The category has no target");
+  // support.ynab.com "Paired Targets": "Credit card targets can't be snoozed."
+  if (row.linkedAccountId) throw managedError("Credit card payment targets can't be snoozed");
+  // YNAB: "You can only snooze a target in the current month."
+  if (month !== monthOf(today)) {
+    throw new AppError(
+      400,
+      "SNOOZE_CURRENT_MONTH",
+      "Only the current month's target can be snoozed",
+    );
+  }
+  const [target] = await db
+    .update(categoryTarget)
+    .set({ snoozedMonth: snoozed ? `${month}-01` : null })
+    .where(eq(categoryTarget.id, existing.id))
+    .returning();
+  return c.json(await loadCategoryJson(db, budgetId, row, target), 200);
 };

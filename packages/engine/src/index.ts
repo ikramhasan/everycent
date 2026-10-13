@@ -13,7 +13,14 @@ export {
 } from "./accounts";
 export { allocate } from "./allocate";
 export { evaluateAmount } from "./amount-expression";
-export { type CardActivity, fundedCardSpending } from "./credit";
+export {
+  type CardActivity,
+  type CardLine,
+  type CardLineEffect,
+  type CardLineKind,
+  cardLedger,
+  fundedCardSpending,
+} from "./credit";
 export {
   assertCurrencyCode,
   CURRENCY_CODES,
@@ -41,6 +48,18 @@ export {
   zDateFormat,
   zNumberFormat,
 } from "./format-settings";
+export {
+  afterStart,
+  type CategoryFunding,
+  FUNDING_STEPS,
+  type FundingPart,
+  type FundingStep,
+  fundUnderfunded,
+  paymentFunding,
+  spendingFunding,
+  type Upcoming,
+  upcomingShort,
+} from "./funding";
 export { convert } from "./fx";
 export {
   add,
@@ -67,7 +86,9 @@ export {
   type CategoryMonth,
   categoryMonth,
   categoryOverspending,
+  type HistoryAutoAssignOption,
   isBudgetMonth,
+  isOverdraft,
   type MonthAmount,
   type MonthFigures,
   monthBounds,
@@ -83,6 +104,7 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,
   DATE_LABELS,
@@ -96,9 +118,21 @@ export {
   type SearchTerm,
 } from "./register-search";
 export { divideRounded, type RoundingMode } from "./rounding";
+export {
+  firstOccurrenceAfter,
+  nextOccurrence,
+  occurrencesBetween,
+  SCHEDULE_FREQUENCIES,
+  SCHEDULE_FREQUENCY_LABELS,
+  type ScheduleFrequency,
+  zScheduleFrequency,
+} from "./schedule";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,
+  isPaymentTarget,
+  PAYMENT_TARGET_CADENCES,
+  periodRollover,
   TARGET_BEHAVIORS,
   TARGET_CADENCES,
   TARGET_REPEAT_UNITS,
@@ -109,6 +143,7 @@ export {
   targetNeed,
   targetPercent,
   weekdaysIn,
+  weeklyDays,
   zTargetBehavior,
   zTargetCadence,
 } from "./targets";

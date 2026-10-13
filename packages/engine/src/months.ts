@@ -237,16 +237,42 @@ export function readyToAssign(input: {
   return { readyToAssign: base - taken, assignedInFuture };
 }
 
-/** YNAB's Auto-Assign options (Underfunded and Reduce Overfunding need targets, phase 8). */
+/**
+ * Whether a negative Ready to Assign is an overdraft (YNAB's "Overdraft? We can help with that!")
+ * rather than money assigned beyond what there is ("You assigned more than you have" with Fix
+ * This): even taking back every category's cash wouldn't bring it to zero. A category's cash is its
+ * Available with credit overspending left out (cash overspending counts against it; overspent
+ * amounts are negative, so it's `available - creditOverspent`); every category counts, payment
+ * and hidden ones included, but not Uncategorized. Checked in YNAB on 2026-10-11 (docs/verify.md):
+ * the month on screen doesn't matter, and exactly zero isn't one.
+ */
+export function isOverdraft(
+  readyToAssign: bigint,
+  categories: readonly Pick<CategoryMonth, "available" | "creditOverspent">[],
+): boolean {
+  if (readyToAssign >= 0n) return false;
+  let cash = readyToAssign;
+  for (const c of categories) cash += c.available - c.creditOverspent;
+  return cash < 0n;
+}
+
+/** YNAB's Auto-Assign options, in its order. */
 export const AUTO_ASSIGN_OPTIONS = [
+  "underfunded",
   "assignedLastMonth",
   "spentLastMonth",
   "averageAssigned",
   "averageSpent",
+  "reduceOverfunding",
   "resetAvailable",
   "resetAssigned",
 ] as const;
 export type AutoAssignOption = (typeof AUTO_ASSIGN_OPTIONS)[number];
+/** The options worked out from a category's history alone (the others need its target). */
+export type HistoryAutoAssignOption = Exclude<
+  AutoAssignOption,
+  "underfunded" | "reduceOverfunding"
+>;
 
 /** How many months YNAB's averages look back (its help center: "up to the last 12 months"). */
 const AVERAGE_MONTHS = 12;
@@ -263,12 +289,13 @@ const AVERAGE_MONTHS = 12;
  *   Ready to Assign, and an overspent category is covered from it (YNAB: Utilities, $25.00
  *   overspent, went to $25.00 assigned).
  * - Reset Assigned: zero.
- * Averages are rounded half-even to the minor unit.
+ * Averages are rounded to the minor unit, halves away from zero (YNAB, checked 2026-10-11:
+ * $0.05 over two months is $0.03, −$0.05 is −$0.03, $0.07 over three is $0.02).
  */
 export function autoAssignAmounts(
   history: readonly MonthFigures[],
   month: BudgetMonth,
-): Record<AutoAssignOption, bigint> {
+): Record<HistoryAutoAssignOption, bigint> {
   const last = addMonths(month, -1);
   const byMonth = new Map<BudgetMonth, { assigned: bigint; activity: bigint }>();
   for (const h of history) {
@@ -294,8 +321,8 @@ export function autoAssignAmounts(
       assigned += byMonth.get(m)?.assigned ?? 0n;
       activity += byMonth.get(m)?.activity ?? 0n;
     }
-    averageAssigned = divideRounded(assigned, count, "half-even");
-    averageSpent = divideRounded(spent(activity), count, "half-even");
+    averageAssigned = divideRounded(assigned, count, "half-up");
+    averageSpent = divideRounded(spent(activity), count, "half-up");
   }
 
   const current = categoryMonth(history, month);

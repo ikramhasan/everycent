@@ -149,7 +149,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">everycent · roadmap phase 8 · updated 3 Oct 2026 (8a–8b merged to main; 7e–7g deferred)</div>
+    <div class="eyebrow">everycent · roadmap phase 8 · updated 8 Oct 2026 (8a–8f merged to main; 7e–7g deferred)</div>
     <h1>Build sequence for targets</h1>
     <p class="lede">Phase 7 made card money correct; Phase 8 tells the user how much each category should get. Its nine README items are split into <strong>six stages</strong>: a target model with monthly targets, the other cadences, plan-wide underfunded totals, snooze and progress bars, credit card payment targets, then an overview and parity pass. Targets never move money; they only compute what's asked for. Build top to bottom; YNAB behaviour that the help center, the API and the app can't settle goes to <code>docs/verify.md</code>, not into code as a guess.</p>
   </header>
@@ -159,13 +159,13 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
       <a class="node done" href="#s00"><span class="n">00 · done</span><span class="t">Foundation</span><span class="s">Plan math, cards, Auto-Assign</span></a>
       <a class="node done" href="#s8a"><span class="n">8a · done</span><span class="t">Monthly targets</span><span class="s">Model, need, inspector</span></a>
       <a class="node done" href="#s8b"><span class="n">8b · done</span><span class="t">Cadences</span><span class="s">Weekly, yearly, custom</span></a>
-      <a class="node now" href="#s8c"><span class="n">8c · next</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
-      <a class="node" href="#s8d"><span class="n">8d</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
-      <a class="node" href="#s8e"><span class="n">8e</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
-      <a class="node" href="#s8f"><span class="n">8f</span><span class="t">Overview</span><span class="s">Totals, history, parity</span></a>
+      <a class="node done" href="#s8c"><span class="n">8c · done</span><span class="t">Underfunded</span><span class="s">Auto-Assign and views</span></a>
+      <a class="node done" href="#s8d"><span class="n">8d · done</span><span class="t">Snooze and bars</span><span class="s">Zz, progress, colors</span></a>
+      <a class="node done" href="#s8e"><span class="n">8e · done</span><span class="t">Card targets</span><span class="s">Monthly, pay off by date</span></a>
+      <a class="node done" href="#s8f"><span class="n">8f · done</span><span class="t">Overview</span><span class="s">Income, history, parity</span></a>
     </div>
     <div class="side"><b>Outside Phase 8:</b> loan debt-payment targets (wait for 7f), positive card balances (7e, deferred), scheduled-transaction funding (Phase 10), targets in a native currency (Phase 11).</div>
-    <div class="then">8a and 8b are merged to <span class="mono">main</span> (09dab2a), with the updatedAt clock fix. To pick up: <span class="mono">Start 8c on a branch from main. Read docs/deferred.md ("Targets") and docs/verify.md (targets sections); settle 8c's gate in YNAB. The API's write limit is easy to hit (200 requests an hour): read whole months, and test in the web app when it's used up.</span></div>
+    <div class="then">8a–8f are merged to <span class="mono">main</span> (01ab6b8). Phase 8 is complete apart from what it parks (loan targets with 7f, scheduled transactions with Phase 10). To pick up: <span class="mono">Next phases are in docs/artifacts/everycent Next Phases.html (7e first). Open target details are in docs/verify.md.</span></div>
   </section>
 
   <section class="steps" aria-label="Stages">
@@ -237,7 +237,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8c">
       <div class="num">8c</div>
       <div class="body">
-        <div class="head"><h2>Underfunded across the plan</h2><span class="pill now">Next</span></div>
+        <div class="head"><h2>Underfunded across the plan</h2><span class="pill done">Done</span></div>
         <p class="why">With needs computed per category, the plan can total them: Auto-Assign gets its two missing options and the budget screen gets its missing views.</p>
         <div class="meta">
           <div>
@@ -249,8 +249,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed</h3>
             <ul><li>The inspector's Auto-Assign lists Underfunded and Reduce Overfunding with an amount each (seen in YNAB, 6e)</li><li>Snoozed targets don't count toward Underfunded (help center)</li><li>Views bar has Underfunded, Overfunded and Snoozed next to the built ones (seen in YNAB, 6d)</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>What counts as overfunded per cadence and behavior, and what Reduce Overfunding leaves</li><li>Whether Underfunded includes payment-category targets and credit overspending</li><li>The Ready to Assign banner's “Assign” pop-up (still unchecked from 6e)</li></ul>
+            <h3>Found in YNAB (API + app, 7 Oct)</h3>
+            <ul><li>Underfunded per category = meet the target or cover overspending, whichever is more (O11 asked $100 not $130; O13, met, asked $30); overspent categories without a target ask their overspending</li><li>Card payment categories ask what's owed beyond Available, less this month's credit overspending; cards with credit overspending are listed apart (“may need more attention”) but still funded</li><li>With nothing selected (or a view) it funds overspending, then dated-this-month by date, end-of-month monthly, later due dates, card payments, and stops at $0 Ready to Assign; a selection is funded in full</li><li>Reduce Overfunding takes back this month's Assigned above what the month asks, capped by Available (O1 −$30 of $50); refill counts carried money, so Assigned can go negative (O4 −$50); dated targets compare against this month's share (O10 −$66.66); payment categories give back Available above what's owed</li><li>Views list what each option would change; empty states “Cheers! You don't currently have any underfunded categories.” / “You don't currently have any overfunded targets.”</li><li>“Cost to Be Me / October's Targets” = each target's month amount (dated: this month's share), current month only, plus “Next month's targets could increase your total to …”</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Preview wording when Ready to Assign runs out part-way; balance-without-date overfunding; the first-month rule; hidden categories in October's Targets; payment-only labels (“Paid Last Month”) <span class="src">verify.md</span></li><li class="q">The Ready to Assign banner's “Assign” pop-up (still unchecked from 6e) <span class="src">verify.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -258,7 +260,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8d">
       <div class="num">8d</div>
       <div class="body">
-        <div class="head"><h2>Snooze and progress bars</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Snooze and progress bars</h2><span class="pill done">Done</span></div>
         <p class="why">The visible layer: let the user mute a target for a month, and draw each category's progress the way YNAB does so the plan reads at a glance.</p>
         <div class="meta">
           <div>
@@ -270,8 +272,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>Snooze lasts for the month it's set in and only the current month can be snoozed; the next month asks again</li><li>A snoozed category shows green (money) or grey (zero) instead of yellow</li><li>Credit card payment targets can't be snoozed</li><li>Rollover money is always spent first; “Refill up to…” rollover isn't progress in a future month</li><li>Progress bar on/off resets when local storage is cleared (so it's a browser setting)</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Exact bar geometry for mixed spent/available/overspent, in both themes, against YNAB screenshots</li></ul>
+            <h3>Found in YNAB (app, 7 Oct)</h3>
+            <ul><li>A snoozed category loses its note, gets a “zᶻ” green/grey pill (red stays red), leaves Underfunded except for its overspending, still gives back what's over, and still counts in October's Targets; Undo covers it</li><li>Snoozed view empty state: “You don't currently have categories with snoozed targets in this month.”</li><li>Bar geometry read from YNAB's page: set aside rollover section (T8 N 60/40), weekly sections plus an extra one beyond the weeks (O6), one section growing to money or spending otherwise (O13 76.9% spent / 23.1% overspent), dated targets against their total (T8 G 7%); spending eats the first section first; unassigned inflows aren't drawn</li><li>Notes: “Funded. Spent $x of $y”, “Spent $x of $y”, “Fully Spent”; bars off hides bars and notes; payment categories have no bar</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">A snoozed category's note with spending; $y in “Spent $x of $y” with money carried in; the snooze “?” text; the switch in past months; exact colours <span class="src">verify.md</span></li><li class="q">Dated set aside rollover section (help center) not drawn yet <span class="src">deferred.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -279,7 +283,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8e">
       <div class="num">8e</div>
       <div class="body">
-        <div class="head"><h2>Credit card payment targets</h2><span class="pill">Planned</span></div>
+        <div class="head"><h2>Credit card payment targets</h2><span class="pill done">Done</span></div>
         <p class="why">Payment categories get their own two target types. They reuse 8a's model but measure progress differently: a fixed monthly payment, or the card's balance paid off by a date.</p>
         <div class="meta">
           <div>
@@ -291,8 +295,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <div>
             <h3>Confirmed (help center)</h3>
             <ul><li>Two types only for payment categories; specific-amount progress is for this month only</li><li>Pay-off-by-date progress is Available against the whole balance; uncovered credit overspending raises next month's ask</li><li>Funded card spending moving into the payment category doesn't change what the target asks</li></ul>
-            <h3>Verification gate</h3>
-            <ul><li>Rounding and the month the date falls in for pay-off-by-date</li><li>Positive card balances (7e is deferred): skip target behavior for them until 7e</li></ul>
+            <h3>Found in YNAB (API + app, 8 Oct)</h3>
+            <ul><li>Pay off by date spreads what's owed beyond Available over the months left, both ends counted, rounding up: $120 by March asked $20.00, $100 by December $33.34</li><li>This month's Funded Spending is left out of both sides (E2: $110 owed, $10 funded → “Pay off $100.00”, 0%); credit overspending raises the ask at once ($125 → $20.84); a payment without money set aside changes nothing</li><li>Specific amount asks like a monthly “Set aside another…”; Underfunded asks the target, not the balance; Reduce Overfunding gives back Assigned above the ask (E3 $20.00, E1 $29.16); card targets count in October's Targets</li><li>The Target section replaces the Payment alert, except while the category is red; no row note, no snooze; one payment category's Auto-Assign reads “Paid Last Month”, “Average Paid”</li><li>A pay-off month in the past leaves no target</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">After the pay-off month; a fully covered balance; funding order; a red paid-off card's Total Underfunded; past-month colours <span class="src">verify.md</span></li><li class="q">Positive card balances wait for 7e; “Making minimum payments?” link and “Cover Overspent Categories” not built <span class="src">deferred.md</span></li></ul>
           </div>
         </div>
       </div>
@@ -300,18 +306,20 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <article class="step" id="s8f">
       <div class="num">8f</div>
       <div class="body">
-        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill">Planned</span></div>
-        <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f.</p>
+        <div class="head"><h2>Targets overview and finish Phase 8</h2><span class="pill done">Done</span></div>
+        <p class="why">Close the phase: show what the whole plan needs this month and next, run the parity pass, and leave loan debt targets clearly parked with 7f. YNAB's overview turned out to be Cost to Be Me (8c) plus Expected Income; it has no per-group totals, so none were built.</p>
         <div class="meta">
           <div>
             <h3>Includes</h3>
-            <ul><li>Targets overview: total needed this month vs next month, and per group</li><li>Target history: past months show what that month's target asked for</li><li>Browser parity pass of every target type in both themes; deferred.md and verify.md updated</li><li><code>pnpm check</code>; OpenAPI/client and migrations generated and committed</li></ul>
+            <ul><li>Expected Income under Cost to Be Me: entered once, kept every month, with YNAB's two bars (targets blue, or red when income falls short; income grey)</li><li>Target history as YNAB keeps it: a changed target starts in the month it's saved from, so earlier months show none; an unchanged save only moves the start back</li><li>Past and future months: no Assign button in past months; the snooze switch shown but disabled outside the current month</li><li>Parity pass in both themes; deferred.md and verify.md updated; <code>pnpm check</code>; OpenAPI/client and the migration committed</li></ul>
             <h3>Depends on</h3>
             <ul><li>8a–8e</li></ul>
           </div>
           <div>
-            <h3>Verification gate</h3>
-            <ul><li>Where YNAB shows the overview today (month summary, “Cost to Be Me” in Edit Plan) and what it totals</li><li>How a past month shows a target that was edited later (help center: edits apply to every month)</li></ul>
+            <h3>Found in YNAB (app + help center, 8 Oct)</h3>
+            <ul><li>On the web the overview is the summary's Cost to Be Me; “Next month's targets…” only when higher; a yearly target due this month counts its new year's share there (help center wording aside)</li><li>Expected Income: amount field with Cancel/Save, then a pencil; bars scaled to the larger of the two; 0 can't clear it</li><li>No target versions: changing a target restarts it in the month it's saved from (F-Y1 Sept → Oct → Nov)</li><li>Past months: no Assign button; snooze switch disabled outside the current month (“You can only snooze targets in the current month.”)</li></ul>
+            <h3>Still open</h3>
+            <ul><li class="q">Fresh start and expected income; which edits count as a change; snooze kept across a change <span class="src">verify.md</span></li></ul>
             <h3>Not here</h3>
             <ul><li>Loan “Monthly Debt Payment” targets: need 7f's loan activity and amortization</li><li>Scheduled-transaction funding and the calendar pill (Phase 10)</li><li>Daily or biweekly cadences (YNAB has none)</li></ul>
           </div>

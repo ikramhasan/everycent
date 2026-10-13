@@ -132,12 +132,17 @@ export const moneyMove = pgTable(
       .references(() => budget.id, { onDelete: "cascade" }),
     /** Who moved the money; kept when they leave the budget. */
     userId: text().references(() => user.id, { onDelete: "set null" }),
-    fromCategoryId: text()
-      .notNull()
-      .references(() => category.id, { onDelete: "cascade" }),
-    toCategoryId: text()
-      .notNull()
-      .references(() => category.id, { onDelete: "cascade" }),
+    /** Null once the category is deleted; its name is kept in `fromCategoryName`. */
+    fromCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    toCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * The name of a deleted category on either side (YNAB keeps such moves as "deleted category
+     * <name>"); null while the category exists.
+     */
+    fromCategoryName: text(),
+    toCategoryName: text(),
+    /** Logged by deleting a category (YNAB shows these with a trash icon, under "Moved"). */
+    deletion: boolean().notNull().default(false),
     /** First day of the month the money moved in, YYYY-MM-01. */
     month: date({ mode: "string" }).notNull(),
     /** Minor units, always positive. */
@@ -177,7 +182,33 @@ export const categoryTarget = pgTable(
     repeatUnit: text({ enum: TARGET_REPEAT_UNITS }),
     /** First day of the first month the target applies to, YYYY-MM-01. */
     startMonth: date({ mode: "string" }).notNull(),
+    /**
+     * Weekly: the day of the start month it began on, when created (or made weekly) in the user's
+     * current month; earlier occurrences that month aren't asked for. Null for the whole month.
+     */
+    startDay: integer(),
+    /** YYYY-MM-01 of the month the target is snoozed for (YNAB's snooze lasts one month). */
+    snoozedMonth: date({ mode: "string" }),
     ...timestamps,
   },
   (t) => [index("category_target_budget_id_idx").on(t.budgetId)],
+);
+
+/**
+ * YNAB's month note ("Enter a note…" under the month name): one per budget and month, not carried
+ * to other months.
+ */
+export const monthNote = pgTable(
+  "month_note",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    /** First day of the month, YYYY-MM-01. */
+    month: date({ mode: "string" }).notNull(),
+    note: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("month_note_budget_month_idx").on(t.budgetId, t.month)],
 );

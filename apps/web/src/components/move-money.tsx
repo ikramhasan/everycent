@@ -1,12 +1,15 @@
+import type { BudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
+import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@everycent/ui/components/tabs";
 import { cn } from "@everycent/ui/lib/utils";
-import { CircleCheck } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { CalendarDays, ChevronDown, CircleCheck, Zap } from "lucide-react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import type { TargetMark } from "@/lib/budget-view";
-import { type MoneyOption, minAmount } from "@/lib/months";
+import { type MoneyOption, minAmount, monthLabel } from "@/lib/months";
 import { CategoryField } from "./register-fields";
 
 export interface MoveActions {
@@ -18,6 +21,13 @@ export interface MoveActions {
   /** Minor units as an input value, without the currency symbol. */
   toInput: (amount: string) => string;
   move: (fromCategoryId: string, toCategoryId: string, amount: bigint) => Promise<void>;
+  /** The same in another month (Fix This can un-assign from later months). */
+  moveIn: (
+    month: BudgetMonth,
+    fromCategoryId: string,
+    toCategoryId: string,
+    amount: bigint,
+  ) => Promise<void>;
 }
 
 type Format = (minorUnits: string) => string;
@@ -57,12 +67,26 @@ export function AvailablePill({
         className,
       )}
     >
-      {mark &&
-        (mark.met ? (
-          <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
-        ) : (
-          <TargetPie percent={mark.percent} />
-        ))}
+      {mark?.kind === "met" && (
+        <CircleCheck className="size-3.5 shrink-0" aria-label="Target met" />
+      )}
+      {mark?.kind === "underfunded" && <TargetPie percent={mark.percent} />}
+      {mark?.kind === "upcoming" && (
+        <CalendarDays
+          className="size-3.5 shrink-0"
+          aria-label="Not enough for upcoming scheduled transactions"
+        />
+      )}
+      {mark?.kind === "snoozed" && (
+        // YNAB's "Zz" snooze icon.
+        <span
+          className="shrink-0 font-semibold text-[0.65rem] leading-none"
+          role="img"
+          aria-label="Target snoozed"
+        >
+          z<sup>z</sup>
+        </span>
+      )}
       <span className="truncate">{format(amount)}</span>
     </span>
   );
@@ -165,12 +189,17 @@ function MoveForm({
   format,
   actions,
   onDone,
+  label = "Move",
+  submitLabel = "OK",
 }: {
   categoryId: string;
   amount: string;
   format: Format;
   actions: MoveActions;
   onDone: () => void;
+  /** The amount's label ("Move", or "Assign" in the banner's pop-up). */
+  label?: string;
+  submitLabel?: string;
 }) {
   const [text, setText] = useState(() => actions.toInput(amount));
   const [to, setTo] = useState<string | null>(null);
@@ -190,7 +219,7 @@ function MoveForm({
   return (
     <form onSubmit={submit} className="grid gap-3">
       <Field data-invalid={error ? true : undefined}>
-        <FieldLabel htmlFor="move-amount">Move</FieldLabel>
+        <FieldLabel htmlFor="move-amount">{label}</FieldLabel>
         <Input
           id="move-amount"
           autoFocus
@@ -208,7 +237,7 @@ function MoveForm({
       <Field>
         <FieldLabel>To</FieldLabel>
         <CategoryField
-          label="Move to"
+          label={`${label} to`}
           placeholder=""
           value={to}
           onChange={setTo}
@@ -221,22 +250,98 @@ function MoveForm({
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!to}>
-          OK
+          {submitLabel}
         </Button>
       </div>
     </form>
   );
 }
 
+const ASSIGN_TAB_KEY = "everycent.assignTab";
+
+/**
+ * The Ready to Assign banner's Assign button (YNAB, checked 2026-10-12 in "ihni7's Plan"): a
+ * pop-up with two tabs, "Auto" (the Auto-Assign options) and "Manually" ("Assign:" filled with all
+ * of Ready to Assign, "To:" a category, Cancel / Assign). It opens on the tab used last, which YNAB
+ * keeps in the browser.
+ */
+export function AssignButton({
+  readyToAssign,
+  format,
+  actions,
+  auto,
+}: {
+  readyToAssign: string;
+  format: Format;
+  actions: MoveActions;
+  /** The Auto-Assign options for the rows in view. */
+  auto: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState(() => {
+    try {
+      return localStorage.getItem(ASSIGN_TAB_KEY) === "auto" ? "auto" : "manual";
+    } catch {
+      return "manual";
+    }
+  });
+  const choose = (value: string) => {
+    setTab(value);
+    try {
+      localStorage.setItem(ASSIGN_TAB_KEY, value);
+    } catch {
+      // Remembering the tab is a convenience.
+    }
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" className="bg-green-800 text-white hover:bg-green-900">
+          Assign
+          <ChevronDown />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="center" className="w-80">
+        <Tabs value={tab} onValueChange={choose}>
+          <TabsList className="w-full">
+            <TabsTrigger value="auto">
+              <Zap />
+              Auto
+            </TabsTrigger>
+            <TabsTrigger value="manual">Manually</TabsTrigger>
+          </TabsList>
+          <TabsContent value="auto" className="pt-2">
+            {auto}
+          </TabsContent>
+          <TabsContent value="manual" className="pt-2">
+            <MoveForm
+              categoryId={actions.readyToAssignId}
+              amount={readyToAssign}
+              format={format}
+              actions={actions}
+              onDone={() => setOpen(false)}
+              label="Assign"
+              submitLabel="Assign"
+            />
+          </TabsContent>
+        </Tabs>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** A form that only picks a category to take money from, as YNAB's cover and Fix This do. */
 function PickSourceForm({
   label,
+  aside,
   options,
   format,
   onCancel,
   onPick,
 }: {
   label: string;
+  /** Shown next to the label (Fix This's month picker). */
+  aside?: ReactNode;
   options: readonly MoneyOption[];
   format: Format;
   onCancel: () => void;
@@ -253,7 +358,10 @@ function PickSourceForm({
       className="grid gap-3"
     >
       <Field>
-        <FieldLabel>{label}</FieldLabel>
+        <div className="flex items-center justify-between gap-2">
+          <FieldLabel>{label}</FieldLabel>
+          {aside}
+        </div>
         <CategoryField
           label={label}
           placeholder=""
@@ -277,42 +385,82 @@ function PickSourceForm({
 }
 
 /**
+ * The months Fix This can un-assign from, as YNAB offers them (checked 2026-10-11): from the
+ * current month to the last one with money assigned, months with nothing assigned disabled. The
+ * current month offers what's available; later months what's assigned in them.
+ */
+export interface FixThisMonths {
+  months: readonly { month: BudgetMonth; disabled: boolean }[];
+  /** Selected at first: the month on screen. */
+  initial: BudgetMonth;
+  /** The categories to offer in `month`, with what can be taken back; undefined while loading. */
+  optionsFor: (month: BudgetMonth) => readonly MoneyOption[] | undefined;
+  /** Moves `amount` from a category back to Ready to Assign in `month`. */
+  unassign: (month: BudgetMonth, categoryId: string, amount: bigint) => Promise<void>;
+}
+
+/**
  * YNAB's "Fix This" on a negative Ready to Assign: takes the shortfall back from one category
- * (as much as it has).
+ * (as much as it has), in the month on screen or, with `months`, another month YNAB offers.
  */
 export function FixThisButton({
   readyToAssign,
   format,
   actions,
+  months,
 }: {
   readyToAssign: string;
   format: Format;
   actions: MoveActions;
+  months?: FixThisMonths;
 }) {
   const [open, setOpen] = useState(false);
+  const [month, setMonth] = useState(months?.initial);
+  const picked = months && month ? months.optionsFor(month) : actions.options;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setMonth(months?.initial);
+      }}
+    >
       <PopoverTrigger asChild>
         <Button size="sm" variant="destructive">
           Fix This
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
+      <PopoverContent align="end" className="w-80">
         <PickSourceForm
+          key={month}
           label="Un-assign money from"
-          options={actions.options.filter(
+          aside={
+            months &&
+            months.months.length > 1 && (
+              <NativeSelect
+                size="sm"
+                aria-label="Month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value as BudgetMonth)}
+              >
+                {months.months.map((m) => (
+                  <NativeSelectOption key={m.month} value={m.month} disabled={m.disabled}>
+                    {monthLabel(m.month)}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            )
+          }
+          options={(picked ?? []).filter(
             (o) => o.id !== actions.readyToAssignId && BigInt(o.available) > 0n,
           )}
           format={format}
           onCancel={() => setOpen(false)}
           onPick={async (source) => {
             setOpen(false);
-            const shortfall = -BigInt(readyToAssign);
-            await actions.move(
-              source.id,
-              actions.readyToAssignId,
-              minAmount(BigInt(source.available), shortfall),
-            );
+            const amount = minAmount(BigInt(source.available), -BigInt(readyToAssign));
+            if (months && month) await months.unassign(month, source.id, amount);
+            else await actions.move(source.id, actions.readyToAssignId, amount);
           }}
         />
       </PopoverContent>

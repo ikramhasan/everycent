@@ -27,7 +27,13 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { isCaution, targetMark, UNCATEGORIZED as UNCATEGORIZED_ID } from "@/lib/budget-view";
+import {
+  availableMark,
+  isCaution,
+  summarize,
+  toTotals,
+  UNCATEGORIZED as UNCATEGORIZED_ID,
+} from "@/lib/budget-view";
 import {
   type Category,
   type CategoryGroup,
@@ -39,11 +45,12 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
-import { targetRowNote } from "@/lib/targets";
+import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
+import { ProgressBar } from "./progress-bar";
 
 export interface CategoryListActions {
   createGroup: (name: string) => Promise<void>;
@@ -71,6 +78,7 @@ type PendingDelete = {
   /** Categories that disappear with it. */
   deletedIds: string[];
   hasTransactions: boolean;
+  transactionCount: number;
 } | null;
 
 /** A month's numbers for the list, with the budget's amount formatting. */
@@ -95,6 +103,8 @@ export interface CategoryFigures {
   shown?: ReadonlySet<string>;
   /** What to say when a view keeps nothing, with a way back to All. */
   emptyView?: { message: string; onViewAll: () => void };
+  /** YNAB's Progress Bars setting: off hides the bars and the notes under category names. */
+  progressBars?: boolean;
 }
 
 export interface SelectionActions {
@@ -212,13 +222,20 @@ export function CategoryList({
   function requestDelete(kind: "group" | "category", id: string, name: string) {
     const deleted =
       kind === "group" ? (groupsById.get(id)?.categories ?? []) : [categoriesById.get(id)];
+    const hasTransactions = deleted.some((c) => c?.hasTransactions);
+    // YNAB deletes a category with neither transactions nor assigned money straight away.
+    if (kind === "category" && !hasTransactions && !deleted[0]?.hasAssignedMoney) {
+      void actions.deleteCategory(id);
+      return;
+    }
     setReassignTo("");
     setPendingDelete({
       kind,
       id,
       name,
       deletedIds: deleted.flatMap((c) => (c ? [c.id] : [])),
-      hasTransactions: deleted.some((c) => c?.hasTransactions),
+      hasTransactions,
+      transactionCount: deleted.reduce((n, c) => n + (c?.transactionCount ?? 0), 0),
     });
   }
 
@@ -395,7 +412,12 @@ export function CategoryList({
                   group={group}
                   index={groupIndex}
                   actions={actions}
-                  totals={groupFigures.get(groupId)}
+                  totals={
+                    // Under a view a group totals only its categories in view (YNAB, 2026-10-11).
+                    shown && figures
+                      ? toTotals(summarize(figures.month, itemsOf(groupId)))
+                      : groupFigures.get(groupId)
+                  }
                   figures={figures}
                   reorderable={!shown}
                   onToggleSelection={selection && (() => toggleGroupSelection(groupId))}
@@ -474,18 +496,43 @@ export function CategoryList({
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{pendingDelete?.name}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.kind === "group"
-                ? "The group and all of its categories will be deleted."
-                : "The category will be deleted."}{" "}
-              If you might need it later, hide it instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+          {pendingDelete?.kind === "category" ? (
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Category</AlertDialogTitle>
+              {/* YNAB's wording (checked 2026-10-11, docs/verify.md). */}
+              <AlertDialogDescription className="grid gap-2">
+                {pendingDelete.hasTransactions ? (
+                  <span>
+                    Before you can delete the category <strong>{pendingDelete.name}</strong>, you'll
+                    need to reassign your past activity to a new category.
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      There is money currently assigned to <strong>{pendingDelete.name}</strong>.
+                    </span>
+                    <span>
+                      When you delete this category, all assigned amounts will be moved to{" "}
+                      <strong>Ready to Assign</strong>.
+                    </span>
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          ) : (
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete “{pendingDelete?.name}”?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The group and all of its categories will be deleted. If you might need it later,
+                hide it instead.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          )}
           {pendingDelete?.hasTransactions && (
             <div className="grid gap-2">
-              <Label htmlFor="reassign-to">Move its transactions to</Label>
+              <Label htmlFor="reassign-to">
+                {pendingDelete.kind === "category" ? "Select category" : "Move its transactions to"}
+              </Label>
               <NativeSelect
                 id="reassign-to"
                 value={reassignTo}
@@ -504,6 +551,16 @@ export function CategoryList({
                   </optgroup>
                 ))}
               </NativeSelect>
+              {pendingDelete.kind === "category" && (
+                <div className="grid gap-1 text-sm">
+                  <p className="font-medium">Here's what will be reassigned to the new category:</p>
+                  <ul className="list-disc ps-5 text-muted-foreground">
+                    <li>All transactions [{pendingDelete.transactionCount}]</li>
+                    <li>All assigned amounts</li>
+                    <li>Any remaining available amount</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           <AlertDialogFooter>
@@ -722,81 +779,97 @@ function CategoryRow({
         selected && SELECTED_ROW,
       )}
     >
-      <div className={NAME_CELL}>
-        <Spacer />
-        {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
-        {reorderable ? (
-          <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
-        ) : (
+      <div className="grid min-w-0 gap-1">
+        <div className={NAME_CELL}>
           <Spacer />
-        )}
-        <NamePopover
-          title="Category name"
-          withNote
-          nameLockedReason={
-            isPayment ? "Named after its credit account. Rename the account instead." : undefined
-          }
-          initial={{ name: category.name, note: category.note }}
-          onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
-          actions={(close) => (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  close();
-                  await actions.updateCategory(category.id, { hidden: true });
-                }}
-              >
-                Hide
-              </Button>
-              {!isPayment && (
+          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
+          {reorderable ? (
+            <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+          ) : (
+            <Spacer />
+          )}
+          <NamePopover
+            title="Category name"
+            withNote
+            nameLockedReason={
+              isPayment ? "Named after its credit account. Rename the account instead." : undefined
+            }
+            initial={{ name: category.name, note: category.note }}
+            onSubmit={({ name, note }) => actions.updateCategory(category.id, { name, note })}
+            actions={(close) => (
+              <>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="text-destructive"
-                  onClick={() => {
+                  onClick={async () => {
                     close();
-                    onDelete();
+                    await actions.updateCategory(category.id, { hidden: true });
                   }}
                 >
-                  Delete
+                  Hide
                 </Button>
-              )}
-            </>
-          )}
-          trigger={
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(NAME_BUTTON, "font-normal text-sm")}
-              onClick={(e) => {
-                if (!selection || onlySelected) return;
-                // Selecting comes first; Radix skips opening the editor on a prevented click.
-                e.preventDefault();
-                selection.selectOnly(category.id);
-              }}
-            >
-              <span className="truncate">{category.name}</span>
-            </Button>
-          }
-        />
-        {category.note && (
-          <StickyNote className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has a note" />
-        )}
-        {totals && format && figures && totals.available.startsWith("-") ? (
-          <OverspentNote totals={totals} format={format} />
-        ) : (
-          totals?.target &&
-          category.target &&
-          format &&
-          figures && (
-            <TargetNote
-              {...targetRowNote(category.target, totals.target, figures.month.month, format)}
+                {!isPayment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => {
+                      close();
+                      onDelete();
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
+            trigger={
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(NAME_BUTTON, "font-normal text-sm")}
+                onClick={(e) => {
+                  if (!selection || onlySelected) return;
+                  // Selecting comes first; Radix skips opening the editor on a prevented click.
+                  e.preventDefault();
+                  selection.selectOnly(category.id);
+                }}
+              >
+                <span className="truncate">{category.name}</span>
+              </Button>
+            }
+          />
+          {category.note && (
+            <StickyNote
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Has a note"
             />
-          )
+          )}
+          {totals &&
+            format &&
+            figures &&
+            figures.progressBars !== false &&
+            // YNAB writes no note under a payment category, target or not (seen 2026-10-08).
+            !isPayment &&
+            (totals.available.startsWith("-") ? (
+              <OverspentNote totals={totals} format={format} />
+            ) : (
+              <RowNote
+                note={categoryRowNote(
+                  category.target,
+                  totals.target,
+                  totals.bar,
+                  figures.month.month,
+                  format,
+                )}
+              />
+            ))}
+        </div>
+        {totals?.bar && figures?.progressBars !== false && (
+          // Lined up with the name, past the three slots and the name button's padding.
+          <ProgressBar bar={totals.bar} className="mr-1 ml-[5.75rem]" />
         )}
       </div>
       {totals && format && (
@@ -832,14 +905,14 @@ function CategoryRow({
                 format={format}
                 actions={move}
                 caution={caution}
-                target={targetMark(totals.target)}
+                target={availableMark(totals)}
               />
             ) : (
               <AvailablePill
                 amount={totals.available}
                 format={format}
                 caution={caution}
-                target={targetMark(totals.target)}
+                target={availableMark(totals)}
               />
             )}
           </span>
@@ -849,16 +922,13 @@ function CategoryRow({
   );
 }
 
-/** What a category's target still asks for this month, under its name (YNAB's row note). */
-function TargetNote({ text, met }: { text: string; met: boolean }) {
+/** The note under a category's name: its target's status, or what was spent (YNAB's row note). */
+function RowNote({ note }: { note: { strong: string; rest: string } | null }) {
+  if (!note) return null;
   return (
-    <span
-      className={cn(
-        "min-w-0 flex-1 basis-0 truncate pl-2 text-right text-xs",
-        met ? "font-medium text-foreground" : "text-muted-foreground",
-      )}
-    >
-      {text}
+    <span className="min-w-0 flex-1 basis-0 truncate pl-2 text-right text-muted-foreground text-xs">
+      {note.strong && <span className="font-medium text-foreground">{note.strong}</span>}
+      {note.rest}
     </span>
   );
 }

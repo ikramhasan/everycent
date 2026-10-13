@@ -15,115 +15,126 @@ before starting a roadmap phase** and remove an entry once it's done.
 
 - All overspending counts as cash overspending (it comes out of the next month's Ready to Assign).
   Phase 7 must treat spending on a credit card as credit overspending (new debt, yellow).
-- Past months' negative banner ("Overdraft?") has no "Next Steps" link (a YNAB help page).
-- The current month doesn't warn when a later month is negative (YNAB's future-months panel:
-  "Ready to Assign in November is −$985.00 … Cover Overspending / Go to November").
-- YNAB draws a progress bar under every category (green as money is spent, red stripes when
-  overspent) and says "Fully Spent" when spending used it all. Only the "Overspent" note is built;
-  the bars belong with targets (phase 8), which they mostly show.
+- The overdraft banner ("Overdraft? We can help with that!") has no "Next Steps" button: YNAB's
+  opens its help article "Getting Out of Overdraft with YNAB", and everycent has no help center
+  (EVERYCENT-117).
 - Undo/redo history is local to the open browser budget and deliberately disappears on reload, so
   partners cannot undo one another's history. Undo and redo still call the API, so the resulting
   budget/transaction state is saved on the server. It covers assigning, moving and auto-assign,
   plus single and bulk transaction create/edit/delete. A later partner edit to the same row can
   still make a local inverse stale; conflict detection needs a shared row-version design (phase 16
   real-time collaboration or phase 19 audit history).
-- Auto-Assign lives in the inspector; the Ready to Assign banner's "Assign" pop-up isn't built
-  (docs/verify.md). Underfunded and Reduce Overfunding wait for targets (phase 8). The assigned
-  field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts phase).
+- The assigned field has no Tab-to-next-category or calculator buttons yet (keyboard shortcuts
+  phase).
 - Assigning in an archived budget (after a fresh start) is allowed, as every other edit is.
-- YNAB marks a category's Available with a calendar pill when a scheduled (future-dated)
-  transaction is coming. We keep future-dated transactions as plain transactions until phase 10,
-  so there's no pill yet.
-- YNAB has a note per month ("Enter a note…" under the month name). Not built; no phase has it
-  yet.
+- Upcoming scheduled transactions (10b) put a yellow calendar on a category's Available when it
+  doesn't cover them, list under the inspector's Available Balance and count in Underfunded
+  (docs/verify.md "Scheduled transactions in the plan"). Payment categories show their scheduled
+  payments in the inspector but keep their own pill.
 - The budget screen keeps YNAB's four fixed columns at every width; a narrow window scrolls the
   list sideways (YNAB's web app cuts it off the same way). A separate mobile pass will design the
   phone layout.
 - The budget screen's row checkboxes select categories for the inspector (6d); the bulk actions
-  on a selection are auto-assign's (6e). The Underfunded, Overfunded and Snoozed views wait for
-  phase 8c–8d.
+  on a selection are auto-assign's (6e).
 - Funded card spending moves into each card's payment category (phase 7b), computed from history
-  on every read (`fundedCardSpending`, no stored rows). Two multi-card rules are provisional
-  (docs/verify.md). Credit overspending (7c) is yellow and stays out of next month's Ready to
+  on every read (`fundedCardSpending`, no stored rows), cash first and then card activity in date
+  order, equal same-day purchases by transaction id (all settled 2026-10-11, docs/verify.md).
+  Uncategorized funds and returns card money like any category. Credit overspending (7c) is yellow and stays out of next month's Ready to
   Assign. Payments from budget accounts come out of the payment category (7d); statement credits
-  and cash advances don't move payment money. Not yet: positive card balances acting as cash (7e,
-  deferred: see "Credit lifecycle and loans" below), and transfers into a card from a tracking
-  account (docs/verify.md). Uncategorized card spending counts as credit overspending, as YNAB's
-  "Uncategorized cash transactions … $2.00 will be deducted" note suggests (cash part only).
-- A payment category's Activity opens the card's register for the month with YNAB's Spending /
-  Returns / Funded Spending / Payments & Returns summary. YNAB's window lists the card's own
-  transactions with their categories; ours uses the same columns as other categories (Account,
-  Date, Payee, Memo, Amount). The inspector has no "Cover Overspent Categories" button and no
-  "Create a Debt Payoff Target" (phase 8); its Current Balance and Available for Payment lines
-  aren't collapsible as YNAB's are. Auto-Assign on payment categories (YNAB: Underfunded,
-  Paid Last Month, Average Paid) is still the spending set.
+  and cash advances don't move payment money. A card's balance above zero is cash (7e, see
+  "Credit lifecycle and loans" below). Uncategorized card spending counts as credit overspending,
+  except its cash part on a positive card, as YNAB's "Uncategorized cash transactions … $2.00
+  will be deducted" note suggests (cash part only).
+- A payment category's Activity lists the card's transactions for the month (its splits line by
+  line) with YNAB's Spending / Returns / Funded Spending / Payments & Returns summary and Date,
+  Payee, Category, Memo, Amount columns ("Group: Category"; payments show "Credit Card Payments:
+  <card>"). "Cover Overspent Categories" switches to the Overspent view and past months hide the
+  alert and Current Balance, as YNAB does; Current Balance and Available for Payment fold, and the
+  folding is remembered in the browser (EVERYCENT-22). Auto-Assign reads Paid Last Month and
+  Average Paid for one payment category and the spending labels when several are selected, as
+  YNAB does.
 - The overspent note under a category name ("Overspent. $14.00 of $10.00") is the same grey for
-  cash and credit, as YNAB's is; only the Available pill and the inspector change colour. Uncategorized's "will be deducted" note still quotes its whole Available;
-  YNAB quotes only the cash part (docs/verify.md).
+  cash and credit, as YNAB's is; only the Available pill and the inspector change colour.
 - The funded-credit, credit-overspending and card-balance engine primitives the Phase 7 roadmap
   listed under 7a were moved to 7b/7c: they depend on which payment method YNAB treats as funded
   first, a 7c verification gate.
 
 - Starting balances of cash accounts (and credit accounts that start positive) are categorized to
   the internal "Inflow: Ready to Assign" category.
-- Credit-card starting debt has **no category**. Phase 7 must treat it as existing debt to be paid
-  from the card's payment category (YNAB: "assign money to cover the starting balance directly to
-  the Credit Card Payment category").
+- Credit-card starting debt has **no category** (YNAB's API reports Inflow: Ready to Assign; its
+  register shows "Category not needed"). It's existing debt, paid from money assigned to the
+  card's payment category (7c); `cardLedger` treats it as money to Ready to Assign, which counts
+  only above zero, so it moves nothing.
 - Deleting a category moves its transactions and assigned money to the category picked (YNAB
   reassigns transactions, assigned amounts and available money). Moving to Ready to Assign or
   Uncategorized returns the money to Ready to Assign.
 - Closing an account with a non-zero balance creates a "Manual Balance Adjustment" transaction;
   for on-budget accounts it's categorized to Ready to Assign (as YNAB does). With the phase 6 math
   that takes the closing balance out of Ready to Assign, which keeps the budget's money equal to
-  its accounts' (checked for cash accounts). Credit cards still need checking in phase 7.
+  its accounts' (checked for cash accounts). For credit accounts the adjustment counts only by
+  the balance above zero (7e; YNAB, docs/verify.md).
 
 ## Targets (phase 8)
 
 - 8a–8b built every target YNAB's form offers: weekly, monthly, yearly and custom (set aside,
   fill up to, have a balance of; one-time or repeating), the inspector's Target section and editor,
   the row note and the yellow/green Available with its pie or check.
-- Not yet: the row's progress bars and "Spent $x of $y" notes (8d), Snooze (8d; YNAB shows
-  "Snooze target for this month" under Edit Target), Underfunded and Reduce Overfunding in
-  Auto-Assign and the month summary's "October's Targets" / "Cost to Be Me" (8c), payment-category
-  targets (8e, the API refuses them with 409 `MANAGED_CATEGORY`).
-- Target edits aren't in the undo history (docs/verify.md).
-- A category's history is reassigned on delete, but its target is deleted with it.
+- 8c added Underfunded and Reduce Overfunding to Auto-Assign (in YNAB's funding order, stopping
+  at Ready to Assign for the whole plan or a view), the Underfunded and Overfunded views, and the
+  summary's "Cost to Be Me" / "October's Targets".
+- 8d added Snooze (inspector switch, Zz pill, Snoozed view), progress bars with the On/Off toggle
+  and the "Spent $x of $y" / "Fully Spent" notes.
+- 8e added the two credit card payment targets (Pay Specific Amount Monthly, Pay Off Balance by
+  Date) with "Create a Debt Payoff Target", the payment inspector's Target section and their place
+  in Underfunded, Reduce Overfunding and the month's targets. Not built there: the form's "Making
+  minimum payments?" help link (YNAB's help center; everycent has none), "Cover Overspent
+  Categories", and loan "Monthly Debt Payment" targets (they need 7f's loan activity).
+- Not yet: YNAB's Shift+Z snooze shortcut (keyboard shortcuts phase).
+- Underfunded funds upcoming scheduled transactions with the due-date step (10b). Among card
+  payments, those with a scheduled payment go first; YNAB then puts card payment targets before
+  plain Underfunded alerts, which everycent doesn't order yet.
+- 8f added the summary's Expected Income (with its bars), YNAB's start-month rule for changed
+  targets, and the past/future month details (no Assign in past months, the snooze switch disabled
+  outside the current month). A fresh start doesn't copy the expected income yet (not seen in
+  YNAB, docs/verify.md).
+- A payment target in a month before its card account existed asks nothing in YNAB; everycent
+  asks as usual (EVERYCENT-122, backlog; only reachable by saving the target from such a month).
+- A category's history is reassigned on delete, but its target is deleted with it (YNAB does the same, checked 2026-10-11).
 
-## Credit lifecycle and loans (phase 7e–7g, deferred)
+## Credit lifecycle and loans (phase 7e–7g)
 
-Phase 7 stopped after 7d (decided 2026-10-03). 7e–7g wait until after phase 8; the roadmap
-artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps their scope, and
-`docs/verify.md` ("Credit lifecycle (phase 7e)") has what YNAB showed and what's still open.
+7e is built (2026-10-11, EVERYCENT-2); 7f–7g (loans) wait. `docs/verify.md` ("Credit lifecycle
+(phase 7e)") has what YNAB showed and what's still open.
 
-- **Positive card balances (7e) behave wrongly until built.** YNAB counts the part of a card's
-  balance above zero as cash in Ready to Assign, and spending while the card is positive is cash.
-  everycent doesn't: an overpayment is red cash overspending that comes out of next month's Ready
-  to Assign, but the positive balance never goes in, so the plan loses that money; spending on a
-  positive card still moves money to its payment category. Closing a positive card takes its
-  balance out of Ready to Assign a second time.
-- **Closing a card hides its payment category.** YNAB leaves it visible (the help center tells you
-  to hide it yourself). Confirmed; a small fix, waiting with 7e.
-- **The close dialog** has one wording; YNAB words it differently for a positive balance ("The
-  money in this account will be removed from your plan") and for debt (only the adjustment).
+- **Positive card balances (7e)** are built: `cardLedger` walks each card's lines by date and
+  splits them at zero, including transfers between two cards and a split's lines in their order
+  (all checked in YNAB, docs/verify.md). A payment target on a card above zero follows YNAB (it
+  can't be created there; an existing one reads "Cheers to a debt-free future!" when met).
+- **Closing** keeps the payment category visible, uses YNAB's dialog wordings and the "Closed
+  Account" memo; a zero-balance account closes without a dialog. Edit account offers Close, or
+  Delete while an account has only its starting balance; a closed account offers Re-open and
+  Delete (disabled with YNAB's tooltip while it has history).
+- **Working Balance** in Edit account adds a cleared Manual Balance Adjustment (EVERYCENT-113);
+  loans don't have it until 7f decides what a loan's edit dialog holds.
 - **Account types:** YNAB can't change an account's type at all. everycent allows changes within
   a family (no money moves). Kept as is; cross-family changes are not planned.
 - **Loans (7f–7g):** no loan activity (principal, interest, escrow) and no payoff planner. Loan
   accounts store rate, minimum payment and escrow, unused. Phase 8's loan debt-payment targets
   need 7f, so they wait too.
-- Lines of credit are treated as credit cards; YNAB's app showed the same behaviour, but the API
-  readings behind it need re-checking (docs/verify.md).
+- Lines of credit are treated as credit cards, as YNAB does (re-checked 2026-10-11, docs/verify.md).
 
 ## Onboarding and fresh start
 
-- The setup flow (`/budgets/$id/setup`) covers YNAB's "Personalize plan" and "Add accounts". Its
-  third step, "Fund categories" (assign money), needs the phase 6 budget screen.
+- The setup flow (`/budgets/$id/setup`) follows YNAB's new-plan checklist: "Personalize plan",
+  "Add accounts" and "Fund categories" (which opens the budget to assign, as YNAB's does).
 - Fresh start (`apps/api/src/lib/fresh-start.ts`) copies partners, categories (with their
-  targets, which start in the fresh start's month), payees and accounts. When these exist, it must
-  copy them too: scheduled transactions (phase 10), payee rules (phase 12).
-- By decision, a fresh start drops all transactions, uncleared ones included; each account starts
-  from its working balance on the fresh-start date as a single cleared Starting Balance. That
-  balance leaves out future-dated transactions, so they're lost; phase 10 should carry them over
-  as scheduled transactions.
+  targets, which start in the fresh start's month), payees, accounts and scheduled transactions
+  (10b; future-dated transactions are schedules since 10a). When they exist, it must copy payee
+  rules too (phase 12). It doesn't copy the expected income yet (EVERYCENT-20).
+- A fresh start drops all transactions, uncleared ones included, and every account starts at $0
+  (a $0 Starting Balance on the fresh-start date) for the user to update, as YNAB starts unlinked
+  accounts (EVERYCENT-119). When bank linking arrives (phase 14), linked accounts should start
+  from today's balance instead.
 
 ## Transactions and register (phase 5)
 
@@ -134,7 +145,7 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
   and run the window over the page only, or cache balances.
 - Search follows YNAB's syntax (`parseSearch` in `@everycent/engine`) and uses `ilike` (no
   index; fine at the sizes above). A `pg_trgm` index would help much bigger budgets.
-- Search terms YNAB has that wait for their phases: `Income:` (income for future months, phase 6)
+- Search terms YNAB has that aren't built: `Income:` ("Income: October 2026", EVERYCENT-114)
   and `Is:` Matched, Approved, Unapproved, Needs Category, Unapproved or Needs Category (phase
   13). Typed, they're searched as free text for now.
 - Like YNAB, a term can't contain a comma (commas separate terms), so amounts with a thousands
@@ -146,8 +157,10 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
 - Balances exclude transactions after the user's "today": `listAccounts` takes `?today=`; other
   account responses (update, move, reopen) use the server's UTC date. The web refetches the list,
   so it only matters to other API clients.
-- Reconciled transactions show a lock and can't be unlocked from the register yet; the API
-  accepts `cleared` on them. Phase 9 adds the reconcile flow and the "unlock?" warning.
+- Reconciled transactions keep their lock for good (YNAB can't unreconcile); edits that can put
+  a reconciliation out of balance ask first (phase 9, docs/verify.md "Reconciliation").
+- The Reconcile popover leaves out YNAB's "How do I find my account balance?" link and the
+  difference step's help-doc box: everycent has no help center yet.
 - Payees can't be renamed, merged or deleted yet (payee management, phase 12). Unused payees
   stay in the autocomplete.
 - shadcn has no Autocomplete wrapper, so `packages/ui/src/components/autocomplete.tsx` wraps Base
@@ -157,8 +170,9 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
 
 ## Transfers (phase 5b follow-ups)
 
-- A transfer whose other side is reconciled can't change date or amount, be re-pointed or be
-  deleted (409 `TRANSFER_RECONCILED`). Phase 9's "unlock?" flow should offer to unlock it instead.
+- A transfer whose other side is reconciled can be changed or deleted after YNAB's warning; the
+  other side follows and stays reconciled (phase 9). Undoing a deleted transfer brings its other
+  side back uncleared.
 - Transfers to and from a credit card carry no category. Phase 7 must treat a payment from a
   budget account as moving money out of the card's payment category, and spending on the card as
   moving available money into it.
@@ -173,8 +187,6 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
 - The transaction a split's transfer line keeps in the other account only takes memo, cleared and
   category there (409 `TRANSFER_IN_SPLIT` otherwise); date, amount and deletion go through the
   split. The register hides those cells and the delete action.
-- A split with a reconciled transfer side can't drop or re-point that line (409
-  `TRANSFER_RECONCILED`); phase 9's "unlock?" flow should cover it.
 
 ## Bulk edit (phase 5f follow-ups)
 
@@ -186,9 +198,32 @@ artifact (`docs/artifacts/everycent Credit Cards and Debt Roadmap.html`) keeps t
   intentionally clears that history so partners never share an undo stack.
 - YNAB's Categorize menu is category groups with their categories as submenus; ours is the
   category picker the register uses. Its keyboard shortcuts (K, C, shift F then 0–6) aren't in.
-- YNAB's other bulk actions wait for their phases: approve/reject and match (13), duplicate,
-  enter now and make repeating (10), and Export (no phase yet).
+- Duplicate, Enter Now and Make Repeating are built (EVERYCENT-40); approve/reject and match wait
+  for phase 13, Export has no phase yet.
 - Changing the search or filters clears the selection.
+
+## Scheduled transactions (phase 10a follow-ups)
+
+- Due occurrences are entered when a read arrives with the user's `today` (register, accounts,
+  month, activity); nothing is entered without a `today` (the server's UTC date could be a day
+  early). There's no background job on purpose: YNAB only enters from an open client, by the
+  device's date (checked 2026-10-12, EVERYCENT-5; see `docs/verify.md`).
+- Entered-on-their-date transactions are stored unapproved, as YNAB does, but the register has
+  no approve/unapproved styling yet (EVERYCENT-65).
+- Schedules in a closed account wait without moving their date, so they'd catch up on reopening;
+  what YNAB does is EVERYCENT-115.
+- Duplicating a transfer selected from both sides (All Accounts) selects the copy's own side
+  only; YNAB selects both sides of the copy.
+- Bulk Categorize's un-split warning counts selected transactions only; selected scheduled splits
+  are un-split (or keep their transfer lines) without it.
+- The transactions API still accepts future dates (the web never sends them; YNAB's API refuses
+  them). Those rows stay out of balances until their date. Rejecting them would need the client's
+  `today` on every create and edit.
+- The migration that turned existing future-dated transactions into one-off schedules keeps one
+  schedule per transfer (from its outflow side); the other side's memo, flag and cleared state
+  aren't kept.
+- Undoing a reschedule (or a delete) of a transfer to an account closed since can't bring the
+  transaction back (new transfers to closed accounts are refused); the schedule stays.
 
 ## Flags (phase 5d follow-ups)
 

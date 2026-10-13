@@ -18,6 +18,7 @@ export type Db = Database | Tx;
 const INTERNAL_PAYEE_NAMES: Record<InternalPayeeKind, string> = {
   starting_balance: "Starting Balance",
   manual_balance_adjustment: "Manual Balance Adjustment",
+  reconciliation_balance_adjustment: "Reconciliation Balance Adjustment",
 };
 
 /** The budget's built-in payee of this kind, created on first use. */
@@ -128,6 +129,8 @@ export interface NewTransaction {
   cleared: ClearedState;
   memo?: string;
   flag?: FlagColor | null;
+  /** False for scheduled transactions entered on their date (YNAB asks to approve those). */
+  approved?: boolean;
   transferTransactionId?: string | null;
   transferSubTransactionId?: string | null;
 }

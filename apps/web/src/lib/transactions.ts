@@ -1,4 +1,5 @@
 import type { components } from "@everycent/api-client";
+import type { ScheduleFrequency } from "@everycent/engine";
 import { $api } from "./api";
 import type { CategoryList } from "./categories";
 import type { FlagColor } from "./flags";
@@ -60,6 +61,8 @@ export function transferLabel(accountName: string) {
 export interface Draft {
   accountId: string;
   date: string;
+  /** YNAB's "Repeat:" in the date picker; new and scheduled transactions only. */
+  frequency?: ScheduleFrequency;
   payeeName: string;
   /** Set when the payee is another account's "Transfer : <account>". */
   transferAccountId: string | null;

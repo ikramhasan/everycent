@@ -14,10 +14,18 @@ type Target = {
   repeatEvery: number | null;
   repeatUnit: string | null;
   startMonth: string;
+  startDay: number | null;
+  snoozedMonth: string | null;
 };
 type Category = { id: string; name: string; target: Target | null };
 type Group = { id: string; kind: string | null; categories: Category[] };
-type Need = { needed: string; funded: string; underfunded: string; dueDate: string | null } | null;
+type Need = {
+  needed: string;
+  funded: string;
+  underfunded: string;
+  dueDate: string | null;
+  pastDue: boolean;
+} | null;
 type Month = { categories: { categoryId: string; available: string; target: Need }[] };
 type ErrorBody = { error: { code: string } };
 
@@ -57,6 +65,7 @@ async function setup() {
       amount: "10000",
       dueDay: null,
       month: "2026-10",
+      today: TODAY,
       ...input,
     });
   const assign = (categoryId: string, m: string, assigned: string) =>
@@ -97,6 +106,8 @@ describe("category targets", () => {
       repeatEvery: null,
       repeatUnit: null,
       startMonth: "2026-10",
+      startDay: null,
+      snoozedMonth: null,
     });
     expect((await findCategory(rent.id))?.target?.amount).toBe("10000");
 
@@ -123,12 +134,49 @@ describe("category targets", () => {
     expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-09");
   });
 
+  it("a changed target starts again in the month it's saved from (YNAB F-Y1)", async () => {
+    const { rent, setTarget, findCategory, need } = await setup();
+    await setTarget(rent.id, { month: "2026-09" });
+    // $80.00 from October: September shows no target any more.
+    await setTarget(rent.id, { amount: "8000", month: "2026-10" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+    expect(await need(rent.id, "2026-09")).toBeNull();
+    // A change from a later month moves it forward too; saved unchanged, it stays.
+    await setTarget(rent.id, { amount: "9000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-11");
+    await setTarget(rent.id, { amount: "9000", month: "2026-10" });
+    await setTarget(rent.id, { amount: "9000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+    // A new due day alone isn't a change (YNAB "C5 First" F A, 2026-10-12).
+    await setTarget(rent.id, { amount: "9000", dueDay: 15, month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-10");
+  });
+
+  // YNAB's Undo puts a target back, start month included (2026-10-12, "C4 Clean" C5 Z0).
+  it("restores a target exactly as it was, or removes it", async () => {
+    const { cookie, base, rent, setTarget, findCategory } = await setup();
+    await setTarget(rent.id, { amount: "10000" });
+    const before = (await findCategory(rent.id))?.target;
+    await setTarget(rent.id, { amount: "13000", month: "2026-11" });
+    expect((await findCategory(rent.id))?.target?.startMonth).toBe("2026-11");
+    const restore = (target: unknown) =>
+      send("PUT", `${base}/categories/${rent.id}/target/restore`, cookie, { target });
+    expect((await restore(before)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toEqual(before);
+    expect((await restore(null)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toBeNull();
+    expect((await restore(before)).status).toBe(200);
+    expect((await findCategory(rent.id))?.target).toEqual(before);
+    const payment = { ...before, cadence: "payment_monthly" };
+    expect((await restore(payment)).status).toBe(409);
+  });
+
   it("set aside counts this month's Assigned (YNAB T8 B, C, E)", async () => {
     const { rent, phone, setTarget, assign, spend, need } = await setup();
     await setTarget(rent.id, {});
     await setTarget(phone.id, {});
     await assign(rent.id, "2026-10", "4000");
-    expect(await need(rent.id, "2026-10")).toEqual({
+    expect(await need(rent.id, "2026-10")).toMatchObject({
       needed: "10000",
       funded: "4000",
       underfunded: "6000",
@@ -148,7 +196,7 @@ describe("category targets", () => {
     await setTarget(phone.id, { behavior: "refill" });
     await assign(rent.id, "2026-09", "7000");
     await spend(rent.id, "2026-10-01", "-2000");
-    expect(await need(rent.id, "2026-10")).toEqual({
+    expect(await need(rent.id, "2026-10")).toMatchObject({
       needed: "10000",
       funded: "7000",
       underfunded: "3000",
@@ -194,6 +242,24 @@ describe("category targets", () => {
     expect((await need(rent.id, "2026-11"))?.needed).toBe("4000");
   });
 
+  // YNAB "C5 First" and "C4 Clean", 2026-10-12: made weekly on Monday the 12th.
+  it("asks a target made weekly mid-month only for the weeks from that day", async () => {
+    const { rent, phone, setTarget, need } = await setup();
+    const weekly = { cadence: "weekly", amount: "1000", dueDay: 6, today: "2026-10-12" };
+    await setTarget(rent.id, weekly);
+    expect((await need(rent.id, "2026-10"))?.needed).toBe("3000");
+    expect((await need(rent.id, "2026-11"))?.needed).toBe("4000");
+    // Editing it keeps its start day; a monthly target made weekly starts that day too.
+    await setTarget(rent.id, { ...weekly, amount: "2000", today: "2026-10-20" });
+    expect((await need(rent.id, "2026-10"))?.needed).toBe("6000");
+    await setTarget(phone.id, { amount: "2000", today: "2026-10-12" });
+    await setTarget(phone.id, { ...weekly, today: "2026-10-20" });
+    expect((await need(phone.id, "2026-10"))?.needed).toBe("2000");
+    // Saved from another month, it asks for every week there.
+    await setTarget(phone.id, { ...weekly, amount: "500", month: "2026-11" });
+    expect((await need(phone.id, "2026-11"))?.needed).toBe("2000");
+  });
+
   it("spreads a yearly target over the months left (YNAB T8 F)", async () => {
     const { rent, setTarget, assign, need, findCategory } = await setup();
     await setTarget(rent.id, {
@@ -207,7 +273,7 @@ describe("category targets", () => {
       dueDate: "2026-12-30",
       dueDay: null,
     });
-    expect(await need(rent.id, "2026-10")).toEqual({
+    expect(await need(rent.id, "2026-10")).toMatchObject({
       needed: "100000",
       funded: "0",
       underfunded: "33334",
@@ -237,6 +303,42 @@ describe("category targets", () => {
     });
     expect((await findCategory(phone.id))?.target?.dueDate).toBe("2026-12-01");
     expect((await need(phone.id, "2026-10"))?.underfunded).toBe("10000");
+  });
+
+  // YNAB plan "C4 Clean", 2026-10-12: C5 U1, C5 P1 (one-time, due in September) seen in October.
+  it("keeps a one-time target on past its due month, asking nothing; balance targets count Available", async () => {
+    const { rent, phone, setTarget, assign, spend, need } = await setup();
+    await setTarget(rent.id, {
+      cadence: "custom",
+      amount: "10000",
+      dueDate: "2026-09-15",
+      repeat: null,
+      dueDay: undefined,
+    });
+    expect(await assign(rent.id, "2026-10", "3000")).toHaveProperty("status", 200);
+    expect(await need(rent.id, "2026-10")).toMatchObject({
+      needed: "10000",
+      funded: "3000",
+      underfunded: "0",
+      dueDate: "2026-09-15",
+      pastDue: true,
+    });
+    // Balance: $40.00 carried in, $20.00 spent in October → $180.00 over three months.
+    await setTarget(phone.id, {
+      cadence: "custom",
+      behavior: "balance",
+      amount: "20000",
+      dueDate: "2026-12-01",
+      repeat: null,
+      dueDay: undefined,
+    });
+    await assign(phone.id, "2026-09", "4000");
+    await spend(phone.id, "2026-10-01", "-2000");
+    expect(await need(phone.id, "2026-10")).toMatchObject({
+      funded: "2000",
+      underfunded: "6000",
+      pastDue: false,
+    });
   });
 
   it("refuses cadence fields that don't fit", async () => {
@@ -276,5 +378,83 @@ describe("category targets", () => {
       month: "2026-10",
     });
     expect(res.status).toBe(404);
+  });
+
+  // YNAB (support.ynab.com "Snooze a Target", web app 2026-10-07: T8 E, O9, O11).
+  describe("snooze", () => {
+    type MonthRow = {
+      categoryId: string;
+      assigned: string;
+      target: { snoozed: boolean } | null;
+      autoAssign: { underfunded: string; reduceOverfunding: string };
+      bar: { tone: string; sections: { size: string }[] } | null;
+    };
+    const monthRow = async (ctx: { base: string; cookie: string }, id: string, m: string) => {
+      const res = await send("GET", `${ctx.base}/months/${m}?today=${TODAY}`, ctx.cookie);
+      return (await json<{ categories: MonthRow[] }>(res)).categories.find(
+        (c) => c.categoryId === id,
+      );
+    };
+    const snooze = (
+      ctx: { base: string; cookie: string },
+      id: string,
+      month: string,
+      snoozed = true,
+    ) =>
+      send("PUT", `${ctx.base}/categories/${id}/target/snooze`, ctx.cookie, {
+        month,
+        snoozed,
+        today: TODAY,
+      });
+
+    it("asks for nothing more in the month it's snoozed, and again the next", async () => {
+      const ctx = await setup();
+      const { rent, setTarget, findCategory } = ctx;
+      await setTarget(rent.id, {});
+      expect((await monthRow(ctx, rent.id, "2026-10"))?.bar?.tone).toBe("underfunded");
+
+      const res = await snooze(ctx, rent.id, "2026-10");
+      expect(res.status).toBe(200);
+      expect((await findCategory(rent.id))?.target?.snoozedMonth).toBe("2026-10");
+      const oct = await monthRow(ctx, rent.id, "2026-10");
+      expect(oct).toMatchObject({
+        target: { snoozed: true },
+        autoAssign: { underfunded: "0" },
+        bar: { tone: "funded" },
+      });
+      const nov = await monthRow(ctx, rent.id, "2026-11");
+      expect(nov).toMatchObject({
+        target: { snoozed: false },
+        autoAssign: { underfunded: "10000" },
+      });
+
+      expect((await snooze(ctx, rent.id, "2026-10", false)).status).toBe(200);
+      expect((await findCategory(rent.id))?.target?.snoozedMonth).toBeNull();
+    });
+
+    it("still covers overspending and gives back what's over (YNAB O11, O9)", async () => {
+      const ctx = await setup();
+      const { rent, phone, setTarget, assign, spend } = ctx;
+      await setTarget(rent.id, {});
+      await setTarget(phone.id, {});
+      await spend(rent.id, "2026-10-01", "-3000");
+      await assign(phone.id, "2026-10", "15000");
+      await snooze(ctx, rent.id, "2026-10");
+      await snooze(ctx, phone.id, "2026-10");
+      expect((await monthRow(ctx, rent.id, "2026-10"))?.autoAssign.underfunded).toBe("3000");
+      expect((await monthRow(ctx, phone.id, "2026-10"))?.autoAssign.reduceOverfunding).toBe(
+        "10000",
+      );
+    });
+
+    it("snoozes only the current month, and only a target", async () => {
+      const ctx = await setup();
+      const { rent, phone, setTarget } = ctx;
+      await setTarget(rent.id, {});
+      const future = await snooze(ctx, rent.id, "2026-11");
+      expect(future.status).toBe(400);
+      expect((await json<ErrorBody>(future)).error.code).toBe("SNOOZE_CURRENT_MONTH");
+      expect((await snooze(ctx, phone.id, "2026-10")).status).toBe(404);
+    });
   });
 });

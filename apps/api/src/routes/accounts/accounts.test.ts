@@ -21,6 +21,7 @@ type Account = {
   escrowAmount: string | null;
   paymentCategoryId: string | null;
   balances: Balances;
+  lastReconciledAt: string | null;
 };
 type Txn = {
   date: string;
@@ -203,8 +204,8 @@ describe("accounts", () => {
     expect((await accounts()).map((x) => x.name)).toEqual(["B", "A"]);
   });
 
-  it("closes an account, zeroing its balance and hiding its payment category", async () => {
-    const { cookie, base, addAccount, transactions, groups } = await setup();
+  it("closes an account, zeroing its balance and keeping its payment category", async () => {
+    const { cookie, base, addAccount, accounts, transactions, groups } = await setup();
     const savings = await addAccount({ name: "Savings", type: "savings", balance: "10000" });
     const res = await send("POST", `${base}/accounts/${savings.id}/close`, cookie, { date: TODAY });
     expect(res.status).toBe(200);
@@ -213,17 +214,145 @@ describe("accounts", () => {
       amount: "-10000",
       payeeName: "Manual Balance Adjustment",
       categoryName: "Inflow: Ready to Assign",
+      memo: "Closed Account",
     });
 
     const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "0" });
+    // Only a starting balance: no history (YNAB offers Delete instead of Close). The closing
+    // adjustment gives Savings some.
+    expect((await accounts()).find((a) => a.id === visa.id)).toMatchObject({ hasHistory: false });
+    expect((await accounts()).find((a) => a.id === savings.id)).toMatchObject({ hasHistory: true });
     await send("POST", `${base}/accounts/${visa.id}/close`, cookie, { date: TODAY });
-    expect((await groups())[0]?.categories[0]?.hidden).toBe(true);
+    // YNAB leaves it visible with whatever is set aside.
+    expect((await groups())[0]?.categories[0]?.hidden).toBe(false);
     // A zero balance needs no adjustment.
     expect(await transactions(visa.id)).toHaveLength(1);
 
     const reopened = await send("POST", `${base}/accounts/${visa.id}/reopen`, cookie);
     expect(await reopened.json()).toMatchObject({ closed: false });
     expect((await groups())[0]?.categories[0]?.hidden).toBe(false);
+  });
+
+  it("reconciles: locks cleared transactions and adjusts for a difference", async () => {
+    // YNAB 2026-10-11 ("Onboarding Check", R9 Chk A): bank $480 against a cleared $483 added a
+    // reconciled −$3 "Reconciliation Balance Adjustment" in Inflow: Ready to Assign.
+    const { base, cookie, addAccount, accounts, transactions } = await setup();
+    const checking = await addAccount({ name: "Checking", type: "checking", balance: "48300" });
+    expect(checking.lastReconciledAt).toBeNull();
+    const post = (input: Record<string, unknown>) =>
+      send("POST", `${base}/transactions`, cookie, {
+        accountId: checking.id,
+        categoryId: null,
+        payeeName: "Shop",
+        ...input,
+      });
+    await post({ date: TODAY, amount: "-1000" });
+    await post({ date: "2026-10-09", amount: "-500", cleared: "cleared" });
+
+    const res = await send("POST", `${base}/accounts/${checking.id}/reconcile`, cookie, {
+      balance: "48000",
+      date: TODAY,
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const reconciled = (await res.json()) as Account;
+    expect(reconciled.lastReconciledAt).not.toBeNull();
+    expect(reconciled.balances).toEqual({ cleared: "48000", uncleared: "-1000", working: "47000" });
+    const rows = await transactions(checking.id);
+    expect(rows.find((t) => t.payeeName === "Reconciliation Balance Adjustment")).toMatchObject({
+      amount: "-300",
+      date: TODAY,
+      categoryName: "Inflow: Ready to Assign",
+      cleared: "reconciled",
+    });
+    expect(rows.find((t) => t.payeeName === "Starting Balance")?.cleared).toBe("reconciled");
+    // Uncleared, and cleared but still in the future, stay as they were.
+    expect(
+      rows
+        .filter((t) => t.payeeName === "Shop")
+        .map((t) => t.cleared)
+        .sort(),
+    ).toEqual(["cleared", "uncleared"]);
+
+    // Matching balance: no adjustment.
+    await send("POST", `${base}/accounts/${checking.id}/reconcile`, cookie, {
+      balance: "48000",
+      date: TODAY,
+    });
+    expect(
+      (await transactions(checking.id)).filter(
+        (t) => t.payeeName === "Reconciliation Balance Adjustment",
+      ),
+    ).toHaveLength(1);
+    expect((await accounts())[0]?.lastReconciledAt).not.toBeNull();
+  });
+
+  it("reconciles cards and tracking accounts, but not loans", async () => {
+    const { base, cookie, addAccount, transactions } = await setup();
+    const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });
+    const house = await addAccount({ name: "House", type: "asset", balance: "10000" });
+    const loan = await addAccount({ name: "Car", type: "auto_loan", balance: "-900000" });
+    const reconcile = (id: string, balance: string) =>
+      send("POST", `${base}/accounts/${id}/reconcile`, cookie, { balance, date: TODAY });
+
+    const rta = async () =>
+      (
+        (await (await send("GET", `${base}/months/2026-10`, cookie)).json()) as {
+          readyToAssign: string;
+        }
+      ).readyToAssign;
+    const before = await rta();
+    expect((await reconcile(card.id, "-5700")).status).toBe(200);
+    // More debt from Ready to Assign doesn't move it (YNAB: R9 Card's −$7 left it unchanged).
+    expect(await rta()).toBe(before);
+    expect(
+      (await transactions(card.id)).find(
+        (t) => t.payeeName === "Reconciliation Balance Adjustment",
+      ),
+    ).toMatchObject({ amount: "-700", categoryName: "Inflow: Ready to Assign" });
+    expect((await reconcile(house.id, "12000")).status).toBe(200);
+    expect(
+      (await transactions(house.id)).find(
+        (t) => t.payeeName === "Reconciliation Balance Adjustment",
+      ),
+    ).toMatchObject({ amount: "2000", categoryName: null });
+    expect((await reconcile(loan.id, "-900000")).status).toBe(400);
+  });
+
+  it("sets a working balance with a Manual Balance Adjustment", async () => {
+    // YNAB 2026-10-11: R9 Chk B 328 → 320 added a cleared −$8 adjustment with no memo; R9 Card
+    // −64 → 70 added +$134, both in Inflow: Ready to Assign.
+    const { base, cookie, addAccount, transactions } = await setup();
+    const checking = await addAccount({ name: "Checking", type: "checking", balance: "32800" });
+    const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-6400" });
+    const patch = (id: string, body: Record<string, unknown>) =>
+      send("PATCH", `${base}/accounts/${id}`, cookie, { date: TODAY, ...body });
+
+    const res = await patch(checking.id, { workingBalance: "32000" });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(((await res.json()) as Account).balances.working).toBe("32000");
+    expect(
+      (await transactions(checking.id)).find((t) => t.payeeName === "Manual Balance Adjustment"),
+    ).toMatchObject({
+      amount: "-800",
+      date: TODAY,
+      categoryName: "Inflow: Ready to Assign",
+      cleared: "cleared",
+    });
+    await patch(card.id, { workingBalance: "7000" });
+    expect(
+      (await transactions(card.id)).find((t) => t.payeeName === "Manual Balance Adjustment")
+        ?.amount,
+    ).toBe("13400");
+
+    // The same balance adds nothing; closed accounts and loans have no working balance field.
+    await patch(checking.id, { workingBalance: "32000" });
+    expect(
+      (await transactions(checking.id)).filter((t) => t.payeeName === "Manual Balance Adjustment"),
+    ).toHaveLength(1);
+    await send("POST", `${base}/accounts/${card.id}/close`, cookie, { date: TODAY });
+    expect((await patch(card.id, { workingBalance: "0" })).status).toBe(400);
+    const loan = await addAccount({ name: "Car", type: "auto_loan", balance: "-900000" });
+    expect((await patch(loan.id, { workingBalance: "0" })).status).toBe(400);
   });
 
   it("deletes a fresh account with its starting balance and payment category", async () => {

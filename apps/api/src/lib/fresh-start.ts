@@ -8,20 +8,24 @@ import {
   categoryTarget,
   flagName,
   payee,
+  scheduledSubTransaction,
+  scheduledTransaction,
 } from "@everycent/db/schema";
 import { formatDate, monthOf } from "@everycent/engine";
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
-import { accountBalances, insertStartingBalance, type Tx, transferPayeeId } from "./ledger";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { insertStartingBalance, internalCategoryId, type Tx, transferPayeeId } from "./ledger";
 
 type BudgetRow = typeof budget.$inferSelect;
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
  * category groups and categories (order, hidden flags, notes, targets), payees, flag names, and
- * accounts (with their transfer payees), each starting from its working balance on `date`. No
- * transactions come along. Then archives the old budget.
- *
- * Scheduled transactions will have to be copied too once they exist (docs/deferred.md).
+ * accounts (with their transfer payees), each starting at $0 with a $0 Starting Balance on `date`
+ * for the user to update (YNAB: "Unlinked accounts will start with a $0 balance for you to update
+ * with today's balance"; "C4 Order FS", 2026-10-12; everycent has no linked accounts), and
+ * scheduled transactions, unchanged (YNAB, checked 2026-10-12: "C4 Order" → "C4 Order FS" kept
+ * each schedule's dates, frequency, amount, category, memo and account; the old budget keeps them
+ * too). No transactions come along. Then archives the old budget.
  */
 export async function copyIntoFreshStart(
   tx: Tx,
@@ -51,8 +55,17 @@ export async function copyIntoFreshStart(
     .from(budgetAccount)
     .where(eq(budgetAccount.budgetId, old.id))
     .orderBy(asc(budgetAccount.sortOrder), asc(budgetAccount.id));
-  const balances = await accountBalances(tx, old.id, date);
   const accountIds = new Map<string, string>();
+  /** Old transfer payee → the new account's. */
+  const payeeIds = new Map<string, string>();
+  const oldTransferPayees = new Map(
+    (
+      await tx
+        .select({ id: payee.id, accountId: payee.transferAccountId })
+        .from(payee)
+        .where(eq(payee.budgetId, old.id))
+    ).flatMap((p) => (p.accountId ? [[p.accountId, p.id] as const] : [])),
+  );
   for (const a of accounts) {
     const id = newId();
     accountIds.set(a.id, id);
@@ -69,12 +82,14 @@ export async function copyIntoFreshStart(
       minimumPayment: a.minimumPayment,
       escrowAmount: a.escrowAmount,
     });
-    await transferPayeeId(tx, { id, budgetId: newBudgetId, name: a.name });
+    const transferPayee = await transferPayeeId(tx, { id, budgetId: newBudgetId, name: a.name });
+    const oldTransferPayee = oldTransferPayees.get(a.id);
+    if (oldTransferPayee) payeeIds.set(oldTransferPayee, transferPayee);
     await insertStartingBalance(tx, {
       budgetId: newBudgetId,
       accountId: id,
       type: a.type,
-      amount: balances.get(a.id)?.working ?? 0n,
+      amount: 0n,
       currency: a.currency,
       date,
     });
@@ -83,15 +98,18 @@ export async function copyIntoFreshStart(
   // People's payees; the internal ones are recreated on first use, transfer ones came with the
   // accounts.
   const payees = await tx
-    .select({ name: payee.name })
+    .select({ id: payee.id, name: payee.name })
     .from(payee)
     .where(
       and(eq(payee.budgetId, old.id), isNull(payee.internalKind), isNull(payee.transferAccountId)),
     );
   if (payees.length > 0) {
-    await tx
-      .insert(payee)
-      .values(payees.map((p) => ({ id: newId(), budgetId: newBudgetId, name: p.name })));
+    const copies = payees.map((p) => {
+      const id = newId();
+      payeeIds.set(p.id, id);
+      return { id, budgetId: newBudgetId, name: p.name };
+    });
+    await tx.insert(payee).values(copies);
   }
 
   const flags = await tx.select().from(flagName).where(eq(flagName.budgetId, old.id));
@@ -131,10 +149,12 @@ export async function copyIntoFreshStart(
       t,
     ]),
   );
+  const categoryIds = new Map<string, string>();
   for (const c of categories) {
     const groupId = groupIds.get(c.groupId);
     if (!groupId) continue;
     const id = newId();
+    categoryIds.set(c.id, id);
     await tx.insert(category).values({
       id,
       budgetId: newBudgetId,
@@ -161,9 +181,21 @@ export async function copyIntoFreshStart(
         repeatEvery: target.repeatEvery,
         repeatUnit: target.repeatUnit,
         startMonth: `${monthOf(date)}-01`,
+        // A weekly target begun this month keeps its start day (YNAB, 2026-10-12: "C5 First FS"
+        // still asked F D for the Saturdays from the 12th).
+        startDay: monthOf(target.startMonth) === monthOf(date) ? target.startDay : null,
       });
     }
   }
+
+  // Ready to Assign and Uncategorized are seeded with every budget.
+  for (const kind of ["ready_to_assign", "uncategorized"] as const) {
+    categoryIds.set(
+      await internalCategoryId(tx, old.id, kind),
+      await internalCategoryId(tx, newBudgetId, kind),
+    );
+  }
+  await copySchedules(tx, old.id, newBudgetId, { accountIds, categoryIds, payeeIds });
 
   await tx
     .update(budget)
@@ -172,4 +204,67 @@ export async function copyIntoFreshStart(
       archivedAt: new Date(),
     })
     .where(eq(budget.id, old.id));
+}
+
+/** Copies the old budget's scheduled transactions (and split lines) onto the new ids. */
+async function copySchedules(
+  tx: Tx,
+  oldBudgetId: string,
+  newBudgetId: string,
+  ids: {
+    accountIds: ReadonlyMap<string, string>;
+    categoryIds: ReadonlyMap<string, string>;
+    payeeIds: ReadonlyMap<string, string>;
+  },
+) {
+  const mapped = (map: ReadonlyMap<string, string>, id: string | null) =>
+    id ? (map.get(id) ?? null) : null;
+  const schedules = await tx
+    .select()
+    .from(scheduledTransaction)
+    .where(eq(scheduledTransaction.budgetId, oldBudgetId));
+  if (schedules.length === 0) return;
+  const lines = await tx
+    .select()
+    .from(scheduledSubTransaction)
+    .where(
+      inArray(
+        scheduledSubTransaction.scheduledTransactionId,
+        schedules.map((s) => s.id),
+      ),
+    );
+  for (const s of schedules) {
+    const accountId = ids.accountIds.get(s.accountId);
+    if (!accountId) continue;
+    const id = newId();
+    await tx.insert(scheduledTransaction).values({
+      id,
+      budgetId: newBudgetId,
+      accountId,
+      frequency: s.frequency,
+      dateFirst: s.dateFirst,
+      dateNext: s.dateNext,
+      amount: s.amount,
+      currency: s.currency,
+      payeeId: mapped(ids.payeeIds, s.payeeId),
+      categoryId: mapped(ids.categoryIds, s.categoryId),
+      memo: s.memo,
+      flag: s.flag,
+    });
+    const own = lines.filter((l) => l.scheduledTransactionId === s.id);
+    if (own.length > 0) {
+      await tx.insert(scheduledSubTransaction).values(
+        own.map((l) => ({
+          id: newId(),
+          scheduledTransactionId: id,
+          sortOrder: l.sortOrder,
+          amount: l.amount,
+          currency: l.currency,
+          payeeId: mapped(ids.payeeIds, l.payeeId),
+          categoryId: mapped(ids.categoryIds, l.categoryId),
+          memo: l.memo,
+        })),
+      );
+    }
+  }
 }

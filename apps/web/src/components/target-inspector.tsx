@@ -4,15 +4,20 @@ import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Switch } from "@everycent/ui/components/switch";
 import { cn } from "@everycent/ui/lib/utils";
-import { Trash2 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { Check, CircleHelp, Trash2 } from "lucide-react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { todayIso } from "@/lib/dates";
 import {
   type CategoryTarget,
   DUE_DAY_OPTIONS,
+  isPaymentTarget,
   MONTH_OPTIONS,
+  PAYMENT_TARGET_OPTIONS,
+  paymentTargetKind,
+  payoffAmount,
   type TargetInput,
   type TargetNeed,
   targetDueLine,
@@ -24,7 +29,8 @@ import {
 import { DateField } from "./register-fields";
 
 type Format = (minorUnits: string) => string;
-type Cadence = CategoryTarget["cadence"];
+/** The four tabs of the target form for spending categories. */
+type Cadence = Exclude<CategoryTarget["cadence"], "payment_monthly" | "payoff_by_date">;
 type Behavior = CategoryTarget["behavior"];
 
 const CADENCES: { value: Cadence; label: string }[] = [
@@ -56,6 +62,10 @@ function choiceLabel(cadence: Cadence, behavior: Behavior, amount: string) {
  * "Monthly targets" and "Weekly, yearly and custom targets"): what the target asks for this month
  * and how far along it is, or an invitation to create one. `need` is null before the target's start
  * month (and after a one-time target's due month), which shows the invitation too.
+ *
+ * A credit card's payment category (`payment`) takes YNAB's two payment targets instead (checked
+ * 2026-10-08, docs/verify.md "Credit card payment targets"). While none applies, or while the
+ * category is red, the payment alert shows in its place, with "Create a Debt Payoff Target".
  */
 export function TargetSection({
   name,
@@ -68,6 +78,9 @@ export function TargetSection({
   onSave,
   onDelete,
   onAssign,
+  onSnooze,
+  snoozeLocked = false,
+  payment,
 }: {
   name: string;
   target: CategoryTarget | null;
@@ -80,8 +93,51 @@ export function TargetSection({
   onDelete: () => Promise<boolean>;
   /** Assigns what's still to go this month; undefined when the month can't take money. */
   onAssign?: (amount: bigint) => Promise<void>;
+  /** Snoozes or wakes the target; undefined outside the current month (YNAB snoozes only it). */
+  onSnooze?: (snoozed: boolean) => Promise<void>;
+  /**
+   * Outside the current month YNAB still shows the snooze switch, disabled: "You can only snooze
+   * targets in the current month." (seen 2026-10-08).
+   */
+  snoozeLocked?: boolean;
+  /**
+   * For a payment category: the month on screen (the target is saved from it), its Funded
+   * Spending and Payments Made, whether it's red, and its alert.
+   */
+  payment?: {
+    month: string;
+    fundedSpending: string;
+    paymentsMade: string;
+    overpaid: boolean;
+    /** A month before the current one: YNAB shows no Payment alert there, only "Create Target". */
+    past: boolean;
+    alert: (createTarget: () => void) => ReactNode;
+  };
 }) {
   const [editing, setEditing] = useState(false);
+  if (editing && payment) {
+    return (
+      <PaymentTargetEditor
+        target={target}
+        parse={parse}
+        toInput={toInput}
+        onCancel={() => setEditing(false)}
+        onSave={async (input) => {
+          if (await onSave(input)) setEditing(false);
+        }}
+        onDelete={
+          target
+            ? async () => {
+                if (await onDelete()) setEditing(false);
+              }
+            : undefined
+        }
+      />
+    );
+  }
+  if (payment && !payment.past && (!target || !need || payment.overpaid)) {
+    return payment.alert(() => setEditing(true));
+  }
   if (editing) {
     return (
       <TargetEditor
@@ -120,17 +176,33 @@ export function TargetSection({
   }
 
   const percent = targetPercent({ needed: BigInt(need.needed), funded: BigInt(need.funded) });
-  const message = targetMessage(target, need, format);
+  const message = targetMessage(target, need, format, payment?.month);
   const met = BigInt(need.funded) >= BigInt(need.needed);
+  const kind = paymentTargetKind(target);
+  const headingAmount = format(
+    target.cadence === "payoff_by_date"
+      ? payoffAmount(need, payment?.paymentsMade ?? "0")
+      : target.amount,
+  );
   return (
     <Section>
+      {kind && <p className="font-medium text-sm">{kind}</p>}
       <div className="grid gap-0.5">
-        <p className="font-medium text-sm">{targetHeading(target, format(target.amount))}</p>
+        <p className="font-medium text-sm">{targetHeading(target, headingAmount)}</p>
         <p className="text-muted-foreground text-xs">{targetDueLine(target, need)}</p>
       </div>
-      {!met && <ProgressRing percent={percent} />}
+      {met ? (
+        <MetRing />
+      ) : (
+        // Green once this month asks for nothing more (YNAB, 2026-10-12: T8 F on track, C5 U1 past
+        // its due date), yellow while it does.
+        <ProgressRing percent={percent} green={need.underfunded === "0"} />
+      )}
       {message && "text" in message && (
-        <p className="text-center font-medium text-sm">{message.text}</p>
+        // Met and on track both sit in green (YNAB T8 F, T8 L).
+        <p className="rounded-md bg-green-100 p-3 text-center font-medium text-green-950 text-sm dark:bg-green-900/40 dark:text-green-50">
+          {message.text}
+        </p>
       )}
       {message && "prompt" in message && (
         <div className="grid gap-2 rounded-md bg-yellow-100 p-3 text-center text-sm text-yellow-950 dark:bg-yellow-900/40 dark:text-yellow-50">
@@ -153,7 +225,7 @@ export function TargetSection({
         </div>
       )}
       <dl className="grid gap-1 text-sm">
-        {targetLines(target, need, format).map((line) => (
+        {targetLines(target, need, format, payment?.fundedSpending).map((line) => (
           <Row
             key={line.label}
             label={line.label}
@@ -165,7 +237,53 @@ export function TargetSection({
       <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
         Edit Target
       </Button>
+      {(onSnooze || (snoozeLocked && !payment)) && (
+        // YNAB keeps the target's details on show while it's snoozed.
+        <div className="flex items-center gap-1">
+          <Label
+            className={cn(
+              "flex items-center gap-2 font-normal text-sm",
+              !onSnooze && "text-muted-foreground",
+            )}
+            title={onSnooze ? undefined : "You can only snooze targets in the current month."}
+          >
+            <Switch
+              checked={need.snoozed}
+              disabled={!onSnooze}
+              onCheckedChange={(checked) => void onSnooze?.(checked)}
+            />
+            Snooze target for this month
+          </Label>
+          <SnoozeHelp />
+        </div>
+      )}
     </Section>
+  );
+}
+
+/** The "?" beside the snooze switch; YNAB opens this on click (app.ynab.com, 2026-10-12). */
+function SnoozeHelp() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground"
+          aria-label="About snoozing"
+        >
+          <CircleHelp />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-sm">
+        <p className="font-medium">Snooze Target</p>
+        <p className="text-muted-foreground">
+          When you snooze a Target, everycent will treat the category as if it didn't have a Target
+          (which means the category won't show as underfunded). At the start of next month, your
+          Target will reactivate, well-rested and in a very good mood!
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -188,7 +306,20 @@ function Row({ label, value, className }: { label: string; value: string; classN
 }
 
 /** YNAB's progress ring with the funded percentage in the middle. */
-function ProgressRing({ percent }: { percent: number }) {
+/** YNAB's met target: a green ring with a check (seen 2026-10-11 on spending and card targets). */
+function MetRing() {
+  return (
+    <div
+      role="img"
+      aria-label="Target met"
+      className="mx-auto grid size-16 place-items-center rounded-full border-4 border-muted bg-green-600 text-white"
+    >
+      <Check className="size-8" strokeWidth={3} aria-hidden />
+    </div>
+  );
+}
+
+function ProgressRing({ percent, green }: { percent: number; green: boolean }) {
   const r = 26;
   const c = 2 * Math.PI * r;
   return (
@@ -208,7 +339,7 @@ function ProgressRing({ percent }: { percent: number }) {
           strokeWidth="6"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - percent / 100)}
-          className="stroke-yellow-400"
+          className={green ? "stroke-green-500" : "stroke-yellow-400"}
         />
       </svg>
       <span className="absolute inset-0 grid place-items-center font-semibold text-sm">
@@ -245,7 +376,9 @@ function TargetEditor({
   onDelete?: () => Promise<void>;
 }) {
   const nextMonth = firstOfNextMonth();
-  const [cadence, setCadence] = useState<Cadence>(target?.cadence ?? "monthly");
+  const [cadence, setCadence] = useState<Cadence>(
+    target && !isPaymentTarget(target) ? (target.cadence as Cadence) : "monthly",
+  );
   const [amountText, setAmountText] = useState(target ? toInput(target.amount) : "");
   const [behavior, setBehavior] = useState<Behavior>(target?.behavior ?? "set_aside");
   // Monthly: "last" or a day; weekly: a weekday (today's by default, as YNAB).
@@ -525,6 +658,165 @@ function TargetEditor({
             </Button>
           )}
           <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={busy}>
+            Save Target
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+/** The first of next month as YYYY-MM, YNAB's default month for a new pay-off target. */
+const nextMonthValue = () => firstOfNextMonth().slice(0, 7);
+
+/**
+ * YNAB's target form on a credit card's payment category (seen 2026-10-08): "Pay Off Balance by
+ * Date" (the default) with a month and a year (next month by default; this year and the next 49),
+ * or "Pay Specific Amount Monthly" with one amount field.
+ */
+function PaymentTargetEditor({
+  target,
+  parse,
+  toInput,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  target: CategoryTarget | null;
+  parse: (text: string) => bigint | string;
+  toInput: (amount: string) => string;
+  onSave: (input: TargetInput) => Promise<void>;
+  onCancel: () => void;
+  onDelete?: () => Promise<void>;
+}) {
+  const [cadence, setCadence] = useState<"payoff_by_date" | "payment_monthly">(
+    target?.cadence === "payment_monthly" ? "payment_monthly" : "payoff_by_date",
+  );
+  const [amountText, setAmountText] = useState(
+    target?.cadence === "payment_monthly" ? toInput(target.amount) : "",
+  );
+  const [dueMonth, setDueMonth] = useState(
+    target?.cadence === "payoff_by_date" && target.dueDate
+      ? target.dueDate.slice(0, 7)
+      : nextMonthValue(),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [year, month] = dueMonth.split("-").map(Number) as [number, number];
+  const thisYear = Number(todayIso().slice(0, 4));
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    let input: TargetInput;
+    if (cadence === "payment_monthly") {
+      const parsed = amountText.trim() === "" ? 0n : parse(amountText);
+      if (typeof parsed === "string") return setError(parsed);
+      if (parsed <= 0n) return setError("Enter how much you want to pay each month.");
+      input = { cadence, amount: parsed.toString() };
+    } else {
+      // YNAB drops a pay-off target saved with a month before today's, even from an earlier
+      // month (2026-10-12, "C5 First": September saved from September), so it's refused.
+      if (dueMonth < todayIso().slice(0, 7)) return setError("Choose this month or later.");
+      input = { cadence, dueMonth };
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await onSave(input);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-label="Target" className="grid grid-cols-[minmax(0,1fr)] gap-3 border-t pt-3">
+      <h3 className="font-semibold text-sm">Target</h3>
+      <form onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] gap-3">
+        <NativeSelect
+          aria-label="Target type"
+          className="w-full"
+          value={cadence}
+          onChange={(e) => {
+            setCadence(e.target.value as typeof cadence);
+            setError(null);
+          }}
+        >
+          {PAYMENT_TARGET_OPTIONS.map((o) => (
+            <NativeSelectOption key={o.value} value={o.value}>
+              {o.label}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {cadence === "payoff_by_date" ? (
+          // The month gets the wider share so "September" fits, as in YNAB's form.
+          <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-2">
+            <NativeSelect
+              aria-label="Month"
+              className="w-full"
+              value={String(month)}
+              onChange={(e) => setDueMonth(`${year}-${e.target.value.padStart(2, "0")}`)}
+            >
+              {MONTH_OPTIONS.map((o) => (
+                <NativeSelectOption key={o.value} value={o.value}>
+                  {o.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              aria-label="Year"
+              className="w-full"
+              value={String(year)}
+              onChange={(e) => setDueMonth(`${e.target.value}-${String(month).padStart(2, "0")}`)}
+            >
+              {/* YNAB lists this year and the next 49. */}
+              {Array.from({ length: 50 }, (_, i) => thisYear + i).map((y) => (
+                <NativeSelectOption key={y} value={y}>
+                  {y}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+        ) : (
+          <Field>
+            <FieldLabel htmlFor="target-amount" className="sr-only">
+              Amount
+            </FieldLabel>
+            <Input
+              id="target-amount"
+              autoFocus
+              inputMode="decimal"
+              value={amountText}
+              onChange={(e) => setAmountText(e.target.value)}
+              aria-invalid={error ? true : undefined}
+            />
+          </Field>
+        )}
+        {error && <FieldError>{error}</FieldError>}
+        {/* YNAB: Delete centred on its own line, then Cancel and Save Target. */}
+        {onDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mx-auto text-destructive"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onDelete();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Trash2 /> Delete
+          </Button>
+        )}
+        <div className="flex items-center justify-between gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
             Cancel
           </Button>
           <Button type="submit" size="sm" disabled={busy}>

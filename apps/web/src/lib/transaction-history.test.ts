@@ -16,9 +16,11 @@ const transaction: Transaction = {
   memo: "weekly",
   cleared: "cleared",
   flag: "blue",
+  approved: true,
   transferAccountId: null,
   transferTransactionId: null,
   transferFromSplit: false,
+  transferReconciled: false,
   subtransactions: [
     {
       id: "s1",
@@ -30,6 +32,7 @@ const transaction: Transaction = {
       memo: "food",
       transferAccountId: null,
       transferTransactionId: null,
+      transferReconciled: false,
     },
     {
       id: "s2",
@@ -41,6 +44,7 @@ const transaction: Transaction = {
       memo: "transfer",
       transferAccountId: "a2",
       transferTransactionId: "t2",
+      transferReconciled: false,
     },
   ],
   runningBalance: "10000",
@@ -66,5 +70,12 @@ describe("transaction history bodies", () => {
       "s1",
       "s2",
     ]);
+  });
+
+  it("keeps a reconciled transaction reconciled", () => {
+    const reconciled = { ...transaction, cleared: "reconciled" as const };
+    expect(createBodyFromTransaction(reconciled).cleared).toBe("reconciled");
+    expect(updateBodyFromTransaction(reconciled)).not.toHaveProperty("cleared");
+    expect(updateBodyFromTransaction(transaction).cleared).toBe("cleared");
   });
 });

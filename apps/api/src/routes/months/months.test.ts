@@ -1,5 +1,5 @@
 import { newId } from "@everycent/db";
-import { categoryAssignment } from "@everycent/db/schema";
+import { categoryAssignment, moneyMove } from "@everycent/db/schema";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
 
@@ -13,6 +13,8 @@ type Totals = {
   cashActivity: string;
   creditActivity: string;
   available: string;
+  cashOverspent: string;
+  creditOverspent: string;
 };
 type Month = {
   month: string;
@@ -20,25 +22,37 @@ type Month = {
   firstMonth: string;
   lastMonth: string;
   readyToAssign: string;
+  overdraft: boolean;
   assignedInFuture: string;
+  futureShortfall: { month: string; readyToAssign: string } | null;
+  note: string;
   futureMonths: { month: string; assigned: string }[];
   categories: (Totals & {
     categoryId: string;
-    payment: Record<
-      | "balance"
-      | "priorBalance"
-      | "spendingAndOutflows"
-      | "paymentsAndInflows"
-      | "underfunded"
-      | "overspentCategories"
-      | "fundedSpending"
-      | "paymentsMade",
-      string
-    > | null;
+    payment:
+      | (Record<
+          | "balance"
+          | "priorBalance"
+          | "spendingAndOutflows"
+          | "paymentsAndInflows"
+          | "underfunded"
+          | "overspentCategories"
+          | "fundedSpending"
+          | "paymentsMade",
+          string
+        > & { hasUncategorized: boolean })
+      | null;
+    autoAssign: Record<string, string>;
+    underfundedParts: { amount: string; step: number; date: string }[];
+    upcoming: {
+      amount: string;
+      transactions: { date: string; accountName: string; memo: string; amount: string }[];
+    } | null;
   })[];
   groups: (Totals & { groupId: string })[];
   hidden: Totals;
   uncategorized: Omit<Totals, "assigned"> | null;
+  targets: { month: string; nextMonth: string };
 };
 type Category = { id: string; name: string };
 type Group = { id: string; kind: string | null; categories: Category[] };
@@ -170,6 +184,91 @@ async function cards(visaDebt = 0n) {
   return { ...ctx, visa, amex, credit, create };
 }
 
+// YNAB, checked 2026-10-12 in "Onboarding Check" (U10 A–J) and "C4 Order".
+describe("upcoming scheduled transactions", () => {
+  async function scheduled() {
+    const ctx = await cards();
+    const schedule = async (input: Record<string, unknown>) => {
+      const res = await send("POST", `${ctx.base}/scheduled-transactions`, ctx.cookie, {
+        accountId: ctx.account.id,
+        today: TODAY,
+        ...input,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    return { ...ctx, schedule };
+  }
+
+  it("counts the month's occurrences after today, inflows netted, and funds what's short", async () => {
+    const { schedule, month, assign, rent, phone, groceries } = await scheduled();
+    await schedule({ date: "2026-10-20", amount: "-3000", categoryId: rent.id, memo: "x-a" });
+    await schedule({ date: "2026-10-22", amount: "2500", categoryId: rent.id });
+    await schedule({
+      date: "2026-10-07",
+      frequency: "weekly",
+      amount: "-1000",
+      categoryId: groceries.id,
+    });
+    await assign(phone.id, "2026-10", 5000n);
+    await schedule({ date: "2026-10-20", amount: "-3000", categoryId: phone.id });
+
+    const oct = await month("2026-10");
+    // U10 A: −$30.00 and +$25.00 → −$5.00, the earliest date first in Underfunded's order.
+    expect(oct.byCategory(rent.id)).toMatchObject({
+      upcoming: { amount: "-500" },
+      autoAssign: { underfunded: "500" },
+      underfundedParts: [{ amount: "500", step: 2, date: "2026-10-20" }],
+    });
+    expect(oct.byCategory(rent.id)?.upcoming?.transactions.map((t) => t.date)).toEqual([
+      "2026-10-22",
+      "2026-10-20",
+    ]);
+    // U10 F: weekly from 10/07, four in October, four in November.
+    expect(oct.byCategory(groceries.id)?.upcoming).toMatchObject({ amount: "-4000" });
+    expect((await month("2026-11")).byCategory(groceries.id)?.upcoming?.amount).toBe("-4000");
+    // U10 H: covered by Available, nothing to fund.
+    expect(oct.byCategory(phone.id)).toMatchObject({
+      upcoming: { amount: "-3000" },
+      autoAssign: { underfunded: "5000" },
+    });
+    // Nothing upcoming in a past month.
+    expect((await month("2026-09")).byCategory(rent.id)?.upcoming).toBeNull();
+  });
+
+  it("counts split lines, card spending and card payments where they land", async () => {
+    const { schedule, month, rent, phone, groceries, visa } = await scheduled();
+    await schedule({
+      date: "2026-10-23",
+      amount: "-900",
+      subtransactions: [
+        { amount: "-400", categoryId: rent.id },
+        { amount: "-500", categoryId: phone.id },
+      ],
+    });
+    await schedule({
+      accountId: visa.id,
+      date: "2026-10-21",
+      amount: "-700",
+      categoryId: groceries.id,
+    });
+    await schedule({ date: "2026-10-21", amount: "-500", transferAccountId: visa.id });
+
+    const oct = await month("2026-10");
+    expect(oct.byCategory(rent.id)?.upcoming?.amount).toBe("-400");
+    expect(oct.byCategory(phone.id)?.upcoming?.amount).toBe("-500");
+    // U10 J: spending on a card counts in its category, not the card's payment category.
+    expect(oct.byCategory(groceries.id)).toMatchObject({
+      upcoming: { amount: "-700" },
+      autoAssign: { underfunded: "700" },
+    });
+    // Card W: the scheduled payment comes out of the payment category.
+    expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({
+      upcoming: { amount: "-500", transactions: [{ date: "2026-10-21" }] },
+      underfundedParts: [{ amount: "500", step: 5, date: "2026-10-21" }],
+    });
+  });
+});
+
 describe("budget months", () => {
   it("adds up each category's activity in the month, split lines one by one", async () => {
     const { month, spend, rent, phone, groceries, bills, savings } = await setup();
@@ -244,6 +343,12 @@ describe("budget months", () => {
     expect(oct.byCategory(groceries.id)).toMatchObject(split("100", "0", "100"));
     expect(oct.byGroup(bills.id)).toMatchObject(split("-700", "600", "-1300"));
     expect(oct.uncategorized).toMatchObject(split("-300", "-200", "-100"));
+    // YNAB's "… $2.00 will be deducted" note quotes only the cash part (Available −$3.00).
+    expect(oct.uncategorized).toMatchObject({
+      available: "-300",
+      cashOverspent: "-200",
+      creditOverspent: "-100",
+    });
     // Observation only: Available and Ready to Assign are what they were before the split.
     expect(oct.byCategory(phone.id)).toMatchObject({ assigned: "0", available: "-700" });
     expect((await month("2026-11")).byCategory(phone.id)).toMatchObject(split("0", "0", "0"));
@@ -329,6 +434,33 @@ describe("budget months", () => {
       expect(await pay()).toBe("200");
       await send("DELETE", `${base}/transactions/${tx.id}`, cookie);
       expect(await pay()).toBe("0");
+    });
+
+    it("funds the earliest purchase first (YNAB: G-F1, $5, −$4 on 10/02 and −$3 on 10/01)", async () => {
+      const { month, assign, create, rent, visa, amex } = await cards();
+      await assign(rent.id, "2026-10", 500n);
+      // Visa is the older card and its purchase is entered first; the date decides.
+      await create({ accountId: visa.id, date: "2026-10-02", amount: "-400", categoryId: rent.id });
+      await create({ accountId: amex.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({ available: "300" });
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({ available: "200" });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "-200" });
+    });
+
+    it("refills earlier unfunded card spending with a later return (YNAB: G-X2)", async () => {
+      const { month, create, rent, visa, amex } = await cards(10000n);
+      await create({ accountId: amex.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      await create({ accountId: visa.id, date: "2026-10-02", amount: "500", categoryId: rent.id });
+      const oct = await month("2026-10");
+      // Amex stays unfunded and keeps its overspent categories (YNAB: Card R4); only $2 of
+      // Visa's $5 return leaves its payment category.
+      expect(oct.byCategory(amex.paymentCategoryId)).toMatchObject({
+        available: "0",
+        payment: { overspentCategories: "300" },
+      });
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({ available: "-200" });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "200", creditOverspent: "0" });
     });
 
     it("funds September's card spending from September's money only", async () => {
@@ -474,15 +606,34 @@ describe("budget months", () => {
       await create({ accountId: visa.id, date: "2026-10-01", amount: "-500", categoryId: rent.id });
       await create({ date: "2026-10-02", amount: "-300", transferAccountId: visa.id });
       await create({ accountId: visa.id, date: "2026-09-30", amount: "-100", categoryId: rent.id });
+      // YNAB (Card T5, 2026-10-11) lists a card's split line by line.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "-80",
+        categoryId: null,
+        subtransactions: [
+          { amount: "-50", categoryId: rent.id },
+          { amount: "-30", categoryId: rent.id },
+        ],
+      });
       const res = await send(
         "GET",
         `${base}/months/2026-10/activity?categoryId=${visa.paymentCategoryId}&today=${TODAY}`,
         cookie,
       );
       expect(res.status).toBe(200);
-      const { transactions } = await json<{ transactions: { amount: string }[] }>(res);
-      // The purchase and the payment; not September's or the Starting Balance.
-      expect(transactions.map((t) => t.amount).sort()).toEqual(["-500", "300"]);
+      const { transactions } = await json<{
+        transactions: { amount: string; categoryName: string | null }[];
+      }>(res);
+      // The purchase, the split's lines and the payment; not September's or the Starting Balance.
+      expect(transactions.map((t) => t.amount).sort()).toEqual(["-30", "-50", "-500", "300"]);
+      // "Group: Category"; the payment shows the payment category (YNAB's "Credit Card
+      // Payments: Card T5").
+      expect(transactions.find((t) => t.amount === "-500")?.categoryName).toMatch(/: /);
+      expect(transactions.find((t) => t.amount === "300")?.categoryName).toBe(
+        "Credit Card Payments: Visa",
+      );
     });
 
     it("goes red when more is paid than set aside, and takes it from next month", async () => {
@@ -520,7 +671,8 @@ describe("budget months", () => {
           date: "2026-08-20",
         }),
       );
-      // From a tracking account: not a payment out of the plan (docs/verify.md).
+      // From a tracking account: no payment. Its card side is Uncategorized, a return like any
+      // other, so it takes its $5 out of the payment category (YNAB: Card R3, docs/verify.md).
       await create({
         accountId: asset.id,
         date: "2026-10-02",
@@ -529,9 +681,44 @@ describe("budget months", () => {
       });
       const pay = (await month("2026-10")).byCategory(visa.paymentCategoryId);
       expect(pay).toMatchObject({
-        available: "-700",
-        payment: { paymentsMade: "-700", balance: "-800" },
+        available: "-1200",
+        payment: { paymentsMade: "-700", fundedSpending: "-500", balance: "-800" },
       });
+    });
+
+    it("treats a categorized transfer from a tracking account as a refund (YNAB: Track T)", async () => {
+      const { cookie, base, month, create, rent, visa, readyToAssignCategoryId } =
+        await cards(2000n);
+      const asset = await json<{ id: string }>(
+        await send("POST", `${base}/accounts`, cookie, {
+          name: "House",
+          type: "asset",
+          balance: "100000",
+          date: "2026-08-20",
+        }),
+      );
+      // Into Inflow: Ready to Assign it only lowers what's owed, like a statement credit.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "200",
+        transferAccountId: asset.id,
+        categoryId: readyToAssignCategoryId,
+      });
+      // Into a spending category it moves money from the payment category, like a refund.
+      await create({
+        accountId: visa.id,
+        date: "2026-10-02",
+        amount: "500",
+        transferAccountId: asset.id,
+        categoryId: rent.id,
+      });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({
+        available: "-500",
+        payment: { paymentsMade: "0", balance: "-1300" },
+      });
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "500" });
     });
 
     it("leaves the payment category alone for statement credits and cash advances", async () => {
@@ -559,7 +746,7 @@ describe("budget months", () => {
       });
     });
 
-    it("moves a later month's refund out of the payment category, even below zero", async () => {
+    it("keeps a refund to a paid-off card out of the payment category (YNAB: Card T)", async () => {
       const { month, put, create, rent, visa } = await cards();
       await put(rent.id, "2026-09", "1000");
       await create({
@@ -568,15 +755,245 @@ describe("budget months", () => {
         amount: "-1000",
         categoryId: rent.id,
       });
-      // Paid off in September, then refunded in October (YNAB's clothing example).
+      // Paid off in September, then refunded in October: the card is above zero, so the refund is
+      // cash; the help center's clothing example takes it out of the payment category, but YNAB's
+      // app didn't (docs/verify.md, phase 7e).
       await create({ date: "2026-09-20", amount: "-1000", transferAccountId: visa.id });
       await create({ accountId: visa.id, date: "2026-10-01", amount: "1000", categoryId: rent.id });
       const oct = await month("2026-10");
-      expect(oct.byCategory(rent.id)?.available).toBe("1000");
+      expect(oct.byCategory(rent.id)).toMatchObject({ available: "1000", cashActivity: "1000" });
       expect(oct.byCategory(visa.paymentCategoryId)).toMatchObject({
-        available: "-1000",
-        payment: { fundedSpending: "-1000", balance: "1000" },
+        available: "0",
+        payment: { fundedSpending: "0", balance: "1000" },
       });
+      expect(oct.readyToAssign).toBe((await month("2026-09")).readyToAssign);
+    });
+  });
+
+  // Phase 7e, from YNAB's "Onboarding Check" plan (2026-10-11), docs/verify.md.
+  describe("positive card balances", () => {
+    it("adds an overpayment above zero to Ready to Assign (YNAB: Card X)", async () => {
+      const { month, create, amex } = await cards();
+      const before = (await month("2026-09")).readyToAssign;
+      await create({ date: "2026-09-05", amount: "-1000", transferAccountId: amex.id });
+      const sep = await month("2026-09");
+      expect(BigInt(sep.readyToAssign) - BigInt(before)).toBe(1000n);
+      // The payment category is overpaid: red, and October gives the $10 back.
+      expect(sep.byCategory(amex.paymentCategoryId)).toMatchObject({
+        available: "-1000",
+        cashOverspent: "-1000",
+      });
+      expect((await month("2026-10")).readyToAssign).toBe(before);
+    });
+
+    it("makes spending on a positive card cash, from the day after the payment (YNAB: S1, S2)", async () => {
+      const { month, create, rent, phone, visa, amex } = await cards();
+      // S2: paid on 09/03, spent on 09/05: cash overspending, deducted in October.
+      await create({ date: "2026-09-03", amount: "-1000", transferAccountId: amex.id });
+      await create({ accountId: amex.id, date: "2026-09-05", amount: "-400", categoryId: rent.id });
+      // S1: paid and spent on 09/05: the spending counts first, so it's credit.
+      await create({ date: "2026-09-05", amount: "-1000", transferAccountId: visa.id });
+      await create({
+        accountId: visa.id,
+        date: "2026-09-05",
+        amount: "-400",
+        categoryId: phone.id,
+      });
+      const sep = await month("2026-09");
+      expect(sep.byCategory(rent.id)).toMatchObject({
+        cashActivity: "-400",
+        creditActivity: "0",
+        cashOverspent: "-400",
+      });
+      expect(sep.byCategory(phone.id)).toMatchObject({
+        creditActivity: "-400",
+        creditOverspent: "-400",
+      });
+      // Nothing moved to either payment category for the spending.
+      expect(sep.byCategory(amex.paymentCategoryId)?.available).toBe("-1000");
+      expect(sep.byCategory(visa.paymentCategoryId)?.available).toBe("-1000");
+      // October gets back both overpayments and loses the cash overspending: +$20 above zero in
+      // September less $4 for S1's credit spending, then −$20 overpaid and −$4 cash overspent.
+      const oct = await month("2026-10");
+      expect(BigInt(oct.readyToAssign) - BigInt(sep.readyToAssign)).toBe(-2000n - 400n);
+    });
+
+    it("splits spending that crosses zero, uncategorized included (YNAB: Card Z)", async () => {
+      const { month, create, rent, amex } = await cards();
+      await create({ date: "2026-09-01", amount: "-500", transferAccountId: amex.id });
+      // No category: Uncategorized.
+      await create({ accountId: amex.id, date: "2026-09-02", amount: "-400" });
+      await create({ accountId: amex.id, date: "2026-09-03", amount: "-300", categoryId: rent.id });
+      const sep = await month("2026-09");
+      expect(sep.uncategorized).toMatchObject({ cashActivity: "-400", cashOverspent: "-400" });
+      expect(sep.byCategory(rent.id)).toMatchObject({
+        cashActivity: "-100",
+        creditActivity: "-200",
+        cashOverspent: "-100",
+        creditOverspent: "-200",
+      });
+    });
+
+    it("counts card money to Ready to Assign only above zero (YNAB: Cards V and W)", async () => {
+      const { month, create, readyToAssignCategoryId, visa, amex } = await cards(500n);
+      const before = BigInt((await month("2026-09")).readyToAssign);
+      // A statement credit on Visa (owing $5) lowers the debt only.
+      await create({
+        accountId: visa.id,
+        date: "2026-09-05",
+        amount: "200",
+        categoryId: readyToAssignCategoryId,
+      });
+      expect(BigInt((await month("2026-09")).readyToAssign)).toBe(before);
+      // Amex at +$3, $5 out to Ready to Assign: −$3.
+      await create({ date: "2026-09-01", amount: "-300", transferAccountId: amex.id });
+      await create({
+        accountId: amex.id,
+        date: "2026-09-06",
+        amount: "-500",
+        categoryId: readyToAssignCategoryId,
+      });
+      expect(BigInt((await month("2026-09")).readyToAssign)).toBe(before);
+    });
+
+    it("adds a cash advance's new debt to Ready to Assign (YNAB: Cards A and W)", async () => {
+      const { month, create, account, visa, amex } = await cards(500n);
+      const before = BigInt((await month("2026-09")).readyToAssign);
+      // Visa owes $5: a $3 advance is all new debt.
+      await create({
+        accountId: visa.id,
+        date: "2026-09-05",
+        amount: "-300",
+        transferAccountId: account.id,
+      });
+      expect(BigInt((await month("2026-09")).readyToAssign) - before).toBe(300n);
+      // Amex at +$6 moving $8: +$6 for the overpayment, then +$2 of new debt.
+      await create({ date: "2026-09-01", amount: "-600", transferAccountId: amex.id });
+      await create({
+        accountId: amex.id,
+        date: "2026-09-06",
+        amount: "-800",
+        transferAccountId: account.id,
+      });
+      expect(BigInt((await month("2026-09")).readyToAssign) - before).toBe(300n + 600n + 200n);
+      expect((await month("2026-09")).byCategory(amex.paymentCategoryId)?.available).toBe("-600");
+    });
+
+    it("pays down debt with a return first, the rest is cash (YNAB: Card R8)", async () => {
+      const { month, create, rent, visa } = await cards(300n);
+      const before = (await month("2026-09")).readyToAssign;
+      await create({ accountId: visa.id, date: "2026-09-09", amount: "500", categoryId: rent.id });
+      const sep = await month("2026-09");
+      expect(sep.byCategory(rent.id)).toMatchObject({ available: "500", cashActivity: "200" });
+      expect(sep.byCategory(visa.paymentCategoryId)).toMatchObject({
+        available: "-300",
+        payment: { fundedSpending: "-300" },
+      });
+      expect(sep.readyToAssign).toBe(before);
+    });
+
+    it("pays another card from the part above zero only (YNAB: Cards T1–T4)", async () => {
+      const { month, create, visa, amex } = await cards(2000n);
+      const before = BigInt((await month("2026-09")).readyToAssign);
+      // T1 → T2: Amex at +$10 sends $6 to Visa (owing $20): a $6 payment, nothing to Ready to Assign.
+      await create({ date: "2026-09-01", amount: "-1000", transferAccountId: amex.id });
+      await create({
+        accountId: amex.id,
+        date: "2026-09-03",
+        amount: "-600",
+        transferAccountId: visa.id,
+      });
+      let sep = await month("2026-09");
+      expect(BigInt(sep.readyToAssign) - before).toBe(1000n);
+      expect(sep.byCategory(visa.paymentCategoryId)).toMatchObject({
+        available: "-600",
+        payment: { paymentsMade: "-600" },
+      });
+      // T3 → T4: Visa (owing $14) sends $8 to Amex (+$4): new debt; Amex goes to +$12, so $8 more
+      // above zero for Ready to Assign, and no payment.
+      await create({
+        accountId: visa.id,
+        date: "2026-09-05",
+        amount: "-800",
+        transferAccountId: amex.id,
+      });
+      sep = await month("2026-09");
+      expect(BigInt(sep.readyToAssign) - before).toBe(1000n + 800n);
+      expect(sep.byCategory(amex.paymentCategoryId)?.payment).toMatchObject({
+        paymentsMade: "-1000",
+      });
+      expect(sep.byCategory(visa.paymentCategoryId)?.payment).toMatchObject({
+        paymentsMade: "-600",
+      });
+    });
+
+    it("funds and returns card money through Uncategorized like any category (YNAB: Cards R3, R4)", async () => {
+      const { month, spend, create, visa } = await cards(2000n);
+      // $7 in Uncategorized from an uncategorized inflow.
+      await spend({ date: "2026-09-02", amount: "700" });
+      await create({ accountId: visa.id, date: "2026-09-09", amount: "-300" });
+      let sep = await month("2026-09");
+      expect(sep.byCategory(visa.paymentCategoryId)?.available).toBe("300");
+      expect(sep.uncategorized).toMatchObject({ available: "400" });
+      // An uncategorized return takes its money back out.
+      await create({ accountId: visa.id, date: "2026-09-10", amount: "500" });
+      sep = await month("2026-09");
+      expect(sep.byCategory(visa.paymentCategoryId)?.available).toBe("-200");
+      expect(sep.uncategorized).toMatchObject({ available: "900" });
+    });
+
+    it("gives a split's cash part to its lines in order (YNAB: Card T8)", async () => {
+      const { month, create, rent, phone, amex } = await cards();
+      await create({ date: "2026-09-01", amount: "-500", transferAccountId: amex.id });
+      // Amex at +$5: the first line (Phone, the smaller) takes $3 of cash, Rent gets $2 cash and
+      // $3 credit; largest-first would have given Rent all $5.
+      await create({
+        accountId: amex.id,
+        date: "2026-09-03",
+        amount: "-800",
+        subtransactions: [
+          { amount: "-300", categoryId: phone.id },
+          { amount: "-500", categoryId: rent.id },
+        ],
+      });
+      const sep = await month("2026-09");
+      expect(sep.byCategory(phone.id)).toMatchObject({ cashActivity: "-300", creditActivity: "0" });
+      expect(sep.byCategory(rent.id)).toMatchObject({
+        cashActivity: "-200",
+        creditActivity: "-300",
+      });
+    });
+
+    it("funds equal same-day purchases in the order they were entered (YNAB: G-E1–G-E4)", async () => {
+      const { month, assign, create, rent, visa, amex } = await cards();
+      await assign(rent.id, "2026-09", 500n);
+      // Amex's purchase is entered first, so its id is smaller: it's funded first.
+      await create({ accountId: amex.id, date: "2026-09-06", amount: "-400", categoryId: rent.id });
+      await create({ accountId: visa.id, date: "2026-09-06", amount: "-400", categoryId: rent.id });
+      const sep = await month("2026-09");
+      expect(sep.byCategory(amex.paymentCategoryId)?.available).toBe("400");
+      expect(sep.byCategory(visa.paymentCategoryId)?.available).toBe("100");
+    });
+
+    it("closes a positive card out of Ready to Assign once, and keeps its payment category", async () => {
+      const { cookie, base, month, create, amex } = await cards();
+      await create({ date: "2026-09-01", amount: "-1000", transferAccountId: amex.id });
+      const open = (await month("2026-09")).readyToAssign;
+      const res = await send("POST", `${base}/accounts/${amex.id}/close`, cookie, {
+        date: "2026-09-10",
+      });
+      expect(res.status).toBe(200);
+      const sep = await month("2026-09");
+      // YNAB: Card P at +$10 closed → Ready to Assign −$10; the payment category stays at −$10.
+      expect(BigInt(sep.readyToAssign) - BigInt(open)).toBe(-1000n);
+      expect(sep.byCategory(amex.paymentCategoryId)?.available).toBe("-1000");
+      const { groups } = await json<{
+        groups: { categories: { id: string; hidden: boolean }[] }[];
+      }>(await send("GET", `${base}/categories`, cookie));
+      const payment = groups
+        .flatMap((g) => g.categories)
+        .find((c) => c.id === amex.paymentCategoryId);
+      expect(payment?.hidden).toBe(false);
     });
   });
 
@@ -607,6 +1024,21 @@ describe("budget months", () => {
 
     // Future months carry what's left.
     expect((await month("2026-11")).byCategory(rent.id)).toMatchObject(t("0", "0", "8000"));
+  });
+
+  it("tells an overdraft from money assigned beyond what there is (YNAB plan C4 Clean)", async () => {
+    const { month, assign, spend, rent, groceries } = await setup();
+    await assign(rent.id, "2026-10", 80000n);
+    expect((await month("2026-10")).overdraft).toBe(false);
+    // $1,000 of income, $800 assigned, $999 overspent in September: −$799.00, which Rent's $800
+    // could still cover.
+    await spend({ date: "2026-09-15", amount: "-99900", categoryId: groceries.id });
+    const oct = await month("2026-10");
+    expect(oct.readyToAssign).toBe("-79900");
+    expect(oct.overdraft).toBe(false);
+    // $5 of cash overspending in October leaves the categories $4 short.
+    await spend({ date: "2026-10-02", amount: "-500", categoryId: groceries.id });
+    expect((await month("2026-10")).overdraft).toBe(true);
   });
 
   it("keeps hidden categories out of their group's totals", async () => {
@@ -723,6 +1155,32 @@ describe("budget months", () => {
       expect((await month("2026-10")).readyToAssign).toBe("0");
       // November assigned more than there is.
       expect((await month("2026-11")).readyToAssign).toBe("-25000");
+      // The current month names the first later month that's short (YNAB "C5 First FS").
+      await put(rent.id, "2026-12", "1000");
+      expect((await month("2026-10")).futureShortfall).toEqual({
+        month: "2026-11",
+        readyToAssign: "-25000",
+      });
+      await put(phone.id, "2026-11", "0");
+      expect((await month("2026-10")).futureShortfall).toBeNull();
+    });
+
+    // YNAB "C5 First FS", 2026-10-12: one note per month; an empty one removes it.
+    it("keeps a note per month", async () => {
+      const { cookie, base, month } = await setup();
+      const setNote = (m: string, note: string) =>
+        send("PUT", `${base}/months/${m}/note`, cookie, { note });
+      expect((await setNote("2026-10", "Rent due early")).status).toBe(200);
+      expect((await month("2026-10")).note).toBe("Rent due early");
+      expect((await month("2026-11")).note).toBe("");
+      await setNote("2026-10", "Rent paid");
+      expect((await month("2026-10")).note).toBe("Rent paid");
+      await setNote("2026-10", "  ");
+      expect((await month("2026-10")).note).toBe("");
+      const other = await signUp(app);
+      expect(
+        (await send("PUT", `${base}/months/2026-10/note`, other.cookie, { note: "x" })).status,
+      ).toBe(404);
     });
 
     it("leaves income dated after today out", async () => {
@@ -761,6 +1219,9 @@ describe("budget months", () => {
       kind: string;
       fromCategoryId: string | null;
       toCategoryId: string | null;
+      fromDeletedCategory: string | null;
+      toDeletedCategory: string | null;
+      deletion: boolean;
       month: string;
       amount: string;
       userName: string | null;
@@ -826,6 +1287,75 @@ describe("budget months", () => {
           userName: "Test User",
         },
       ]);
+    });
+
+    it("keeps a deleted category's moves and logs the delete (YNAB: V6c A–C)", async () => {
+      const { cookie, base, put, move, moves, spend, rent, phone, groceries, needs } =
+        await moveSetup();
+      const del = (id: string, to?: string) =>
+        send(
+          "DELETE",
+          `${base}/categories/${id}${to ? `?reassignToCategoryId=${to}` : ""}`,
+          cookie,
+        );
+      // Money only: it goes back to Ready to Assign ("Removed $20.00 from deleted category").
+      await put(rent.id, "2026-10", "2000");
+      expect((await del(rent.id)).status).toBe(204);
+      expect(await moves()).toMatchObject([
+        {
+          kind: "removed",
+          fromCategoryId: null,
+          fromDeletedCategory: rent.name,
+          toCategoryId: null,
+          deletion: true,
+          amount: "2000",
+        },
+        { kind: "assigned", toCategoryId: null, toDeletedCategory: rent.name, deletion: false },
+      ]);
+      // Negative assigned money: "Moved $5.00 from Ready to Assign to deleted category".
+      await put(phone.id, "2026-10", "1000");
+      await move(phone.id, groceries.id, "1500");
+      await spend({ date: "2026-10-01", amount: "-100", categoryId: groceries.id });
+      expect((await del(phone.id)).status).toBe(204);
+      expect((await moves())[0]).toMatchObject({
+        kind: "moved",
+        fromCategoryId: null,
+        fromDeletedCategory: null,
+        toDeletedCategory: phone.name,
+        deletion: true,
+        amount: "500",
+      });
+      // With transactions, to the category picked: "Moved $15.00 from deleted category … to …".
+      const other = needs.categories.find((c) => c.id !== groceries.id);
+      if (!other) throw new Error("starter data missing");
+      expect((await del(groceries.id, other.id)).status).toBe(204);
+      expect((await moves())[0]).toMatchObject({
+        kind: "moved",
+        fromDeletedCategory: groceries.name,
+        toCategoryId: other.id,
+        deletion: true,
+        amount: "1500",
+      });
+    });
+
+    it("lists the last 34 days of moves, as YNAB's Recent Moves", async () => {
+      const { base, put, moves, rent, readyToAssignCategoryId } = await moveSetup();
+      await put(rent.id, "2026-10", "2000");
+      const budgetId = base.split("/").at(-1) ?? "";
+      const old = (days: number) =>
+        db.insert(moneyMove).values({
+          id: newId(),
+          budgetId,
+          fromCategoryId: readyToAssignCategoryId,
+          toCategoryId: rent.id,
+          month: "2026-10-01",
+          amount: BigInt(days),
+          currency: "USD",
+          createdAt: new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+        });
+      await old(33);
+      await old(35);
+      expect((await moves()).map((m) => m.amount)).toEqual(["2000", "33"]);
     });
 
     it("refuses bad moves", async () => {
@@ -1015,6 +1545,186 @@ describe("budget months", () => {
         today: TODAY,
       });
       expect(far.status).toBe(400);
+    });
+  });
+
+  // YNAB's rules, checked in its web app on 2026-10-07 (docs/verify.md "Underfunded and Reduce
+  // Overfunding").
+  describe("underfunded and reduce overfunding", () => {
+    const target = (
+      ctx: { cookie: string; base: string },
+      categoryId: string,
+      input: Record<string, unknown> = {},
+    ) =>
+      send("PUT", `${ctx.base}/categories/${categoryId}/target`, ctx.cookie, {
+        cadence: "monthly",
+        behavior: "set_aside",
+        amount: "10000",
+        dueDay: null,
+        month: "2026-10",
+        ...input,
+      });
+    const auto = (
+      ctx: { cookie: string; base: string },
+      option: string,
+      extra: Record<string, unknown> = {},
+    ) =>
+      send("POST", `${ctx.base}/months/2026-10/auto-assign`, ctx.cookie, {
+        option,
+        today: TODAY,
+        ...extra,
+      });
+
+    it("lists what each category asks for and what's over", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone, groceries } = ctx;
+      expect((await target(ctx, rent.id)).status).toBe(200);
+      expect((await target(ctx, phone.id, { behavior: "refill", dueDay: 15 })).status).toBe(200);
+      await put(rent.id, "2026-10", "15000");
+      await spend({ date: "2026-10-01", amount: "-2500", categoryId: groceries.id });
+
+      const oct = await month("2026-10");
+      // Rent: $150.00 against $100.00, so $50.00 is over.
+      expect(oct.byCategory(rent.id)).toMatchObject({
+        autoAssign: { underfunded: "15000", reduceOverfunding: "10000" },
+        underfundedParts: [],
+      });
+      // Phone: due on the 15th. Groceries: no target, only its overspending.
+      expect(oct.byCategory(phone.id)).toMatchObject({
+        autoAssign: { underfunded: "10000", reduceOverfunding: "0" },
+        underfundedParts: [{ amount: "10000", step: 2, date: "2026-10-15" }],
+      });
+      expect(oct.byCategory(groceries.id)).toMatchObject({
+        autoAssign: { underfunded: "2500" },
+        underfundedParts: [{ amount: "2500", step: 1, date: "" }],
+      });
+      // October's Targets: each target's month amount, met or not.
+      expect(oct.targets).toEqual({ month: "20000", nextMonth: "20000", expectedIncome: null });
+    });
+
+    it("meets the target or covers overspending, whichever is more (YNAB O11, O13)", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id);
+      await spend({ date: "2026-10-01", amount: "-3000", categoryId: rent.id });
+      await put(phone.id, "2026-10", "10000");
+      await spend({ date: "2026-10-01", amount: "-13000", categoryId: phone.id });
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)?.autoAssign.underfunded).toBe("10000");
+      expect(oct.byCategory(phone.id)?.autoAssign.underfunded).toBe("13000");
+    });
+
+    it("funds in YNAB's order and stops when Ready to Assign runs out", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone, groceries } = ctx;
+      await target(ctx, rent.id); // end of month
+      await target(ctx, phone.id, { dueDay: 15 }); // due on a date: before end of month
+      await spend({ date: "2026-10-01", amount: "-500", categoryId: groceries.id }); // first
+      // $1,000.00 in; leave $60.00 to assign.
+      const { groups } = await json<{ groups: Group[] }>(
+        await send("GET", `${ctx.base}/categories`, ctx.cookie),
+      );
+      const spare = groups.find((g) => g.id === ctx.needs.id)?.categories[1];
+      if (!spare) throw new Error("starter data missing");
+      await put(spare.id, "2026-10", "94000");
+      expect((await month("2026-10")).readyToAssign).toBe("6000");
+
+      expect((await auto(ctx, "underfunded")).status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(groceries.id)).toMatchObject(t("500", "-500", "0"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("5500", "0", "5500"));
+      expect(oct.byCategory(rent.id)).toMatchObject(t("0", "0", "0"));
+      expect(oct.readyToAssign).toBe("0");
+
+      // A selection is funded in full, even past Ready to Assign.
+      expect((await auto(ctx, "underfunded", { categoryIds: [rent.id] })).status).toBe(200);
+      const after = await month("2026-10");
+      expect(after.byCategory(rent.id)).toMatchObject(t("10000", "0", "10000"));
+      expect(after.readyToAssign).toBe("-10000");
+    });
+
+    it("keeps a view's Underfunded to Ready to Assign, in order", async () => {
+      const ctx = await setup();
+      const { put, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id, { dueDay: 15 });
+      await put(ctx.groceries.id, "2026-10", "95000");
+      expect(
+        (await auto(ctx, "underfunded", { categoryIds: [rent.id, phone.id], scope: "view" }))
+          .status,
+      ).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(phone.id)?.assigned).toBe("5000");
+      expect(oct.byCategory(rent.id)?.assigned).toBe("0");
+    });
+
+    it("takes back what's over, up to what's Available (YNAB O1, O4)", async () => {
+      const ctx = await setup();
+      const { put, spend, month, rent, phone } = ctx;
+      await target(ctx, rent.id);
+      await target(ctx, phone.id, { behavior: "refill" });
+      await put(rent.id, "2026-10", "15000");
+      await spend({ date: "2026-10-01", amount: "-12000", categoryId: rent.id });
+      await put(phone.id, "2026-09", "15000");
+
+      expect((await auto(ctx, "reduceOverfunding")).status).toBe(200);
+      const oct = await month("2026-10");
+      expect(oct.byCategory(rent.id)).toMatchObject(t("12000", "-12000", "0"));
+      expect(oct.byCategory(phone.id)).toMatchObject(t("-5000", "0", "10000"));
+    });
+
+    // YNAB plan "C5 First" (created 2026-10-12), checked that day.
+    it("funds what fell due before the budget began last in its first month", async () => {
+      const ctx = await setup();
+      const { month, rent, phone, groceries } = ctx;
+      await target(ctx, rent.id, { dueDay: 5 }); // before the start
+      await target(ctx, phone.id, { dueDay: 20 });
+      await target(ctx, groceries.id); // end of month: the 31st
+      const oct = await month("2026-10", "2026-10-12");
+      expect(oct.byCategory(rent.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 3, date: "2026-10-05" },
+      ]);
+      expect(oct.byCategory(phone.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 2, date: "2026-10-20" },
+      ]);
+      expect(oct.byCategory(groceries.id)?.underfundedParts).toEqual([
+        { amount: "10000", step: 2, date: "2026-10-31" },
+      ]);
+      // Only in the first month.
+      const nov = await month("2026-11", "2026-10-12");
+      expect(nov.byCategory(rent.id)?.underfundedParts[0]?.step).toBe(2);
+    });
+
+    it("flags a card with uncategorized transactions this month", async () => {
+      const ctx = await cards();
+      const spendOnVisa = (date: string) =>
+        send("POST", `${ctx.base}/transactions`, ctx.cookie, {
+          accountId: ctx.visa.id,
+          categoryId: null,
+          date,
+          amount: "-500",
+        });
+      expect((await spendOnVisa("2026-09-20")).status).toBe(201);
+      const flag = async () =>
+        (await ctx.month("2026-10")).byCategory(ctx.visa.paymentCategoryId)?.payment
+          ?.hasUncategorized;
+      expect(await flag()).toBe(false);
+      expect((await spendOnVisa("2026-10-01")).status).toBe(201);
+      expect(await flag()).toBe(true);
+    });
+
+    it("asks a card's payment category for what's owed, and gives back the rest", async () => {
+      const ctx = await cards(5000n);
+      await ctx.put(ctx.amex.paymentCategoryId, "2026-10", "600");
+      const oct = await ctx.month("2026-10");
+      expect(oct.byCategory(ctx.visa.paymentCategoryId)).toMatchObject({
+        autoAssign: { underfunded: "5000", reduceOverfunding: "0" },
+        underfundedParts: [{ amount: "5000", step: 5, date: "" }],
+      });
+      expect(oct.byCategory(ctx.amex.paymentCategoryId)).toMatchObject({
+        autoAssign: { underfunded: "600", reduceOverfunding: "0" },
+      });
     });
   });
 });

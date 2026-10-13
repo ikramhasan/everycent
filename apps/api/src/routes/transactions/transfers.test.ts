@@ -20,6 +20,7 @@ type Txn = {
   cleared: string;
   transferAccountId: string | null;
   transferTransactionId: string | null;
+  transferReconciled: boolean;
 };
 type Category = { id: string; name: string };
 type Group = { kind: string | null; categories: Category[] };
@@ -246,25 +247,45 @@ describe("transfers", () => {
     expect((await register()).filter((t) => t.transferAccountId)).toEqual([]);
   });
 
-  it("won't change or delete a transfer whose other side is reconciled", async () => {
+  it("changes a transfer whose other side is reconciled, which stays reconciled", async () => {
+    // YNAB 2026-10-11: after its warning, the reconciled side follows the edit (re-pointed, it
+    // moved to the new account with the same id) and keeps its lock.
     const { base, cookie, addAccount, transfer, patch, find } = await setup();
     const checking = await addAccount("Checking", "checking", "100000");
     const savings = await addAccount("Savings", "savings");
+    const wallet = await addAccount("Wallet", "cash");
     const out = await transfer(checking, savings, "-2000");
     const otherId = out.transferTransactionId ?? "";
     await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, otherId));
 
-    for (const body of [{ amount: "-1" }, { date: "2026-10-02" }, { payeeName: "Bank" }]) {
-      const res = await patch(out.id, body);
-      expect(res.status).toBe(409);
-      expect((await json<ErrorBody>(res)).error.code).toBe("TRANSFER_RECONCILED");
-    }
-    const del = await send("DELETE", `${base}/transactions/${out.id}`, cookie);
-    expect(del.status).toBe(409);
+    const listed = await find(out.id);
+    expect(listed).toMatchObject({ transferReconciled: true });
+    expect((await patch(out.id, { amount: "-2500", date: "2026-10-02" })).status).toBe(200);
+    expect(await find(otherId)).toMatchObject({
+      amount: "2500",
+      date: "2026-10-02",
+      cleared: "reconciled",
+    });
+    expect((await patch(out.id, { transferAccountId: wallet.id })).status).toBe(200);
+    expect(await find(otherId)).toMatchObject({ accountId: wallet.id, cleared: "reconciled" });
 
-    // Memo and cleared are this side's own.
-    expect((await patch(out.id, { memo: "ok", cleared: "cleared" })).status).toBe(200);
-    expect(await find(otherId)).toMatchObject({ amount: "2000", cleared: "reconciled" });
+    // Deleting deletes both sides, as YNAB does after "Delete Reconciled Transfer?".
+    expect((await send("DELETE", `${base}/transactions/${out.id}`, cookie)).status).toBe(204);
+    expect(await find(otherId)).toBeUndefined();
+  });
+
+  it("keeps a reconciled transaction reconciled", async () => {
+    const { addAccount, transfer, patch, find } = await setup();
+    const checking = await addAccount("Checking", "checking", "100000");
+    const savings = await addAccount("Savings", "savings");
+    const out = await transfer(checking, savings, "-2000");
+    await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, out.id));
+    const res = await patch(out.id, { cleared: "cleared" });
+    expect(res.status).toBe(409);
+    expect((await json<ErrorBody>(res)).error.code).toBe("TRANSACTION_RECONCILED");
+    // Everything else can still change (YNAB warns on the amount).
+    expect((await patch(out.id, { amount: "-1500", memo: "fixed" })).status).toBe(200);
+    expect(await find(out.id)).toMatchObject({ amount: "-1500", cleared: "reconciled" });
   });
 
   it("keeps accounts with transfers from being deleted", async () => {

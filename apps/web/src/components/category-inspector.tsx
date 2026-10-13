@@ -1,7 +1,15 @@
 import { addMonths } from "@everycent/engine";
+import { Button } from "@everycent/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@everycent/ui/components/collapsible";
+import { Input } from "@everycent/ui/components/input";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
-import { type ReactNode, useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, SquarePen } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import type { Breakdown } from "@/lib/budget-view";
 import { monthName } from "@/lib/months";
 
@@ -47,12 +55,26 @@ export function MonthSummary({
   totals,
   format,
   selectedNames,
+  targets,
 }: {
   month: string;
   totals: Breakdown;
   format: Format;
   /** Names of the selected categories, when two or more are. */
   selectedNames?: string[];
+  /**
+   * What the plan's targets ask of this month and the next (YNAB's "Cost to Be Me"), with the
+   * budget's expected income; shown in the current month only, as YNAB does.
+   */
+  targets?: {
+    month: bigint;
+    nextMonth: bigint;
+    expectedIncome: bigint | null;
+    /** Saves the expected income; undefined when the user can't (no editor then). */
+    onSetIncome?: (amount: bigint) => Promise<boolean>;
+    parse?: (text: string) => bigint | string;
+    toInput?: (amount: string) => string;
+  };
 }) {
   const previous = monthName(addMonths(month, -1));
   const name = monthName(month);
@@ -91,7 +113,138 @@ export function MonthSummary({
           hint={`The total amount of money you have available in ${name}.`}
         />
       </dl>
+      {targets && (
+        <>
+          <h3 className="font-semibold text-sm">Cost to Be Me</h3>
+          <CostToBeMe name={name} targets={targets} format={format} />
+          {/* YNAB showed this line whenever next month's total was higher; equal or lower wasn't seen. */}
+          {targets.nextMonth > targets.month && (
+            <p className="rounded-md bg-muted p-2 text-center text-muted-foreground text-xs">
+              Next month's targets could increase your total to{" "}
+              {format(targets.nextMonth.toString())}
+            </p>
+          )}
+        </>
+      )}
     </Panel>
+  );
+}
+
+/** Bar width for `part` of `whole`, as a CSS percentage capped at 100%. */
+const barWidth = (part: bigint, whole: bigint) =>
+  whole <= 0n || part >= whole ? "100%" : `${Number((part * 10000n) / whole) / 100}%`;
+
+/**
+ * YNAB's Cost to Be Me (seen 2026-10-08, docs/verify.md "Targets overview and history"): the
+ * month's targets and, once entered, the expected income, each with a bar against the larger of
+ * the two. The targets bar is blue while the income covers them and red when it falls short;
+ * the income bar is grey. "Enter your expected income" opens an amount field; zero leaves it as
+ * it was (YNAB can't clear it).
+ */
+function CostToBeMe({
+  name,
+  targets,
+  format,
+}: {
+  name: string;
+  targets: NonNullable<Parameters<typeof MonthSummary>[0]["targets"]>;
+  format: Format;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const income = targets.expectedIncome;
+  const { onSetIncome, parse, toInput } = targets;
+  const short = income !== null && targets.month > income;
+
+  function open() {
+    setText(income !== null && toInput ? toInput(income.toString()) : "0.00");
+    setEditing(true);
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const amount = parse && text.trim() !== "" ? parse(text) : 0n;
+    if (typeof amount === "string" || amount <= 0n || !onSetIncome) return setEditing(false);
+    setBusy(true);
+    try {
+      if (await onSetIncome(amount)) setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <dl className="grid gap-1">
+        <Line label={`${name}’s Targets`} value={targets.month} format={format} />
+        {income !== null && (
+          <div
+            role="img"
+            aria-label={short ? "Targets are more than the expected income" : "Targets"}
+            className={cn(
+              "h-1 rounded-full",
+              short ? "bg-linear-to-r from-red-400 to-red-700" : "bg-blue-600 dark:bg-blue-500",
+            )}
+            style={{ width: barWidth(targets.month, income) }}
+          />
+        )}
+      </dl>
+      {editing ? (
+        <form onSubmit={save} className="grid gap-2">
+          <label htmlFor="expected-income" className="font-semibold text-sm">
+            Expected Income
+          </label>
+          <Input
+            id="expected-income"
+            autoFocus
+            inputMode="decimal"
+            value={text}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={busy}>
+              Save
+            </Button>
+          </div>
+        </form>
+      ) : income !== null ? (
+        <div className="grid gap-1">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">Expected Income</span>
+            <span className="flex items-center gap-1 tabular-nums">
+              {format(income.toString())}
+              {onSetIncome && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  aria-label="Edit your income"
+                  onClick={open}
+                >
+                  <SquarePen className="size-3.5" />
+                </Button>
+              )}
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label="Expected income"
+            className="h-1 rounded-full bg-muted-foreground/30"
+            style={{ width: barWidth(income, targets.month) }}
+          />
+        </div>
+      ) : (
+        onSetIncome && (
+          <Button size="sm" variant="secondary" onClick={open}>
+            Enter your expected income
+          </Button>
+        )
+      )}
+    </div>
   );
 }
 
@@ -108,6 +261,7 @@ export function CategoryInspector({
   onNoteChange,
   uncategorized = false,
   target,
+  upcoming,
 }: {
   name: string;
   totals: Breakdown;
@@ -119,6 +273,8 @@ export function CategoryInspector({
   uncategorized?: boolean;
   /** The Target section. */
   target?: ReactNode;
+  /** The month's upcoming scheduled transactions, under the breakdown (YNAB). */
+  upcoming?: ReactNode;
 }) {
   const overspent = totals.available < 0n;
   const shortfall = format((-totals.available).toString());
@@ -144,6 +300,7 @@ export function CategoryInspector({
         <Line label="Cash Spending" value={totals.cashActivity} format={format} />
         <Line label="Credit Spending" value={totals.creditActivity} format={format} />
       </dl>
+      {upcoming}
       {overspent && (
         <OverspentMessage
           totals={totals}
@@ -178,7 +335,9 @@ export interface PaymentFigures {
  * The inspector for a credit card's payment category (YNAB's "Payment" panel, checked in its web
  * app on 2026-10-03): whether Available covers the balance, the Total Underfunded split into this
  * month's overspent categories and the rest, then Current Balance and Available for Payment with
- * where the money came from. "Cover Overspent Categories" and Debt Payoff Targets aren't built.
+ * where the money came from. With a target that applies, `target` (the Target section) takes the
+ * alert's place (YNAB, 2026-10-08). In a past month YNAB shows neither the alert nor Current
+ * Balance (Card R6, 2026-10-11).
  */
 export function PaymentInspector({
   name,
@@ -189,6 +348,10 @@ export function PaymentInspector({
   note,
   onNoteChange,
   warn,
+  past = false,
+  target,
+  onCoverOverspent,
+  upcoming,
 }: {
   name: string;
   totals: Breakdown;
@@ -199,15 +362,141 @@ export function PaymentInspector({
   onNoteChange: (note: string) => Promise<void>;
   /** YNAB only shows the Underfunded alert from the current month on. */
   warn: boolean;
+  /** A month before the current one (no alert, no Current Balance). */
+  past?: boolean;
+  /** "Cover Overspent Categories": shows the Overspent view. */
+  onCoverOverspent?: () => void;
+  /** The Target section, which shows the alert itself when no target applies. */
+  target?: ReactNode;
+  /** Scheduled payments still to come, in Available for Payment (YNAB, 2026-10-12: Card W). */
+  upcoming?: ReactNode;
 }) {
-  const f = (n: bigint) => format(n.toString());
-  const rest = payment.underfunded - payment.overspentCategories;
   return (
     <Panel label={`${name} inspector`}>
       <h2 className="truncate font-semibold">{name}</h2>
-      <section aria-label="Payment" className="grid gap-1 text-sm">
+      {target ??
+        (!past && <PaymentAlert {...{ name, totals, payment, format, warn, onCoverOverspent }} />)}
+      {!past && (
+        <FoldingSection
+          storageKey="current-balance"
+          title="Current Balance"
+          value={<span className="tabular-nums">{format(payment.balance.toString())}</span>}
+        >
+          <Line label="Prior Balance" value={payment.priorBalance} format={format} />
+          <ActivityHeading />
+          <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
+          <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
+        </FoldingSection>
+      )}
+      <FoldingSection
+        storageKey="available-for-payment"
+        title="Available for Payment"
+        value={available}
+      >
+        <Line label="Cash Left Over From Last Month" value={totals.carried} format={format} />
+        <ActivityHeading />
+        <Line label="Assigned" value={totals.assigned} format={format} />
+        <Line label="Funded Spending" value={payment.fundedSpending} format={format} />
+        <Line label="Payments Made" value={payment.paymentsMade} format={format} />
+        {upcoming}
+      </FoldingSection>
+      <NoteField key={name} note={note} onChange={onNoteChange} />
+    </Panel>
+  );
+}
+
+function ActivityHeading() {
+  return <dt className="pt-1 font-medium text-sm">Activity This Month</dt>;
+}
+
+/** YNAB keeps the payment inspector's folded sections in the browser, for every plan. */
+const FOLD_PREFIX = "everycent:inspector-folded:";
+
+function readFolded(key: string) {
+  try {
+    return localStorage.getItem(FOLD_PREFIX + key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A payment inspector section that folds to its title and total, as YNAB's Current Balance and
+ * Available for Payment do (checked 2026-10-11; YNAB remembers it in localStorage).
+ */
+function FoldingSection({
+  storageKey,
+  title,
+  value,
+  children,
+}: {
+  storageKey: string;
+  title: string;
+  value: ReactNode;
+  children: ReactNode;
+}) {
+  const [folded, setFolded] = useState(() => readFolded(storageKey));
+  function toggle(open: boolean) {
+    setFolded(!open);
+    try {
+      if (open) localStorage.removeItem(FOLD_PREFIX + storageKey);
+      else localStorage.setItem(FOLD_PREFIX + storageKey, "true");
+    } catch {
+      // Blocked storage: it folds until the page closes.
+    }
+  }
+  return (
+    <Collapsible open={!folded} onOpenChange={toggle} className="grid gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex items-center gap-1 whitespace-nowrap rounded-sm text-left font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {title}
+          {folded ? (
+            <ChevronRight className="size-4" aria-hidden />
+          ) : (
+            <ChevronDown className="size-4" aria-hidden />
+          )}
+        </CollapsibleTrigger>
+        {value}
+      </div>
+      <CollapsibleContent asChild>
+        <dl className="grid gap-2">{children}</dl>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/**
+ * YNAB's Payment alert: the payment was more than was set aside (red), this month's overspent
+ * categories or the rest of the balance still to cover, or the card paid off. While the balance
+ * isn't covered it offers "Create a Debt Payoff Target" (`onCreateTarget`), then Total
+ * Underfunded with its parts.
+ */
+export function PaymentAlert({
+  name,
+  totals,
+  payment,
+  format,
+  warn,
+  onCreateTarget,
+  onCoverOverspent,
+}: {
+  name: string;
+  totals: Pick<Breakdown, "available">;
+  payment: PaymentFigures;
+  format: Format;
+  warn: boolean;
+  onCreateTarget?: () => void;
+  /** YNAB's "Cover Overspent Categories": switches the budget to the Overspent view. */
+  onCoverOverspent?: () => void;
+}) {
+  const f = (n: bigint) => format(n.toString());
+  const rest = payment.underfunded - payment.overspentCategories;
+  const overpaid = totals.available < 0n;
+  return (
+    <>
+      <section aria-label="Payment" className="grid gap-2 text-sm">
         <h3 className="font-semibold">Payment</h3>
-        {totals.available < 0n ? (
+        {overpaid ? (
           <p className="text-destructive">
             You sent more to {name} than you had set aside for the payment.
           </p>
@@ -225,6 +514,24 @@ export function PaymentInspector({
         ) : payment.balance >= 0n ? (
           <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
         ) : null}
+        {!overpaid && warn && payment.overspentCategories > 0n && onCoverOverspent && (
+          // YNAB, 2026-10-11: one click, no money moves; it shows the Overspent view.
+          <Button size="sm" onClick={onCoverOverspent}>
+            Cover Overspent Categories
+          </Button>
+        )}
+        {!overpaid && warn && payment.underfunded > 0n && onCreateTarget && (
+          <>
+            <p className="text-center text-muted-foreground">
+              {payment.overspentCategories > 0n
+                ? "Can't cover the overspent categories?"
+                : "Don't have more money to assign?"}
+            </p>
+            <Button size="sm" variant="secondary" onClick={onCreateTarget}>
+              Create a Debt Payoff Target
+            </Button>
+          </>
+        )}
       </section>
       {warn && payment.underfunded > 0n && (
         <dl className="grid gap-2">
@@ -241,24 +548,7 @@ export function PaymentInspector({
           )}
         </dl>
       )}
-      <dl className="grid gap-2">
-        <Line label="Current Balance" value={payment.balance} format={format} />
-        <Line label="Prior Balance" value={payment.priorBalance} format={format} />
-        <Line label="Spending and Outflows" value={payment.spendingAndOutflows} format={format} />
-        <Line label="Payments and Inflows" value={payment.paymentsAndInflows} format={format} />
-      </dl>
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">Available for Payment</span>
-        {available}
-      </div>
-      <dl className="grid gap-2">
-        <Line label="Cash Left Over From Last Month" value={totals.carried} format={format} />
-        <Line label="Assigned" value={totals.assigned} format={format} />
-        <Line label="Funded Spending" value={payment.fundedSpending} format={format} />
-        <Line label="Payments Made" value={payment.paymentsMade} format={format} />
-      </dl>
-      <NoteField key={name} note={note} onChange={onNoteChange} />
-    </Panel>
+    </>
   );
 }
 

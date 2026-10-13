@@ -1,5 +1,5 @@
 import { newId } from "@everycent/db";
-import { subTransaction, transaction } from "@everycent/db/schema";
+import { type ClearedState, subTransaction, transaction } from "@everycent/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
@@ -8,7 +8,6 @@ import {
   assertNotSelf,
   assertOpen,
   findAccount,
-  reconciledOtherSide,
   resolveCategory,
   usesCategory,
 } from "./rules";
@@ -19,6 +18,8 @@ export interface LineInput {
   id?: string;
   amount: string;
   payeeName: string | null;
+  /** Instead of `payeeName`: a payee by id (entering a scheduled split). */
+  payeeId?: string | null;
   transferAccountId?: string;
   categoryId: string | null;
   memo: string;
@@ -29,6 +30,7 @@ interface LineSpec {
   id?: string;
   amount: bigint;
   payeeName?: string | null;
+  payeeId?: string | null;
   transferAccountId: string | null;
   categoryId: string | null;
   /** The category was asked for, so it's checked strictly rather than adjusted. */
@@ -90,6 +92,8 @@ export async function syncLines(
     account: AccountRow;
     /** The parent moved to `account` from another one. */
     moved: boolean;
+    /** How new transfer lines' other sides start out (by default uncleared and approved). */
+    counterpart?: { cleared: (account: AccountRow) => ClearedState; approved: boolean };
   },
   input?: readonly LineInput[],
 ) {
@@ -107,6 +111,7 @@ export async function syncLines(
         id: l.id,
         amount: BigInt(l.amount),
         payeeName: l.payeeName,
+        payeeId: l.payeeId,
         transferAccountId: l.transferAccountId ?? null,
         categoryId: l.categoryId,
         explicitCategory: true,
@@ -125,7 +130,6 @@ export async function syncLines(
   for (const line of existing) {
     if (kept.has(line.id)) continue;
     const other = otherOf.get(line.id);
-    if (other?.cleared === "reconciled") reconciledOtherSide();
     if (other) await tx.delete(transaction).where(eq(transaction.id, other.id));
     await tx.delete(subTransaction).where(eq(subTransaction.id, line.id));
   }
@@ -141,13 +145,8 @@ export async function syncLines(
       assertNotSelf(account, transferTo);
     }
     const retargeted = (transferTo?.id ?? null) !== (other?.accountId ?? null);
-    if (transferTo && retargeted) assertOpen(transferTo);
-    if (
-      other?.cleared === "reconciled" &&
-      (retargeted || other.amount !== -spec.amount || other.date !== date)
-    ) {
-      reconciledOtherSide();
-    }
+    // Entering a scheduled split still reaches a closed account, as YNAB does.
+    if (transferTo && retargeted && !ctx.counterpart) assertOpen(transferTo);
 
     let categoryId = spec.categoryId;
     if (spec.explicitCategory) {
@@ -158,11 +157,13 @@ export async function syncLines(
     }
     const payeeId = transferTo
       ? await transferPayeeId(tx, transferTo)
-      : spec.payeeName === undefined
-        ? (old?.payeeId ?? null)
-        : spec.payeeName
-          ? await findOrCreatePayee(tx, budgetId, spec.payeeName)
-          : null;
+      : spec.payeeId !== undefined
+        ? spec.payeeId
+        : spec.payeeName === undefined
+          ? (old?.payeeId ?? null)
+          : spec.payeeName
+            ? await findOrCreatePayee(tx, budgetId, spec.payeeName)
+            : null;
 
     const values = {
       sortOrder: index,
@@ -209,7 +210,8 @@ export async function syncLines(
         payeeId: await transferPayeeId(tx, account),
         categoryId: await resolveCategory(tx, budgetId, transferTo, account, null),
         memo: spec.memo ?? "",
-        cleared: "uncleared",
+        cleared: ctx.counterpart?.cleared(transferTo) ?? "uncleared",
+        approved: ctx.counterpart?.approved,
         transferSubTransactionId: lineId,
       });
     }
@@ -223,7 +225,6 @@ export async function deleteLineTransfers(tx: Db, parentId: string) {
     tx,
     lines.map((l) => l.id),
   );
-  if (counterparts.some((c) => c.cleared === "reconciled")) reconciledOtherSide();
   if (counterparts.length > 0) {
     await tx.delete(transaction).where(
       inArray(

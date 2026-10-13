@@ -92,6 +92,55 @@
       "when": 1791025691902,
       "tag": "0012_target_cadences",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791330612754,
+      "tag": "0013_target_snooze",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791402553914,
+      "tag": "0014_typical_harpoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791674161615,
+      "tag": "0015_lying_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791730515772,
+      "tag": "0016_curved_domino",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791740723053,
+      "tag": "0017_sour_shockwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791808250358,
+      "tag": "0018_warm_starbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791819790486,
+      "tag": "0019_robust_leo",
+      "breakpoints": true
     }
   ]
 }

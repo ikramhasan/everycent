@@ -86,7 +86,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees and accounts (each starting from its balance on `date`). The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -210,12 +210,52 @@ export interface paths {
         get?: never;
         /**
          * Create or replace a category's target
-         * @description A category has one target at a time; saving changes it in every month from its start. A new target starts in `month` (the month it's set from); saving from an earlier month than its start moves the start back. Payment categories can't have targets yet.
+         * @description A category has one target at a time, the same in every month from its start. A new or changed target starts in `month` (the month it's saved from), so earlier months show none; saving it unchanged from an earlier month moves the start back. Credit card payment categories take only payment_monthly and payoff_by_date targets, and only they take them.
          */
         put: operations["setCategoryTarget"];
         post?: never;
         /** Remove a category's target */
         delete: operations["deleteCategoryTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put a category's target back as it was (undo and redo)
+         * @description Writes the target exactly as given, start month, start day and snooze included, or removes it when `target` is null. For undoing and redoing target edits; the start-month rules of setCategoryTarget don't apply.
+         */
+        put: operations["restoreCategoryTarget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/categories/{categoryId}/target/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Snooze a category's target for this month, or wake it
+         * @description A snoozed target asks for nothing more in the month it's snoozed for; the next month it asks again. Only the user's current month can be snoozed, and never a credit card payment target (YNAB).
+         */
+        put: operations["snoozeCategoryTarget"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -256,7 +296,10 @@ export interface paths {
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
-        /** Rename an account, edit its note, type or loan details */
+        /**
+         * Rename an account, edit its note, type or loan details, or set its working balance
+         * @description A `workingBalance` different from the account's adds a Manual Balance Adjustment for the difference, dated `date` and cleared (as YNAB's Edit Account does; budget accounts take it from Ready to Assign). Not for loans or closed accounts.
+         */
         patch: operations["updateAccount"];
         trace?: never;
     };
@@ -271,6 +314,26 @@ export interface paths {
         put?: never;
         /** Move an account before another one, or to the end */
         post: operations["moveAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile an account against the bank's balance
+         * @description Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). Loans aren't reconciled.
+         */
+        post: operations["reconcileAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -366,7 +429,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to every selected transaction it applies to
-         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). All of it happens in one database transaction.
+         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
          */
         post: operations["bulkUpdateTransactions"];
         delete?: never;
@@ -387,14 +450,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a transaction
-         * @description Deleting either side of a transfer deletes both. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own.
+         * @description Deleting either side of a transfer deletes both, reconciled or not. Deleting a split deletes its transfer lines' other sides; those can't be deleted on their own (`TRANSFER_IN_SPLIT`).
          */
         delete: operations["deleteTransaction"];
         options?: never;
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. Setting `cleared` on a reconciled transaction unlocks it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -410,6 +473,91 @@ export interface paths {
         get: operations["listPayees"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The register's Scheduled Transactions section, newest first
+         * @description One row per schedule (its next occurrence), plus the other account's view of scheduled transfers and of scheduled splits' transfer lines. Due occurrences are entered first. The search and dates work as in `listTransactions` (scheduled rows count as uncleared).
+         */
+        get: operations["listScheduledTransactions"];
+        put?: never;
+        /**
+         * Schedule a transaction (a future one-off or a repeating one)
+         * @description Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. `fromTransactionId` replaces that transaction (and its transfer's other side) with the schedule, as YNAB does when a transaction's date is moved into the future.
+         */
+        post: operations["createScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one action to every selected scheduled row it applies to
+         * @description The register's action bar on scheduled rows (by row `id`; a transfer's other side acts on its schedule, once). `enterNow` enters each as Enter Now does (a split's transfer line enters its split). `duplicate` copies each schedule, starting at its next date. `flag`, `memo`, `categorize`, `move` and `delete` work as on transactions. A scheduled split's transfer line in the other account is skipped by everything but `enterNow`, as YNAB does. One database transaction.
+         */
+        post: operations["bulkUpdateScheduledTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a scheduled transaction and all of its future occurrences */
+        delete: operations["deleteScheduledTransaction"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a scheduled transaction (it and all of its future occurrences)
+         * @description Same rules as transactions: on-budget accounts fall back to Uncategorized, tracking accounts and transfers between budget accounts take no category, payment categories can't be used, and a split's lines (two or more) add up to its amount. A transfer's one category is its budget side's, even when that's the other account. A `date` on or before `today` is entered right away (unapproved), and the schedule starts at its first date after today, as YNAB does when a past date is saved. A new `date` restarts the repeats there (YNAB resets the first date); a new `frequency` counts from the date shown. Setting `payeeName` turns a transfer into a normal one, `subtransactions` replace a split's lines and a `categoryId` un-splits it.
+         */
+        patch: operations["updateScheduledTransaction"];
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}/enter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enter Now: the next occurrence, dated today
+         * @description As YNAB's Enter Now: the transaction is dated `today` and approved (uncleared, or cleared in a cash account), and the schedule moves to its following date; a one-off is done. Works in a closed account too.
+         */
+        post: operations["enterScheduledTransaction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -490,6 +638,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/months/{month}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the month's note
+         * @description YNAB's note under the month name: one per month, not carried to other months. An empty note removes it.
+         */
+        put: operations["setMonthNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/months/{month}/moves": {
         parameters: {
             query?: never;
@@ -521,7 +689,7 @@ export interface paths {
         put?: never;
         /**
          * Set categories' Assigned from one of YNAB's Auto-Assign options
-         * @description Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves.
+         * @description Sets each category's Assigned to the option's amount (`autoAssign` in the month). Without `categoryIds` it covers every category that isn't hidden. Each change is a move in Recent Moves. Underfunded funds selected categories in full; over the whole plan or a view (`scope: view`) it funds `underfundedParts` in order and stops when Ready to Assign runs out.
          */
         post: operations["autoAssign"];
         delete?: never;
@@ -539,7 +707,7 @@ export interface paths {
         };
         /**
          * The transactions behind a category's, a group's or Uncategorized's Activity
-         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first.
+         * @description Pass exactly one of `categoryId`, `groupId` (its categories that aren't hidden, as its totals) or `uncategorized=true`. Lists the transactions dated in the month up to the user's today, a split's lines one by one, newest first. A payment category lists its card's transactions (all but the starting balance).
          */
         get: operations["listMonthActivity"];
         put?: never;
@@ -557,9 +725,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recent changes to assigned money, newest first */
+        /**
+         * Recent changes to assigned money, newest first
+         * @description Every change of the last 34 days, as YNAB's Recent Moves ("Previous 34 days of assigning and moving money").
+         */
         get: operations["listMoves"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/expected-income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the budget's expected monthly income
+         * @description YNAB's "Enter your expected income" under Cost to Be Me: entered once, it stays from month to month. It must be positive; like YNAB, it can be changed but not cleared.
+         */
+        put: operations["setExpectedIncome"];
         post?: never;
         delete?: never;
         options?: never;
@@ -714,23 +905,27 @@ export interface components {
             linkedAccountId: string | null;
             /** @description Deleting it requires reassignToCategoryId */
             hasTransactions: boolean;
+            /** @description Its transactions, split lines counted one by one (what a delete reassigns) */
+            transactionCount: number;
+            /** @description Money assigned to it in some month (a delete returns it to Ready to Assign) */
+            hasAssignedMoney: boolean;
             target: components["schemas"]["CategoryTarget"];
         };
         CategoryTarget: {
             /** @enum {string} */
-            cadence: "weekly" | "monthly" | "yearly" | "custom";
+            cadence: "weekly" | "monthly" | "yearly" | "custom" | "payment_monthly" | "payoff_by_date";
             /**
-             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only)
+             * @description set_aside: the full amount each period (YNAB's 'Set aside another'); refill: only what brings the category back up to the amount ('Refill up to', custom 'Fill up to'); balance: reach the amount, by a month or eventually ('Have a balance of', custom only). Payment targets: set_aside for payment_monthly, balance for payoff_by_date
              * @enum {string}
              */
             behavior: "set_aside" | "refill" | "balance";
-            /** @description Per week (weekly), per month (monthly) or per period (yearly, custom) */
+            /** @description Per week (weekly), per month (monthly, payment_monthly) or per period (yearly, custom); 0 for payoff_by_date, which pays off what the card owes */
             amount: string;
             /** @description Monthly: day of the month, null for the last. Weekly: weekday, 0 = Sunday */
             dueDay: number | null;
             /**
              * Format: date
-             * @description Yearly and custom: the first due date; a balance target's month (day 1), null for eventually
+             * @description Yearly and custom: the first due date; a balance target's month (day 1), null for eventually. payoff_by_date: the month to pay off by (day 1)
              */
             dueDate: string | null;
             /** @description Custom: repeats every N months or years; null for one-time */
@@ -739,6 +934,10 @@ export interface components {
             repeatUnit: "month" | "year" | null;
             /** @description The first month the target applies to */
             startMonth: string;
+            /** @description Weekly: the day of the start month it began on (earlier weeks that month aren't asked for); null for the whole month */
+            startDay: number | null;
+            /** @description The month it's snoozed for: it asks for nothing more that month only */
+            snoozedMonth: string | null;
         } | null;
         CreateCategoryGroup: {
             name: string;
@@ -814,9 +1013,34 @@ export interface components {
                 /** @enum {string} */
                 unit: "month" | "year";
             } | null;
+        } | {
+            /** @enum {string} */
+            cadence: "payment_monthly";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+        } | {
+            /** @enum {string} */
+            cadence: "payoff_by_date";
+            /** @description Pay off the card's balance by the end of this month */
+            dueMonth: string;
         }) & {
             /** @description The month the target is set from */
             month: string;
+            /**
+             * Format: date
+             * @description The user's today (defaults to the server's UTC date): a target made weekly in this month asks only for the weeks from today
+             */
+            today?: string;
+        };
+        SnoozeTarget: {
+            /** @description The month to snooze; must be the user's current month */
+            month: string;
+            snoozed: boolean;
+            /**
+             * Format: date
+             * @description The user's today. Defaults to the server's UTC date.
+             */
+            today?: string;
         };
         AccountList: {
             /** @description In sidebar order, closed ones included */
@@ -844,7 +1068,14 @@ export interface components {
             escrowAmount: string | null;
             /** @description Credit accounts: their payment category */
             paymentCategoryId: string | null;
+            /** @description Has transactions besides its starting balance (so it can be closed, not deleted) */
+            hasHistory: boolean;
             balances: components["schemas"]["AccountBalances"];
+            /**
+             * Format: date-time
+             * @description When the account was last reconciled; null if never
+             */
+            lastReconciledAt: string | null;
         };
         /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
         AccountBalances: {
@@ -895,10 +1126,26 @@ export interface components {
             minimumPayment?: string | null;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             escrowAmount?: string | null;
+            /** @description The balance the account should have; negative for money owed */
+            workingBalance?: string;
+            /**
+             * Format: date
+             * @description The user's today: the adjustment's date, and the day the working balance is read at. Defaults to the server's UTC date.
+             */
+            date?: string;
         };
         MoveAccount: {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
+        };
+        ReconcileAccount: {
+            /** @description The bank's current cleared balance, signed like the account's (negative for money owed) */
+            balance: string;
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            date: string;
         };
         CloseAccount: {
             /**
@@ -943,12 +1190,16 @@ export interface components {
              * @enum {string|null}
              */
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description False for a scheduled transaction entered on its date, until it's approved */
+            approved: boolean;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
             /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
             transferTransactionId: string | null;
             /** @description The other side is a line of a split, which owns this transfer's date, amount and account; only memo, cleared and category change here */
             transferFromSplit: boolean;
+            /** @description Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change) */
+            transferReconciled: boolean;
             /** @description A split's lines, in order (empty when not split); the split has no category */
             subtransactions: components["schemas"]["SubTransaction"][];
             /** @description The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest) */
@@ -969,6 +1220,8 @@ export interface components {
             transferAccountId: string | null;
             /** @description Transfer lines: the transaction they keep in the other account */
             transferTransactionId: string | null;
+            /** @description Transfer lines: the other side is reconciled */
+            transferReconciled: boolean;
         };
         SelectionSummary: {
             count: number;
@@ -977,6 +1230,8 @@ export interface components {
             uncleared: number;
             cleared: number;
             reconciled: number;
+            /** @description Transactions whose transfer's other side (or a split line's) is reconciled; deleting them changes another account's reconciliation */
+            reconciledTransfers: number;
             /** @description Transactions that take a category (not transfers within the budget, nor tracking accounts) */
             categorizable: number;
             splits: number;
@@ -1017,6 +1272,8 @@ export interface components {
             updated: number;
             /** @description Pre-edit rows for the caller's local undo history */
             before: components["schemas"]["Transaction"][];
+            /** @description `duplicate`: the new transactions' ids (empty for other actions) */
+            created: string[];
         };
         BulkAction: {
             /** @enum {string} */
@@ -1046,6 +1303,9 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "delete";
+        } | {
+            /** @enum {string} */
+            type: "duplicate";
         };
         CreateTransaction: {
             accountId: string;
@@ -1068,7 +1328,7 @@ export interface components {
              * @default uncleared
              * @enum {string}
              */
-            cleared: "uncleared" | "cleared";
+            cleared: "uncleared" | "cleared" | "reconciled";
             /**
              * @description One of YNAB's six flag colors; null clears it
              * @default null
@@ -1122,6 +1382,223 @@ export interface components {
             /** @description Category of the payee's latest categorized transaction, suggested for the next */
             lastCategoryId: string | null;
         };
+        ScheduledTransactionList: {
+            scheduledTransactions: components["schemas"]["ScheduledTransaction"][];
+        };
+        ScheduledTransaction: {
+            /** @description The row's id: the schedule's own, or for the other side of a transfer a derived one */
+            id: string;
+            /** @description The schedule this row shows */
+            scheduledTransactionId: string;
+            /**
+             * @description `schedule`: the schedule in its own account. `transfer`: a scheduled transfer as the other account shows it (amount negated). `splitTransfer`: a scheduled split's transfer line in that line's account; it's edited and deleted through the split
+             * @enum {string}
+             */
+            kind: "schedule" | "transfer" | "splitTransfer";
+            accountId: string;
+            accountName: string;
+            /** @enum {string} */
+            frequency: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description Where the repeats are counted from
+             */
+            dateFirst: string;
+            /**
+             * Format: date
+             * @description The next occurrence (the date the register shows)
+             */
+            dateNext: string;
+            /** @description Negative is an outflow, in this row's account */
+            amount: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            payeeId: string | null;
+            payeeName: string | null;
+            /** @description Null on splits. A transfer's one category belongs to its budget side: the `schedule` row carries it even when that's the other account; a `transfer` row only on that side */
+            categoryId: string | null;
+            categoryName: string | null;
+            memo: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description Transfers: the other account */
+            transferAccountId: string | null;
+            /** @description A split's lines, in order (only on the `schedule` row) */
+            subtransactions: components["schemas"]["ScheduledSubTransaction"][];
+        };
+        ScheduledSubTransaction: {
+            id: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            payeeId: string | null;
+            payeeName: string | null;
+            categoryId: string | null;
+            categoryName: string | null;
+            memo: string;
+            /** @description Transfer lines: the other account */
+            transferAccountId: string | null;
+        };
+        ScheduledBulkResult: {
+            /** @description Schedules the action applied to */
+            updated: number;
+            /** @description Those schedules before, as their own account shows them (for undo) */
+            before: components["schemas"]["ScheduledTransaction"][];
+            /** @description `enterNow`: the new transactions' ids */
+            entered: string[];
+            /** @description `duplicate`: the new schedules' ids */
+            created: string[];
+        };
+        ScheduledBulkUpdate: {
+            ids: string[];
+            action: components["schemas"]["ScheduledBulkAction"];
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        ScheduledBulkAction: {
+            /** @enum {string} */
+            type: "enterNow";
+        } | {
+            /** @enum {string} */
+            type: "duplicate";
+        } | {
+            /** @enum {string} */
+            type: "flag";
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+        } | {
+            /** @enum {string} */
+            type: "memo";
+            memo: string;
+        } | {
+            /** @enum {string} */
+            type: "categorize";
+            categoryId: string;
+        } | {
+            /** @enum {string} */
+            type: "move";
+            accountId: string;
+        } | {
+            /** @enum {string} */
+            type: "delete";
+        };
+        ScheduledTransactionWrite: {
+            scheduledTransaction: components["schemas"]["ScheduledTransaction"] & (Record<string, never> | null);
+            /** @description The transaction entered because the date was on or before `today` */
+            enteredTransactionId: string | null;
+        };
+        CreateScheduledTransaction: {
+            accountId: string;
+            /**
+             * @description YNAB's "Repeat:" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later.
+             * @default never
+             * @enum {string}
+             */
+            frequency: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description The first occurrence
+             */
+            date: string;
+            /**
+             * Format: date
+             * @description Count repeats from this earlier date instead (restoring a schedule, as an undo does)
+             */
+            dateFirst?: string;
+            /** @description Negative is an outflow */
+            amount: string;
+            /** @default null */
+            payeeName: string | null;
+            /** @description Make it a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
+            /** @default null */
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @default null
+             * @enum {string|null}
+             */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            subtransactions?: components["schemas"]["ScheduledSubTransactionInput"][];
+            fromTransactionId?: string;
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        ScheduledSubTransactionInput: {
+            /** @description Negative is an outflow */
+            amount: string;
+            /** @default null */
+            payeeName: string | null;
+            /** @description Make this line a transfer */
+            transferAccountId?: string;
+            /** @default null */
+            categoryId: string | null;
+            /** @default  */
+            memo: string;
+        };
+        UpdateScheduledTransaction: {
+            accountId?: string;
+            /**
+             * @description YNAB's "Repeat:" options; `never` is a one-off. Month-based repeats fall on the first date's day (or a shorter month's last day) and count from `dateFirst`; yearly ones step from the previous date; twice a month pairs the day with the day 15 later.
+             * @enum {string}
+             */
+            frequency?: "never" | "daily" | "weekly" | "everyOtherWeek" | "twiceAMonth" | "every4Weeks" | "monthly" | "everyOtherMonth" | "every3Months" | "every4Months" | "twiceAYear" | "yearly" | "everyOtherYear";
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            date?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            dateFirst?: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount?: string;
+            payeeName?: string | null;
+            /** @description Make it a transfer to or from that account; leave `payeeName` out */
+            transferAccountId?: string;
+            categoryId?: string | null;
+            memo?: string;
+            /**
+             * @description One of YNAB's six flag colors, or null
+             * @enum {string|null}
+             */
+            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            subtransactions?: components["schemas"]["ScheduledSubTransactionInput"][];
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
+        EnteredScheduledTransaction: {
+            transaction: components["schemas"]["Transaction"] & unknown;
+            scheduledTransaction: components["schemas"]["ScheduledTransaction"] & (Record<string, never> | null);
+        };
+        EnterScheduledTransaction: {
+            /**
+             * Format: date
+             * @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date.
+             */
+            today?: string;
+        };
         FlagList: {
             /** @description All six colors, in YNAB's order */
             flags: components["schemas"]["Flag"][];
@@ -1149,6 +1626,8 @@ export interface components {
             lastMonth: string;
             /** @description Money without a job in this month; negative when more was assigned than there is */
             readyToAssign: string;
+            /** @description A negative Ready to Assign that taking back every category's cash wouldn't cover (YNAB's "Overdraft?"); false when categories could cover it ("You assigned more than you have", Fix This) and when Ready to Assign isn't negative */
+            overdraft: boolean;
             /** @description Money assigned in the months after this one */
             assignedInFuture: string;
             /** @description The later months with money assigned, in order */
@@ -1158,6 +1637,15 @@ export interface components {
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 assigned: string;
             }[];
+            /** @description The month's note (YNAB's "Enter a note…"); empty for none */
+            note: string;
+            /** @description The first later month whose Ready to Assign is negative, if any */
+            futureShortfall: {
+                /** @description A month, YYYY-MM */
+                month: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                readyToAssign: string;
+            } | null;
             /** @description Every category of the category list, hidden ones included */
             categories: components["schemas"]["MonthCategory"][];
             /** @description Each group's totals over its categories that aren't hidden */
@@ -1178,12 +1666,17 @@ export interface components {
                 /** @description The rest of a negative Available: credit overspending, which becomes card debt; 0 otherwise */
                 creditOverspent: string;
             } | null;
+            targets: components["schemas"]["MonthTargets"];
         };
         MonthCategory: components["schemas"]["MonthTotals"] & {
             categoryId: string;
             payment: components["schemas"]["PaymentDetails"];
             target: components["schemas"]["TargetNeed"];
             autoAssign: components["schemas"]["AutoAssignAmounts"];
+            bar: components["schemas"]["ProgressBar"];
+            /** @description What Underfunded adds, in the pieces it funds in order when Ready to Assign runs short (they add up to `autoAssign.underfunded` less Assigned) */
+            underfundedParts: components["schemas"]["FundingPart"][];
+            upcoming: components["schemas"]["CategoryUpcoming"];
         };
         /** @description Set on a credit account's payment category */
         PaymentDetails: {
@@ -1203,12 +1696,14 @@ export interface components {
             fundedSpending: string;
             /** @description This month's payments to the card, negative */
             paymentsMade: string;
+            /** @description The card has uncategorized transactions this month (up to today) */
+            hasUncategorized: boolean;
         } | null;
-        /** @description The category's target this month; null without one, before it starts or after a one-time target's due month */
+        /** @description The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month */
         TargetNeed: {
             /** @description What the target needs: this month's amount (weekly, monthly) or the total by its due date (yearly, custom), or the balance to reach */
             needed: string;
-            /** @description What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on); can be negative */
+            /** @description What counts toward it: Assigned (set aside: this month's, or the period's for dated targets), or what was carried in plus this month's Assigned (refill, balance; carried money counts from the user's month on), or Available (balance); can be negative */
             funded: string;
             /** @description What's still to assign this month to stay on track; 0 when this month's share is in */
             underfunded: string;
@@ -1217,9 +1712,15 @@ export interface components {
              * @description Yearly and custom: the due date of the period this month is in
              */
             dueDate: string | null;
+            /** @description A one-time target after its due month: still shown, asking for nothing (underfunded 0) */
+            pastDue: boolean;
+            /** @description Snoozed this month: it asks for nothing more (Underfunded leaves it out) */
+            snoozed: boolean;
         } | null;
-        /** @description What each Auto-Assign option would set the category's Assigned to this month: last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), Available reset to zero, or zero */
+        /** @description What each Auto-Assign option would set the category's Assigned to this month: enough to meet its target and cover overspending (underfunded, when there's enough Ready to Assign), last month's assigned or spending, the average over up to the last 12 months (from the first with money assigned or spent), less what's above its target (reduceOverfunding), Available reset to zero, or zero */
         AutoAssignAmounts: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            underfunded: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             assignedLastMonth: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -1229,10 +1730,60 @@ export interface components {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             averageSpent: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            reduceOverfunding: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             resetAvailable: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             resetAssigned: string;
         };
+        /** @description YNAB's progress bar under the category; null for payment categories */
+        ProgressBar: {
+            /**
+             * @description underfunded (yellow) while the target asks for more this month; funded (green)
+             * @enum {string}
+             */
+            tone: "funded" | "underfunded";
+            sections: {
+                /**
+                 * @description rollover: money carried into a set aside target; target: the month, target period or a week; extra: a weekly target's money or spending beyond its weeks
+                 * @enum {string}
+                 */
+                kind: "rollover" | "target" | "extra";
+                /** @description What the section stands for; drawn in proportion */
+                size: string;
+                segments: {
+                    /** @enum {string} */
+                    kind: "spent" | "available" | "overspent";
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    amount: string;
+                }[];
+            }[];
+        } | null;
+        FundingPart: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
+            /** @description 1 overspending, 2 due this month (by date; end of month is the last day), 3 due before the budget started (its first month only), 4 due in a later month, 5 credit card payment */
+            step: number;
+            /** @description YYYY-MM-DD it's due; empty when the step isn't ordered by date */
+            date: string;
+        };
+        /** @description Scheduled transactions still to come in the month (YNAB's "Upcoming Transactions"): after the user's today, none in past months; null when there are none */
+        CategoryUpcoming: {
+            /** @description Their net amount for the category; negative when more goes out than comes in */
+            amount: string;
+            /** @description Latest first */
+            transactions: {
+                scheduleId: string;
+                accountId: string;
+                accountName: string;
+                /** Format: date */
+                date: string;
+                payeeName: string | null;
+                memo: string;
+                /** @description What it does to this category */
+                amount: string;
+            }[];
+        } | null;
         MonthTotals: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             assigned: string;
@@ -1252,6 +1803,14 @@ export interface components {
         MonthGroup: components["schemas"]["MonthTotals"] & {
             groupId: string;
         };
+        MonthTargets: {
+            /** @description What the targets of the categories that aren't hidden ask of this month (YNAB's "October's Targets"): each month's amount, or this month's share of a dated target */
+            month: string;
+            /** @description The same for the month after */
+            nextMonth: string;
+            /** @description The budget's expected monthly income (YNAB's "Expected Income" under Cost to Be Me), the same in every month; null until entered */
+            expectedIncome: string | null;
+        };
         AssignCategory: {
             /** @description The new Assigned amount; negative takes money out */
             assigned: string;
@@ -1260,6 +1819,14 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+        };
+        MonthNote: {
+            /** @description A month, YYYY-MM */
+            month: string;
+            note: string;
+        };
+        SetMonthNote: {
+            note: string;
         };
         MoveMoney: {
             fromCategoryId: string;
@@ -1274,8 +1841,13 @@ export interface components {
         };
         AutoAssign: {
             /** @enum {string} */
-            option: "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "resetAvailable" | "resetAssigned";
+            option: "underfunded" | "assignedLastMonth" | "spentLastMonth" | "averageAssigned" | "averageSpent" | "reduceOverfunding" | "resetAvailable" | "resetAssigned";
             categoryIds?: string[];
+            /**
+             * @description Whether `categoryIds` are the user's selection (the default) or the rows of a view; Underfunded stops at Ready to Assign only for a view or the whole plan
+             * @enum {string}
+             */
+            scope?: "selection" | "view";
             /**
              * Format: date
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
@@ -1296,6 +1868,8 @@ export interface components {
             date: string;
             payeeName: string | null;
             categoryId: string | null;
+            /** @description "Group: Category" (internal categories by their own name); a card's transfers show its payment category */
+            categoryName: string | null;
             memo: string;
             /** @description Negative is an outflow */
             amount: string;
@@ -1306,14 +1880,20 @@ export interface components {
         MoneyMove: {
             id: string;
             /**
-             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories
+             * @description assigned: from Ready to Assign; removed: back to it; moved: between categories (and, for a deletion, from Ready to Assign to the deleted category, as YNAB words it)
              * @enum {string}
              */
             kind: "assigned" | "moved" | "removed";
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             fromCategoryId: string | null;
-            /** @description Null for Ready to Assign */
+            /** @description Null for Ready to Assign and for a deleted category */
             toCategoryId: string | null;
+            /** @description The name of the deleted category the money came from; null otherwise */
+            fromDeletedCategory: string | null;
+            /** @description The name of the deleted category the money went to; null otherwise */
+            toDeletedCategory: string | null;
+            /** @description Logged by deleting a category: its assigned money going to the category picked */
+            deletion: boolean;
             /** @description A month, YYYY-MM */
             month: string;
             /** @description Positive */
@@ -1322,6 +1902,14 @@ export interface components {
             movedAt: string;
             /** @description Who moved it; null if they left the budget */
             userName: string | null;
+        };
+        ExpectedIncome: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            expectedIncome: string;
+        };
+        SetExpectedIncome: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            amount: string;
         };
     };
     responses: never;
@@ -2350,7 +2938,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description MANAGED_CATEGORY: payment categories can't have targets yet */
+            /** @description MANAGED_CATEGORY: payment categories take only payment targets, other categories none */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2402,6 +2990,152 @@ export interface operations {
             };
             /** @description No such budget, group or category, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    restoreCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    target: components["schemas"]["CategoryTarget"];
+                };
+            };
+        };
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, group or category, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: payment categories take only payment targets, other categories none */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    snoozeCategoryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeTarget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description Invalid input, or SNOOZE_CURRENT_MONTH: only the current month can be snoozed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such category or target, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description MANAGED_CATEGORY: credit card payment targets can't be snoozed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2699,6 +3433,69 @@ export interface operations {
             };
         };
     };
+    reconcileAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileAccount"];
+            };
+        };
+        responses: {
+            /** @description Reconciled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description Invalid input, or a loan account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     closeAccount: {
         parameters: {
             query?: never;
@@ -2829,6 +3626,8 @@ export interface operations {
                 dir?: "asc" | "desc";
                 limit?: number;
                 cursor?: string;
+                /** @description The user's today: scheduled transactions due by then are entered first */
+                today?: string;
             };
             header?: never;
             path: {
@@ -3056,15 +3855,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Moving or deleting would change a transfer whose other side is reconciled (TRANSFER_RECONCILED); nothing changed */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
         };
     };
     deleteTransaction: {
@@ -3113,7 +3903,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3185,7 +3975,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The other side of the transfer is reconciled, so its date and amount can't change; or this is a split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3226,6 +4016,355 @@ export interface operations {
                 };
             };
             /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listScheduledTransactions: {
+        parameters: {
+            query?: {
+                /** @description Leave out for all accounts */
+                accountId?: string;
+                /** @description The register's search (see `listTransactions`) */
+                q?: string;
+                /** @description Next occurrence on or after this date */
+                from?: string;
+                /** @description Next occurrence on or before this date */
+                to?: string;
+                /** @description The user's today: occurrences due by then are entered first. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scheduled transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionWrite"];
+                };
+            };
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    bulkUpdateScheduledTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledBulkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledBulkResult"];
+                };
+            };
+            /** @description Invalid input, a category schedules can't use, or a closed account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionWrite"];
+                };
+            };
+            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    enterScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                scheduledTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnterScheduledTransaction"];
+            };
+        };
+        responses: {
+            /** @description Entered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnteredScheduledTransaction"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or scheduled transaction, or not a member */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3458,6 +4597,70 @@ export interface operations {
             };
         };
     };
+    setMonthNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                /** @description A month, YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMonthNote"];
+            };
+        };
+        responses: {
+            /** @description The month's note */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthNote"];
+                };
+            };
+            /** @description Invalid month or note */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change the plan */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     moveMoney: {
         parameters: {
             query?: never;
@@ -3654,7 +4857,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The latest moves */
+            /** @description The last 34 days' moves */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3665,6 +4868,68 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setExpectedIncome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetExpectedIncome"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedIncome"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't assign money in this budget */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

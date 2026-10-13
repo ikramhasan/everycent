@@ -8,7 +8,7 @@ import {
 } from "@everycent/ui/components/card";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AddAccountForm } from "@/components/account-forms";
@@ -22,14 +22,16 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/setup")({
   component: SetupPage,
 });
 
-/** Onboarding for a new budget: pick categories, then add a first account. */
+/**
+ * Onboarding for a new budget, YNAB's new-plan checklist: pick categories, add a first account,
+ * then fund categories (which, as YNAB's checklist does, just opens the budget to assign).
+ */
 function SetupPage() {
   const { budget } = useBudget();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const createAccount = useCreateAccount(budget.id);
-  const [step, setStep] = useState<"categories" | "account">("categories");
+  const [step, setStep] = useState<"categories" | "account" | "fund">("categories");
   const [saving, setSaving] = useState(false);
   const budgetHome = { to: "/budgets/$budgetId", params: { budgetId: budget.id } } as const;
 
@@ -79,7 +81,8 @@ function SetupPage() {
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <p className="text-muted-foreground text-sm">
-        Step {step === "categories" ? 1 : 2} of 2 · Setting up {budget.name}
+        Step {step === "categories" ? 1 : step === "account" ? 2 : 3} of 3 · Setting up{" "}
+        {budget.name}
       </p>
       {step === "categories" ? (
         <Card>
@@ -98,7 +101,7 @@ function SetupPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : step === "account" ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Add your first account</CardTitle>
@@ -113,12 +116,28 @@ function SetupPage() {
               onSubmit={async (values) => {
                 const result = await createAccount(values);
                 if ("error" in result) return result.error;
-                await navigate(budgetHome);
+                setStep("fund");
                 return null;
               }}
             />
             <Button asChild variant="link" className="justify-self-start px-0">
               <Link {...budgetHome}>Skip for now</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Fund your categories</CardTitle>
+            <CardDescription>
+              Your account's balance is now Ready to Assign at the top of the budget. Give it jobs:
+              assign the money you have right now, not your monthly income, until Ready to Assign
+              reaches zero.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link {...budgetHome}>Fund categories</Link>
             </Button>
           </CardContent>
         </Card>

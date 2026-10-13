@@ -8,7 +8,9 @@ import {
   listCategoriesHandler,
   moveCategoryGroupHandler,
   moveCategoryHandler,
+  restoreCategoryTargetHandler,
   setCategoryTargetHandler,
+  snoozeCategoryTargetHandler,
   updateCategoryGroupHandler,
   updateCategoryHandler,
 } from "./handlers";
@@ -21,7 +23,9 @@ import {
   listCategories,
   moveCategory,
   moveCategoryGroup,
+  restoreCategoryTarget,
   setCategoryTarget,
+  snoozeCategoryTarget,
   updateCategory,
   updateCategoryGroup,
 } from "./routes";
@@ -37,4 +41,6 @@ export const categoriesRouter = createRouter()
   .openapi(deleteCategory, deleteCategoryHandler)
   .openapi(moveCategory, moveCategoryHandler)
   .openapi(setCategoryTarget, setCategoryTargetHandler)
-  .openapi(deleteCategoryTarget, deleteCategoryTargetHandler);
+  .openapi(restoreCategoryTarget, restoreCategoryTargetHandler)
+  .openapi(deleteCategoryTarget, deleteCategoryTargetHandler)
+  .openapi(snoozeCategoryTarget, snoozeCategoryTargetHandler);

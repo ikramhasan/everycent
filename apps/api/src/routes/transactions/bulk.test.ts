@@ -10,6 +10,8 @@ afterAll(close);
 type Txn = {
   id: string;
   accountId: string;
+  amount: string;
+  approved: boolean;
   cleared: string;
   flag: string | null;
   categoryId: string | null;
@@ -174,6 +176,7 @@ describe("bulk edit", () => {
       uncleared: 4,
       cleared: 1,
       reconciled: 0,
+      reconciledTransfers: 0,
       categorizable: 3,
       splits: 2,
       splitsWithTransfers: 1,
@@ -234,6 +237,47 @@ describe("bulk edit", () => {
     const rows = await all();
     expect(rows.find((t) => t.id === a.id)?.cleared).toBe("reconciled");
     expect(rows.find((t) => t.id === b.id)?.cleared).toBe("cleared");
+  });
+
+  it("moves and deletes transfers whose other side is reconciled, as YNAB does", async () => {
+    // YNAB 2026-10-11 (x-tr-rec, x-split-rec): Move re-points the reconciled side with no
+    // prompt; Delete asks first ("Delete Reconciled Transfer?") and then deletes both sides.
+    const { addAccount, add, bulk, summary, all, updated, groceries } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const wallet = await addAccount("Wallet", "cash");
+    const transfer = await add({ transferAccountId: savings.id });
+    const split = await add({
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
+    const plain = await add({ payeeName: "Plain" });
+    const sides = [
+      transfer.transferTransactionId ?? "",
+      split.subtransactions[1]?.transferTransactionId ?? "",
+    ];
+    for (const id of sides) {
+      await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, id));
+    }
+    expect(await summary({ ids: [transfer.id, split.id, plain.id] })).toMatchObject({
+      reconciled: 0,
+      reconciledTransfers: 2,
+    });
+
+    expect(
+      await updated(await bulk({ ids: [transfer.id] }, { type: "move", accountId: wallet.id })),
+    ).toBe(1);
+    const moved = (await all(wallet.id)).find((t) => t.id === transfer.id);
+    expect(moved?.transferAccountId).toBe(savings.id);
+    expect((await all(savings.id)).find((t) => t.id === sides[0])).toMatchObject({
+      cleared: "reconciled",
+      transferAccountId: wallet.id,
+    });
+
+    expect(await updated(await bulk({ ids: [transfer.id, split.id] }, { type: "delete" }))).toBe(2);
+    expect((await all(savings.id)).map((t) => t.id)).not.toContain(sides[0]);
+    expect((await all(savings.id)).map((t) => t.id)).not.toContain(sides[1]);
   });
 
   it("replaces the memo of every selected transaction", async () => {
@@ -361,5 +405,50 @@ describe("bulk edit", () => {
     expect((await json<ErrorBody>(res)).error.code).toBe("CATEGORY_NOT_ALLOWED");
     expect((await bulk({ ids: [a.id] }, { type: "archive" })).status).toBe(400);
     expect((await bulk({ ids: [] }, { type: "flag", flag: "red" })).status).toBe(400);
+  });
+
+  it("duplicates as YNAB does: approved, cleared kept, transfers and splits whole", async () => {
+    const { add, bulk, all, addAccount, groceries, household } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const plain = await add({
+      payeeName: "Shop",
+      categoryId: groceries.id,
+      memo: "m",
+      flag: "green",
+      cleared: "reconciled",
+    });
+    const transfer = await add({ transferAccountId: savings.id, amount: "-500" });
+    await add({
+      payeeName: "Split",
+      amount: "-300",
+      subtransactions: [
+        { amount: "-100", categoryId: household.id },
+        { amount: "-200", transferAccountId: savings.id },
+      ],
+    });
+    const splitSide = (await all(savings.id)).find((t) => t.amount === "200");
+    if (!splitSide || !transfer.transferTransactionId) throw new Error("setup");
+    const res = await bulk(
+      // The transfer from both sides and the split's transfer side: each copied once.
+      { ids: [plain.id, transfer.id, transfer.transferTransactionId, splitSide.id] },
+      { type: "duplicate" },
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    const result = await json<{ updated: number; created: string[] }>(res);
+    expect(result.updated).toBe(3);
+    const rows = await all();
+    const copy = rows.find((t) => result.created.includes(t.id) && t.payeeName === "Shop");
+    expect(copy).toMatchObject({
+      categoryId: groceries.id,
+      memo: "m",
+      flag: "green",
+      cleared: "cleared",
+      approved: true,
+    });
+    expect(rows.filter((t) => t.transferAccountId === savings.id)).toHaveLength(2);
+    expect(rows.filter((t) => t.payeeName === "Split")).toHaveLength(2);
+    // Each transfer and transfer line copy has its own other side.
+    const savingsRows = await all(savings.id);
+    expect(savingsRows.filter((t) => t.payeeName !== "Starting Balance")).toHaveLength(4);
   });
 });

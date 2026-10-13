@@ -9,7 +9,7 @@ import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { applyUpdate, deleteWithTransfers } from "./handlers";
+import { applyUpdate, deleteWithTransfers, insertNewTransaction } from "./handlers";
 import {
   matchingTransactions,
   queryRegisterRows,
@@ -66,6 +66,17 @@ function selectedRows(db: Db, where: SQL) {
       accountType: budgetAccount.type,
       transferAccountType: transferAccount.type,
       fromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`,
+      // The other side of its transfer, or of one of its split lines' transfers, is reconciled.
+      reconciledTransfer: sql<boolean>`exists (
+        select 1 from ${transaction} other_side
+        where other_side.cleared = 'reconciled' and (
+          other_side.id = ${transaction.transferTransactionId}
+          or other_side.transfer_sub_transaction_id in (
+            select ${subTransaction.id} from ${subTransaction}
+            where ${subTransaction.transactionId} = ${transaction.id}
+          )
+        )
+      )`,
       isSplit: sql<boolean>`${exists(
         db
           .select({ one: sql`1` })
@@ -116,6 +127,7 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
       uncleared: count((r) => r.cleared === "uncleared"),
       cleared: count((r) => r.cleared === "cleared"),
       reconciled: count((r) => r.cleared === "reconciled"),
+      reconciledTransfers: count((r) => r.reconciledTransfer && !r.fromSplit),
       categorizable: count(categorizable),
       splits: count((r) => r.isSplit),
       splitsWithTransfers: count((r) => r.isSplit && r.hasTransferLine),
@@ -135,7 +147,11 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
   const { budget } = await loadBudgetAccess(
     c,
     budgetId,
-    action.type === "delete" ? { transaction: ["delete"] } : { transaction: ["update"] },
+    action.type === "delete"
+      ? { transaction: ["delete"] }
+      : action.type === "duplicate"
+        ? { transaction: ["create"] }
+        : { transaction: ["update"] },
   );
   await checkFilterAccount(db, budgetId, selection);
 
@@ -148,13 +164,14 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       .where(where)
       .orderBy(transaction.id)
       .for("update");
-    if (locked.length === 0) return { updated: 0, before: [] };
+    if (locked.length === 0) return { updated: 0, before: [], created: [] };
     const lockedIds = locked.map((r) => r.id);
     const beforeRows = await queryRegisterRows(tx, budgetId, lockedIds);
     const beforeById = new Map(beforeRows.map((row) => [row.id, row]));
     const rows = await selectedRows(tx, selectedIds(lockedIds));
 
     let updatedIds: string[];
+    let created: string[] = [];
     switch (action.type) {
       case "cleared": {
         const ids = rows.filter((r) => r.cleared !== "reconciled").map((r) => r.id);
@@ -181,6 +198,9 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       case "delete":
         updatedIds = await remove(tx, budgetId, lockedIds);
         break;
+      case "duplicate":
+        created = await duplicate(tx, budgetId, lockedIds);
+        return { updated: created.length, before: [], created };
     }
     return {
       updated: updatedIds.length,
@@ -188,6 +208,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         const row = beforeById.get(id);
         return row ? [row] : [];
       }),
+      created,
     };
   });
   return c.json(result, 200);
@@ -328,10 +349,78 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
     // Gone already when it was the other side of a transfer deleted earlier in this loop.
     const row = await lockTransaction(tx, budgetId, id);
     if (!row || row.transferSubTransactionId) continue;
-    await deleteWithTransfers(tx, budgetId, row);
+    await deleteWithTransfers(tx, row);
     deleted.push(id);
   }
   return deleted;
+}
+
+/**
+ * YNAB's Duplicate: a copy of each row, same date and fields, cleared state kept (a reconciled
+ * one comes back cleared) and approved; a transfer gets a new other side. A split's transfer side
+ * copies its split; a transfer picked from both sides is copied once. Rows that would add a
+ * transaction to a closed account are skipped. Returns the copies' ids.
+ */
+async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
+  const created: string[] = [];
+  const done = new Set<string>();
+  for (const id of ids) {
+    const row = await lockTransaction(tx, budgetId, id);
+    if (!row) continue;
+    let sourceId = row.id;
+    if (row.transferSubTransactionId) {
+      const [line] = await tx
+        .select({ splitId: subTransaction.transactionId })
+        .from(subTransaction)
+        .where(eq(subTransaction.id, row.transferSubTransactionId));
+      if (!line) continue;
+      sourceId = line.splitId;
+    }
+    if (done.has(sourceId) || (row.transferTransactionId && done.has(row.transferTransactionId))) {
+      continue;
+    }
+    done.add(sourceId);
+    const [source] = await queryRegisterRows(tx, budgetId, [sourceId]);
+    if (!source) continue;
+    const accountIds = [
+      source.accountId,
+      source.transferAccountId,
+      ...source.subtransactions.map((l) => l.transferAccountId),
+    ].filter((a): a is string => a !== null);
+    const accounts = await tx
+      .select({ closed: budgetAccount.closed })
+      .from(budgetAccount)
+      .where(inArray(budgetAccount.id, accountIds));
+    if (accounts.some((a) => a.closed)) continue;
+    const split = source.subtransactions.length > 0;
+    created.push(
+      await insertNewTransaction(tx, budgetId, {
+        accountId: source.accountId,
+        date: source.date,
+        amount: source.amount,
+        ...(source.transferAccountId
+          ? { payeeName: null, transferAccountId: source.transferAccountId }
+          : { payeeName: source.payeeName }),
+        categoryId: split ? null : source.categoryId,
+        memo: source.memo,
+        cleared: source.cleared === "reconciled" ? "cleared" : source.cleared,
+        flag: source.flag,
+        ...(split
+          ? {
+              subtransactions: source.subtransactions.map((l) => ({
+                amount: l.amount,
+                ...(l.transferAccountId
+                  ? { payeeName: null, transferAccountId: l.transferAccountId }
+                  : { payeeName: l.payeeName }),
+                categoryId: l.categoryId,
+                memo: l.memo,
+              })),
+            }
+          : {}),
+      }),
+    );
+  }
+  return created;
 }
 
 /** One array parameter rather than one per id, so big selections stay one statement. */

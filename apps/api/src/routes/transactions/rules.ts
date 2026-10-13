@@ -1,4 +1,10 @@
-import { budgetAccount, category, transaction } from "@everycent/db/schema";
+import {
+  budgetAccount,
+  type ClearedState,
+  category,
+  type FlagColor,
+  transaction,
+} from "@everycent/db/schema";
 import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
 import { and, eq } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
@@ -83,12 +89,22 @@ export function assertOnePayee(body: { payeeName?: string | null; transferAccoun
   }
 }
 
+/** How the other side of a new transfer starts out (by default uncleared and approved). */
+export interface OtherSideOptions {
+  /** The other side's category, when the transfer's category belongs on that side. */
+  categoryId?: string | null;
+  cleared?: ClearedState;
+  approved?: boolean;
+  flag?: FlagColor | null;
+}
+
 /** Adds the other side of a new transfer, in `transferTo`, and links the two. */
 export async function insertOtherSide(
   tx: Db,
   side: { id: string; budgetId: string; date: string; amount: bigint; memo: string },
   account: AccountRow,
   transferTo: AccountRow,
+  options: OtherSideOptions = {},
 ) {
   const otherId = await insertTransaction(tx, {
     budgetId: side.budgetId,
@@ -97,9 +113,17 @@ export async function insertOtherSide(
     amount: -side.amount,
     currency: transferTo.currency,
     payeeId: await transferPayeeId(tx, account),
-    categoryId: await resolveCategory(tx, side.budgetId, transferTo, account, null),
+    categoryId: await resolveCategory(
+      tx,
+      side.budgetId,
+      transferTo,
+      account,
+      options.categoryId ?? null,
+    ),
     memo: side.memo,
-    cleared: "uncleared",
+    cleared: options.cleared ?? "uncleared",
+    approved: options.approved,
+    flag: options.flag,
     transferTransactionId: side.id,
   });
   await tx
@@ -117,11 +141,12 @@ export async function lockTransaction(tx: Db, budgetId: string, id: string) {
   return row;
 }
 
-export function reconciledOtherSide(): never {
+/** YNAB can't unreconcile a transaction; its cleared state is fixed once reconciled. */
+export function reconciledStays(): never {
   throw new AppError(
     409,
-    "TRANSFER_RECONCILED",
-    "The other side of this transfer is reconciled. Its date and amount can't change.",
+    "TRANSACTION_RECONCILED",
+    "This transaction is reconciled, and reconciled transactions stay reconciled.",
   );
 }
 

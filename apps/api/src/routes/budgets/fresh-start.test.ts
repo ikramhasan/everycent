@@ -112,10 +112,11 @@ describe("fresh start", () => {
     const accounts = (
       await json<{ accounts: Account[] }>(await send("GET", `${freshBase}/accounts`, owner.cookie))
     ).accounts;
+    // YNAB starts unlinked accounts at $0 for the user to update ("C4 Order FS", 2026-10-12).
     expect(accounts.map((a) => [a.name, a.type, a.closed, a.balances.working])).toEqual([
       ["Checking", "checking", true, "0"],
-      ["Visa", "credit_card", false, "-38500"],
-      ["Mortgage", "mortgage", false, "-100000"],
+      ["Visa", "credit_card", false, "0"],
+      ["Mortgage", "mortgage", false, "0"],
     ]);
     const newVisa = accounts.find((a) => a.name === "Visa");
     const visaTxns = (
@@ -124,7 +125,7 @@ describe("fresh start", () => {
       )
     ).transactions;
     expect(visaTxns).toEqual([
-      expect.objectContaining({ amount: "-38500", payeeName: "Starting Balance", date: TODAY }),
+      expect.objectContaining({ amount: "0", payeeName: "Starting Balance", date: TODAY }),
     ]);
     // Payees come along; with no transactions yet there's no category to suggest.
     const payees = await json<{ payees: unknown[] }>(
@@ -145,6 +146,102 @@ describe("fresh start", () => {
     expect(payment).toMatchObject({ name: "Visa", linkedAccountId: newVisa?.id });
     expect(newVisa?.paymentCategoryId).toBe(payment?.id);
     expect(visa.id).not.toBe(newVisa?.id);
+  });
+
+  // YNAB, 2026-10-12: "C4 Order" → "C4 Order FS" kept every schedule, and the old plan kept them.
+  it("copies scheduled transactions onto the new accounts, categories and payees", async () => {
+    const { owner, budget, base, addAccount } = await setup();
+    const checking = await addAccount({ name: "Checking", type: "checking", balance: "250000" });
+    const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "-37500" });
+    const [rent, utilities] = (
+      await json<{ groups: Group[] }>(await send("GET", `${base}/categories`, owner.cookie))
+    ).groups.flatMap((g) => (g.kind ? [] : g.categories));
+    const schedule = async (input: Record<string, unknown>) => {
+      const res = await send("POST", `${base}/scheduled-transactions`, owner.cookie, {
+        accountId: checking.id,
+        today: TODAY,
+        ...input,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    await schedule({
+      date: "2026-10-24",
+      frequency: "monthly",
+      amount: "-6000",
+      payeeName: "Landlord",
+      categoryId: rent?.id,
+      memo: "x-order2",
+      flag: "red",
+    });
+    await schedule({ date: "2026-10-21", amount: "-5000", transferAccountId: visa.id });
+    await schedule({
+      date: "2026-10-15",
+      amount: "-900",
+      payeeName: "Shop",
+      subtransactions: [
+        { amount: "-400", categoryId: rent?.id },
+        { amount: "-500", categoryId: utilities?.id },
+      ],
+    });
+
+    const fresh = await json<Budget>(await freshStart(budget.id, owner.cookie));
+    const freshBase = `/v1/budgets/${fresh.id}`;
+    type Row = {
+      kind: string;
+      accountId: string;
+      frequency: string;
+      dateFirst: string;
+      dateNext: string;
+      amount: string;
+      payeeName: string | null;
+      categoryId: string | null;
+      memo: string;
+      flag: string | null;
+      transferAccountId: string | null;
+      subtransactions: { amount: string; categoryId: string | null }[];
+    };
+    const list = async (b: string) =>
+      (
+        await json<{ scheduledTransactions: Row[] }>(
+          await send("GET", `${b}/scheduled-transactions`, owner.cookie),
+        )
+      ).scheduledTransactions.filter((r) => r.kind === "schedule");
+    const accounts = (
+      await json<{ accounts: Account[] }>(await send("GET", `${freshBase}/accounts`, owner.cookie))
+    ).accounts;
+    const newChecking = accounts.find((a) => a.name === "Checking");
+    const newVisa = accounts.find((a) => a.name === "Visa");
+    const [newRent, newUtilities] = (
+      await json<{ groups: Group[] }>(await send("GET", `${freshBase}/categories`, owner.cookie))
+    ).groups.flatMap((g) => (g.kind ? [] : g.categories));
+
+    const copied = await list(freshBase);
+    expect(copied).toHaveLength(3);
+    expect(copied).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: newChecking?.id,
+          frequency: "monthly",
+          dateFirst: "2026-10-24",
+          dateNext: "2026-10-24",
+          amount: "-6000",
+          payeeName: "Landlord",
+          categoryId: newRent?.id,
+          memo: "x-order2",
+          flag: "red",
+        }),
+        expect.objectContaining({ amount: "-5000", transferAccountId: newVisa?.id }),
+        expect.objectContaining({
+          amount: "-900",
+          subtransactions: [
+            expect.objectContaining({ amount: "-400", categoryId: newRent?.id }),
+            expect.objectContaining({ amount: "-500", categoryId: newUtilities?.id }),
+          ],
+        }),
+      ]),
+    );
+    // The archived budget keeps its own.
+    expect(await list(base)).toHaveLength(3);
   });
 
   it("brings partners along with their roles", async () => {
@@ -206,7 +303,37 @@ describe("fresh start", () => {
       repeatEvery: null,
       repeatUnit: null,
       startMonth: "2026-10",
+      startDay: null,
+      snoozedMonth: null,
     });
+  });
+
+  // YNAB "C5 First FS", 2026-10-12: the copy of a weekly target begun that day asked the same.
+  it("keeps a weekly target's start day in the same month", async () => {
+    const { owner, budget, base } = await setup();
+    const categories = async (b: string) =>
+      (
+        await json<{ groups: Group[] }>(
+          await send("GET", `/v1/budgets/${b}/categories`, owner.cookie),
+        )
+      ).groups.flatMap((g) => g.categories);
+    const [rent] = await categories(budget.id);
+    if (!rent) throw new Error("starter data missing");
+    await send("PUT", `${base}/categories/${rent.id}/target`, owner.cookie, {
+      cadence: "weekly",
+      behavior: "set_aside",
+      amount: "1000",
+      dueDay: 6,
+      month: TODAY.slice(0, 7),
+      today: `${TODAY.slice(0, 7)}-12`,
+    });
+    const fresh = await json<Budget>(await freshStart(budget.id, owner.cookie));
+    const copy = (await categories(fresh.id)).find((c) => c.name === rent.name);
+    const month = await json<{ categories: { categoryId: string; target: { needed: string } }[] }>(
+      await send("GET", `/v1/budgets/${fresh.id}/months/2026-10?today=${TODAY}`, owner.cookie),
+    );
+    // Saturdays from the 12th of October 2026: the 17th, 24th and 31st.
+    expect(month.categories.find((c) => c.categoryId === copy?.id)?.target.needed).toBe("3000");
   });
 
   it("starts budgets created from scratch with the template", async () => {
