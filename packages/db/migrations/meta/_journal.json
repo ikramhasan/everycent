@@ -183,6 +183,13 @@
       "when": 1791907911764,
       "tag": "0025_confused_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791911500591,
+      "tag": "0026_escrow_mortgages_only",
+      "breakpoints": true
     }
   ]
 }
