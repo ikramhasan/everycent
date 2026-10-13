@@ -135,7 +135,9 @@ function ok<T extends z.ZodType>(description: string, schema: T) {
   return { description, content: { "application/json": { schema } } };
 }
 const notFound = jsonError("No such budget, account or transaction, or the caller isn't a member");
-const forbidden = jsonError("The caller's role can't change transactions");
+const forbidden = jsonError(
+  "The caller's role can't change transactions, or the account's email address isn't confirmed",
+);
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state " +
     "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
@@ -209,6 +211,7 @@ export const listTransactions = createRoute({
     200: ok("Transactions", TransactionListSchema),
     400: jsonError("Invalid input, or a cursor from another register or sort (INVALID_CURSOR)"),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
@@ -348,6 +351,7 @@ export const listPayees = createRoute({
   responses: {
     200: ok("Payees", z.object({ payees: z.array(PayeeSchema) }).openapi("PayeeList")),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
@@ -433,6 +437,7 @@ export const summarizeSelection = createRoute({
     ),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });

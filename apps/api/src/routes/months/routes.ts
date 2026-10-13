@@ -281,6 +281,7 @@ export const getBudgetMonth = createRoute({
     },
     400: jsonError("Invalid month or date"),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -318,7 +319,9 @@ export const setMonthNote = createRoute({
     },
     400: jsonError("Invalid month or note"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't change the plan"),
+    403: jsonError(
+      "The caller's role can't change the plan, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -359,7 +362,9 @@ export const assignCategory = createRoute({
     },
     400: jsonError("Invalid amount, or MONTH_OUT_OF_RANGE"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't assign money"),
+    403: jsonError(
+      "The caller's role can't assign money, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget or category, or the caller isn't a member"),
   },
 });
@@ -402,7 +407,9 @@ export const moveMoney = createRoute({
     },
     400: jsonError("Invalid amount or categories, or MONTH_OUT_OF_RANGE"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't assign money"),
+    403: jsonError(
+      "The caller's role can't assign money, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget or category, or the caller isn't a member"),
   },
 });
@@ -460,6 +467,7 @@ export const listMonthActivity = createRoute({
     },
     400: jsonError("Invalid month, or not exactly one of categoryId, groupId, uncategorized"),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, category or group, or the caller isn't a member"),
   },
 });
@@ -508,7 +516,9 @@ export const autoAssign = createRoute({
     },
     400: jsonError("Invalid input, or MONTH_OUT_OF_RANGE"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't assign money"),
+    403: jsonError(
+      "The caller's role can't assign money, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget or category, or the caller isn't a member"),
   },
 });
@@ -574,6 +584,7 @@ export const listMoves = createRoute({
       },
     },
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -617,7 +628,9 @@ export const setExpectedIncome = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't assign money in this budget"),
+    403: jsonError(
+      "The caller's role can't assign money in this budget, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });

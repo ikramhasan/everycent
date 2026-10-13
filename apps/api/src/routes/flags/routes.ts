@@ -35,6 +35,7 @@ export const listFlags = createRoute({
   responses: {
     200: { description: "Flags", content: { "application/json": { schema: FlagListSchema } } },
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
@@ -62,7 +63,9 @@ export const renameFlag = createRoute({
     200: { description: "Renamed", content: { "application/json": { schema: FlagSchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't change transactions"),
+    403: jsonError(
+      "The caller's role can't change transactions, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });

@@ -245,10 +245,32 @@ before starting a roadmap phase** and remove an entry once it's done.
 ## Budgets and sharing (phase 16)
 
 - Invitations: the organization plugin's `budget_invitation` table exists but nothing uses it.
-  Sending invites needs real email delivery (phase 1).
+  Email delivery now exists (`deps.email`, `apps/api/src/lib/email`); invites add a template and
+  an `EmailKind`.
 - There is no viewer role yet (YNAB has none; the roadmap lists it as an extra).
 - `session.active_organization_id` (added by the plugin) is unused; the current budget lives in the
   URL.
+
+## Account and security (phase 1, Cycle 8 follow-ups)
+
+- Rate limits key on the client IP. Behind a reverse proxy, set `TRUSTED_PROXIES` (its CIDRs) so
+  `x-forwarded-for` is trusted only through those hops; without it a single-value header is taken
+  as is, which a client talking to the API directly could spoof. Decide at deploy time.
+- Emails go out after the response so an endpoint takes the same time whether or not it sent
+  one. A send that fails is logged, not retried: a durable queue would come with the reminders
+  work (bill reminders).
+- The sessions list shows when a device signed in, not live activity: Better Auth refreshes a
+  session row about once a day.
+- Old email links aren't revoked by newer ones: a confirmation link works until it expires
+  (1 hour), as Better Auth's stateless tokens do. Reset links are single-use and stored hashed.
+- If someone signs up with an address while it's waiting to become another account's new email,
+  confirming the change fails (the address is taken) and the page shows a generic error. Safe (the
+  newcomer can't sign in unconfirmed and the change doesn't happen), but the message could say
+  why; Better Auth's verify endpoint doesn't report it distinctly (EVERYCENT-124, with `TRUSTED_PROXIES`
+  at deploy and durable sends).
+- The breach check (Have I Been Pwned) fails closed: if its API is down, sign-up, reset and
+  change-password refuse with "Failed to check password" until it's back.
+- Checked checkboxes app-wide miss their checked style (EVERYCENT-123).
 
 ## Libraries
 

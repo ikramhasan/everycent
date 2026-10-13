@@ -64,10 +64,11 @@ Items marked **(extra)** go beyond what YNAB offers.
 
 ### 1. Account & security basics
 
-- [ ] Email verification
-- [ ] Forgot / reset password
-- [ ] Change email and password
-- [ ] Active sessions list and revoke
+- [x] Transactional email (Resend; console in development) with per-address throttling
+- [x] Email verification
+- [x] Forgot / reset password
+- [x] Change email and password
+- [x] Active sessions list and revoke
 - [ ] Two-factor auth (TOTP + recovery codes)
 - [ ] OAuth sign-in (Google, Apple) **(extra over email-only)**
 - [ ] Delete account (with full data purge)

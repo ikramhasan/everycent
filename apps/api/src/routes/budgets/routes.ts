@@ -73,6 +73,7 @@ export const listBudgets = createRoute({
       content: { "application/json": { schema: BudgetListSchema } },
     },
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
   },
 });
 
@@ -91,6 +92,7 @@ export const createBudget = createRoute({
     201: { description: "Created", content: { "application/json": { schema: BudgetSchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
   },
 });
 
@@ -106,6 +108,7 @@ export const getBudget = createRoute({
   responses: {
     200: { description: "The budget", content: { "application/json": { schema: BudgetSchema } } },
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -126,7 +129,9 @@ export const updateBudget = createRoute({
     200: { description: "Updated", content: { "application/json": { schema: BudgetSchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't update this budget"),
+    403: jsonError(
+      "The caller's role can't update this budget, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -143,7 +148,9 @@ export const deleteBudget = createRoute({
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
-    403: jsonError("Only the owner can delete a budget"),
+    403: jsonError(
+      "Only the owner can delete a budget, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget, or the caller isn't a member"),
   },
 });
@@ -180,7 +187,9 @@ export const freshStartBudget = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("Only the owner can make a fresh start"),
+    403: jsonError(
+      "Only the owner can make a fresh start, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such budget, or the caller isn't a member"),
     409: jsonError("ALREADY_ARCHIVED: this budget was already replaced by a fresh start"),
   },

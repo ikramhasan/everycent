@@ -38,6 +38,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start changing the account's email address
+         * @description Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link).
+         */
+        post: operations["changeEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Devices signed in to the account, current one first */
+        get: operations["listSessions"];
+        put?: never;
+        post?: never;
+        /** Sign out every device except this one */
+        delete: operations["revokeOtherSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sign out another device */
+        delete: operations["revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets": {
         parameters: {
             query?: never;
@@ -785,6 +840,41 @@ export interface components {
             image: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        ChangeEmailResult: {
+            /** @enum {string} */
+            status: "approval_sent";
+        };
+        ChangeEmail: {
+            /** Format: email */
+            newEmail: string;
+            /** @description The account's current password */
+            password: string;
+        };
+        SessionList: {
+            sessions: components["schemas"]["Session"][];
+        };
+        Session: {
+            id: string;
+            /** @description The session making this request */
+            current: boolean;
+            /** @description e.g. Chrome; null when the user agent is unknown */
+            browser: string | null;
+            /** @description e.g. macOS */
+            os: string | null;
+            /** @enum {string} */
+            deviceType: "desktop" | "mobile" | "tablet" | "other";
+            ipAddress: string | null;
+            /**
+             * Format: date-time
+             * @description When this device signed in
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Last time the session was refreshed (about daily)
+             */
+            lastActiveAt: string;
         };
         BudgetList: {
             budgets: components["schemas"]["Budget"][];
@@ -1976,6 +2066,205 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    changeEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEmail"];
+            };
+        };
+        responses: {
+            /** @description Approval link sent to the current address */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeEmailResult"];
+                };
+            };
+            /** @description Invalid input (VALIDATION_ERROR), or the new address is the current one (SAME_EMAIL) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Wrong password (INVALID_PASSWORD), or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many password attempts (RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    revokeOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    revokeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description That's this device: sign out instead (CURRENT_SESSION) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such session for this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listBudgets: {
@@ -1998,6 +2287,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2047,6 +2345,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getBudget: {
@@ -2071,6 +2378,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2116,7 +2432,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Only the owner can delete a budget */
+            /** @description Only the owner can delete a budget, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2178,7 +2494,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't update this budget */
+            /** @description The caller's role can't update this budget, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2240,7 +2556,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Only the owner can make a fresh start */
+            /** @description Only the owner can make a fresh start, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2291,6 +2607,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2351,7 +2676,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2422,7 +2747,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2491,7 +2816,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2563,7 +2888,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2635,7 +2960,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2704,7 +3029,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2776,7 +3101,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2848,7 +3173,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2920,7 +3245,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2979,7 +3304,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3044,7 +3369,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3116,7 +3441,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't edit categories */
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3177,6 +3502,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description No such budget or account, or the caller isn't a member */
             404: {
                 headers: {
@@ -3230,7 +3564,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3278,7 +3612,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3350,7 +3684,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3413,7 +3747,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3476,7 +3810,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3539,7 +3873,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3589,7 +3923,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't manage accounts */
+            /** @description The caller's role can't manage accounts, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3664,6 +3998,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
                 headers: {
@@ -3717,7 +4060,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3781,6 +4124,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
                 headers: {
@@ -3837,7 +4189,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3885,7 +4237,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3957,7 +4309,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4015,6 +4367,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description No such budget, account or transaction, or the caller isn't a member */
             404: {
                 headers: {
@@ -4059,6 +4420,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4119,7 +4489,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4190,7 +4560,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4238,7 +4608,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4301,7 +4671,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4355,7 +4725,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4397,6 +4767,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4458,7 +4837,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change transactions */
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4514,6 +4893,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4577,7 +4965,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't assign money */
+            /** @description The caller's role can't assign money, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4641,7 +5029,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change the plan */
+            /** @description The caller's role can't change the plan, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4705,7 +5093,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't assign money */
+            /** @description The caller's role can't assign money, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4769,7 +5157,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't assign money */
+            /** @description The caller's role can't assign money, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4835,6 +5223,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description No such budget, category or group, or the caller isn't a member */
             404: {
                 headers: {
@@ -4868,6 +5265,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4928,7 +5334,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't assign money in this budget */
+            /** @description The caller's role can't assign money in this budget, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;

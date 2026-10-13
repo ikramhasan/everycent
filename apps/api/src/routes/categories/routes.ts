@@ -246,6 +246,7 @@ export const listCategories = createRoute({
       content: { "application/json": { schema: CategoryListSchema } },
     },
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
@@ -269,7 +270,9 @@ export const createCategoryGroup = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -298,7 +301,9 @@ export const updateCategoryGroup = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -317,7 +322,9 @@ export const deleteCategoryGroup = createRoute({
     204: { description: "Deleted" },
     400: jsonError("Invalid reassignment target"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -351,7 +358,9 @@ export const moveCategoryGroup = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -373,7 +382,9 @@ export const createCategory = createRoute({
     201: { description: "Created", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -403,7 +414,9 @@ export const updateCategory = createRoute({
     200: { description: "Updated", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -422,7 +435,9 @@ export const deleteCategory = createRoute({
     204: { description: "Deleted" },
     400: jsonError("Invalid reassignment target"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -459,7 +474,9 @@ export const moveCategory = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: managed,
   },
@@ -487,7 +504,9 @@ export const setCategoryTarget = createRoute({
     200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: jsonError(
       "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
@@ -515,7 +534,9 @@ export const restoreCategoryTarget = createRoute({
     200: { description: "Restored", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
     409: jsonError(
       "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
@@ -535,7 +556,9 @@ export const deleteCategoryTarget = createRoute({
   responses: {
     200: { description: "Removed", content: { "application/json": { schema: CategorySchema } } },
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: notFound,
   },
 });
@@ -571,7 +594,9 @@ export const snoozeCategoryTarget = createRoute({
     200: { description: "Saved", content: { "application/json": { schema: CategorySchema } } },
     400: jsonError("Invalid input, or SNOOZE_CURRENT_MONTH: only the current month can be snoozed"),
     401: jsonError("Not signed in"),
-    403: jsonError("The caller's role can't edit categories"),
+    403: jsonError(
+      "The caller's role can't edit categories, or the account's email address isn't confirmed",
+    ),
     404: jsonError("No such category or target, or the caller isn't a member"),
     409: jsonError("MANAGED_CATEGORY: credit card payment targets can't be snoozed"),
   },

@@ -90,7 +90,9 @@ function ok<T extends z.ZodType>(description: string, schema: T) {
   return { description, content: { "application/json": { schema } } };
 }
 const notFound = jsonError("No such budget, account or scheduled transaction, or not a member");
-const forbidden = jsonError("The caller's role can't change transactions");
+const forbidden = jsonError(
+  "The caller's role can't change transactions, or the account's email address isn't confirmed",
+);
 
 const ScheduledLineInput = z
   .object({
@@ -152,6 +154,7 @@ export const listScheduledTransactions = createRoute({
         .openapi("ScheduledTransactionList"),
     ),
     401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
