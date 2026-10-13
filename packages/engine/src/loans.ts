@@ -105,6 +105,76 @@ export function termsFor(terms: readonly LoanTerms[], month: BudgetMonth): LoanT
   return found;
 }
 
+/** A term changed in Update Balance's check step, and whether it's kept after this month. */
+export interface LoanTermChange<T> {
+  value: T;
+  /** "Keep this new … going forward"; unchecked, next month goes back to the old value. */
+  keep: boolean;
+}
+
+export interface LoanTermsChange {
+  interestRate?: LoanTermChange<string | null>;
+  escrowAmount?: LoanTermChange<bigint | null>;
+}
+
+const sameRate = (a: string | null, b: string | null) =>
+  a === null || b === null ? a === b : rateThousandths(a) === rateThousandths(b);
+
+/**
+ * The `loan_terms` entries Update Balance's check step writes (YNAB, 2026-10-14, "ihni7's Plan"):
+ * the new values from `month` on ("Your interest rate has been changed to 7% for October and going
+ * forward."); with "Keep … going forward" unchecked ("… changed to 7% for October.") the old
+ * value comes back the month after (YNAB's API then had rates {Oct: 7%, Nov: 6%}). Values equal
+ * to the current ones aren't changes; with none, there's nothing to write.
+ */
+export function loanTermsEntries(
+  terms: readonly LoanTerms[],
+  month: BudgetMonth,
+  change: LoanTermsChange,
+): LoanTerms[] {
+  const current: LoanTerms = termsFor(terms, month) ?? {
+    month,
+    interestRate: null,
+    minimumPayment: null,
+    escrowAmount: null,
+  };
+  const rate = change.interestRate;
+  const escrow = change.escrowAmount;
+  const rateChanged = rate !== undefined && !sameRate(rate.value, current.interestRate);
+  const escrowChanged =
+    escrow !== undefined && (escrow.value ?? 0n) !== (current.escrowAmount ?? 0n);
+  if (!rateChanged && !escrowChanged) return [];
+  const now: LoanTerms = {
+    ...current,
+    month,
+    interestRate: rateChanged ? rate.value : current.interestRate,
+    escrowAmount: escrowChanged ? escrow.value : current.escrowAmount,
+  };
+  const entries = [now];
+  const rateBack = rateChanged && !rate.keep;
+  const escrowBack = escrowChanged && !escrow.keep;
+  if (rateBack || escrowBack) {
+    entries.push({
+      ...now,
+      month: addMonths(month, 1),
+      interestRate: rateBack ? current.interestRate : now.interestRate,
+      escrowAmount: escrowBack ? current.escrowAmount : now.escrowAmount,
+    });
+  }
+  return entries;
+}
+
+/** `terms` with `entries` written over them (an entry replaces the same month's). */
+export function withLoanTerms(
+  terms: readonly LoanTerms[],
+  entries: readonly LoanTerms[],
+): LoanTerms[] {
+  const months = new Set(entries.map((e) => e.month));
+  return [...terms.filter((t) => !months.has(t.month)), ...entries].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
+}
+
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
 /**

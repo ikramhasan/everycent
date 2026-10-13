@@ -88,12 +88,16 @@ export {
   type LoanLine,
   type LoanLineKind,
   type LoanMonth,
+  type LoanTermChange,
   type LoanTerms,
+  type LoanTermsChange,
   loanCharges,
   loanMonths,
+  loanTermsEntries,
   monthlyInterest,
   rateThousandths,
   termsFor,
+  withLoanTerms,
 } from "./loans";
 export {
   add,

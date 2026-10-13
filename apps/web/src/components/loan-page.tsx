@@ -189,6 +189,10 @@ export function LoanPage({
     "post",
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile",
   );
+  const previewReconcile = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
+  );
   const updateAccount = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
   const createTransaction = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
   const updateTransaction = $api.useMutation(
@@ -567,12 +571,24 @@ export function LoanPage({
           account={account}
           settings={settings}
           format={format}
-          onReconcile={(balance) =>
+          month={current}
+          onPreview={async (balance, loanTerms) => {
+            try {
+              const { adjustment } = await previewReconcile.mutateAsync({
+                params: { path },
+                body: { balance: balance.toString(), date: today, loanTerms },
+              });
+              return BigInt(adjustment);
+            } catch (error) {
+              return apiErrorMessage(error, "Couldn't work out the adjustment.");
+            }
+          }}
+          onReconcile={(balance, loanTerms) =>
             save(
               () =>
                 reconcile.mutateAsync({
                   params: { path },
-                  body: { balance: balance.toString(), date: today },
+                  body: { balance: balance.toString(), date: today, loanTerms },
                 }),
               "Couldn't update the balance.",
             )

@@ -1,5 +1,10 @@
 import type { components } from "@everycent/api-client";
-import { type AccountType, type BudgetMonth, monthBounds } from "@everycent/engine";
+import {
+  type AccountType,
+  type BudgetMonth,
+  monthBounds,
+  rateThousandths,
+} from "@everycent/engine";
 import { queryOptions } from "@tanstack/react-query";
 import { format as formatDateFns } from "date-fns";
 import { apiClient } from "./api";
@@ -46,6 +51,40 @@ export const shortMonth = (month: BudgetMonth) =>
 /** "October 2026" (the Account Activity headings). */
 export const longMonth = (month: BudgetMonth) =>
   formatDateFns(isoToDate(monthBounds(month).start), "MMMM yyyy");
+
+export type LoanTermsCheck = components["schemas"]["LoanTermsCheck"];
+
+/**
+ * The Changes lines of Update Balance's interest rate / escrow check, worded as YNAB's
+ * (2026-10-14): "Your interest rate has been changed to 7% for October and going forward." and,
+ * with "Keep … going forward" unchecked, "… for October.". Only values that changed get a line.
+ */
+export function loanTermsChangeLines(
+  check: LoanTermsCheck,
+  before: { interestRate: string | null; escrowAmount: string | null },
+  month: BudgetMonth,
+  formatAmount: (minorUnits: bigint) => string,
+): string[] {
+  const name = formatDateFns(isoToDate(monthBounds(month).start), "MMMM");
+  const when = (keep: boolean) => `for ${name}${keep ? " and going forward" : ""}.`;
+  const lines: string[] = [];
+  const rate = check.interestRate;
+  if (rate && rateChanged(rate.rate, before.interestRate)) {
+    const shown = rate.rate === null ? "0" : formatRate(rate.rate);
+    lines.push(`Your interest rate has been changed to ${shown}% ${when(rate.keepGoingForward)}`);
+  }
+  const escrow = check.escrowAmount;
+  if (escrow && BigInt(escrow.amount ?? 0) !== BigInt(before.escrowAmount ?? 0)) {
+    const shown = formatAmount(BigInt(escrow.amount ?? 0));
+    lines.push(
+      `Your monthly escrow amount has been changed to ${shown} ${when(escrow.keepGoingForward)}`,
+    );
+  }
+  return lines;
+}
+
+const rateChanged = (a: string | null, b: string | null) =>
+  a === null || b === null ? a !== b : rateThousandths(a) !== rateThousandths(b);
 
 /** "a", "a and b", "a, b and c". */
 export function joinAnd(items: readonly string[]) {
