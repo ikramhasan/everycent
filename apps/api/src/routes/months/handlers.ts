@@ -1,6 +1,7 @@
 import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
+  budgetMember,
   budget as budgetTable,
   category,
   categoryAssignment,
@@ -84,6 +85,7 @@ import type {
   assignCategory,
   autoAssign,
   getBudgetMonth,
+  listMonthMoves,
   listMoves,
   moveMoney,
   setExpectedIncome,
@@ -1145,6 +1147,8 @@ export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c)
 
   await db.transaction(async (tx) => {
     const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    // YNAB lists one Auto-Assign as a single "auto-assigned … to N categories" move.
+    const autoAssign = { batchId: newId(), method: option };
     for (const [id, target] of goal) {
       const delta = target - (await assignedAmount(tx, id, month));
       if (delta === 0n) continue;
@@ -1155,18 +1159,23 @@ export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c)
         toCategoryId: delta > 0n ? id : readyToAssignId,
         month,
         amount: delta > 0n ? delta : -delta,
+        autoAssign,
       });
     }
   });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };
 
-export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) => {
-  const { budgetId } = c.req.valid("param");
-  const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
+/**
+ * Money moves as the API lists them, newest first: Recent Moves' (every move since `since`) or a
+ * category history's (every move into or out of a category in one month).
+ */
+async function movesJson(
+  db: Db,
+  budgetId: string,
+  where: { since: Date } | { month: BudgetMonth },
+) {
   const readyToAssignId = await internalCategoryId(db, budgetId, "ready_to_assign");
-  const since = new Date(Date.now() - RECENT_MOVES_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: moneyMove.id,
@@ -1178,38 +1187,69 @@ export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) =
       month: moneyMove.month,
       amount: moneyMove.amount,
       createdAt: moneyMove.createdAt,
+      autoAssignBatchId: moneyMove.autoAssignBatchId,
+      autoAssignMethod: moneyMove.autoAssignMethod,
+      userId: moneyMove.userId,
       userName: user.name,
+      memberRole: budgetMember.role,
     })
     .from(moneyMove)
     .leftJoin(user, eq(user.id, moneyMove.userId))
-    .where(and(eq(moneyMove.budgetId, budgetId), gte(moneyMove.createdAt, since)))
+    .leftJoin(
+      budgetMember,
+      and(eq(budgetMember.budgetId, moneyMove.budgetId), eq(budgetMember.userId, moneyMove.userId)),
+    )
+    .where(
+      and(
+        eq(moneyMove.budgetId, budgetId),
+        "since" in where
+          ? gte(moneyMove.createdAt, where.since)
+          : eq(moneyMove.month, `${where.month}-01`),
+      ),
+    )
     .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id));
-  return c.json(
-    {
-      moves: rows.map((m) => {
-        const fromReady = m.fromCategoryId === readyToAssignId;
-        const toReady = m.toCategoryId === readyToAssignId;
-        return {
-          id: m.id,
-          kind: toReady
-            ? ("removed" as const)
-            : fromReady && !m.deletion
-              ? ("assigned" as const)
-              : ("moved" as const),
-          fromCategoryId: fromReady ? null : m.fromCategoryId,
-          toCategoryId: toReady ? null : m.toCategoryId,
-          fromDeletedCategory: m.fromCategoryId ? null : m.fromCategoryName,
-          toDeletedCategory: m.toCategoryId ? null : m.toCategoryName,
-          deletion: m.deletion,
-          month: monthOf(m.month),
-          amount: m.amount.toString(),
-          movedAt: m.createdAt.toISOString(),
-          userName: m.userName,
-        };
-      }),
-    },
-    200,
-  );
+  return rows.map((m) => {
+    const fromReady = m.fromCategoryId === readyToAssignId;
+    const toReady = m.toCategoryId === readyToAssignId;
+    return {
+      id: m.id,
+      kind: toReady
+        ? ("removed" as const)
+        : fromReady && !m.deletion
+          ? ("assigned" as const)
+          : ("moved" as const),
+      fromCategoryId: fromReady ? null : m.fromCategoryId,
+      toCategoryId: toReady ? null : m.toCategoryId,
+      fromDeletedCategory: m.fromCategoryId ? null : m.fromCategoryName,
+      toDeletedCategory: m.toCategoryId ? null : m.toCategoryName,
+      deletion: m.deletion,
+      month: monthOf(m.month),
+      amount: m.amount.toString(),
+      movedAt: m.createdAt.toISOString(),
+      autoAssign:
+        m.autoAssignBatchId && m.autoAssignMethod
+          ? { batchId: m.autoAssignBatchId, method: m.autoAssignMethod }
+          : null,
+      userId: m.userId,
+      userName: m.userName,
+      memberRole: m.memberRole,
+    };
+  });
+}
+
+export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const since = new Date(Date.now() - RECENT_MOVES_DAYS * 24 * 60 * 60 * 1000);
+  return c.json({ moves: await movesJson(db, budgetId, { since }) }, 200);
+};
+
+export const listMonthMovesHandler: RouteHandler<typeof listMonthMoves, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  return c.json({ moves: await movesJson(db, budgetId, { month }) }, 200);
 };
 
 /** YNAB's Recent Moves: "Previous 34 days of assigning and moving money" (checked 2026-10-11). */

@@ -321,7 +321,9 @@ export function LoanPage({
 
       {plan && (
         <LoanBanners
+          budgetId={budget.id}
           accountId={account.id}
+          banners={loan.data?.banners}
           paidOff={plan.progress.paidOff}
           onSimulate={account.closed ? undefined : () => setOpen({ kind: "simulator" })}
         />

@@ -463,6 +463,18 @@ const LoanChargeSchema = z
   })
   .openapi("LoanCharge");
 
+const LoanBannersSchema = z
+  .object({
+    simulatorDismissed: z
+      .boolean()
+      .describe("The payoff simulator banner was dismissed; one dismissal covers every loan"),
+    paidOffDismissed: z
+      .boolean()
+      .describe('This loan\'s "Another debt bites the dust" banner was dismissed'),
+  })
+  .describe("YNAB keeps these as plan settings, so they follow the plan to every device and member")
+  .openapi("LoanBanners");
+
 const LoanActivitySchema = z
   .object({
     months: z
@@ -505,6 +517,7 @@ const LoanActivitySchema = z
         "The loan's interest rate, minimum payment and escrow from each month on, oldest first " +
           "(months before the first entry use it), for the payoff planner",
       ),
+    banners: LoanBannersSchema,
     originalHistory: z
       .object({
         accountId: z.string(),
@@ -612,6 +625,30 @@ export const recordLoanPayment = createRoute({
     403: jsonError(
       "The caller's role can't change transactions, or the account's email address isn't confirmed",
     ),
+    404: notFound,
+  },
+});
+
+export const dismissLoanBanner = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss",
+  operationId: "dismissLoanBanner",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Dismiss a loan page banner for the whole plan",
+  description:
+    "`simulator` hides the payoff simulator banner on every loan; `paidOff` hides this loan's " +
+    '"Another debt bites the dust". Kept on the plan, as YNAB keeps them (checked 2026-10-14).',
+  request: {
+    params: AccountParams,
+    body: json(z.object({ banner: z.enum(["simulator", "paidOff"]) }).openapi("DismissLoanBanner")),
+  },
+  responses: {
+    200: ok("The loan's banners", LoanBannersSchema),
+    400: jsonError("Not a loan account"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });
