@@ -756,6 +756,12 @@ function GroupSection({
   );
 }
 
+/**
+ * Scroll requests already handled, so a row remounting (its group expanded again, a view
+ * switched) doesn't jump back to it. Each `setScrollTo` makes a new request object.
+ */
+const scrolledTo = new WeakSet<object>();
+
 function CategoryRow({
   category,
   index,
@@ -792,7 +798,8 @@ function CategoryRow({
   const onlySelected = selected && selection?.selected.size === 1;
   const scrollTo = figures?.scrollTo;
   useEffect(() => {
-    if (scrollTo?.id !== category.id) return;
+    if (scrollTo?.id !== category.id || scrolledTo.has(scrollTo)) return;
+    scrolledTo.add(scrollTo);
     document
       .querySelector(`[data-category-row="${category.id}"]`)
       ?.scrollIntoView?.({ block: "center" });
