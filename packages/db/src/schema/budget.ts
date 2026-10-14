@@ -44,6 +44,17 @@ export const budget = pgTable("budget", {
    */
   expectedIncome: bigint({ mode: "bigint" }),
   expectedIncomeCurrency: char({ length: 3 }).$type<CurrencyCode>(),
+  /**
+   * YNAB's plan setting `dismissed_loan_account_payoff_simulator_banner`: one dismissal hides the
+   * loan payoff simulator banner on every loan, for everyone on the plan (checked 2026-10-14).
+   */
+  loanSimulatorBannerDismissed: boolean().notNull().default(false),
+  /**
+   * The order of the views Manage Views can rearrange: preset keys (`PRESET_BUDGET_VIEWS`) and
+   * `budget_view` ids, shared by everyone on the budget. Null until first rearranged; entries it
+   * lacks go last (see the views route).
+   */
+  viewOrder: text().array(),
   ...timestamps,
 });
 

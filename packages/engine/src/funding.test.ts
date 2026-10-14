@@ -85,7 +85,7 @@ describe("paymentFunding", () => {
     // E3: $30.00 a month asks $30.00, credit overspending or not.
     expect(paymentFunding(0n, 105_00n, 5_00n, need(30_00n))).toMatchObject({
       underfunded: 30_00n,
-      parts: [{ amount: 30_00n, step: FUNDING_STEPS.cardPayment, date: "" }],
+      parts: [{ amount: 30_00n, step: FUNDING_STEPS.cardPayment, date: "", rank: 0 }],
     });
     // E2: red at −$10.00 still asks its $33.34 share; overspending beyond the share is covered.
     expect(paymentFunding(-10_00n, 90_00n, 0n, need(33_34n)).underfunded).toBe(33_34n);
@@ -190,7 +190,7 @@ describe("upcoming scheduled transactions", () => {
     const card = paymentFunding(0n, 10_00n, 0n, null, up(-5_00n, "2026-10-21"));
     expect(card.underfunded).toBe(10_00n);
     expect(card.parts).toEqual([
-      { amount: 10_00n, step: FUNDING_STEPS.cardPayment, date: "2026-10-21" },
+      { amount: 10_00n, step: FUNDING_STEPS.cardPayment, date: "2026-10-21", rank: 1 },
     ]);
     const plain = paymentFunding(0n, 10_00n, 0n);
     expect(
@@ -202,6 +202,29 @@ describe("upcoming scheduled transactions", () => {
         10_00n,
       ),
     ).toEqual(new Map([["scheduled", 10_00n]]));
+  });
+
+  // YNAB plan "x132 Order", 2026-10-14: $15.00 for three cards owing $10.00, listed A (alert),
+  // C (pay off by October), B ($10.00 payment scheduled on the 20th).
+  it("funds scheduled payments, then payment targets, then plain alerts", () => {
+    const alert = paymentFunding(0n, 10_00n, 0n);
+    const target = paymentFunding(0n, 10_00n, 0n, need(10_00n));
+    const scheduled = paymentFunding(0n, 10_00n, 0n, null, up(-10_00n, "2026-10-20"));
+    expect(
+      fundUnderfunded(
+        [
+          { categoryId: "A", parts: alert.parts },
+          { categoryId: "C", parts: target.parts },
+          { categoryId: "B", parts: scheduled.parts },
+        ],
+        15_00n,
+      ),
+    ).toEqual(
+      new Map([
+        ["B", 10_00n],
+        ["C", 5_00n],
+      ]),
+    );
   });
 });
 

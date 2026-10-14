@@ -26,6 +26,9 @@ type MonthCategory = BudgetMonthData["categories"][number];
  * YNAB's labels, singular when one category is selected; a lone payment category's spending options
  * read "Paid Last Month" and "Average Paid" (seen 2026-10-08 on Cards E1–E3).
  */
+/** An Auto-Assign as Recent Moves names its method ("Method: Reset Assigned Amounts"). */
+export const autoAssignMethodLabel = (option: AutoAssignOption) => label(option, false);
+
 function label(option: AutoAssignOption, one: boolean, payment = false) {
   switch (option) {
     case "underfunded":

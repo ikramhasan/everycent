@@ -25,6 +25,8 @@ export interface FundingPart {
   step: FundingStep;
   /** YYYY-MM-DD the part is due, or "" when the step doesn't order by date. */
   date: string;
+  /** Orders parts of one step and date before the list order: lower first. Defaults to zero. */
+  rank?: number;
 }
 
 /**
@@ -161,7 +163,10 @@ function targetParts(month: BudgetMonth, target: FundedTarget, need: TargetNeed)
  *
  * A scheduled payment asks for what Available doesn't cover, or the above if more (YNAB,
  * 2026-10-12: Card W owed $10.00 with a $5.00 payment scheduled, still $10.00), and puts the card
- * first among card payments (support.ynab.com: those with a scheduled payment come first).
+ * first among card payments (support.ynab.com: those with a scheduled payment come first). Then
+ * come cards with a payment target, then plain Underfunded alerts, whatever the list order (YNAB,
+ * 2026-10-14, plan "x132 Order": with $15.00 for three cards owing $10.00 listed A (alert), C
+ * (target), B (scheduled), B got $10.00, C $5.00, A nothing).
  */
 export function paymentFunding(
   available: bigint,
@@ -188,7 +193,9 @@ export function paymentFunding(
   return {
     underfunded,
     overfunded,
-    parts: underfunded ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date }] : [],
+    parts: underfunded
+      ? [{ amount: underfunded, step: FUNDING_STEPS.cardPayment, date, rank: need ? 0 : 1 }]
+      : [],
   };
 }
 
@@ -209,7 +216,8 @@ export function afterStart(parts: readonly FundingPart[], start: string): Fundin
 
 /**
  * Underfunded over many categories with only `readyToAssign` to give: each part in YNAB's order
- * (step, then date, undated parts last, then the categories' order as listed) gets what's left
+ * (step, then date, undated parts last, then rank, then the categories' order as listed) gets
+ * what's left
  * until nothing is.
  * Returns what each category gets. Categories come in list order.
  */
@@ -227,7 +235,7 @@ export function fundUnderfunded(
         ? a.date === "" || (b.date !== "" && a.date > b.date)
           ? 1
           : -1
-        : a.index - b.index,
+        : (a.rank ?? 0) - (b.rank ?? 0) || a.index - b.index,
   );
   const given = new Map<string, bigint>();
   let left = readyToAssign;

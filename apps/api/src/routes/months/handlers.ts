@@ -1,6 +1,7 @@
 import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
+  budgetMember,
   budget as budgetTable,
   category,
   categoryAssignment,
@@ -46,6 +47,7 @@ import {
   periodRollover,
   progressBar,
   readyToAssign,
+  readyToAssignBreakdown,
   spendingFunding,
   type TargetNeed,
   targetNeed,
@@ -83,6 +85,7 @@ import type {
   assignCategory,
   autoAssign,
   getBudgetMonth,
+  listMonthMoves,
   listMoves,
   moveMoney,
   setExpectedIncome,
@@ -186,7 +189,7 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
     .where(eq(category.budgetId, budgetId));
   const byAccount = new Map(rows.flatMap((p) => (p.accountId ? [[p.accountId, p.id]] : [])));
   const readyToAssignId = rows.find((r) => r.internalKind === "ready_to_assign")?.id;
-  const cards = applyCardLedger(
+  const { credit: cards, debt } = applyCardLedger(
     history,
     await cardLines(db, budgetId, cutoff),
     readyToAssignId,
@@ -199,7 +202,7 @@ async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
   );
   const creditOverspent = addFundedSpending(cards, history, byAccount, skip);
   await addPayments(db, budgetId, cutoff, history, byAccount);
-  return { history, paymentAccounts: byAccount, creditOverspent };
+  return { history, paymentAccounts: byAccount, creditOverspent, debt };
 }
 
 /**
@@ -380,7 +383,7 @@ async function cardLines(db: Db, budgetId: string, cutoff: string): Promise<Plac
  * the cash part of category lines moves from credit to cash activity, and Ready to Assign gets what
  * the card's balance above zero adds or takes (instead of every inflow to it), and a transfer from
  * another card is a payment for the part that card paid from above zero. Returns each category's
- * credit activity per month and day, which funds card spending.
+ * credit activity (and returns' cash parts) per month and day, which funds card spending.
  */
 function applyCardLedger(
   history: Map<string, MonthFigures[]>,
@@ -394,10 +397,13 @@ function applyCardLedger(
   for (const line of lines) {
     byAccount.set(line.accountId, [...(byAccount.get(line.accountId) ?? []), line]);
   }
-  // categoryId → month → each card's credit activity per day.
+  // categoryId → month → each card's credit activity (and returns' cash parts) per day.
   const credit = new Map<string, Map<BudgetMonth, CardActivity[]>>();
   // A sending card's line id → what it paid from above zero.
   const paidFromCash = new Map<string, bigint>();
+  // month → what the cards' balances above zero added to Ready to Assign ("Inflow from Debt
+  // Account" in YNAB's breakdown).
+  const debt = new Map<BudgetMonth, bigint>();
   const received: PlacedCardLine[] = [];
   for (const [accountId, own] of byAccount) {
     const byId = new Map(own.map((l) => [l.id, l]));
@@ -408,6 +414,9 @@ function applyCardLedger(
         if (line.amount < 0n) paidFromCash.set(line.id, effect.paidFromCash);
         else received.push(line);
       }
+      if (effect.readyToAssign !== 0n) {
+        debt.set(month, (debt.get(month) ?? 0n) + effect.readyToAssign);
+      }
       // Inflows to Ready to Assign were counted in full as income; count what the ledger says.
       const counted = line.kind === "readyToAssign" && line.categoryId ? line.amount : 0n;
       if (readyToAssignId && effect.readyToAssign !== counted) {
@@ -417,18 +426,22 @@ function applyCardLedger(
       if (effect.cash !== 0n) {
         push(line.categoryId, { month, assigned: 0n, activity: 0n, creditActivity: -effect.cash });
       }
-      if (effect.credit === 0n) continue;
+      // A return's part above zero joins the category on its date (`CardActivity.cash`).
+      const returned = effect.cash > 0n ? effect.cash : 0n;
+      if (effect.credit === 0n && returned === 0n) continue;
       const months = credit.get(line.categoryId) ?? new Map<BudgetMonth, CardActivity[]>();
       const days = months.get(month) ?? [];
       const same = days.find((d) => d.date === effect.date && d.accountId === accountId);
       if (same) {
         same.amount += effect.credit;
+        same.cash = (same.cash ?? 0n) + returned;
         if (line.transactionId < same.order) same.order = line.transactionId;
       } else {
         days.push({
           accountId,
           date: effect.date,
           amount: effect.credit,
+          cash: returned,
           order: line.transactionId,
         });
       }
@@ -442,7 +455,7 @@ function applyCardLedger(
     if (!paymentId || paid === 0n) continue;
     push(paymentId, { month: monthOf(line.date), assigned: 0n, activity: -paid, payments: -paid });
   }
-  return credit;
+  return { credit, debt };
 }
 
 /**
@@ -464,7 +477,9 @@ function addFundedSpending(
     const entries = history.get(categoryId) ?? [];
     for (const [month, days] of months) {
       const figures = categoryMonth(entries, month);
-      const cash = figures.carried + figures.assigned + figures.cashActivity;
+      // Returns' parts above zero come in on their dates, not before the card activity.
+      const returned = days.reduce((sum, d) => sum + (d.cash ?? 0n), 0n);
+      const cash = figures.carried + figures.assigned + figures.cashActivity - returned;
       const { moved, unfunded: short } = fundedCardSpending(cash, days);
       for (const [accountId, amount] of short) {
         const months = unfunded.get(accountId) ?? new Map<BudgetMonth, bigint>();
@@ -582,7 +597,11 @@ async function monthState(
   const { start, end } = monthBounds(month);
   // Transactions dated after the user's today don't count yet.
   const cutoff = end < today ? end : today;
-  const { history, paymentAccounts, creditOverspent } = await budgetHistory(db, budgetId, cutoff);
+  const { history, paymentAccounts, creditOverspent, debt } = await budgetHistory(
+    db,
+    budgetId,
+    cutoff,
+  );
   const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts);
 
   const range = await monthRange(db, budgetId, today);
@@ -643,6 +662,16 @@ async function monthState(
     )
     .groupBy(transaction.accountId);
   const register = new Map(cardMonth.map((r) => [r.accountId, r]));
+  // Each card's opening month: the month of its first transaction (the Starting Balance).
+  const openedRows = await db
+    .select({ accountId: transaction.accountId, date: min(transaction.date) })
+    .from(transaction)
+    .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
+    .where(and(eq(transaction.budgetId, budgetId), inArray(budgetAccount.type, CREDIT_TYPES)))
+    .groupBy(transaction.accountId);
+  const openedMonth = new Map(
+    openedRows.flatMap((r) => (r.date ? [[r.accountId, monthOf(r.date)] as const] : [])),
+  );
   const accountOf = new Map([...paymentAccounts].map(([accountId, id]) => [id, accountId]));
   const paymentOf = (categoryId: string, figures: CategoryMonth) => {
     const accountId = accountOf.get(categoryId);
@@ -659,6 +688,19 @@ async function monthState(
     return { accountId, balance, owed, underfunded, fromOverspending };
   };
 
+  // A payment target asks nothing in months before its card was opened (YNAB, 2026-10-12, Card E3
+  // opened Oct 8: September's "Pay Specific Amount Monthly $30.00" read "Assign $0.00 to meet your
+  // target", Amount to Assign $30.00, To Go $0.00).
+  const beforeOpening = (
+    accountId: string | undefined,
+    need: TargetNeed | null,
+    m: BudgetMonth = month,
+  ): TargetNeed | null => {
+    const opened = accountId && openedMonth.get(accountId);
+    if (!need || !opened || m >= opened) return need;
+    return { ...need, underfunded: 0n, monthAmount: 0n };
+  };
+
   const listed: {
     categoryId: string;
     figures: CategoryMonth;
@@ -667,6 +709,8 @@ async function monthState(
     snoozed: boolean;
     bar: ProgressBar | null;
     payment: ReturnType<typeof paymentOf>;
+    /** A payment category in a month before its card was opened. */
+    beforeOpening: boolean;
     funding: CategoryFunding;
     upcoming: CategoryUpcoming | null;
     hidden: boolean;
@@ -679,6 +723,18 @@ async function monthState(
   const overspent: MonthAmount[] = [];
   const nextMonth = addMonths(month, 1);
   const monthTargets = { month: 0n, nextMonth: 0n };
+  // Each later month the panel lists (money assigned there, and always next month): how much its
+  // targets need and how much of that is funded, for YNAB's pie or check by the month.
+  const futureTargets = new Map<BudgetMonth, { needed: bigint; funded: bigint }>([
+    [nextMonth, { needed: 0n, funded: 0n }],
+  ]);
+  for (const entries of history.values()) {
+    for (const e of entries) {
+      if (e.month > month && e.assigned !== 0n && !futureTargets.has(e.month)) {
+        futureTargets.set(e.month, { needed: 0n, funded: 0n });
+      }
+    }
+  }
   for (const cat of categories) {
     const entries = history.get(cat.id) ?? [];
     if (cat.internalKind === "ready_to_assign") {
@@ -700,7 +756,10 @@ async function monthState(
     const payment = paymentOf(cat.id, figures);
     // A payment target pays toward what the card owes; next month starts from the same balance.
     const owed = payment?.owed ?? 0n;
-    const need = target && targetNeed(entries, target, month, monthOf(today), owed);
+    const need = beforeOpening(
+      payment?.accountId,
+      target && targetNeed(entries, target, month, monthOf(today), owed),
+    );
     // Credit card payment targets can't be snoozed (support.ynab.com "Paired Targets").
     const snoozed = !payment && snoozedNow.has(cat.id);
     const coming = upcoming.get(cat.id) ?? null;
@@ -712,9 +771,24 @@ async function monthState(
         ? { ...funded, parts: afterStart(funded.parts, firstDay) }
         : funded;
     if (target && !isHidden) {
+      for (const [m, sums] of futureTargets) {
+        const n = beforeOpening(
+          payment?.accountId,
+          targetNeed(entries, target, m, monthOf(today), owed),
+          m,
+        );
+        // A one-time target past its due month asks for nothing there (YNAB: x132 C Target).
+        if (!n || n.needed <= 0n || (n.dueDate && monthOf(n.dueDate) < m)) continue;
+        sums.needed += n.needed;
+        sums.funded += n.funded < 0n ? 0n : n.funded < n.needed ? n.funded : n.needed;
+      }
       monthTargets.month += need?.monthAmount ?? 0n;
       monthTargets.nextMonth +=
-        targetNeed(entries, target, nextMonth, monthOf(today), owed)?.monthAmount ?? 0n;
+        beforeOpening(
+          payment?.accountId,
+          targetNeed(entries, target, nextMonth, monthOf(today), owed),
+          nextMonth,
+        )?.monthAmount ?? 0n;
     }
     listed.push({
       categoryId: cat.id,
@@ -737,6 +811,7 @@ async function monthState(
             target ? periodRollover(entries, target, month) : 0n,
           ),
       payment,
+      beforeOpening: !!payment && (openedMonth.get(payment.accountId) ?? month) > month,
       funding,
       upcoming: coming,
       hidden: isHidden,
@@ -753,7 +828,16 @@ async function monthState(
     .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)));
 
   const rta = readyToAssign({ month, income, assigned, overspent });
+  const debtIncome = [...debt].map(([m, amount]) => ({ month: m, amount }));
+  const breakdown = readyToAssignBreakdown({
+    month,
+    income,
+    debt: debtIncome,
+    assigned,
+    overspent,
+  });
   return {
+    breakdown,
     range,
     listed,
     groupRows,
@@ -766,6 +850,7 @@ async function monthState(
     rta,
     register,
     monthTargets,
+    futureTargets,
   };
 }
 
@@ -784,6 +869,13 @@ function futureShortfall(
     if (amount < 0n) return { month: m, readyToAssign: amount.toString() };
   }
   return null;
+}
+
+/** A later month's targets for the panel, or null when it has none. */
+function futureTargetsJson(sums: { needed: bigint; funded: bigint } | undefined) {
+  return sums && sums.needed > 0n
+    ? { needed: sums.needed.toString(), funded: sums.funded.toString() }
+    : null;
 }
 
 /** The budget screen's numbers for `month`, as of the user's `today`. */
@@ -811,10 +903,24 @@ export async function budgetMonthJson(
       listed.map((l) => l.figures),
     ),
     assignedInFuture: rta.assignedInFuture.toString(),
+    readyToAssignBreakdown: {
+      leftOver: state.breakdown.leftOver.toString(),
+      inflows: state.breakdown.inflows.toString(),
+      debtInflows: state.breakdown.debtInflows.toString(),
+      cashOverspending: state.breakdown.cashOverspending.toString(),
+      assigned: state.breakdown.assigned.toString(),
+      assignedInFuture: state.breakdown.assignedInFuture.toString(),
+      total: state.breakdown.total.toString(),
+    },
     futureMonths: [...future]
       .filter(([, amount]) => amount !== 0n)
       .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([m, amount]) => ({ month: m, assigned: amount.toString() })),
+      .map(([m, amount]) => ({
+        month: m,
+        assigned: amount.toString(),
+        targets: futureTargetsJson(state.futureTargets.get(m)),
+      })),
+    nextMonthTargets: futureTargetsJson(state.futureTargets.get(addMonths(month, 1))),
     note:
       (
         await db
@@ -847,6 +953,7 @@ export async function budgetMonthJson(
           // Only a one-time target's due date can be before the month it's shown in.
           pastDue: l.need.dueDate !== null && monthOf(l.need.dueDate) < month,
           snoozed: l.snoozed,
+          beforeOpening: l.beforeOpening,
         },
         bar: l.bar && {
           tone: l.bar.tone,
@@ -956,30 +1063,56 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
 
 export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) => {
   const { budgetId, month } = c.req.valid("param");
-  const { fromCategoryId, toCategoryId, amount, today = serverToday() } = c.req.valid("json");
+  const {
+    fromCategoryId,
+    toCategoryId,
+    amount,
+    fromMonth = month,
+    today = serverToday(),
+  } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
   const from = await moneyCategory(db, budgetId, fromCategoryId);
   const to = await moneyCategory(db, budgetId, toCategoryId);
-  if (from.id === to.id) {
+  if (from.id === to.id && fromMonth === month) {
     throw new AppError(400, "BAD_REQUEST", "Money has to move to another category");
   }
   const value = BigInt(amount);
   if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Move a positive amount");
   await assertMonthInRange(db, budgetId, month, today);
+  if (fromMonth !== month) await assertMonthInRange(db, budgetId, fromMonth, today);
 
-  // Moving money changes what each side has assigned; Ready to Assign follows from that.
+  // Moving money changes what each side has assigned; Ready to Assign follows from that. Covering
+  // from a later month takes it off that month's Assigned (YNAB, 2026-10-14, "x132 Order": $2.00
+  // from November's Groceries left it at $3.00 and October's Transportation at $2.00).
   await db.transaction(async (tx) => {
-    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, month, -value);
+    if (!from.readyToAssign) await adjustAssigned(tx, budget, from.id, fromMonth, -value);
     if (!to.readyToAssign) await adjustAssigned(tx, budget, to.id, month, value);
-    await logMove(tx, budget, {
-      userId: c.var.user.id,
-      fromCategoryId: from.id,
-      toCategoryId: to.id,
-      month,
-      amount: value,
-    });
+    if (fromMonth === month) {
+      await logMove(tx, budget, {
+        userId: c.var.user.id,
+        fromCategoryId: from.id,
+        toCategoryId: to.id,
+        month,
+        amount: value,
+      });
+      return;
+    }
+    // Across months each side is logged in its own month: removed there, assigned here.
+    const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    const log = (fromId: string, toId: string, m: BudgetMonth) =>
+      fromId === toId
+        ? Promise.resolve()
+        : logMove(tx, budget, {
+            userId: c.var.user.id,
+            fromCategoryId: fromId,
+            toCategoryId: toId,
+            month: m,
+            amount: value,
+          });
+    await log(from.id, readyToAssignId, fromMonth);
+    await log(readyToAssignId, to.id, month);
   });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };
@@ -1014,6 +1147,8 @@ export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c)
 
   await db.transaction(async (tx) => {
     const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
+    // YNAB lists one Auto-Assign as a single "auto-assigned … to N categories" move.
+    const autoAssign = { batchId: newId(), method: option };
     for (const [id, target] of goal) {
       const delta = target - (await assignedAmount(tx, id, month));
       if (delta === 0n) continue;
@@ -1024,18 +1159,23 @@ export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c)
         toCategoryId: delta > 0n ? id : readyToAssignId,
         month,
         amount: delta > 0n ? delta : -delta,
+        autoAssign,
       });
     }
   });
   return c.json(await budgetMonthJson(db, budget, month, today), 200);
 };
 
-export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) => {
-  const { budgetId } = c.req.valid("param");
-  const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
+/**
+ * Money moves as the API lists them, newest first: Recent Moves' (every move since `since`) or a
+ * category history's (every move into or out of a category in one month).
+ */
+async function movesJson(
+  db: Db,
+  budgetId: string,
+  where: { since: Date } | { month: BudgetMonth },
+) {
   const readyToAssignId = await internalCategoryId(db, budgetId, "ready_to_assign");
-  const since = new Date(Date.now() - RECENT_MOVES_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: moneyMove.id,
@@ -1047,38 +1187,69 @@ export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) =
       month: moneyMove.month,
       amount: moneyMove.amount,
       createdAt: moneyMove.createdAt,
+      autoAssignBatchId: moneyMove.autoAssignBatchId,
+      autoAssignMethod: moneyMove.autoAssignMethod,
+      userId: moneyMove.userId,
       userName: user.name,
+      memberRole: budgetMember.role,
     })
     .from(moneyMove)
     .leftJoin(user, eq(user.id, moneyMove.userId))
-    .where(and(eq(moneyMove.budgetId, budgetId), gte(moneyMove.createdAt, since)))
+    .leftJoin(
+      budgetMember,
+      and(eq(budgetMember.budgetId, moneyMove.budgetId), eq(budgetMember.userId, moneyMove.userId)),
+    )
+    .where(
+      and(
+        eq(moneyMove.budgetId, budgetId),
+        "since" in where
+          ? gte(moneyMove.createdAt, where.since)
+          : eq(moneyMove.month, `${where.month}-01`),
+      ),
+    )
     .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id));
-  return c.json(
-    {
-      moves: rows.map((m) => {
-        const fromReady = m.fromCategoryId === readyToAssignId;
-        const toReady = m.toCategoryId === readyToAssignId;
-        return {
-          id: m.id,
-          kind: toReady
-            ? ("removed" as const)
-            : fromReady && !m.deletion
-              ? ("assigned" as const)
-              : ("moved" as const),
-          fromCategoryId: fromReady ? null : m.fromCategoryId,
-          toCategoryId: toReady ? null : m.toCategoryId,
-          fromDeletedCategory: m.fromCategoryId ? null : m.fromCategoryName,
-          toDeletedCategory: m.toCategoryId ? null : m.toCategoryName,
-          deletion: m.deletion,
-          month: monthOf(m.month),
-          amount: m.amount.toString(),
-          movedAt: m.createdAt.toISOString(),
-          userName: m.userName,
-        };
-      }),
-    },
-    200,
-  );
+  return rows.map((m) => {
+    const fromReady = m.fromCategoryId === readyToAssignId;
+    const toReady = m.toCategoryId === readyToAssignId;
+    return {
+      id: m.id,
+      kind: toReady
+        ? ("removed" as const)
+        : fromReady && !m.deletion
+          ? ("assigned" as const)
+          : ("moved" as const),
+      fromCategoryId: fromReady ? null : m.fromCategoryId,
+      toCategoryId: toReady ? null : m.toCategoryId,
+      fromDeletedCategory: m.fromCategoryId ? null : m.fromCategoryName,
+      toDeletedCategory: m.toCategoryId ? null : m.toCategoryName,
+      deletion: m.deletion,
+      month: monthOf(m.month),
+      amount: m.amount.toString(),
+      movedAt: m.createdAt.toISOString(),
+      autoAssign:
+        m.autoAssignBatchId && m.autoAssignMethod
+          ? { batchId: m.autoAssignBatchId, method: m.autoAssignMethod }
+          : null,
+      userId: m.userId,
+      userName: m.userName,
+      memberRole: m.memberRole,
+    };
+  });
+}
+
+export const listMovesHandler: RouteHandler<typeof listMoves, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const since = new Date(Date.now() - RECENT_MOVES_DAYS * 24 * 60 * 60 * 1000);
+  return c.json({ moves: await movesJson(db, budgetId, { since }) }, 200);
+};
+
+export const listMonthMovesHandler: RouteHandler<typeof listMonthMoves, Env> = async (c) => {
+  const { budgetId, month } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  return c.json({ moves: await movesJson(db, budgetId, { month }) }, 200);
 };
 
 /** YNAB's Recent Moves: "Previous 34 days of assigning and moving money" (checked 2026-10-11). */

@@ -29,6 +29,31 @@ export function addMonths(month: BudgetMonth, count: number): BudgetMonth {
   return `${String(y).padStart(4, "0")}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
+/**
+ * An account's balance at the end of each month from its first transaction's month through its
+ * last's, newest first (YNAB's "Original Tracking Account History" on a loan made from a tracking
+ * account lists them so). Empty without transactions.
+ */
+export function monthEndBalances(
+  entries: ReadonlyArray<{ date: string; amount: bigint }>,
+): Array<{ month: BudgetMonth; endBalance: bigint }> {
+  if (entries.length === 0) return [];
+  const byMonth = new Map<BudgetMonth, bigint>();
+  for (const e of entries) {
+    const month = monthOf(e.date);
+    byMonth.set(month, (byMonth.get(month) ?? 0n) + e.amount);
+  }
+  const months = [...byMonth.keys()].sort();
+  const last = months[months.length - 1] as BudgetMonth;
+  const result: Array<{ month: BudgetMonth; endBalance: bigint }> = [];
+  let balance = 0n;
+  for (let month = months[0] as BudgetMonth; month <= last; month = addMonths(month, 1)) {
+    balance += byMonth.get(month) ?? 0n;
+    result.push({ month, endBalance: balance });
+  }
+  return result.reverse();
+}
+
 /** First and last calendar day of a month, YYYY-MM-DD. */
 export function monthBounds(month: BudgetMonth): { start: string; end: string } {
   const [year, m] = month.split("-").map(Number) as [number, number];
@@ -173,8 +198,14 @@ export function categoryMonth(history: readonly MonthFigures[], month: BudgetMon
     payments,
     available,
     // What it had before card spending: carried in, assigned and cash activity. A payment category
-    // paid below zero is cash overspending (YNAB: red, deducted from next month).
-    ...splitOverspending(available, available - creditActivity - fundedSpending),
+    // paid below zero is cash overspending (YNAB: red, deducted from next month), and so is one a
+    // card return took below zero: returns moving money out aren't card spending (YNAB, 2026-10-14,
+    // x128 Card A: a $5 uncategorized return left the payment category at −$4, deducted from
+    // November).
+    ...splitOverspending(
+      available,
+      available - creditActivity - (fundedSpending > 0n ? fundedSpending : 0n),
+    ),
   };
 }
 
@@ -235,6 +266,62 @@ export function readyToAssign(input: {
   const room = base > 0n ? base : 0n;
   const taken = assignedInFuture < room ? assignedInFuture : room;
   return { readyToAssign: base - taken, assignedInFuture };
+}
+
+/** The lines of YNAB's "Ready to Assign Breakdown" for a month; minus lines are negative. */
+export interface ReadyToAssignBreakdown {
+  /** "Ready to Assign left over from <last month>": last month's, before later months' assigning. */
+  leftOver: bigint;
+  /** "Inflow: Ready to Assign transactions in <month>", card inflows left out. */
+  inflows: bigint;
+  /** "Inflow from Debt Account": what credit accounts' balances above zero added this month. */
+  debtInflows: bigint;
+  /** "Cash overspending in <last month>". */
+  cashOverspending: bigint;
+  /** "Assigned in <month>". */
+  assigned: bigint;
+  /** "Assigned in Future": what later months' assigning takes from this month. */
+  assignedInFuture: bigint;
+  /** "Total Ready to Assign", the sum of the lines. */
+  total: bigint;
+}
+
+/**
+ * Ready to Assign for `month` line by line, as YNAB's breakdown shows it (checked 2026-10-14 in
+ * "ihni7's Plan" and "x132 Order"): October in ihni7's read left over from September −$508.06,
+ * inflows +$12,085.00, Inflow from Debt Account +$89.00, cash overspending in September
+ * −$2,700.00, assigned −$2,570.37, total $6,395.57. Assigned in Future only takes what keeps the
+ * total at zero (x132: $3.00 assigned in November showed −$1.00), and the next month's left over is
+ * the month's total before it (+$1.00). `debt` is the part of `income` from credit accounts.
+ */
+export function readyToAssignBreakdown(input: {
+  month: BudgetMonth;
+  income: readonly MonthAmount[];
+  debt: readonly MonthAmount[];
+  assigned: readonly MonthAmount[];
+  overspent: readonly MonthAmount[];
+}): ReadyToAssignBreakdown {
+  const { month } = input;
+  const previous = addMonths(month, -1);
+  const leftOver =
+    total(input.income, (m) => m <= previous) -
+    total(input.assigned, (m) => m <= previous) +
+    total(input.overspent, (m) => m < previous);
+  const debtInflows = total(input.debt, (m) => m === month);
+  const inflows = total(input.income, (m) => m === month) - debtInflows;
+  const cashOverspending = total(input.overspent, (m) => m === previous);
+  const assigned = -total(input.assigned, (m) => m === month);
+  const { readyToAssign: rta } = readyToAssign(input);
+  const before = leftOver + inflows + debtInflows + cashOverspending + assigned;
+  return {
+    leftOver,
+    inflows,
+    debtInflows,
+    cashOverspending,
+    assigned,
+    assignedInFuture: rta - before,
+    total: rta,
+  };
 }
 
 /**

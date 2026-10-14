@@ -90,7 +90,15 @@ export const createScheduledTransactionHandler: RouteHandler<
   const today = body.today ?? serverToday();
   const result = await db.transaction(async (tx) => {
     // A rescheduled transaction keeps its account and transfer even if they're closed now.
-    let from: { accountId: string; transferAccountId: string | null } | undefined;
+    let from:
+      | { accountId: string; transferAccountId: string | null; restore?: boolean }
+      | undefined = body.restore
+      ? {
+          accountId: body.accountId,
+          transferAccountId: body.transferAccountId ?? null,
+          restore: true,
+        }
+      : undefined;
     if (body.fromTransactionId) {
       const existing = await lockTransaction(tx, budgetId, body.fromTransactionId);
       if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
@@ -98,7 +106,11 @@ export const createScheduledTransactionHandler: RouteHandler<
       const other = existing.transferTransactionId
         ? await lockTransaction(tx, budgetId, existing.transferTransactionId)
         : undefined;
-      from = { accountId: existing.accountId, transferAccountId: other?.accountId ?? null };
+      from = {
+        accountId: existing.accountId,
+        transferAccountId: other?.accountId ?? null,
+        restore: body.restore,
+      };
       await deleteWithTransfers(tx, existing);
     }
     const id = await writeSchedule(
@@ -205,7 +217,7 @@ export const updateScheduledTransactionHandler: RouteHandler<
         flag: body.flag !== undefined ? body.flag : schedule.flag,
         lines: keptLines,
       },
-      { id, accountId: schedule.accountId, transferAccountId },
+      { id, accountId: schedule.accountId, transferAccountId, restore: body.restore },
     );
     // Only a new date enters what's past (YNAB's rule for saving a past date); other edits leave
     // the schedule's occurrences alone, as for those waiting in a closed account.

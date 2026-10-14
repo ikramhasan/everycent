@@ -1,3 +1,4 @@
+import { BUDGET_ROLES } from "@everycent/db/schema";
 import {
   AUTO_ASSIGN_OPTIONS,
   BUDGET_MONTH_PATTERN,
@@ -82,6 +83,14 @@ const PaymentSchema = z
   .describe("Set on a credit account's payment category")
   .openapi("PaymentDetails");
 
+const FutureTargetsSchema = z
+  .object({
+    needed: zMinorUnits.describe("What the month's targets need, all together"),
+    funded: zMinorUnits.describe("How much of that is funded (each target counts up to its need)"),
+  })
+  .nullable()
+  .describe("A later month's targets for YNAB's pie or check; null when it has none");
+
 const TargetNeedSchema = z
   .object({
     needed: zMinorUnits.describe(
@@ -108,6 +117,12 @@ const TargetNeedSchema = z
     snoozed: z
       .boolean()
       .describe("Snoozed this month: it asks for nothing more (Underfunded leaves it out)"),
+    beforeOpening: z
+      .boolean()
+      .describe(
+        "Payment targets: a month before the card's account was opened; it asks for nothing " +
+          "(underfunded 0)",
+      ),
   })
   .nullable()
   .describe(
@@ -221,9 +236,37 @@ const MonthSchema = z
           "than you have\", Fix This) and when Ready to Assign isn't negative",
       ),
     assignedInFuture: zMinorUnits.describe("Money assigned in the months after this one"),
+    readyToAssignBreakdown: z
+      .object({
+        leftOver: zMinorUnits.describe(
+          "Ready to Assign left over from last month, before later months' assigning",
+        ),
+        inflows: zMinorUnits.describe(
+          "Inflows to Ready to Assign this month, card inflows left out",
+        ),
+        debtInflows: zMinorUnits.describe(
+          "What credit accounts' balances above zero added this month (Inflow from Debt Account)",
+        ),
+        cashOverspending: zMinorUnits.describe("Last month's cash overspending (negative)"),
+        assigned: zMinorUnits.describe("This month's assigned money (negative)"),
+        assignedInFuture: zMinorUnits.describe(
+          "What later months' assigning takes from this month (negative, never below zero)",
+        ),
+        total: zMinorUnits.describe("The sum of the lines: Ready to Assign"),
+      })
+      .describe("YNAB's Ready to Assign Breakdown, line by line"),
     futureMonths: z
-      .array(z.object({ month: zBudgetMonth, assigned: zMinorUnits }))
+      .array(
+        z.object({
+          month: zBudgetMonth,
+          assigned: zMinorUnits,
+          targets: FutureTargetsSchema,
+        }),
+      )
       .describe("The later months with money assigned, in order"),
+    nextMonthTargets: FutureTargetsSchema.describe(
+      "Next month's targets, for the panel's row when nothing is assigned there yet",
+    ),
     note: z.string().describe("The month's note (YNAB's \"Enter a note…\"); empty for none"),
     futureShortfall: z
       .object({ month: zBudgetMonth, readyToAssign: zMinorUnits })
@@ -393,6 +436,12 @@ export const moveMoney = createRoute({
               fromCategoryId: z.string(),
               toCategoryId: z.string(),
               amount: zMinorUnits.describe("Positive"),
+              fromMonth: zBudgetMonth
+                .optional()
+                .describe(
+                  "Take the money from the first category's Assigned in this month instead " +
+                    "(covering overspending from a later month); defaults to `month`",
+                ),
               today: Today.optional(),
             })
             .openapi("MoveMoney"),
@@ -554,9 +603,25 @@ const MoneyMoveSchema = z
     month: zBudgetMonth,
     amount: zMinorUnits.describe("Positive"),
     movedAt: z.iso.datetime(),
-    userName: z.string().nullable().describe("Who moved it; null if they left the budget"),
+    autoAssign: z
+      .object({
+        batchId: z.string().describe("Shared by every move of one Auto-Assign"),
+        method: z.enum(AUTO_ASSIGN_OPTIONS).describe("The Auto-Assign option used"),
+      })
+      .nullable()
+      .describe(
+        "Set on the moves of an Auto-Assign, which YNAB lists together as one entry; null otherwise",
+      ),
+    userId: z.string().nullable().describe("Who moved it; null if their user was deleted"),
+    userName: z.string().nullable().describe("Who moved it; null if their user was deleted"),
+    memberRole: z
+      .enum(BUDGET_ROLES)
+      .nullable()
+      .describe("The mover's role on the budget now; null once they've left it"),
   })
   .openapi("MoneyMove");
+
+const MoneyMoveList = z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList");
 
 export const listMoves = createRoute({
   method: "get",
@@ -579,9 +644,32 @@ export const listMoves = createRoute({
       description: "The last 34 days' moves",
       content: {
         "application/json": {
-          schema: z.object({ moves: z.array(MoneyMoveSchema) }).openapi("MoneyMoveList"),
+          schema: MoneyMoveList,
         },
       },
+    },
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const listMonthMoves = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/months/{month}/moves",
+  operationId: "listMonthMoves",
+  tags: ["Budget months"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Every change to assigned money in a month, newest first",
+  description:
+    'Behind YNAB\'s per-category history ("Changes to your assigned amount this month"): all of ' +
+    "the month's moves, however old.",
+  request: { params: BudgetParams },
+  responses: {
+    200: {
+      description: "The month's moves",
+      content: { "application/json": { schema: MoneyMoveList } },
     },
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),

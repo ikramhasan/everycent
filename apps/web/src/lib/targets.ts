@@ -232,7 +232,8 @@ export function targetLines(
   format: Format,
   fundedSpending = "0",
 ) {
-  const toGo = BigInt(need.needed) - BigInt(need.funded);
+  // Before its card was opened a payment target has nothing to go (YNAB: Card E3, To Go $0.00).
+  const toGo = need.beforeOpening ? 0n : BigInt(need.needed) - BigInt(need.funded);
   const toGoLine = { label: "To Go", value: format((toGo > 0n ? toGo : 0n).toString()) };
   if (target.cadence === "payoff_by_date") {
     const extra = BigInt(fundedSpending);
@@ -276,6 +277,9 @@ export function targetMessage(
   format: Format,
   month?: BudgetMonth,
 ) {
+  // Before its card was opened a payment target asks nothing, and YNAB still reads "Assign $0.00
+  // to meet your target" (Card E3, 2026-10-12).
+  if (need.beforeOpening) return { prompt: format("0"), suffix: " to meet your target" };
   const status = targetStatus(need);
   // Past a one-time target's due month YNAB shows no message unless it's met (C5 U1, 2026-10-12).
   if (need.pastDue && status !== "met") return null;

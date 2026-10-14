@@ -23,7 +23,7 @@ import {
   Puzzle,
   TriangleAlert,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -67,6 +67,7 @@ import { AvailablePill } from "./move-money";
 import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
 import { ShareProgressDialog } from "./share-progress";
+import { OriginalHistory } from "./update-to-loan";
 
 type Open =
   | { kind: "payment" }
@@ -98,16 +99,24 @@ export function useLoanRefresh(budgetId: string) {
     ]);
 }
 
-/** Saves a pairing choice, creating the new category first when there is one. */
+/**
+ * Saves a pairing choice, creating the new category first when there is one. A dialog retrying
+ * after a failed save passes the same choice object, so it reuses the category it already made
+ * instead of creating another.
+ */
 export function usePairCategory(budgetId: string) {
   const createCategory = $api.useMutation("post", "/v1/budgets/{budgetId}/categories");
+  const created = useRef(new WeakMap<object, string>());
   return async (choice: Exclude<PairChoice, null>) => {
     if ("categoryId" in choice) return choice.categoryId;
-    const created = await createCategory.mutateAsync({
+    const known = created.current.get(choice);
+    if (known) return known;
+    const category = await createCategory.mutateAsync({
       params: { path: { budgetId } },
       body: { name: choice.name.trim(), groupId: choice.groupId },
     });
-    return created.id;
+    created.current.set(choice, category.id);
+    return category.id;
   };
 }
 
@@ -188,6 +197,10 @@ export function LoanPage({
   const reconcile = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile",
+  );
+  const previewReconcile = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
   );
   const updateAccount = $api.useMutation("patch", "/v1/budgets/{budgetId}/accounts/{accountId}");
   const createTransaction = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
@@ -316,7 +329,9 @@ export function LoanPage({
 
       {plan && (
         <LoanBanners
+          budgetId={budget.id}
           accountId={account.id}
+          banners={loan.data?.banners}
           paidOff={plan.progress.paidOff}
           onSimulate={account.closed ? undefined : () => setOpen({ kind: "simulator" })}
         />
@@ -443,6 +458,22 @@ export function LoanPage({
         )}
       </section>
 
+      {loan.data?.originalHistory && (
+        <OriginalHistory
+          months={loan.data.originalHistory.months}
+          format={format}
+          onGoToAccount={() =>
+            void navigate({
+              to: "/budgets/$budgetId/accounts/$accountId",
+              params: {
+                budgetId: budget.id,
+                accountId: loan.data?.originalHistory?.accountId ?? account.id,
+              },
+            })
+          }
+        />
+      )}
+
       {open?.kind === "payment" && (
         <RecordPaymentDialog
           open
@@ -451,6 +482,7 @@ export function LoanPage({
           settings={settings}
           format={format}
           paired={paired ? { name: paired.name, available: pairedAvailable } : null}
+          lastFromAccountId={account.lastPaymentFromAccountId}
           onSave={(input) =>
             save(
               () =>
@@ -567,12 +599,24 @@ export function LoanPage({
           account={account}
           settings={settings}
           format={format}
-          onReconcile={(balance) =>
+          month={current}
+          onPreview={async (balance, loanTerms) => {
+            try {
+              const { adjustment } = await previewReconcile.mutateAsync({
+                params: { path },
+                body: { balance: balance.toString(), date: today, loanTerms },
+              });
+              return BigInt(adjustment);
+            } catch (error) {
+              return apiErrorMessage(error, "Couldn't work out the adjustment.");
+            }
+          }}
+          onReconcile={(balance, loanTerms) =>
             save(
               () =>
                 reconcile.mutateAsync({
                   params: { path },
-                  body: { balance: balance.toString(), date: today },
+                  body: { balance: balance.toString(), date: today, loanTerms },
                 }),
               "Couldn't update the balance.",
             )

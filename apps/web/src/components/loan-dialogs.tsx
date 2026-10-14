@@ -1,6 +1,7 @@
 import { accountFamily, type BudgetMonth } from "@everycent/engine";
 import { Alert, AlertDescription } from "@everycent/ui/components/alert";
 import { Button } from "@everycent/ui/components/button";
+import { Checkbox } from "@everycent/ui/components/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +12,21 @@ import {
 } from "@everycent/ui/components/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
+import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { RadioGroup, RadioGroupItem } from "@everycent/ui/components/radio-group";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
 import type { Account } from "@/lib/accounts";
 import type { CategoryList } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
-import { type LoanMonthData, shortMonth } from "@/lib/loans";
+import {
+  formatRate,
+  hasEscrow,
+  type LoanMonthData,
+  type LoanTermsCheck,
+  loanTermsChangeLines,
+  shortMonth,
+} from "@/lib/loans";
 import { type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
 import { bankBalance } from "./reconcile";
 import { DateField } from "./register-fields";
@@ -183,6 +192,22 @@ export interface PaymentInput {
 }
 
 /**
+ * Where Record Payment's From Account starts. YNAB (2026-10-14, "L7 Loans FS"): on the account of
+ * the payment into this loan entered last (`lastFromAccountId`, from the API; Record Payment or a
+ * register transfer, even back-dated), and on a loan with none, on the first account in the list
+ * (cash accounts, then credit accounts, in sidebar order). A closed account falls back the same way.
+ */
+export function defaultPaymentSource(
+  accounts: readonly Account[],
+  lastFromAccountId: string | null | undefined,
+): string {
+  const open = (family: "cash" | "credit") =>
+    accounts.filter((a) => !a.closed && accountFamily(a.type) === family);
+  const list = [...open("cash"), ...open("credit")];
+  return (list.find((a) => a.id === lastFromAccountId) ?? list[0])?.id ?? "";
+}
+
+/**
  * YNAB's Record Payment (2026-10-13): Payment Amount, From Account (cash accounts, then credit
  * accounts), Date, Memo; with "You have $X available for payment in <category>." when the loan is
  * paired.
@@ -196,6 +221,7 @@ export function RecordPaymentDialog({
   paired,
   initialAmount,
   fromInspector = false,
+  lastFromAccountId,
   onSave,
 }: {
   open: boolean;
@@ -207,12 +233,15 @@ export function RecordPaymentDialog({
   paired: { name: string; available: bigint } | null;
   initialAmount?: bigint;
   fromInspector?: boolean;
+  /** The loan's `lastPaymentFromAccountId`. */
+  lastFromAccountId?: string | null;
   onSave: (input: PaymentInput) => Promise<string | null>;
 }) {
   const cash = accounts.filter((a) => !a.closed && accountFamily(a.type) === "cash");
   const credit = accounts.filter((a) => !a.closed && accountFamily(a.type) === "credit");
-  // YNAB started on the last account in this list (its only card); its rule wasn't confirmed.
-  const [fromAccountId, setFrom] = useState(() => (credit.at(-1) ?? cash.at(-1))?.id ?? "");
+  const [fromAccountId, setFrom] = useState(() =>
+    defaultPaymentSource(accounts, lastFromAccountId),
+  );
   const [amount, setAmount] = useState(
     initialAmount && initialAmount > 0n ? toMoneyInput(initialAmount, settings) : "",
   );
@@ -535,12 +564,17 @@ export function RecordInterestDialog({
   );
 }
 
-type UpdateStep = "confirm" | "enter" | "difference" | "done";
+type UpdateStep = "confirm" | "enter" | "check" | "difference" | "done";
+
+const RATE = /^\d{1,3}(\.\d{1,3})?$/;
 
 /**
- * YNAB's loan Update Balance (2026-10-13): "Is your current balance at your lender …?" Yes
- * reconciles; No asks for the lender's balance and, if it differs, shows the Balance Adjustment
- * it will add. Its interest-rate/escrow check step isn't built yet (EVERYCENT-126).
+ * YNAB's loan Update Balance (2026-10-13/14): "Is your current balance at your lender …?" Yes
+ * reconciles; No asks for the lender's balance. If it differs, a check step shows the Difference
+ * and the loan's interest rate (and a mortgage's monthly escrow), each with "Keep this new …
+ * going forward"; then the Changes step lists the Balance Adjustment (worked out by the API with
+ * this month re-estimated on any new terms) and the term changes. Nothing is saved before its
+ * Next.
  */
 export function UpdateBalanceDialog({
   open,
@@ -548,6 +582,8 @@ export function UpdateBalanceDialog({
   account,
   settings,
   format,
+  month,
+  onPreview,
   onReconcile,
 }: {
   open: boolean;
@@ -555,23 +591,66 @@ export function UpdateBalanceDialog({
   account: Account;
   settings: Settings;
   format: Format;
-  onReconcile: (balance: bigint) => Promise<string | null>;
+  /** The user's current month (the changes apply "for October"). */
+  month: BudgetMonth;
+  /** The adjustment a reconcile with these terms would add, or an error message. */
+  onPreview: (balance: bigint, loanTerms: LoanTermsCheck) => Promise<bigint | string>;
+  onReconcile: (balance: bigint, loanTerms?: LoanTermsCheck) => Promise<string | null>;
 }) {
   const working = BigInt(account.balances.working);
   const [step, setStep] = useState<UpdateStep>("confirm");
   const [text, setText] = useState("");
   const [balance, setBalance] = useState(working);
+  const [rate, setRate] = useState(account.interestRate ? formatRate(account.interestRate) : "");
+  const [keepRate, setKeepRate] = useState(true);
+  const [escrow, setEscrow] = useState(toMoneyInput(account.escrowAmount, settings));
+  const [keepEscrow, setKeepEscrow] = useState(true);
+  const [terms, setTerms] = useState<LoanTermsCheck | undefined>();
+  const [adjustment, setAdjustment] = useState(0n);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const inputId = useId();
+  const rateId = useId();
+  const keepRateId = useId();
+  const escrowId = useId();
+  const keepEscrowId = useId();
+  const changes = terms ? loanTermsChangeLines(terms, account, month, format) : [];
 
-  async function reconcile(to: bigint) {
+  async function reconcile(to: bigint, loanTerms?: LoanTermsCheck) {
     setPending(true);
     setError(null);
-    const message = await onReconcile(to);
+    const message = await onReconcile(to, loanTerms);
     setPending(false);
     if (message) setError(message);
     else setStep("done");
+  }
+
+  /** The check step's Next: the new terms, and the adjustment they lead to. */
+  async function check(event: FormEvent) {
+    event.preventDefault();
+    const newRate = rate.trim().replace(/%$/, "").replace(",", ".");
+    if (newRate && !RATE.test(newRate)) return setError("Enter the interest rate like 6.125");
+    const loanTerms: LoanTermsCheck = {
+      interestRate: { rate: newRate || null, keepGoingForward: keepRate },
+    };
+    if (hasEscrow(account.type)) {
+      const amount = escrow.trim() ? parseMoneyInput(escrow, settings) : null;
+      if (typeof amount === "string") return setError(amount);
+      loanTerms.escrowAmount = { amount: amount?.toString() ?? null, keepGoingForward: keepEscrow };
+    }
+    setError(null);
+    if (loanTermsChangeLines(loanTerms, account, month, format).length === 0) {
+      setTerms(undefined);
+      setAdjustment(balance - working);
+      return setStep("difference");
+    }
+    setPending(true);
+    const result = await onPreview(balance, loanTerms);
+    setPending(false);
+    if (typeof result === "string") return setError(result);
+    setTerms(loanTerms);
+    setAdjustment(result);
+    setStep("difference");
   }
 
   return (
@@ -604,7 +683,7 @@ export function UpdateBalanceDialog({
               setBalance(parsed);
               if (parsed === working) return void reconcile(parsed);
               setError(null);
-              setStep("difference");
+              setStep("check");
             }}
           >
             <div className="flex items-baseline justify-between gap-2 border-b pb-3 text-sm">
@@ -632,12 +711,55 @@ export function UpdateBalanceDialog({
             </Button>
           </form>
         )}
+        {step === "check" && (
+          <form className="grid gap-4" onSubmit={(event) => void check(event)}>
+            <Difference amount={balance - working} format={format} />
+            <p className="text-sm">
+              The balance recorded in everycent doesn't match your account. First of all, let's make
+              sure the information we have is correct.
+            </p>
+            <Field>
+              <FieldLabel htmlFor={rateId}>Interest rate</FieldLabel>
+              <Input
+                id={rateId}
+                inputMode="decimal"
+                autoFocus
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+              />
+              <KeepGoingForward
+                id={keepRateId}
+                label="Keep this new interest rate going forward"
+                checked={keepRate}
+                onChange={setKeepRate}
+              />
+            </Field>
+            {hasEscrow(account.type) && (
+              <Field>
+                <FieldLabel htmlFor={escrowId}>Monthly escrow amount</FieldLabel>
+                <Input
+                  id={escrowId}
+                  inputMode="decimal"
+                  value={escrow}
+                  onChange={(e) => setEscrow(e.target.value)}
+                />
+                <KeepGoingForward
+                  id={keepEscrowId}
+                  label="Keep this new escrow amount going forward"
+                  checked={keepEscrow}
+                  onChange={setKeepEscrow}
+                />
+              </Field>
+            )}
+            {error && <FieldError>{error}</FieldError>}
+            <Button type="submit" className="justify-self-end" disabled={pending}>
+              Next
+            </Button>
+          </form>
+        )}
         {step === "difference" && (
           <div className="grid gap-4">
-            <div className="rounded-md bg-muted p-3 text-center">
-              <p className="font-semibold tabular-nums">{format(balance - working)}</p>
-              <p className="text-muted-foreground text-xs">Difference</p>
-            </div>
+            <Difference amount={adjustment} format={format} />
             <p className="text-sm">
               Since it looks like there is still a difference between your account balance in
               everycent and at your lender, we'll create a balance adjustment to get you back on
@@ -645,19 +767,28 @@ export function UpdateBalanceDialog({
             </p>
             <div className="grid gap-1 text-sm">
               <p className="font-medium">Changes</p>
-              <div className="flex justify-between border-y py-2">
-                <span>Balance Adjustment</span>
-                <span className="tabular-nums">
-                  {balance - working > 0n ? "+" : ""}
-                  {format(balance - working)}
-                </span>
-              </div>
+              <ul className="divide-y border-y">
+                {adjustment !== 0n && (
+                  <li className="flex justify-between py-2">
+                    <span>Balance Adjustment</span>
+                    <span className="tabular-nums">
+                      {adjustment > 0n ? "+" : ""}
+                      {format(adjustment)}
+                    </span>
+                  </li>
+                )}
+                {changes.map((line) => (
+                  <li key={line} className="py-2">
+                    {line}
+                  </li>
+                ))}
+              </ul>
             </div>
             {error && <FieldError>{error}</FieldError>}
             <Button
               className="justify-self-end"
               disabled={pending}
-              onClick={() => void reconcile(balance)}
+              onClick={() => void reconcile(balance, terms)}
             >
               Next
             </Button>
@@ -682,6 +813,37 @@ export function UpdateBalanceDialog({
   );
 }
 
+/** Update Balance's grey "Difference" box. */
+function Difference({ amount, format }: { amount: bigint; format: Format }) {
+  return (
+    <div className="rounded-md bg-muted p-3 text-center">
+      <p className="font-semibold tabular-nums">{format(amount)}</p>
+      <p className="text-muted-foreground text-xs">Difference</p>
+    </div>
+  );
+}
+
+function KeepGoingForward({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={id} checked={checked} onCheckedChange={(v) => onChange(v === true)} />
+      <Label htmlFor={id} className="font-normal">
+        {label}
+      </Label>
+    </div>
+  );
+}
+
 export type PairChoice = { categoryId: string } | { name: string; groupId: string } | null;
 
 /** The plan categories a loan can pair with (YNAB lists every plan category but the card ones). */
@@ -701,10 +863,16 @@ export function PairCategoryFields({
   list,
   value,
   onChange,
+  newName = "",
 }: {
   list: CategoryList;
   value: PairChoice;
   onChange: (choice: PairChoice) => void;
+  /**
+   * The new category's starting name (Update to a Loan Account prefills the account's, YNAB
+   * 2026-10-14).
+   */
+  newName?: string;
 }) {
   const [mode, setMode] = useState<"existing" | "new">(
     value && "name" in value ? "new" : "existing",
@@ -726,7 +894,7 @@ export function PairCategoryFields({
         value={mode}
         onValueChange={(v) => {
           setMode(v as "existing" | "new");
-          onChange(null);
+          onChange(v === "new" && newName ? { name: newName, groupId: "" } : null);
         }}
         aria-label="Which category do you want to pair your loan with?"
       >

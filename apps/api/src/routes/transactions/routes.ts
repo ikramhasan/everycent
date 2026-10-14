@@ -28,6 +28,20 @@ const Flag = z
   .nullable()
   .describe("One of YNAB's six flag colors; null clears it");
 
+const TransferSideSchema = z
+  .object({
+    memo: z.string(),
+    cleared: z.enum(CLEARED_STATES),
+    flag: Flag,
+    approved: z.boolean(),
+    categoryId: z.string().nullable(),
+  })
+  .describe(
+    "Transfers: the other side's own state, which `createTransaction` takes back as " +
+      "`transferSide` when an undo restores the transfer",
+  )
+  .openapi("TransferSide");
+
 const SubTransactionSchema = z
   .object({
     id: z.string(),
@@ -43,6 +57,7 @@ const SubTransactionSchema = z
       .nullable()
       .describe("Transfer lines: the transaction they keep in the other account"),
     transferReconciled: z.boolean().describe("Transfer lines: the other side is reconciled"),
+    transferSide: TransferSideSchema.nullable(),
   })
   .openapi("SubTransaction");
 
@@ -87,6 +102,10 @@ export const TransactionSchema = z
         "Transfers: the other side is reconciled (it follows changes to date, amount and " +
           "account, and stays reconciled; YNAB warns before an amount or account change)",
       ),
+    transferSide: TransferSideSchema.nullable().describe(
+      "Transfers: the other side's own state (null when the other side is a split's line, or " +
+        "for other transactions)",
+    ),
     subtransactions: z
       .array(SubTransactionSchema)
       .describe("A split's lines, in order (empty when not split); the split has no category"),
@@ -159,6 +178,21 @@ const splitRules =
   "its own `categoryId` is then null. Lines follow the same category and transfer rules. Only " +
   "budget accounts have splits, and a transfer can't be split (its lines can be transfers).";
 
+const TransferSideInput = z
+  .object({
+    memo: Memo,
+    cleared: NewCleared,
+    flag: Flag,
+    approved: z.boolean(),
+    categoryId: z.string().nullable(),
+  })
+  .describe(
+    "Restoring a deleted transfer (an undo): its other side's own state, from the deleted " +
+      "transaction's `transferSide`. Left out, the other side starts uncleared, approved, " +
+      "unflagged and with this side's memo",
+  )
+  .openapi("TransferSideInput");
+
 const SubTransactionInput = z
   .object({
     id: z.string().optional().describe("An existing line of this split; leave out for new ones"),
@@ -167,6 +201,7 @@ const SubTransactionInput = z
     transferAccountId: z.string().optional().describe("Make this line a transfer"),
     categoryId: z.string().nullable().default(null),
     memo: Memo.default(""),
+    transferSide: TransferSideInput.optional(),
   })
   .openapi("SubTransactionInput");
 const SubTransactions = z.array(SubTransactionInput).min(2);
@@ -240,6 +275,18 @@ export const createTransaction = createRoute({
           subtransactions: SubTransactions.optional(),
           cleared: NewCleared.default("uncleared"),
           flag: Flag.default(null),
+          approved: z
+            .boolean()
+            .optional()
+            .describe("False brings back an unapproved transaction (an undo); true if left out"),
+          transferSide: TransferSideInput.optional(),
+          restore: z
+            .boolean()
+            .optional()
+            .describe(
+              "An undo bringing back a deleted transaction: its accounts (and its transfers' " +
+                "accounts) may have been closed since, as YNAB's Undo allows",
+            ),
         })
         .openapi("CreateTransaction"),
     ),

@@ -143,6 +143,8 @@ export function scheduleRestoreBody(row: ScheduledTransaction): CreateBody {
           categoryId: null,
         }
       : { categoryId: row.categoryId }),
+    // An undo puts it back even if its accounts were closed since, as YNAB's Undo does.
+    restore: true,
   };
 }
 

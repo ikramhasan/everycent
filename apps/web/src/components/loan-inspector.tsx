@@ -139,6 +139,7 @@ export function PairedLoanSection({
           paired={{ name: categoryName, available: amount }}
           initialAmount={amount}
           fromInspector
+          lastFromAccountId={loan.lastPaymentFromAccountId}
           onSave={async (input) => {
             try {
               await record.mutateAsync({

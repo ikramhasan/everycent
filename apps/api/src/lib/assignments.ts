@@ -1,6 +1,6 @@
 import { newId, sql } from "@everycent/db";
 import { categoryAssignment, moneyMove } from "@everycent/db/schema";
-import type { BudgetMonth, CurrencyCode } from "@everycent/engine";
+import type { AutoAssignOption, BudgetMonth, CurrencyCode } from "@everycent/engine";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "./ledger";
 
@@ -50,7 +50,10 @@ export async function adjustAssigned(
     });
 }
 
-/** Records a change of assigned money for "Recent Moves". `amount` must be positive. */
+/**
+ * Records a change of assigned money for "Recent Moves". `amount` must be positive. The moves of
+ * one Auto-Assign share `autoAssign.batchId`, so they show as one "N categories" entry.
+ */
 export async function logMove(
   db: Db,
   budget: Budget,
@@ -60,6 +63,7 @@ export async function logMove(
     toCategoryId: string;
     month: BudgetMonth;
     amount: bigint;
+    autoAssign?: { batchId: string; method: AutoAssignOption };
   },
 ) {
   await db.insert(moneyMove).values({
@@ -71,5 +75,7 @@ export async function logMove(
     month: `${move.month}-01`,
     amount: move.amount,
     currency: budget.currency,
+    autoAssignBatchId: move.autoAssign?.batchId ?? null,
+    autoAssignMethod: move.autoAssign?.method ?? null,
   });
 }

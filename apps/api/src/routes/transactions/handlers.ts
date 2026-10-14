@@ -29,6 +29,7 @@ import {
   lockTransaction,
   reconciledStays,
   resolveCategory,
+  type TransferSideInput,
   transferInSplit,
   usesCategory,
 } from "./rules";
@@ -81,18 +82,28 @@ export interface CreateBody {
   subtransactions?: LineInput[];
   cleared: ClearedState;
   flag: FlagColor | null;
+  approved?: boolean;
+  /** A restored transfer's other side, as it was. */
+  transferSide?: TransferSideInput;
+  /**
+   * An undo bringing back a deleted transaction: its accounts may have been closed since. YNAB's
+   * Undo restores a transfer into an account closed from elsewhere (2026-10-14).
+   */
+  restore?: boolean;
 }
 
 /** A new transaction (with its transfer's other side and its split's lines); returns its id. */
 export async function insertNewTransaction(tx: Db, budgetId: string, body: CreateBody) {
   assertOnePayee(body);
   const account = await findAccount(tx, budgetId, body.accountId);
-  assertOpen(account);
+  if (!body.restore) assertOpen(account);
   let transferTo: AccountRow | null = null;
   if (body.transferAccountId !== undefined) {
     transferTo = await findAccount(tx, budgetId, body.transferAccountId);
     assertNotSelf(account, transferTo);
-    assertOpen(transferTo);
+    if (!body.restore) assertOpen(transferTo);
+  } else if (body.transferSide) {
+    throw new AppError(400, "BAD_REQUEST", "`transferSide` needs `transferAccountId`");
   }
   const amount = BigInt(body.amount);
   const split = body.subtransactions;
@@ -119,9 +130,14 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
     memo: body.memo,
     cleared: body.cleared,
     flag: body.flag,
+    approved: body.approved,
   });
   if (split) {
-    await syncLines(tx, { budgetId, parentId: id, date: body.date, account, moved: false }, split);
+    await syncLines(
+      tx,
+      { budgetId, parentId: id, date: body.date, account, moved: false, restore: body.restore },
+      split,
+    );
   }
   if (transferTo) {
     await insertOtherSide(
@@ -129,6 +145,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
       { id, budgetId, date: body.date, amount, memo: body.memo },
       account,
       transferTo,
+      body.transferSide ?? {},
     );
   }
   return id;

@@ -41,6 +41,7 @@ const txn: Transaction = {
   approved: true,
   transferFromSplit: false,
   transferReconciled: false,
+  transferSide: null,
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
@@ -288,6 +289,7 @@ describe("splits", () => {
           transferAccountId: null,
           transferTransactionId: null,
           transferReconciled: false,
+          transferSide: null,
         },
         {
           id: "l2",
@@ -300,6 +302,7 @@ describe("splits", () => {
           transferAccountId: null,
           transferTransactionId: null,
           transferReconciled: false,
+          transferSide: null,
         },
       ],
     };

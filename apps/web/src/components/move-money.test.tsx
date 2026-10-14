@@ -22,6 +22,40 @@ function makeActions(): MoveActions & { move: ReturnType<typeof vi.fn> } {
 }
 
 describe("AvailableButton", () => {
+  // YNAB "x132 Order", 2026-10-14 (EVERYCENT-140).
+  it("covers overspending from a later month's assigned money", async () => {
+    const actions = makeActions();
+    const moveFrom = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AvailableButton
+        categoryId="phone"
+        categoryName="Phone"
+        amount="-200"
+        format={format}
+        actions={{
+          ...actions,
+          moveFrom,
+          coverMonths: {
+            months: [
+              { month: "2026-10", disabled: false },
+              { month: "2026-11", disabled: false },
+            ],
+            initial: "2026-10",
+            optionsFor: () => [{ id: "food", name: "Food", group: "Needs", available: "500" }],
+            unassign: vi.fn(),
+          },
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-2" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Month"), "2026-11");
+    await userEvent.click(screen.getByRole("combobox", { name: "Cover overspending from" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Food/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(moveFrom).toHaveBeenCalledWith("2026-11", "food", "phone", 200n);
+    expect(actions.move).not.toHaveBeenCalled();
+  });
+
   it("moves money to another category", async () => {
     const actions = makeActions();
     render(

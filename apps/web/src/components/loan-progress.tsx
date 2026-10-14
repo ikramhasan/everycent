@@ -1,6 +1,7 @@
 import { NUMBER_FORMAT_SPECS, paidOffSavings } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { cn } from "@everycent/ui/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import {
   ChevronDown,
@@ -12,7 +13,14 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
+import { apiErrorMessage } from "@/lib/budgets";
+import { transactionsQueryPrefix } from "@/lib/transactions";
+
+type LoanBannerState = LoanActivity["banners"];
+
 import {
   type LoanPlan,
   type MessagePart,
@@ -21,7 +29,7 @@ import {
   remainingPercent,
   trackAt,
 } from "@/lib/loan-planner";
-import { longMonth } from "@/lib/loans";
+import { type LoanActivity, longMonth } from "@/lib/loans";
 import { LoanChart, LoanChartLegend, type LoanSeries, SERIES_HINTS } from "./loan-chart";
 
 /** Rounds to whole major units, half up, and drops the decimals ("$9,745", "9.745 €"). */
@@ -39,26 +47,31 @@ export function useWholeFormat() {
   };
 }
 
-/** Remembers a dismissed banner on this device. */
-function useDismissed(key: string) {
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return localStorage.getItem(key) === "1";
-    } catch {
-      return false;
+type BannerName = "simulator" | "paidOff";
+
+/**
+ * The banners' dismissals, kept on the plan as YNAB keeps them (checked 2026-10-14): hidden at
+ * once, then saved; every loan's data is refetched, as the simulator one covers them all.
+ */
+function useDismissed(budgetId: string, accountId: string, saved: LoanBannerState | undefined) {
+  const queryClient = useQueryClient();
+  const [local, setLocal] = useState<ReadonlySet<BannerName>>(() => new Set());
+  const dismissed = (banner: BannerName) =>
+    local.has(banner) ||
+    (banner === "simulator" ? saved?.simulatorDismissed : saved?.paidOffDismissed) === true;
+  const dismiss = async (banner: BannerName) => {
+    setLocal((prev) => new Set(prev).add(banner));
+    const { error } = await apiClient.POST(
+      "/v1/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss",
+      { params: { path: { budgetId, accountId } }, body: { banner } },
+    );
+    if (error) {
+      toast.error(apiErrorMessage(error, "Couldn't dismiss the banner."));
+      return;
     }
-  });
-  return [
-    dismissed,
-    () => {
-      setDismissed(true);
-      try {
-        localStorage.setItem(key, "1");
-      } catch {
-        // Storage can be blocked; the banner just comes back next time.
-      }
-    },
-  ] as const;
+    await queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix });
+  };
+  return { dismissed, dismiss };
 }
 
 function Banner({
@@ -117,19 +130,29 @@ function Banner({
 
 /**
  * YNAB's loan page banners (2026-10-13): the payoff simulator ("Try It Now"), and, once the loan is
- * paid off, "Another debt bites the dust." with confetti.
+ * paid off, "Another debt bites the dust." with confetti. Dismissing the simulator one hides it on
+ * every loan; the paid-off one goes per loan. Both stay dismissed for everyone on the plan.
  */
 export function LoanBanners({
+  budgetId,
   accountId,
+  banners,
   paidOff,
   onSimulate,
 }: {
+  budgetId: string;
   accountId: string;
+  /** What's been dismissed on the plan; undefined while loading (nothing shows). */
+  banners: LoanBannerState | undefined;
   paidOff: boolean;
   onSimulate?: () => void;
 }) {
-  const [promoHidden, hidePromo] = useDismissed(`loan-simulator-banner:${accountId}`);
-  const [cheerHidden, hideCheer] = useDismissed(`loan-paid-off-banner:${accountId}`);
+  const { dismissed, dismiss } = useDismissed(budgetId, accountId, banners);
+  if (!banners) return null;
+  const promoHidden = dismissed("simulator");
+  const cheerHidden = dismissed("paidOff");
+  const hidePromo = () => void dismiss("simulator");
+  const hideCheer = () => void dismiss("paidOff");
   return (
     <>
       {!promoHidden && onSimulate && (

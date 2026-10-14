@@ -549,6 +549,67 @@ describe("scheduled transactions", () => {
     expect((await json<ErrorBody>(res)).error.code).toBe("ACCOUNT_CLOSED");
   });
 
+  // YNAB's Undo brings a deleted scheduled transfer back into an account closed since
+  // (2026-10-14, EVERYCENT-133).
+  it("restores a deleted scheduled transfer to an account closed since (undo)", async () => {
+    const ctx = await setup();
+    const checking = await ctx.addAccount("Checking", "checking");
+    const old = await ctx.addAccount("Old", "savings", "0");
+    const restoreBody = {
+      accountId: checking.id,
+      frequency: "monthly",
+      date: "2026-11-20",
+      dateFirst: "2026-10-20",
+      amount: "-3000",
+      transferAccountId: old.id,
+      memo: "rent pot",
+      flag: "green",
+    };
+    const { scheduledTransaction } = await ctx.schedule(restoreBody);
+    const removed = await send(
+      "DELETE",
+      `${ctx.base}/scheduled-transactions/${scheduledTransaction?.id}`,
+      ctx.cookie,
+    );
+    expect(removed.status).toBe(204);
+    const closed = await send("POST", `${ctx.base}/accounts/${old.id}/close`, ctx.cookie, {
+      date: START,
+    });
+    expect(closed.status).toBe(200);
+
+    const refused = await ctx.schedule(restoreBody, 400);
+    expect((refused as unknown as ErrorBody).error.code).toBe("ACCOUNT_CLOSED");
+    const back = await ctx.schedule({ ...restoreBody, restore: true });
+    expect(back.scheduledTransaction).toMatchObject({
+      transferAccountId: old.id,
+      dateFirst: "2026-10-20",
+      dateNext: "2026-11-20",
+      memo: "rent pot",
+      flag: "green",
+    });
+  });
+
+  it("puts an edited schedule back to an account closed since (undo)", async () => {
+    const ctx = await setup();
+    const checking = await ctx.addAccount("Checking", "checking");
+    const old = await ctx.addAccount("Old", "savings", "0");
+    const other = await ctx.addAccount("Other", "savings", "0");
+    const { scheduledTransaction } = await ctx.schedule({
+      accountId: checking.id,
+      date: "2026-11-20",
+      amount: "-3000",
+      transferAccountId: old.id,
+    });
+    const id = scheduledTransaction?.id ?? "";
+    await ctx.patch(id, { transferAccountId: other.id });
+    await send("POST", `${ctx.base}/accounts/${old.id}/close`, ctx.cookie, { date: START });
+
+    const refused = await ctx.patch(id, { transferAccountId: old.id }, 400);
+    expect((refused as unknown as ErrorBody).error.code).toBe("ACCOUNT_CLOSED");
+    const back = await ctx.patch(id, { transferAccountId: old.id, restore: true });
+    expect(back.scheduledTransaction?.transferAccountId).toBe(old.id);
+  });
+
   it("searches and filters scheduled rows like the register (they count as uncleared)", async () => {
     const ctx = await setup();
     const checking = await ctx.addAccount("Checking", "checking");

@@ -7,6 +7,7 @@ import {
   isCaution,
   matchesFilter,
   overspentCount,
+  overspentOnlyCredit,
   summarize,
   targetMark,
   UNCATEGORIZED,
@@ -38,7 +39,17 @@ const month: BudgetMonthData = {
   readyToAssign: "0",
   overdraft: false,
   assignedInFuture: "0",
+  readyToAssignBreakdown: {
+    leftOver: "0",
+    inflows: "0",
+    debtInflows: "0",
+    cashOverspending: "0",
+    assigned: "0",
+    assignedInFuture: "0",
+    total: "0",
+  },
   futureMonths: [],
+  nextMonthTargets: null,
   futureShortfall: null,
   note: "",
   targets: { month: "0", nextMonth: "0", expectedIncome: null },
@@ -100,6 +111,19 @@ describe("budget views", () => {
     expect(overspentCount(month, visible)).toBe(2);
   });
 
+  // support.ynab.com "Focused Views": yellow when all overspending is credit, red with any cash.
+  it("tells when all overspending is credit", () => {
+    const credit = (m: typeof month) => ({
+      ...m,
+      categories: m.categories.map((c) => ({ ...c, cashOverspent: "0" })),
+      uncategorized: m.uncategorized && { ...m.uncategorized, cashOverspent: "0" },
+    });
+    expect(overspentOnlyCredit(credit(month), visible)).toBe(true);
+    const cash = credit(month);
+    if (cash.uncategorized) cash.uncategorized.cashOverspent = "-100";
+    expect(overspentOnlyCredit(cash, visible)).toBe(false);
+  });
+
   it("works out what a category carried in", () => {
     expect(breakdown(cat("food", "1000", "-500", "1500"))).toEqual({
       carried: 1000n,
@@ -131,7 +155,15 @@ describe("targets", () => {
   const need = (underfunded: string, funded = "4000") => ({
     available: "4000",
     cashOverspent: "0",
-    target: { needed: "10000", funded, underfunded, dueDate: null, pastDue: false, snoozed: false },
+    target: {
+      needed: "10000",
+      funded,
+      underfunded,
+      dueDate: null,
+      pastDue: false,
+      snoozed: false,
+      beforeOpening: false,
+    },
   });
   it("is yellow while a target is underfunded, unless cash overspending makes it red", () => {
     expect(isCaution(need("6000"), "2026-10", "2026-10")).toBe(true);

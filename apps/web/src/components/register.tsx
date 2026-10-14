@@ -51,6 +51,7 @@ import {
   Circle,
   CircleCheck,
   CircleHelp,
+  CreditCard,
   Lock,
   MoreHorizontal,
   Plus,
@@ -194,11 +195,14 @@ export function Register({
   focusId,
   search,
   onSearchChange,
+  recordPayment,
 }: {
   accountId?: string;
   focusId?: string;
   search: RegisterSearch;
   onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
+  /** A credit card's Record Payment: the new row it opens (YNAB's toolbar button). */
+  recordPayment?: () => Draft;
 }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const history = useUndo();
@@ -295,6 +299,8 @@ export function Register({
   const [adding, setAdding] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
   const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
+  // Make Repeating opens the date picker on its row; Record Payment doesn't.
+  const [addingPicker, setAddingPicker] = useState(false);
   const [addingKey, setAddingKey] = useState(0);
   const [newError, setNewError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingCell | null>(null);
@@ -800,12 +806,13 @@ export function Register({
     });
   }
 
-  /** Opens the new-transaction row: empty, or with a draft (Make Repeating's). */
-  function startAdding(draft: Draft | null = null) {
+  /** Opens the new-transaction row: empty, or with a draft (Make Repeating's, Record Payment's). */
+  function startAdding(draft: Draft | null = null, openPicker = draft !== null) {
     setEditing(null);
     setEditingSplit(null);
     setNewError(null);
     setAddingDraft(draft);
+    setAddingPicker(openPicker);
     setAddingKey((k) => k + 1);
     setAdding(true);
   }
@@ -1257,6 +1264,16 @@ export function Register({
         <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
           <Plus /> Add transaction
         </Button>
+        {recordPayment && canAdd && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startAdding(recordPayment(), false)}
+            disabled={adding}
+          >
+            <CreditCard /> Record Payment
+          </Button>
+        )}
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
@@ -1429,7 +1446,7 @@ export function Register({
             <TransactionEditor
               key={addingKey}
               initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
-              openDatePicker={addingDraft !== null}
+              openDatePicker={addingPicker}
               repeat
               columns={columnIds}
               accounts={openAccounts}

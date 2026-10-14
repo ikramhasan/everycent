@@ -177,6 +177,25 @@ describe("credit card payment targets", () => {
     expect((await row(payment.id, "2026-11"))?.target?.underfunded).toBe("3000");
   });
 
+  // YNAB, 2026-10-12: Card E3 opened Oct 8, the target saved from September read "Assign $0.00 to
+  // meet your target", Amount to Assign $30.00, To Go $0.00 there (EVERYCENT-122).
+  it("asks nothing in months before the card was opened (Card E3)", async () => {
+    const { payment, setTarget, row, month } = await setup("10000");
+    const res = await setTarget(payment.id, {
+      month: "2026-09",
+      cadence: "payment_monthly",
+      amount: "3000",
+    });
+    expect(res.status).toBe(200);
+    const sep = await row(payment.id, "2026-09");
+    expect(sep?.target).toMatchObject({ needed: "3000", funded: "0", underfunded: "0" });
+    expect(sep?.autoAssign.underfunded).toBe("0");
+    expect((await month("2026-09")).targets).toMatchObject({ month: "0", nextMonth: "3000" });
+    // From the card's opening month on, it asks as usual.
+    expect((await row(payment.id))?.target).toMatchObject({ underfunded: "3000" });
+    expect((await month("2026-10")).targets.month).toBe("3000");
+  });
+
   it("still asks its share while a payment leaves the category red (Card E2)", async () => {
     const { base, cookie, checking, card, payment, rent, setTarget, assign, spend, row } =
       await setup("10000");

@@ -7,8 +7,10 @@ import {
   categoryOverspending,
   isOverdraft,
   monthBounds,
+  monthEndBalances,
   monthOf,
   readyToAssign,
+  readyToAssignBreakdown,
   splitOverspending,
 } from "./months";
 
@@ -204,6 +206,59 @@ describe("categoryMonth", () => {
   });
 });
 
+describe("readyToAssignBreakdown", () => {
+  const a = (month: string, amount: bigint) => ({ month, amount });
+
+  // YNAB "x132 Order", 2026-10-14: $1 in August, $3 assigned in September, $15 in and $12
+  // assigned in October, $3 assigned in November.
+  const plan = {
+    income: [a("2026-08", 100n), a("2026-10", 1500n)],
+    debt: [],
+    assigned: [a("2026-09", 300n), a("2026-10", 1200n), a("2026-11", 300n)],
+    overspent: [],
+  };
+
+  it("lists October's lines, Assigned in Future only down to zero", () => {
+    expect(readyToAssignBreakdown({ ...plan, month: "2026-10" })).toEqual({
+      leftOver: -200n,
+      inflows: 1500n,
+      debtInflows: 0n,
+      cashOverspending: 0n,
+      assigned: -1200n,
+      assignedInFuture: -100n,
+      total: 0n,
+    });
+  });
+
+  it("starts November from October's total before November's assigning", () => {
+    expect(readyToAssignBreakdown({ ...plan, month: "2026-11" })).toMatchObject({
+      leftOver: 100n,
+      assigned: -300n,
+      assignedInFuture: 0n,
+      total: -200n,
+    });
+  });
+
+  it("splits card inflows out and takes last month's cash overspending (ihni7's Plan)", () => {
+    const b = readyToAssignBreakdown({
+      month: "2026-10",
+      income: [a("2026-09", -50806n), a("2026-10", 1208500n + 8900n)],
+      debt: [a("2026-10", 8900n)],
+      assigned: [a("2026-10", 257037n)],
+      overspent: [a("2026-09", -270000n)],
+    });
+    expect(b).toEqual({
+      leftOver: -50806n,
+      inflows: 1208500n,
+      debtInflows: 8900n,
+      cashOverspending: -270000n,
+      assigned: -257037n,
+      assignedInFuture: 0n,
+      total: 639557n,
+    });
+  });
+});
+
 describe("readyToAssign", () => {
   const a = (month: string, amount: bigint) => ({ month, amount });
 
@@ -283,6 +338,15 @@ describe("overspending: cash or credit", () => {
     expect(splitOverspending(-500n, -900n)).toEqual({ cashOverspent: -500n, creditOverspent: 0n });
     expect(splitOverspending(-500n, 200n)).toEqual({ cashOverspent: 0n, creditOverspent: -500n });
     expect(splitOverspending(100n, -300n)).toEqual({ cashOverspent: 0n, creditOverspent: 0n });
+  });
+
+  it("makes a payment category a return took below zero cash overspending (YNAB: x128 Card A)", () => {
+    const returned = { month: "2026-10", assigned: 0n, activity: -400n, fundedSpending: -400n };
+    expect(categoryMonth([returned], "2026-10")).toMatchObject({
+      available: -400n,
+      cashOverspent: -400n,
+      creditOverspent: 0n,
+    });
   });
 });
 
@@ -390,5 +454,39 @@ describe("isOverdraft", () => {
   it("never applies to a Ready to Assign that isn't negative", () => {
     expect(isOverdraft(0n, [cat(-5_00n)])).toBe(false);
     expect(isOverdraft(1n, [])).toBe(false);
+  });
+});
+
+describe("monthEndBalances", () => {
+  it("lists each month's ending balance, newest first (YNAB's x-145 HELOC history)", () => {
+    expect(
+      monthEndBalances([
+        { date: "2026-08-01", amount: -500000n },
+        { date: "2026-09-15", amount: 20000n },
+        { date: "2026-10-02", amount: -3000n },
+        { date: "2026-10-14", amount: 483000n },
+      ]),
+    ).toEqual([
+      { month: "2026-10", endBalance: 0n },
+      { month: "2026-09", endBalance: -480000n },
+      { month: "2026-08", endBalance: -500000n },
+    ]);
+  });
+
+  it("carries a balance through months without transactions, across a year", () => {
+    expect(
+      monthEndBalances([
+        { date: "2027-01-03", amount: 5n },
+        { date: "2026-11-30", amount: -10n },
+      ]),
+    ).toEqual([
+      { month: "2027-01", endBalance: -5n },
+      { month: "2026-12", endBalance: -10n },
+      { month: "2026-11", endBalance: -10n },
+    ]);
+  });
+
+  it("is empty without transactions", () => {
+    expect(monthEndBalances([])).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import {
+  AUTO_ASSIGN_OPTIONS,
   type CurrencyCode,
   TARGET_BEHAVIORS,
   TARGET_CADENCES,
@@ -143,6 +144,13 @@ export const moneyMove = pgTable(
     toCategoryName: text(),
     /** Logged by deleting a category (YNAB shows these with a trash icon, under "Moved"). */
     deletion: boolean().notNull().default(false),
+    /**
+     * Shared by the moves of one Auto-Assign (YNAB groups them under a lightning icon as "N
+     * categories"); null for every other move.
+     */
+    autoAssignBatchId: text(),
+    /** The Auto-Assign option behind the batch (YNAB's "Method: Assigned Last Month"). */
+    autoAssignMethod: text({ enum: AUTO_ASSIGN_OPTIONS }),
     /** First day of the month the money moved in, YYYY-MM-01. */
     month: date({ mode: "string" }).notNull(),
     /** Minor units, always positive. */
@@ -211,4 +219,33 @@ export const monthNote = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("month_note_budget_month_idx").on(t.budgetId, t.month)],
+);
+
+/**
+ * YNAB's preset views that Manage Views can reorder (All and Overspent stay first and fixed), in
+ * YNAB's default order.
+ */
+export const PRESET_BUDGET_VIEWS = ["underfunded", "overfunded", "available", "snoozed"] as const;
+export type PresetBudgetView = (typeof PRESET_BUDGET_VIEWS)[number];
+
+/** YNAB allows up to 12 custom views per plan. */
+export const MAX_CUSTOM_VIEWS = 12;
+
+/**
+ * A custom view (YNAB's "New Custom View"): a named set of categories, shared by everyone on the
+ * budget. `categoryIds` keeps hidden categories (they come back when unhidden, as in YNAB); ids of
+ * deleted categories are dropped when read. Names are unique per budget, ignoring case.
+ */
+export const budgetView = pgTable(
+  "budget_view",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    categoryIds: text().array().notNull().default(sql`'{}'::text[]`),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("budget_view_budget_name_idx").on(t.budgetId, sql`lower(${t.name})`)],
 );

@@ -52,6 +52,21 @@ export const AccountSchema = z
     lastPaymentDate: IsoDate.nullable().describe(
       "Loan accounts: the date of the latest payment up to today",
     ),
+    lastPaymentFromAccountId: z
+      .string()
+      .nullable()
+      .describe(
+        "Record Payment's source: for a loan, the cash or credit account of the payment into " +
+          "it entered last; for a credit card, the cash account it was last paid from",
+      ),
+    migratedToAccountId: z
+      .string()
+      .nullable()
+      .describe("A tracking liability updated to a loan account: the new loan"),
+    migratedFromAccountId: z
+      .string()
+      .nullable()
+      .describe("A loan made by updating a tracking liability: the original (closed) account"),
   })
   .openapi("Account");
 
@@ -197,6 +212,69 @@ export const updateAccount = createRoute({
   },
 });
 
+const LoanTermsCheck = z
+  .object({
+    interestRate: z
+      .object({
+        rate: InterestRate.nullable(),
+        keepGoingForward: z
+          .boolean()
+          .describe('Unchecked, next month goes back to the old rate ("… for October.")'),
+      })
+      .optional(),
+    escrowAmount: z
+      .object({
+        amount: zMinorUnits.nullable(),
+        keepGoingForward: z.boolean().describe("Unchecked, next month goes back to the old escrow"),
+      })
+      .optional()
+      .describe("Mortgages only"),
+  })
+  .openapi("LoanTermsCheck", {
+    description: "Update Balance's check step: the loan's interest rate and monthly escrow",
+  });
+
+const ReconcileAccountBody = z
+  .object({
+    balance: zMinorUnits.describe(
+      "The bank's current cleared balance (a loan's: what's owed), signed like the account's " +
+        "(negative for money owed)",
+    ),
+    date: IsoDate.describe("The user's today"),
+    loanTerms: LoanTermsCheck.optional().describe("Loans only"),
+  })
+  .openapi("ReconcileAccount");
+
+export const previewReconcileAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
+  operationId: "previewReconcileAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Work out a reconcile's balance adjustment without saving",
+  description:
+    "The Reconciliation Balance Adjustment `reconcileAccount` would add for the same body (zero " +
+    "for none): Update Balance's Changes step after its interest rate / escrow check.",
+  request: {
+    params: AccountParams,
+    body: json(ReconcileAccountBody),
+  },
+  responses: {
+    200: ok(
+      "The adjustment",
+      z
+        .object({
+          adjustment: zMinorUnits.describe("Signed like the account; zero when it matches"),
+        })
+        .openapi("ReconcilePreview"),
+    ),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    404: notFound,
+  },
+});
+
 export const reconcileAccount = createRoute({
   method: "post",
   path: "/budgets/{budgetId}/accounts/{accountId}/reconcile",
@@ -211,20 +289,13 @@ export const reconcileAccount = createRoute({
     "Adjustment for the difference comes first, dated `date` (budget accounts take it from " +
     "Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is " +
     "compared with its working balance, every transaction up to `date` is reconciled, and each " +
-    "month's interest and escrow are fixed at what's applied.",
+    "month's interest and escrow are fixed at what's applied. A loan's `loanTerms` (Update " +
+    "Balance's interest rate / escrow check) change its terms from `date`'s month first; the " +
+    "adjustment then makes up the difference to the balance with this month re-estimated on the " +
+    "new terms, while the months are fixed at what they had (YNAB, 2026-10-14).",
   request: {
     params: AccountParams,
-    body: json(
-      z
-        .object({
-          balance: zMinorUnits.describe(
-            "The bank's current cleared balance (a loan's: what's owed), signed like the account's " +
-              "(negative for money owed)",
-          ),
-          date: IsoDate.describe("The user's today"),
-        })
-        .openapi("ReconcileAccount"),
-    ),
+    body: json(ReconcileAccountBody),
   },
   responses: {
     200: ok("Reconciled", AccountSchema),
@@ -334,6 +405,55 @@ export const deleteAccount = createRoute({
   },
 });
 
+export const updateToLoanAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/update-to-loan",
+  operationId: "updateToLoanAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
+  description:
+    "Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms " +
+    "and the paired category. The original account keeps its transactions and is closed: a " +
+    'cleared Manual Balance Adjustment (memo "Closed Account") zeroes its working balance, ' +
+    '" (Original)" is added to its name, and its scheduled transactions (and those transferring ' +
+    "to it) are deleted. Only open tracking liabilities that weren't updated before.",
+  request: {
+    params: AccountParams,
+    body: json(
+      z
+        .strictObject({
+          name: Name.describe("The loan's nickname"),
+          type: zAccountType.describe("A loan type (mortgage, auto_loan, …)"),
+          balance: zMinorUnits.describe("Today's balance; negative for money owed"),
+          date: IsoDate.describe("The user's today"),
+          interestRate: InterestRate.optional(),
+          minimumPayment: zMinorUnits.optional(),
+          escrowAmount: zMinorUnits.optional().describe("Mortgages only"),
+          pairedCategoryId: PairedCategoryId,
+        })
+        .openapi("UpdateToLoanAccount"),
+    ),
+  },
+  responses: {
+    201: ok(
+      "The new loan and the closed original",
+      z
+        .object({ loan: AccountSchema, original: AccountSchema })
+        .openapi("UpdateToLoanAccountResult"),
+    ),
+    400: jsonError(
+      "Not an open tracking liability, already updated, not a loan type, or invalid input",
+    ),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+    ),
+    404: notFound,
+  },
+});
+
 const LoanChargeSchema = z
   .object({
     total: zMinorUnits.describe("The month's full charge: the estimate, or what was set"),
@@ -342,6 +462,18 @@ const LoanChargeSchema = z
     editedAt: z.iso.datetime().nullable().describe("When it was set (edited or reconciled)"),
   })
   .openapi("LoanCharge");
+
+const LoanBannersSchema = z
+  .object({
+    simulatorDismissed: z
+      .boolean()
+      .describe("The payoff simulator banner was dismissed; one dismissal covers every loan"),
+    paidOffDismissed: z
+      .boolean()
+      .describe('This loan\'s "Another debt bites the dust" banner was dismissed'),
+  })
+  .describe("YNAB keeps these as plan settings, so they follow the plan to every device and member")
+  .openapi("LoanBanners");
 
 const LoanActivitySchema = z
   .object({
@@ -384,6 +516,19 @@ const LoanActivitySchema = z
       .describe(
         "The loan's interest rate, minimum payment and escrow from each month on, oldest first " +
           "(months before the first entry use it), for the payoff planner",
+      ),
+    banners: LoanBannersSchema,
+    originalHistory: z
+      .object({
+        accountId: z.string(),
+        months: z
+          .array(z.object({ month: zBudgetMonth, endBalance: zMinorUnits }))
+          .describe("Each month's ending balance, newest first"),
+      })
+      .nullable()
+      .describe(
+        "A loan made by updating a tracking liability: the original account's month-end " +
+          'balances (YNAB\'s "Original Tracking Account History")',
       ),
   })
   .openapi("LoanActivity");
@@ -480,6 +625,30 @@ export const recordLoanPayment = createRoute({
     403: jsonError(
       "The caller's role can't change transactions, or the account's email address isn't confirmed",
     ),
+    404: notFound,
+  },
+});
+
+export const dismissLoanBanner = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss",
+  operationId: "dismissLoanBanner",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Dismiss a loan page banner for the whole plan",
+  description:
+    "`simulator` hides the payoff simulator banner on every loan; `paidOff` hides this loan's " +
+    '"Another debt bites the dust". Kept on the plan, as YNAB keeps them (checked 2026-10-14).',
+  request: {
+    params: AccountParams,
+    body: json(z.object({ banner: z.enum(["simulator", "paidOff"]) }).openapi("DismissLoanBanner")),
+  },
+  responses: {
+    200: ok("The loan's banners", LoanBannersSchema),
+    400: jsonError("Not a loan account"),
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
   },
 });

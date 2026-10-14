@@ -9,6 +9,7 @@ import {
   assertOpen,
   findAccount,
   resolveCategory,
+  type TransferSideInput,
   usesCategory,
 } from "./rules";
 
@@ -23,6 +24,8 @@ export interface LineInput {
   transferAccountId?: string;
   categoryId: string | null;
   memo: string;
+  /** A restored transfer line's other side, as it was. */
+  transferSide?: TransferSideInput;
 }
 
 /** A line to write: from the request, or kept as it is (`payeeName`/`memo` undefined). */
@@ -36,6 +39,7 @@ interface LineSpec {
   /** The category was asked for, so it's checked strictly rather than adjusted. */
   explicitCategory: boolean;
   memo?: string;
+  transferSide?: TransferSideInput;
 }
 
 export function assertSplitAllowed(account: AccountRow) {
@@ -94,6 +98,8 @@ export async function syncLines(
     moved: boolean;
     /** How new transfer lines' other sides start out (by default uncleared and approved). */
     counterpart?: { cleared: (account: AccountRow) => ClearedState; approved: boolean };
+    /** An undo bringing back a deleted split: its transfer lines may reach closed accounts. */
+    restore?: boolean;
   },
   input?: readonly LineInput[],
 ) {
@@ -116,6 +122,7 @@ export async function syncLines(
         categoryId: l.categoryId,
         explicitCategory: true,
         memo: l.memo,
+        transferSide: l.transferSide,
       }))
     : existing.map((l) => ({
         id: l.id,
@@ -146,7 +153,10 @@ export async function syncLines(
     }
     const retargeted = (transferTo?.id ?? null) !== (other?.accountId ?? null);
     // Entering a scheduled split still reaches a closed account, as YNAB does.
-    if (transferTo && retargeted && !ctx.counterpart) assertOpen(transferTo);
+    if (transferTo && retargeted && !ctx.counterpart && !ctx.restore) assertOpen(transferTo);
+    if (spec.transferSide && !transferTo) {
+      throw new AppError(400, "BAD_REQUEST", "A line's `transferSide` needs `transferAccountId`");
+    }
 
     let categoryId = spec.categoryId;
     if (spec.explicitCategory) {
@@ -201,6 +211,7 @@ export async function syncLines(
         })
         .where(eq(transaction.id, other.id));
     } else if (transferTo) {
+      const side = spec.transferSide;
       await insertTransaction(tx, {
         budgetId,
         accountId: transferTo.id,
@@ -208,10 +219,17 @@ export async function syncLines(
         amount: -spec.amount,
         currency: transferTo.currency,
         payeeId: await transferPayeeId(tx, account),
-        categoryId: await resolveCategory(tx, budgetId, transferTo, account, null),
-        memo: spec.memo ?? "",
-        cleared: ctx.counterpart?.cleared(transferTo) ?? "uncleared",
-        approved: ctx.counterpart?.approved,
+        categoryId: await resolveCategory(
+          tx,
+          budgetId,
+          transferTo,
+          account,
+          side?.categoryId ?? null,
+        ),
+        memo: side?.memo ?? spec.memo ?? "",
+        cleared: side?.cleared ?? ctx.counterpart?.cleared(transferTo) ?? "uncleared",
+        approved: side?.approved ?? ctx.counterpart?.approved,
+        flag: side?.flag,
         transferSubTransactionId: lineId,
       });
     }

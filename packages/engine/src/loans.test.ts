@@ -4,9 +4,11 @@ import {
   type LoanTerms,
   loanCharges,
   loanMonths,
+  loanTermsEntries,
   monthlyInterest,
   rateThousandths,
   termsFor,
+  withLoanTerms,
 } from "./loans";
 
 const terms = (
@@ -75,6 +77,85 @@ describe("termsFor", () => {
   ])("%s uses %s%%", (month, rate) => expect(termsFor(history, month)?.interestRate).toBe(rate));
 
   it("is null without terms", () => expect(termsFor([], "2026-10")).toBeNull());
+});
+
+describe("loanTermsEntries (Update Balance's check step)", () => {
+  const history = [terms("2026-10", "6", 15_000n)];
+  const keep = <T>(value: T) => ({ value, keep: true });
+  const once = <T>(value: T) => ({ value, keep: false });
+
+  it("writes nothing when nothing changes", () => {
+    expect(loanTermsEntries(history, "2026-10", {})).toEqual([]);
+    expect(
+      loanTermsEntries(history, "2026-10", {
+        interestRate: keep("6.000"),
+        escrowAmount: keep(15_000n),
+      }),
+    ).toEqual([]);
+  });
+
+  it("changes the month and going forward", () => {
+    expect(loanTermsEntries(history, "2026-10", { interestRate: keep("7") })).toEqual([
+      terms("2026-10", "7", 15_000n),
+    ]);
+    expect(loanTermsEntries(history, "2026-11", { escrowAmount: keep(20_000n) })).toEqual([
+      terms("2026-11", "6", 20_000n),
+    ]);
+  });
+
+  it("brings the old value back next month when not kept", () => {
+    // YNAB's API after 6% → 7% unchecked: {2026-10-01: 7%, 2026-11-01: 6%}.
+    expect(loanTermsEntries(history, "2026-10", { interestRate: once("7") })).toEqual([
+      terms("2026-10", "7", 15_000n),
+      terms("2026-11", "6", 15_000n),
+    ]);
+    expect(
+      loanTermsEntries(history, "2026-12", {
+        interestRate: keep("7"),
+        escrowAmount: once(20_000n),
+      }),
+    ).toEqual([terms("2026-12", "7", 20_000n), terms("2027-01", "7", 15_000n)]);
+  });
+
+  it("keeps a kept value in later months an earlier unkept change wrote", () => {
+    // 7% unkept in October left {Oct: 7%, Nov: 6%}; 8% kept in October must hold in November too.
+    const after = [terms("2026-10", "7", 15_000n), terms("2026-11", "6", 15_000n)];
+    expect(loanTermsEntries(after, "2026-10", { interestRate: keep("8") })).toEqual([
+      terms("2026-10", "8", 15_000n),
+      terms("2026-11", "8", 15_000n),
+    ]);
+  });
+
+  it("merges entries over the history", () => {
+    const merged = withLoanTerms(
+      [terms("2026-09", "5"), terms("2026-10", "6")],
+      [terms("2026-10", "7"), terms("2026-11", "6")],
+    );
+    expect(merged).toEqual([terms("2026-09", "5"), terms("2026-10", "7"), terms("2026-11", "6")]);
+  });
+
+  it("re-estimates the month's interest at the new rate", () => {
+    // x-126-Mort (YNAB, 2026-10-14): $100,000 from Sep 1, $900 on Sep 15 and Oct 5, $150 escrow.
+    const lines: LoanLine[] = [
+      start("2026-09-01", -10_000_000n),
+      { date: "2026-09-15", amount: 90_000n, kind: "payment" },
+      { date: "2026-10-05", amount: 90_000n, kind: "payment" },
+    ];
+    const run = (t: LoanTerms[]) =>
+      loanMonths({ lines, terms: t, overrides: [], through: "2026-10", exponent: 2 });
+    // September keeps its terms (the API pins them before writing October's).
+    const pinned = [terms("2026-09", "6", 15_000n)];
+    const before = run(pinned);
+    expect(before[1]?.interest.applied).toBe(49_875n);
+    expect(before[1]?.endBalance).toBe(-9_949_875n);
+    const after = run(
+      withLoanTerms(pinned, loanTermsEntries(pinned, "2026-10", { interestRate: keep("7") })),
+    );
+    expect(after[0]).toEqual(before[0]);
+    // $99,750 × 7% ÷ 12 = $581.875 → $581.88: YNAB's Difference grew by $83.13.
+    expect(after[1]?.interest.applied).toBe(58_188n);
+    expect(loanCharges(after) - loanCharges(before)).toBe(8_313n);
+  });
 });
 
 describe("loanMonths", () => {

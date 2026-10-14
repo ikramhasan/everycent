@@ -96,6 +96,20 @@ export interface OtherSideOptions {
   cleared?: ClearedState;
   approved?: boolean;
   flag?: FlagColor | null;
+  /** Its own memo (by default the new side's). */
+  memo?: string;
+}
+
+/**
+ * A deleted transfer's other side as it was, so an undo brings it back exactly (YNAB's Undo
+ * restores both sides' own cleared state and flag, 2026-10-14).
+ */
+export interface TransferSideInput {
+  memo: string;
+  cleared: ClearedState;
+  flag: FlagColor | null;
+  approved: boolean;
+  categoryId: string | null;
 }
 
 /** Adds the other side of a new transfer, in `transferTo`, and links the two. */
@@ -120,7 +134,7 @@ export async function insertOtherSide(
       account,
       options.categoryId ?? null,
     ),
-    memo: side.memo,
+    memo: options.memo ?? side.memo,
     cleared: options.cleared ?? "uncleared",
     approved: options.approved,
     flag: options.flag,

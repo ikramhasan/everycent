@@ -34,7 +34,15 @@ const need = (
   underfunded: string,
   dueDate: string | null = null,
   pastDue = false,
-): TargetNeed => ({ needed, funded, underfunded, dueDate, pastDue, snoozed: false });
+): TargetNeed => ({
+  needed,
+  funded,
+  underfunded,
+  dueDate,
+  pastDue,
+  snoozed: false,
+  beforeOpening: false,
+});
 /** A one-section bar holding `spent` and `left`. */
 const bar = (spent: string, left: string) => ({
   tone: "funded" as const,
@@ -176,6 +184,17 @@ describe("target wording", () => {
       suffix: " this month to stay on track",
     });
     expect(targetMessage(payoff, need("200", "100", "0", "2026-10-01", true), format)).toBeNull();
+  });
+
+  // YNAB "ihni7's Plan", 2026-10-12: Card E3 opened Oct 8, its target seen in September.
+  it("asks $0.00 of a payment target before its card was opened", () => {
+    const monthly = target({ cadence: "payment_monthly", behavior: "set_aside", amount: "3000" });
+    const n = { ...need("3000", "0", "0"), beforeOpening: true };
+    expect(targetMessage(monthly, n, format, "2026-09")).toEqual({
+      prompt: "$0.00",
+      suffix: " to meet your target",
+    });
+    expect(targetLines(monthly, n, format).at(-1)).toEqual({ label: "To Go", value: "$0.00" });
   });
 
   it("labels the inspector lines and message per kind", () => {

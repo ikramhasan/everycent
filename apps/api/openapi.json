@@ -1845,6 +1845,27 @@
             ],
             "format": "date",
             "description": "Loan accounts: the date of the latest payment up to today"
+          },
+          "lastPaymentFromAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Record Payment's source: for a loan, the cash or credit account of the payment into it entered last; for a credit card, the cash account it was last paid from"
+          },
+          "migratedToAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A tracking liability updated to a loan account: the new loan"
+          },
+          "migratedFromAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A loan made by updating a tracking liability: the original (closed) account"
           }
         },
         "required": [
@@ -1862,7 +1883,10 @@
           "balances",
           "lastReconciledAt",
           "pairedCategoryId",
-          "lastPaymentDate"
+          "lastPaymentDate",
+          "lastPaymentFromAccountId",
+          "migratedToAccountId",
+          "migratedFromAccountId"
         ]
       },
       "AccountBalances": {
@@ -2208,6 +2232,19 @@
           "beforeAccountId"
         ]
       },
+      "ReconcilePreview": {
+        "type": "object",
+        "properties": {
+          "adjustment": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Signed like the account; zero when it matches"
+          }
+        },
+        "required": [
+          "adjustment"
+        ]
+      },
       "ReconcileAccount": {
         "type": "object",
         "properties": {
@@ -2220,12 +2257,64 @@
             "type": "string",
             "format": "date",
             "description": "The user's today"
+          },
+          "loanTerms": {
+            "$ref": "#/components/schemas/LoanTermsCheck"
           }
         },
         "required": [
           "balance",
           "date"
         ]
+      },
+      "LoanTermsCheck": {
+        "type": "object",
+        "properties": {
+          "interestRate": {
+            "type": "object",
+            "properties": {
+              "rate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^\\d{1,3}(\\.\\d{1,3})?$",
+                "description": "Annual interest rate in percent (loan accounts)"
+              },
+              "keepGoingForward": {
+                "type": "boolean",
+                "description": "Unchecked, next month goes back to the old rate (\"… for October.\")"
+              }
+            },
+            "required": [
+              "rate",
+              "keepGoingForward"
+            ]
+          },
+          "escrowAmount": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "keepGoingForward": {
+                "type": "boolean",
+                "description": "Unchecked, next month goes back to the old escrow"
+              }
+            },
+            "required": [
+              "amount",
+              "keepGoingForward"
+            ],
+            "description": "Mortgages only"
+          }
+        },
+        "description": "Loans only"
       },
       "CloseAccount": {
         "type": "object",
@@ -2239,6 +2328,88 @@
         "required": [
           "date"
         ]
+      },
+      "UpdateToLoanAccountResult": {
+        "type": "object",
+        "properties": {
+          "loan": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "original": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "loan",
+          "original"
+        ]
+      },
+      "UpdateToLoanAccount": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "The loan's nickname"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "cash",
+              "credit_card",
+              "line_of_credit",
+              "mortgage",
+              "auto_loan",
+              "student_loan",
+              "personal_loan",
+              "medical_debt",
+              "other_debt",
+              "asset",
+              "liability"
+            ],
+            "description": "A loan type (mortgage, auto_loan, …)"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Today's balance; negative for money owed"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today"
+          },
+          "interestRate": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,3})?$",
+            "description": "Annual interest rate in percent (loan accounts)"
+          },
+          "minimumPayment": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "escrowAmount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Mortgages only"
+          },
+          "pairedCategoryId": {
+            "type": "string",
+            "description": "Pair this plan category with the loan (one loan per category: pairing a category moves it from any other loan). Not an internal or credit card payment category."
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "balance",
+          "date",
+          "pairedCategoryId"
+        ],
+        "additionalProperties": false
       },
       "LoanActivity": {
         "type": "object",
@@ -2392,11 +2563,55 @@
               ]
             },
             "description": "The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner"
+          },
+          "banners": {
+            "$ref": "#/components/schemas/LoanBanners"
+          },
+          "originalHistory": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "accountId": {
+                "type": "string"
+              },
+              "months": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "month": {
+                      "type": "string",
+                      "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+                      "description": "YYYY-MM"
+                    },
+                    "endBalance": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                    }
+                  },
+                  "required": [
+                    "month",
+                    "endBalance"
+                  ]
+                },
+                "description": "Each month's ending balance, newest first"
+              }
+            },
+            "required": [
+              "accountId",
+              "months"
+            ],
+            "description": "A loan made by updating a tracking liability: the original account's month-end balances (YNAB's \"Original Tracking Account History\")"
           }
         },
         "required": [
           "months",
-          "terms"
+          "terms",
+          "banners",
+          "originalHistory"
         ]
       },
       "LoanCharge": {
@@ -2435,6 +2650,24 @@
           "status",
           "editedAt"
         ]
+      },
+      "LoanBanners": {
+        "type": "object",
+        "properties": {
+          "simulatorDismissed": {
+            "type": "boolean",
+            "description": "The payoff simulator banner was dismissed; one dismissal covers every loan"
+          },
+          "paidOffDismissed": {
+            "type": "boolean",
+            "description": "This loan's \"Another debt bites the dust\" banner was dismissed"
+          }
+        },
+        "required": [
+          "simulatorDismissed",
+          "paidOffDismissed"
+        ],
+        "description": "YNAB keeps these as plan settings, so they follow the plan to every device and member"
       },
       "SetLoanCharge": {
         "type": "object",
@@ -2496,6 +2729,21 @@
           "fromAccountId",
           "amount",
           "date"
+        ]
+      },
+      "DismissLoanBanner": {
+        "type": "object",
+        "properties": {
+          "banner": {
+            "type": "string",
+            "enum": [
+              "simulator",
+              "paidOff"
+            ]
+          }
+        },
+        "required": [
+          "banner"
         ]
       },
       "TransactionList": {
@@ -2791,6 +3039,9 @@
             "type": "boolean",
             "description": "Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change)"
           },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSide"
+          },
           "subtransactions": {
             "type": "array",
             "items": {
@@ -2833,10 +3084,63 @@
           "transferTransactionId",
           "transferFromSplit",
           "transferReconciled",
+          "transferSide",
           "subtransactions",
           "runningBalance",
           "matchingLineIds"
         ]
+      },
+      "TransferSide": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "memo": {
+            "type": "string"
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "memo",
+          "cleared",
+          "flag",
+          "approved",
+          "categoryId"
+        ],
+        "description": "Transfers: the other side's own state (null when the other side is a split's line, or for other transactions)"
       },
       "SubTransaction": {
         "type": "object",
@@ -2893,6 +3197,16 @@
           "transferReconciled": {
             "type": "boolean",
             "description": "Transfer lines: the other side is reconciled"
+          },
+          "transferSide": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransferSide"
+              },
+              {
+                "description": "Transfers: the other side's own state, which `createTransaction` takes back as `transferSide` when an undo restores the transfer"
+              }
+            ]
           }
         },
         "required": [
@@ -2905,7 +3219,8 @@
           "memo",
           "transferAccountId",
           "transferTransactionId",
-          "transferReconciled"
+          "transferReconciled",
+          "transferSide"
         ]
       },
       "SelectionSummary": {
@@ -3278,6 +3593,17 @@
             ],
             "default": null,
             "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "False brings back an unapproved transaction (an undo); true if left out"
+          },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSideInput"
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows"
           }
         },
         "required": [
@@ -3323,11 +3649,64 @@
             "type": "string",
             "maxLength": 500,
             "default": ""
+          },
+          "transferSide": {
+            "$ref": "#/components/schemas/TransferSideInput"
           }
         },
         "required": [
           "amount"
         ]
+      },
+      "TransferSideInput": {
+        "type": "object",
+        "properties": {
+          "memo": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ],
+            "description": "One of YNAB's six flag colors; null clears it"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "memo",
+          "cleared",
+          "flag",
+          "approved",
+          "categoryId"
+        ],
+        "description": "Restoring a deleted transfer (an undo): its other side's own state, from the deleted transaction's `transferSide`. Left out, the other side starts uncleared, approved, unflagged and with this side's memo"
       },
       "UpdateTransaction": {
         "type": "object",
@@ -4567,6 +4946,10 @@
             "type": "string",
             "format": "date",
             "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows"
           }
         },
         "required": [
@@ -4703,6 +5086,10 @@
             "type": "string",
             "format": "date",
             "description": "The user's today: occurrences due by then are entered first. Defaults to the server's UTC date."
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "An undo putting a schedule back as it was: its accounts may have been closed since, as YNAB's Undo allows"
           }
         },
         "additionalProperties": false
@@ -4800,6 +5187,108 @@
         "required": [
           "name"
         ]
+      },
+      "BudgetViewList": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first."
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BudgetView"
+            },
+            "description": "The custom views (at most 12)"
+          }
+        },
+        "required": [
+          "order",
+          "views"
+        ]
+      },
+      "BudgetView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The categories in the view, hidden ones included (a view leaves them out)"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "categoryIds"
+        ]
+      },
+      "CreateBudgetView": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "description": "Categories of this budget; Ready to Assign and Uncategorized can't be in a view"
+          }
+        },
+        "required": [
+          "name",
+          "categoryIds"
+        ]
+      },
+      "ReorderBudgetViews": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "description": "Every preset key and custom view id, once each, in the new order"
+          }
+        },
+        "required": [
+          "order"
+        ]
+      },
+      "UpdateBudgetView": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "description": "Categories of this budget; Ready to Assign and Uncategorized can't be in a view"
+          }
+        }
       },
       "BudgetMonth": {
         "type": "object",
@@ -4996,6 +5485,56 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Money assigned in the months after this one"
           },
+          "readyToAssignBreakdown": {
+            "type": "object",
+            "properties": {
+              "leftOver": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Ready to Assign left over from last month, before later months' assigning"
+              },
+              "inflows": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Inflows to Ready to Assign this month, card inflows left out"
+              },
+              "debtInflows": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What credit accounts' balances above zero added this month (Inflow from Debt Account)"
+              },
+              "cashOverspending": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Last month's cash overspending (negative)"
+              },
+              "assigned": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "This month's assigned money (negative)"
+              },
+              "assignedInFuture": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What later months' assigning takes from this month (negative, never below zero)"
+              },
+              "total": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The sum of the lines: Ready to Assign"
+              }
+            },
+            "required": [
+              "leftOver",
+              "inflows",
+              "debtInflows",
+              "cashOverspending",
+              "assigned",
+              "assignedInFuture",
+              "total"
+            ],
+            "description": "YNAB's Ready to Assign Breakdown, line by line"
+          },
           "futureMonths": {
             "type": "array",
             "items": {
@@ -5010,14 +5549,61 @@
                   "type": "string",
                   "pattern": "^(0|-?[1-9]\\d*)$",
                   "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "targets": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "needed": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "What the month's targets need, all together"
+                    },
+                    "funded": {
+                      "type": "string",
+                      "pattern": "^(0|-?[1-9]\\d*)$",
+                      "description": "How much of that is funded (each target counts up to its need)"
+                    }
+                  },
+                  "required": [
+                    "needed",
+                    "funded"
+                  ],
+                  "description": "A later month's targets for YNAB's pie or check; null when it has none"
                 }
               },
               "required": [
                 "month",
-                "assigned"
+                "assigned",
+                "targets"
               ]
             },
             "description": "The later months with money assigned, in order"
+          },
+          "nextMonthTargets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "needed": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "What the month's targets need, all together"
+              },
+              "funded": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "How much of that is funded (each target counts up to its need)"
+              }
+            },
+            "required": [
+              "needed",
+              "funded"
+            ],
+            "description": "Next month's targets, for the panel's row when nothing is assigned there yet"
           },
           "note": {
             "type": "string",
@@ -5129,7 +5715,9 @@
           "readyToAssign",
           "overdraft",
           "assignedInFuture",
+          "readyToAssignBreakdown",
           "futureMonths",
+          "nextMonthTargets",
           "note",
           "futureShortfall",
           "categories",
@@ -5285,6 +5873,10 @@
           "snoozed": {
             "type": "boolean",
             "description": "Snoozed this month: it asks for nothing more (Underfunded leaves it out)"
+          },
+          "beforeOpening": {
+            "type": "boolean",
+            "description": "Payment targets: a month before the card's account was opened; it asks for nothing (underfunded 0)"
           }
         },
         "required": [
@@ -5293,7 +5885,8 @@
           "underfunded",
           "dueDate",
           "pastDue",
-          "snoozed"
+          "snoozed",
+          "beforeOpening"
         ],
         "description": "The category's target this month; null without one, before it starts, after a balance target's month or a card's pay off month"
       },
@@ -5670,6 +6263,11 @@
             "pattern": "^(0|-?[1-9]\\d*)$",
             "description": "Positive"
           },
+          "fromMonth": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "Take the money from the first category's Assigned in this month instead (covering overspending from a later month); defaults to `month`"
+          },
           "today": {
             "type": "string",
             "format": "date",
@@ -5874,12 +6472,62 @@
             "type": "string",
             "format": "date-time"
           },
+          "autoAssign": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "batchId": {
+                "type": "string",
+                "description": "Shared by every move of one Auto-Assign"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "underfunded",
+                  "assignedLastMonth",
+                  "spentLastMonth",
+                  "averageAssigned",
+                  "averageSpent",
+                  "reduceOverfunding",
+                  "resetAvailable",
+                  "resetAssigned"
+                ],
+                "description": "The Auto-Assign option used"
+              }
+            },
+            "required": [
+              "batchId",
+              "method"
+            ],
+            "description": "Set on the moves of an Auto-Assign, which YNAB lists together as one entry; null otherwise"
+          },
+          "userId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who moved it; null if their user was deleted"
+          },
           "userName": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Who moved it; null if they left the budget"
+            "description": "Who moved it; null if their user was deleted"
+          },
+          "memberRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "owner",
+              "editor",
+              null
+            ],
+            "description": "The mover's role on the budget now; null once they've left it"
           }
         },
         "required": [
@@ -5893,7 +6541,10 @@
           "month",
           "amount",
           "movedAt",
-          "userName"
+          "autoAssign",
+          "userId",
+          "userName",
+          "memberRole"
         ]
       },
       "ExpectedIncome": {
@@ -9280,6 +9931,91 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview": {
+      "post": {
+        "operationId": "previewReconcileAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Work out a reconcile's balance adjustment without saving",
+        "description": "The Reconciliation Balance Adjustment `reconcileAccount` would add for the same body (zero for none): Update Balance's Changes step after its interest rate / escrow check.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The adjustment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcilePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile": {
       "post": {
         "operationId": "reconcileAccount",
@@ -9292,7 +10028,7 @@
           }
         ],
         "summary": "Reconcile an account against the bank's balance",
-        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied.",
+        "description": "Locks every cleared transaction dated up to `date` (they become reconciled, for good) and records when. If `balance` differs from the cleared balance, a Reconciliation Balance Adjustment for the difference comes first, dated `date` (budget accounts take it from Ready to Assign; tracking accounts have no category). A loan (YNAB's Update Balance) is compared with its working balance, every transaction up to `date` is reconciled, and each month's interest and escrow are fixed at what's applied. A loan's `loanTerms` (Update Balance's interest rate / escrow check) change its terms from `date`'s month first; the adjustment then makes up the difference to the balance with this month re-estimated on the new terms, while the months are fixed at what they had (YNAB, 2026-10-14).",
         "parameters": [
           {
             "schema": {
@@ -9507,6 +10243,101 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't manage accounts, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
+      "post": {
+        "operationId": "updateToLoanAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
+        "description": "Adds a loan account with a Starting Balance of `balance` dated `date` (cleared), its terms and the paired category. The original account keeps its transactions and is closed: a cleared Manual Balance Adjustment (memo \"Closed Account\") zeroes its working balance, \" (Original)\" is added to its name, and its scheduled transactions (and those transferring to it) are deleted. Only open tracking liabilities that weren't updated before.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateToLoanAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new loan and the closed original",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateToLoanAccountResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not an open tracking liability, already updated, not a loan type, or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -9809,6 +10640,101 @@
           },
           "403": {
             "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss": {
+      "post": {
+        "operationId": "dismissLoanBanner",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Dismiss a loan page banner for the whole plan",
+        "description": "`simulator` hides the payoff simulator banner on every loan; `paidOff` hides this loan's \"Another debt bites the dust\". Kept on the plan, as YNAB keeps them (checked 2026-10-14).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissLoanBanner"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The loan's banners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanBanners"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a loan account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -11835,6 +12761,421 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/views": {
+      "get": {
+        "tags": [
+          "Views"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "listViews",
+        "summary": "The budget's custom views and the order of the rearrangeable views",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The budget's views",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetViewList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Views"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "createView",
+        "summary": "Add a custom view; it goes after the existing views",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBudgetView"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a category that isn't the budget's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change views, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The name is taken (VIEW_NAME_TAKEN) or the budget has 12 custom views (VIEW_LIMIT)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/views/order": {
+      "put": {
+        "tags": [
+          "Views"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "reorderViews",
+        "summary": "Rearrange the preset and custom views (Manage Views)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderBudgetViews"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The budget's views",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetViewList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The order isn't exactly the budget's rearrangeable views",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change views, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/views/{viewId}": {
+      "patch": {
+        "tags": [
+          "Views"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "updateView",
+        "summary": "Rename a custom view or change its categories",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "viewId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBudgetView"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a category that isn't the budget's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change views, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or view, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The name is taken (VIEW_NAME_TAKEN)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Views"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "deleteView",
+        "summary": "Delete a custom view (preset views can't be deleted)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "viewId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change views, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or view, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/months/{month}": {
       "get": {
         "operationId": "getBudgetMonth",
@@ -12225,6 +13566,82 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listMonthMoves",
+        "tags": [
+          "Budget months"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Every change to assigned money in a month, newest first",
+        "description": "Behind YNAB's per-category history (\"Changes to your assigned amount this month\"): all of the month's moves, however old.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "A month, YYYY-MM"
+            },
+            "required": true,
+            "description": "A month, YYYY-MM",
+            "name": "month",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's moves",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMoveList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

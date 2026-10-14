@@ -76,6 +76,18 @@ export function filteredIds(
   return ids;
 }
 
+/**
+ * Whether all of the month's overspending is credit overspending, which YNAB draws the Overspent
+ * view in yellow for; any cash overspending makes it red (support.ynab.com "Focused Views").
+ */
+export function overspentOnlyCredit(month: BudgetMonthData, visible: ReadonlySet<string>) {
+  const cash = [
+    ...month.categories.filter((c) => visible.has(c.categoryId)),
+    ...(month.uncategorized ? [month.uncategorized] : []),
+  ].some((c) => c.cashOverspent !== "0");
+  return !cash && overspentCount(month, visible) > 0;
+}
+
 /** How many categories are overspent this month (YNAB's "3 Overspent"). */
 export function overspentCount(month: BudgetMonthData, visible: ReadonlySet<string>) {
   return filteredIds("overspent", month, visible).size;
@@ -251,24 +263,29 @@ export function summarize(month: BudgetMonthData, ids: Iterable<string>): Breakd
   return sum;
 }
 
-function readFilter(key: string): BudgetFilter {
+/** Whether `view` is one of YNAB's preset views rather than a custom view's id. */
+export function isPresetFilter(view: string): view is BudgetFilter {
+  return (BUDGET_FILTERS as readonly string[]).includes(view);
+}
+
+function readFilter(key: string): string {
   try {
-    const value = localStorage.getItem(key);
-    return BUDGET_FILTERS.find((f) => f === value) ?? "all";
+    return localStorage.getItem(key) || "all";
   } catch {
     return "all";
   }
 }
 
 /**
- * The budget list's view. YNAB keeps it across reloads and months, in the browser, per plan
- * (`{plan}_active_budget_view` in localStorage, checked 2026-10-11).
+ * The budget list's view: a preset (`BudgetFilter`) or a custom view's id. YNAB keeps it across
+ * reloads and months, in the browser, per plan (`{plan}_active_budget_view` in localStorage, a
+ * custom view by its id; checked 2026-10-11 and 2026-10-14).
  */
 export function useBudgetFilter(budgetId: string) {
   const key = `everycent:budget-filter:${budgetId}`;
-  const [filter, setFilter] = useState<BudgetFilter>(() => readFilter(key));
+  const [filter, setFilter] = useState<string>(() => readFilter(key));
   const update = useCallback(
-    (next: BudgetFilter) => {
+    (next: string) => {
       setFilter(next);
       try {
         localStorage.setItem(key, next);

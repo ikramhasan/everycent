@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/nativ
 import { RadioGroup, RadioGroupItem } from "@everycent/ui/components/radio-group";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { editBalanceLabel } from "@/lib/accounts";
 import type { CategoryList } from "@/lib/categories";
 import { hasEscrow } from "@/lib/loans";
 import { type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
@@ -31,7 +32,7 @@ const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
 
 const RATE = /^\d{1,3}(\.\d{1,3})?$/;
 
-interface LoanValues {
+export interface LoanValues {
   interestRate: string;
   minimumPayment: string;
   escrowAmount: string;
@@ -46,7 +47,11 @@ type LoanResult =
     }
   | { ok: false; error: string };
 
-function parseLoan(values: LoanValues, settings: MoneySettings, type: AccountType): LoanResult {
+export function parseLoan(
+  values: LoanValues,
+  settings: MoneySettings,
+  type: AccountType,
+): LoanResult {
   const rate = values.interestRate.trim().replace(/%$/, "").replace(",", ".");
   if (rate && !RATE.test(rate)) return { ok: false, error: "Enter the interest rate like 6.125" };
   const amounts: Record<"minimumPayment" | "escrowAmount", string | null> = {
@@ -72,7 +77,7 @@ const ESCROW_HINT =
  * required by your lender" and, for a mortgage, whether it includes escrow; Edit Account has
  * Minimum Monthly Payment, Interest Rate (%) and, for a mortgage, Monthly Escrow or Fee Amount.
  */
-function LoanFields({
+export function LoanFields({
   values,
   onChange,
   type,
@@ -426,9 +431,7 @@ export function EditAccountForm({
       </Field>
       {workingBalance !== null && (
         <Field>
-          <FieldLabel htmlFor="edit-account-balance">
-            {isLoan ? "Today's Balance" : "Working Balance"}
-          </FieldLabel>
+          <FieldLabel htmlFor="edit-account-balance">{editBalanceLabel(type)}</FieldLabel>
           <Input
             id="edit-account-balance"
             inputMode="decimal"

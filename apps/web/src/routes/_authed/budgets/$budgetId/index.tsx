@@ -1,15 +1,16 @@
-import { type BudgetMonth, isBudgetMonth } from "@everycent/engine";
+import { addMonths, type BudgetMonth, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
+import { type ViewDialog, ViewDialogs, ViewsMenu } from "@/components/budget-views";
 import {
   CategoryInspector,
   MonthSummary,
@@ -29,7 +30,7 @@ import {
 } from "@/components/move-money";
 import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
-import { movesQueryOptions, RecentMoves } from "@/components/recent-moves";
+import { RecentMoves } from "@/components/recent-moves";
 import { TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { UpcomingTransactions } from "@/components/upcoming-transactions";
@@ -42,12 +43,15 @@ import {
   EMPTY_VIEW,
   filteredIds,
   isCaution,
+  isPresetFilter,
   overspentCount,
+  overspentOnlyCredit,
   summarize,
   UNCATEGORIZED,
   useBudgetFilter,
   useProgressBars,
 } from "@/lib/budget-view";
+import { MAX_CUSTOM_VIEWS, useViewActions, viewsQueryOptions } from "@/lib/budget-views";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
@@ -63,6 +67,13 @@ import {
   toMoney,
   useCollapsedGroups,
 } from "@/lib/months";
+import {
+  categoriesWithMoves,
+  HISTORY_MONTHS_BACK,
+  invalidateMoves,
+  monthMovesQueryOptions,
+} from "@/lib/moves";
+import { sessionQueryOptions } from "@/lib/session";
 import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
@@ -98,15 +109,32 @@ function BudgetPage() {
   const [addingAccount, setAddingAccount] = useState(false);
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
   const { filter, setFilter } = useBudgetFilter(budget.id);
+  const views = useQuery(viewsQueryOptions(budget.id));
+  const viewActions = useViewActions(budget.id);
+  const [viewDialog, setViewDialog] = useState<ViewDialog>(null);
+  // The custom view on, if the stored view is one; an unknown id (a deleted view) shows All.
+  const customView = isPresetFilter(filter)
+    ? undefined
+    : views.data?.views.find((v) => v.id === filter);
+  const preset = isPresetFilter(filter) ? filter : "all";
   const { progressBars, setProgressBars } = useProgressBars();
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [editAssigned, setEditAssigned] = useState<string | undefined>();
+  // The category a link or Recent Moves opened, scrolled to once its month is on screen.
+  const [scrollTo, setScrollTo] = useState<{ id: string } | undefined>();
   useEffect(() => {
     if (!search.category) return;
     setSelected(new Set([search.category]));
     setEditAssigned(search.assign ? search.category : undefined);
+    setScrollTo({ id: search.category });
     void navigate({ search: { month: search.month }, replace: true });
   }, [search.category, search.assign]);
+  // YNAB's per-category history covers the current and later months and three months back.
+  const monthMoves = useQuery({
+    ...monthMovesQueryOptions(budget.id, month),
+    enabled: month >= addMonths(today, -HISTORY_MONTHS_BACK),
+  });
+  const session = useQuery(sessionQueryOptions);
   const queryClient = useQueryClient();
   const assignMutation = $api.useMutation(
     "put",
@@ -172,10 +200,22 @@ function BudgetPage() {
     return map;
   }, [categories.data]);
   const visible = useMemo(() => new Set(listed.keys()), [listed]);
+  const names = useMemo(
+    () =>
+      new Map(
+        (categories.data?.groups ?? []).flatMap((g) => g.categories.map((c) => [c.id, c.name])),
+      ),
+    [categories.data],
+  );
   const shown = useMemo(
     () =>
-      figures.data && filter !== "all" ? filteredIds(filter, figures.data, visible) : undefined,
-    [figures.data, filter, visible],
+      // A custom view keeps its categories that aren't hidden (YNAB, 2026-10-14).
+      customView
+        ? new Set(customView.categoryIds.filter((id) => visible.has(id)))
+        : figures.data && preset !== "all"
+          ? filteredIds(preset, figures.data, visible)
+          : undefined,
+    [figures.data, preset, customView, visible],
   );
   // A category that leaves the view (or the list) leaves the selection too.
   const selection = useMemo<ReadonlySet<string>>(
@@ -230,10 +270,7 @@ function BudgetPage() {
     }
 
     async function refreshBudget() {
-      await Promise.all([
-        invalidateMonths(queryClient),
-        queryClient.invalidateQueries({ queryKey: movesQueryOptions(budget.id).queryKey }),
-      ]);
+      await Promise.all([invalidateMonths(queryClient), invalidateMoves(queryClient)]);
     }
 
     return {
@@ -245,10 +282,26 @@ function BudgetPage() {
       progressBars,
       editAssigned,
       onEditAssignedStarted: () => setEditAssigned(undefined),
-      emptyView: {
-        message: filter === "all" ? "" : EMPTY_VIEW[filter],
-        onViewAll: () => setFilter("all"),
+      scrollTo,
+      moves: monthMoves.data && {
+        moves: monthMoves.data.moves,
+        withMoves: categoriesWithMoves(monthMoves.data.moves),
+        name: (id, deleted) =>
+          deleted ??
+          (id ? (listed.get(id)?.name ?? names.get(id) ?? "Deleted category") : "Ready to Assign"),
+        formatDate,
+        currentUserId: session.data?.user.id,
       },
+      emptyView: customView
+        ? {
+            message: `There are no categories selected for ${customView.name}.`,
+            onViewAll: () => setFilter("all"),
+            onEdit: () => setViewDialog({ kind: "edit", view: customView }),
+          }
+        : {
+            message: preset === "all" ? "" : EMPTY_VIEW[preset],
+            onViewAll: () => setFilter("all"),
+          },
       selection: {
         selected: selection,
         toggle: (id) => {
@@ -301,6 +354,26 @@ function BudgetPage() {
         move: (fromCategoryId, toCategoryId, amount) =>
           moveIn(data.month, fromCategoryId, toCategoryId, amount),
         moveIn,
+        moveFrom: (fromMonth, fromCategoryId, toCategoryId, amount) => {
+          // To the month on screen from `fromMonth`; undone the other way round.
+          const mutate = (to: BudgetMonth, from: BudgetMonth, fromId: string, toId: string) =>
+            moveMutation.mutateAsync({
+              params: { path: { budgetId: budget.id, month: to } },
+              body: {
+                fromCategoryId: fromId,
+                toCategoryId: toId,
+                amount: amount.toString(),
+                fromMonth: from,
+                today: todayIso(),
+              },
+            });
+          return save(
+            () => mutate(data.month, fromMonth, fromCategoryId, toCategoryId),
+            () => mutate(fromMonth, data.month, toCategoryId, fromCategoryId),
+            "money move",
+            "Couldn't move the money.",
+          );
+        },
       },
     };
 
@@ -331,14 +404,42 @@ function BudgetPage() {
     budget,
     queryClient,
     shown,
-    filter,
+    preset,
+    customView,
     setFilter,
     selection,
     history,
     today,
     progressBars,
     editAssigned,
+    scrollTo,
+    monthMoves.data,
+    session.data,
+    listed,
+    names,
   ]);
+
+  // "Cover overspending from" offers the months Fix This does (YNAB, 2026-10-14).
+  const coverMonths = useFixThisMonths({
+    budgetId: budget.id,
+    month,
+    current: today,
+    data: figures.data,
+    categories: categories.data,
+    // Only fetched when something is overspent: covering is the only use.
+    always: Boolean(figures.data?.categories.some((c) => c.available.startsWith("-"))),
+    unassign: async (m, categoryId, amount) => {
+      const move = listFigures?.move;
+      if (move) await move.moveIn(m, categoryId, move.readyToAssignId, amount);
+    },
+  });
+  const coverFigures = useMemo(
+    () =>
+      listFigures?.move && coverMonths
+        ? { ...listFigures, move: { ...listFigures.move, coverMonths } }
+        : listFigures,
+    [listFigures, coverMonths],
+  );
 
   const fixThisMonths = useFixThisMonths({
     budgetId: budget.id,
@@ -417,12 +518,7 @@ function BudgetPage() {
             return updated;
           };
           const refresh = async () => {
-            await Promise.all([
-              invalidateMonths(queryClient),
-              queryClient.invalidateQueries({
-                queryKey: movesQueryOptions(budget.id).queryKey,
-              }),
-            ]);
+            await Promise.all([invalidateMonths(queryClient), invalidateMoves(queryClient)]);
           };
           try {
             const updated = await apply();
@@ -486,6 +582,10 @@ function BudgetPage() {
             amount={listFigures.month.readyToAssign}
             overdraft={listFigures.month.overdraft}
             format={listFigures.format}
+            breakdown={{
+              lines: listFigures.month.readyToAssignBreakdown,
+              month: listFigures.month.month,
+            }}
             assign={
               listFigures.move && (
                 <AssignButton
@@ -539,17 +639,55 @@ function BudgetPage() {
           <div className="grid gap-3">
             {listFigures && (
               <BudgetFilterBar
-                filter={filter}
+                filter={customView ? filter : preset}
                 overspent={overspentCount(listFigures.month, visible)}
+                onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
                 onChange={setFilter}
+                order={views.data?.order}
+                custom={views.data?.views}
+                menu={
+                  views.data && (
+                    <ViewsMenu
+                      full={views.data.views.length >= MAX_CUSTOM_VIEWS}
+                      onManage={() => setViewDialog({ kind: "manage" })}
+                      onNew={() =>
+                        setViewDialog({
+                          kind: "edit",
+                          view: null,
+                          // Categories selected on the budget start checked (YNAB, 2026-10-14).
+                          preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
+                        })
+                      }
+                    />
+                  )
+                }
+              />
+            )}
+            {views.data && (
+              <ViewDialogs
+                dialog={viewDialog}
+                onDialogChange={setViewDialog}
+                order={views.data.order}
+                views={views.data.views}
+                categories={categories.data}
+                actions={viewActions}
+                onCreated={(view) => {
+                  // YNAB switches to a new view and clears the selection.
+                  setFilter(view.id);
+                  setSelected(new Set());
+                }}
+                onDeleted={(viewId) => {
+                  if (filter === viewId) setFilter("all");
+                }}
               />
             )}
             <CategoryList
               data={categories.data}
               actions={actions}
-              figures={listFigures}
+              figures={coverFigures}
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
+              addGroupDisabled={Boolean(customView)}
               toolbar={
                 <div className="flex flex-1 items-center gap-1">
                   <UndoRedoButtons />
@@ -559,7 +697,21 @@ function BudgetPage() {
                       categories={categories.data}
                       format={listFigures.format}
                       formatDate={formatDate}
+                      onOpenCategory={(categoryId, m) =>
+                        void navigate({
+                          search: { month: m === today ? undefined : m, category: categoryId },
+                        })
+                      }
                     />
+                  )}
+                  {customView && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setViewDialog({ kind: "edit", view: customView })}
+                    >
+                      <Pencil /> Edit View
+                    </Button>
                   )}
                   <ProgressBarsToggle
                     on={progressBars}

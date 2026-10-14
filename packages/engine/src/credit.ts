@@ -5,6 +5,12 @@ export interface CardActivity {
   date: string;
   /** Net of the card's spending and returns in the category that day (minor units). */
   amount: bigint;
+  /**
+   * The part of the day's returns paid back above the card's zero (cash, positive). It reaches the
+   * category on its date, after the card activity before it: it isn't in `cash`, and it doesn't
+   * refill earlier unfunded card spending. Defaults to zero.
+   */
+  cash?: bigint;
   /** Breaks ties between equal purchases on one day: the smallest transaction id goes first. */
   order: string;
 }
@@ -36,6 +42,9 @@ export interface FundedCardSpending {
  *   returning card's payment category and is the category's again (2026-10-11: card −$3 on 10/01,
  *   another card's +$5 return on 10/02 left the first unfunded and moved $2 out). A return doesn't
  *   refill cash overspending: it moves out in full (2026-10-03, Groceries).
+ * - What a return pays back above the card's zero (`cash`) joins the category on its date and
+ *   refills nothing (2026-10-14, x128 Card A owing $20: +$25 uncategorized moved $19 out, $1
+ *   refilling Amex's earlier −$1, and Amex's payment category didn't change).
  */
 export function fundedCardSpending(
   cash: bigint,
@@ -56,7 +65,7 @@ export function fundedCardSpending(
       (a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0) ||
       a.order.localeCompare(b.order),
   );
-  for (const { accountId, amount } of ordered) {
+  for (const { accountId, amount, cash: returned = 0n } of ordered) {
     if (amount < 0n) {
       const spent = -amount;
       const funded = pool <= 0n ? 0n : pool < spent ? pool : spent;
@@ -78,6 +87,7 @@ export function fundedCardSpending(
       add(moved, accountId, -rest);
       pool += rest;
     }
+    pool += returned;
   }
   for (const card of cards) {
     if (!moved.has(card.accountId)) moved.set(card.accountId, 0n);

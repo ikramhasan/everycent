@@ -48,6 +48,7 @@ import type { BudgetMonthData, MonthTotals } from "@/lib/months";
 import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
+import { CategoryMovesButton, type CategoryMovesContext } from "./category-moves";
 import { AvailableButton, AvailablePill, type MoveActions } from "./move-money";
 import { NamePopover } from "./name-popover";
 import { ProgressBar } from "./progress-bar";
@@ -105,10 +106,17 @@ export interface CategoryFigures {
    * everything. A view leaves hidden categories and empty groups out and can't be reordered.
    */
   shown?: ReadonlySet<string>;
-  /** What to say when a view keeps nothing, with a way back to All. */
-  emptyView?: { message: string; onViewAll: () => void };
+  /**
+   * What to say when a view keeps nothing, with a way back to All (and, for a custom view, to
+   * edit it).
+   */
+  emptyView?: { message: string; onViewAll: () => void; onEdit?: () => void };
   /** YNAB's Progress Bars setting: off hides the bars and the notes under category names. */
   progressBars?: boolean;
+  /** The month's moves, for the history button next to Assigned (recent months only). */
+  moves?: CategoryMovesContext;
+  /** A category to scroll into view (a new object each time it's asked for). */
+  scrollTo?: { id: string };
 }
 
 export interface SelectionActions {
@@ -151,6 +159,7 @@ export function CategoryList({
   collapsed = NO_GROUPS,
   onCollapsedChange,
   toolbar,
+  addGroupDisabled = false,
 }: {
   data: CategoryListData;
   actions: CategoryListActions;
@@ -159,6 +168,8 @@ export function CategoryList({
   onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
   /** More buttons next to "Category Group" (e.g. Recent Moves). */
   toolbar?: ReactNode;
+  /** Greys out "Category Group" (YNAB does in a custom view). */
+  addGroupDisabled?: boolean;
 }) {
   const serverLayout = useMemo(() => visibleLayout(data), [data]);
   const [layout, setLayout] = useState<VisibleLayout>(serverLayout);
@@ -272,7 +283,7 @@ export function CategoryList({
           submitLabel="Add"
           onSubmit={({ name }) => actions.createGroup(name)}
           trigger={
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled={addGroupDisabled}>
               <Plus /> Category Group
             </Button>
           }
@@ -460,9 +471,16 @@ export function CategoryList({
               <EmptyHeader>
                 <EmptyDescription>{figures.emptyView.message}</EmptyDescription>
               </EmptyHeader>
-              <Button variant="link" size="sm" onClick={figures.emptyView.onViewAll}>
-                View All
-              </Button>
+              <div className="flex gap-2">
+                {figures.emptyView.onEdit && (
+                  <Button variant="secondary" size="sm" onClick={figures.emptyView.onEdit}>
+                    Edit View
+                  </Button>
+                )}
+                <Button variant="link" size="sm" onClick={figures.emptyView.onViewAll}>
+                  View All
+                </Button>
+              </div>
             </Empty>
           )}
           {shown && selectable.length > 0 && figures?.emptyView && (
@@ -738,6 +756,12 @@ function GroupSection({
   );
 }
 
+/**
+ * Scroll requests already handled, so a row remounting (its group expanded again, a view
+ * switched) doesn't jump back to it. Each `setScrollTo` makes a new request object.
+ */
+const scrolledTo = new WeakSet<object>();
+
 function CategoryRow({
   category,
   index,
@@ -772,9 +796,18 @@ function CategoryRow({
   const selected = selection?.selected.has(category.id) ?? false;
   // YNAB: clicking a name selects that category alone; clicking it again opens its editor.
   const onlySelected = selected && selection?.selected.size === 1;
+  const scrollTo = figures?.scrollTo;
+  useEffect(() => {
+    if (scrollTo?.id !== category.id || scrolledTo.has(scrollTo)) return;
+    scrolledTo.add(scrollTo);
+    document
+      .querySelector(`[data-category-row="${category.id}"]`)
+      ?.scrollIntoView?.({ block: "center" });
+  }, [scrollTo, category.id]);
 
   return (
     <div
+      data-category-row={category.id}
       ref={ref}
       className={cn(
         ROW,
@@ -878,19 +911,33 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          {assign ? (
-            <AssignedCell
-              categoryId={category.id}
-              categoryName={category.name}
-              amount={totals.assigned}
-              format={format}
-              actions={assign}
-              startEditing={figures?.editAssigned === category.id}
-              onStartedEditing={figures?.onEditAssignedStarted}
-            />
-          ) : (
-            <span className={cn(FIGURE, "text-sm")}>{format(totals.assigned)}</span>
-          )}
+          <div className="group/assigned relative min-w-0">
+            {assign ? (
+              <AssignedCell
+                categoryId={category.id}
+                categoryName={category.name}
+                amount={totals.assigned}
+                format={format}
+                actions={assign}
+                startEditing={figures?.editAssigned === category.id}
+                onStartedEditing={figures?.onEditAssignedStarted}
+              />
+            ) : (
+              <span className={cn(FIGURE, "block text-sm")}>{format(totals.assigned)}</span>
+            )}
+            {figures?.moves?.withMoves.has(category.id) && (
+              // Just past the amount, in the gap before Activity's right-aligned figure.
+              <span className="absolute top-1/2 left-full -translate-y-1/2">
+                <CategoryMovesButton
+                  categoryId={category.id}
+                  categoryName={category.name}
+                  context={figures.moves}
+                  format={format}
+                  visible={selected}
+                />
+              </span>
+            )}
+          </div>
           <span className={cn(FIGURE, "text-sm")}>
             {figures && (
               <Activity
