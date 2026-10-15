@@ -4,6 +4,7 @@ import {
   availableMark,
   breakdown,
   filteredIds,
+  fitsViewsBar,
   isCaution,
   matchesFilter,
   overspentCount,
@@ -250,5 +251,22 @@ describe("upcoming scheduled transactions on the pill", () => {
     const snoozed = { ...unmet, snoozed: true };
     expect(availableMark(row("0", "-3000", snoozed))).toEqual({ kind: "snoozed" });
     expect(isCaution(row("0", "-3000", snoozed), "2026-10", "2026-10")).toBe(true);
+  });
+});
+
+// YNAB's stylesheet and bar, 2026-10-15 ("x-c11-151 FS3", 12 custom views; EVERYCENT-164).
+describe("fitsViewsBar", () => {
+  it("fits views 0 to 10 in a 1656px window, as YNAB showed", () => {
+    const fits = Array.from({ length: 17 }, (_, i) => fitsViewsBar(i, 1656));
+    expect(fits.indexOf(false)).toBe(11);
+    expect(fits.slice(11).every((f) => !f)).toBe(true);
+  });
+
+  it("follows YNAB's breakpoints", () => {
+    expect(fitsViewsBar(0, 319)).toBe(false);
+    expect([0, 1, 2].map((i) => fitsViewsBar(i, 320))).toEqual([true, false, true]);
+    expect(fitsViewsBar(1, 478)).toBe(true); // 29.875rem
+    expect(fitsViewsBar(3, 477)).toBe(false);
+    expect(fitsViewsBar(4, 636)).toBe(true); // 39.75rem
   });
 });

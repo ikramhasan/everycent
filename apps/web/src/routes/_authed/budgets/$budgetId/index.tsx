@@ -77,6 +77,7 @@ import { sessionQueryOptions } from "@/lib/session";
 import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
+import { useViewportWidth } from "@/lib/use-viewport-width";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
   // The month on screen, YYYY-MM; the current month when absent.
@@ -110,6 +111,7 @@ function BudgetPage() {
   const { collapsed, setCollapsed } = useCollapsedGroups(budget.id);
   const { filter, setFilter } = useBudgetFilter(budget.id);
   const views = useQuery(viewsQueryOptions(budget.id));
+  const viewportWidth = useViewportWidth();
   const viewActions = useViewActions(budget.id);
   const [viewDialog, setViewDialog] = useState<ViewDialog>(null);
   // The custom view on, if the stored view is one; an unknown id (a deleted view) shows All.
@@ -645,10 +647,13 @@ function BudgetPage() {
                 onChange={setFilter}
                 order={views.data?.order}
                 custom={views.data?.views}
-                menu={
+                viewportWidth={viewportWidth}
+                menu={(overflow) =>
                   views.data && (
                     <ViewsMenu
                       full={views.data.views.length >= MAX_CUSTOM_VIEWS}
+                      overflow={overflow}
+                      onPick={setFilter}
                       onManage={() => setViewDialog({ kind: "manage" })}
                       onNew={() =>
                         setViewDialog({

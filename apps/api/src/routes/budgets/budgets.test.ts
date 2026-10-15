@@ -82,7 +82,7 @@ describe("budgets", () => {
     await createBudget(app, cookie, { name: "Apple" });
     expect((await list(cookie)).budgets.map((b) => b.name)).toEqual(["Apple", "zebra"]);
     await send("GET", `/v1/budgets/${zebra.id}`, cookie);
-    const { budgets } = (await list(cookie)) as {
+    const { budgets } = (await list(cookie)) as unknown as {
       budgets: (TestBudget & { lastUsedAt: string | null })[];
     };
     expect(budgets.map((b) => b.name)).toEqual(["zebra", "Apple"]);
@@ -94,7 +94,7 @@ describe("budgets", () => {
     await db
       .insert(budgetMember)
       .values({ id: newId(), budgetId: zebra.id, userId: me.id, role: "editor" });
-    const shared = (await list(partner.cookie)) as {
+    const shared = (await list(partner.cookie)) as unknown as {
       budgets: (TestBudget & { lastUsedAt: string | null })[];
     };
     expect(shared.budgets[0]?.lastUsedAt).toBeNull();

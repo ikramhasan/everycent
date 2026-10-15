@@ -3,6 +3,7 @@ import {
   budget,
   budgetAccount,
   budgetMember,
+  budgetView,
   category,
   categoryGroup,
   categoryTarget,
@@ -221,6 +222,7 @@ export async function copyIntoFreshStart(
     );
   }
   await copySchedules(tx, old.id, newBudgetId, { accountIds, categoryIds, payeeIds });
+  await copyViews(tx, old, newBudgetId, categoryIds);
 
   await tx
     .update(budget)
@@ -229,6 +231,38 @@ export async function copyIntoFreshStart(
       archivedAt: new Date(),
     })
     .where(eq(budget.id, old.id));
+}
+
+/**
+ * Copies the custom views (onto the new categories) and the Manage Views order (YNAB, 2026-10-15:
+ * "x-c11-151 FS" → "FS2" kept both views and their order among the presets).
+ */
+async function copyViews(
+  tx: Tx,
+  old: BudgetRow,
+  newBudgetId: string,
+  categoryIds: ReadonlyMap<string, string>,
+) {
+  const views = await tx.select().from(budgetView).where(eq(budgetView.budgetId, old.id));
+  const viewIds = new Map(views.map((v) => [v.id, newId()]));
+  if (views.length > 0) {
+    await tx.insert(budgetView).values(
+      views.map((v) => ({
+        id: viewIds.get(v.id) ?? newId(),
+        budgetId: newBudgetId,
+        name: v.name,
+        categoryIds: v.categoryIds.flatMap((id) => {
+          const mapped = categoryIds.get(id);
+          return mapped ? [mapped] : [];
+        }),
+      })),
+    );
+  }
+  if (old.viewOrder) {
+    // Preset keys stay as they are; view ids move to the copies.
+    const viewOrder = old.viewOrder.map((key) => viewIds.get(key) ?? key);
+    await tx.update(budget).set({ viewOrder }).where(eq(budget.id, newBudgetId));
+  }
 }
 
 /** Copies the old budget's scheduled transactions (and split lines) onto the new ids. */
