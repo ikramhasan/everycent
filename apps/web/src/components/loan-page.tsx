@@ -51,6 +51,7 @@ import {
   shortMonth,
 } from "@/lib/loans";
 import { invalidateMonths, monthQueryOptions } from "@/lib/months";
+import { scheduledQueryPrefix } from "@/lib/scheduled";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 import {
   type ActivityKind,
@@ -92,8 +93,9 @@ export function useLoanRefresh(budgetId: string) {
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
-      // Registers and loan activity.
+      // Registers and loan activity, and the Scheduled sections a future payment lands in.
       queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
+      queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),
       invalidateMonths(queryClient),
     ]);

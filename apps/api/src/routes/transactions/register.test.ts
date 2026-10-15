@@ -163,6 +163,11 @@ describe("register search, filters, sort and paging", () => {
     expect(await ids("Inflow: <=50")).toEqual([income.id]);
     expect(await ids("Before: 03/01/2026, After: 03/01/2026")).toEqual([b.id]);
     expect(await ids("On: 02/01/2026")).toEqual([a.id]);
+    // A partial date is completed from the user's today, as YNAB does (EVERYCENT-167).
+    const today = { today: "2026-10-16" };
+    expect(await ids("On: 2", today)).toEqual([a.id]);
+    expect(await ids("Before: 3, After: x0301", today)).toEqual([b.id]);
+    expect(await ids("On: 2", { today: "2027-01-05" })).toEqual([]);
     // Every term must match the same transaction or the same split line.
     expect(await ids("Payee: Bob, Is: Cleared")).toEqual([]);
     expect(await ids("Payee: Ann, Outflow: 2")).toEqual([split.id]);

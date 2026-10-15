@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { incomeTerm, parseDate, parseSearch, type SearchSettings } from "./register-search";
+import type { DateFormat } from "./format-settings";
+import { completeDate, incomeTerm, parseSearch, type SearchSettings } from "./register-search";
 
 const settings: SearchSettings = {
   currency: "USD",
@@ -91,16 +92,211 @@ describe("parseSearch", () => {
   });
 });
 
-describe("parseDate", () => {
-  it("reads a full date in the budget's format", () => {
-    expect(parseDate("02/10/2026", "DD/MM/YYYY")).toBe("2026-10-02");
-    expect(parseDate("2026-10-02", "YYYY-MM-DD")).toBe("2026-10-02");
-    expect(parseDate("2.10.2026", "DD.MM.YYYY")).toBe("2026-10-02");
+describe("parseSearch dates", () => {
+  it("completes a partial date in a typed On:/Before:/After: term", () => {
+    // YNAB (2026-10-15): "On: 10/11," and "On: x1011," matched the 10/11/2026 rows; "After:
+    // 10/14," showed 10/14/2026 onward.
+    expect(
+      parseSearch("On: 10/11, On: x1011, After: 10/14, Before: 5, On: 13", settings, TODAY),
+    ).toEqual([
+      { kind: "date", op: "on", date: "2026-10-11" },
+      { kind: "date", op: "on", date: "2026-10-11" },
+      { kind: "date", op: "after", date: "2026-10-14" },
+      { kind: "date", op: "before", date: "2026-05-01" },
+      { kind: "text", text: "On: 13", amount: null },
+    ]);
+  });
+});
+
+const TODAY = "2026-10-16";
+const read = (format: DateFormat, ...texts: string[]) =>
+  texts.map((t) => completeDate(t, format, TODAY));
+
+describe("completeDate", () => {
+  // Every case below is what YNAB's search box offered (2026-10-15/16, EVERYCENT-167).
+  it("reads full dates in the budget's format", () => {
+    expect(read("MM/DD/YYYY", "10/02/2026", "1/2/2030", "02/29/2028")).toEqual([
+      "2026-10-02",
+      "2030-01-02",
+      "2028-02-29",
+    ]);
+    expect(read("DD/MM/YYYY", "02/10/2026")).toEqual(["2026-10-02"]);
+    expect(read("YYYY-MM-DD", "2026-10-05", "2026/10/5")).toEqual(["2026-10-05", "2026-10-05"]);
+    expect(read("DD.MM.YYYY", "2.10.2026")).toEqual(["2026-10-02"]);
   });
 
-  it("rejects dates that don't exist or aren't complete", () => {
-    expect(parseDate("02/30/2026", "MM/DD/YYYY")).toBeNull();
-    expect(parseDate("10/02", "MM/DD/YYYY")).toBeNull();
-    expect(parseDate("10/02/26", "MM/DD/YYYY")).toBeNull();
+  it("reads each part from the next digits, in the format's order", () => {
+    expect(
+      read(
+        "MM/DD/YYYY",
+        "5",
+        "05",
+        "12",
+        "1",
+        "10/02",
+        "10/2",
+        "5/",
+        "1/",
+        "/5",
+        "5a",
+        "Card 5",
+        "Before: 5",
+        "105",
+        "1005",
+        "1231",
+        "12312025",
+        "10/2026",
+        "010/02",
+        "1 2",
+        "10-02",
+        "10.02",
+        "5.5",
+        "10/02 abc",
+        "10/2/2026/5",
+        "x-c11-135",
+      ),
+    ).toEqual([
+      "2026-05-01",
+      "2026-05-01",
+      "2026-12-01",
+      "2026-01-01",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-05-01",
+      "2026-01-01",
+      "2026-05-01",
+      "2026-05-01",
+      "2026-05-01",
+      "2026-05-01",
+      "2026-10-05",
+      "2026-10-05",
+      "2026-12-31",
+      "2025-12-31",
+      "2026-10-20",
+      "2026-01-02",
+      "2026-01-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-05-05",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-11-13",
+    ]);
+  });
+
+  it("fills a missing year and month from today until the first part typed", () => {
+    expect(read("DD/MM/YYYY", "5", "13", "5/", "25/12", "3112", "1/2/3", "10/02")).toEqual([
+      "2026-10-05",
+      "2026-10-13",
+      "2026-10-05",
+      "2026-12-25",
+      "2026-12-31",
+      "2026-02-01",
+      "2026-02-10",
+    ]);
+    expect(
+      read(
+        "YYYY-MM-DD",
+        "12",
+        "13",
+        "2026",
+        "202610",
+        "2026-10",
+        "26-10-05",
+        "10/02",
+        "10-05",
+        "5-3",
+        "x-c11-1",
+      ),
+    ).toEqual([
+      "2012-01-01",
+      "2013-01-01",
+      "2026-01-01",
+      "2026-10-01",
+      "2026-10-01",
+      "2026-10-05",
+      "2010-02-01",
+      "2010-05-01",
+      "2026-03-01",
+      "2011-01-01",
+    ]);
+  });
+
+  it("gives nothing for a month or day that doesn't exist", () => {
+    expect(
+      read(
+        "MM/DD/YYYY",
+        "13",
+        "31",
+        "0",
+        "00",
+        "100",
+        "2026",
+        "2026-10",
+        "10/0",
+        "10/00",
+        "0/5",
+        "10/32",
+        "13/01",
+        "2/30",
+        "2/29",
+        "2/29/2027",
+        "abc",
+        "",
+      ),
+    ).toEqual(Array(17).fill(null));
+    expect(read("DD/MM/YYYY", "1231", "12/25", "10/2026", "x-c11-135")).toEqual(
+      Array(4).fill(null),
+    );
+    expect(read("YYYY-MM-DD", "10-13", "2026-02-30", "x-c11-135")).toEqual(Array(3).fill(null));
+  });
+
+  it("keeps years within 20 of today's, putting this year in place of others", () => {
+    expect(
+      read(
+        "MM/DD/YYYY",
+        "10/02/25",
+        "10/02/2025",
+        "10/02/10",
+        "10/02/30",
+        "10/02/2006",
+        "10/02/2046",
+        "10/02/2005",
+        "12/31/2005",
+        "10/02/2047",
+        "10/02/1999",
+        "10/02/99",
+        "10/02/68",
+        "10/02/00",
+        "10/02/3",
+        "10/02/203",
+        "10/02/20261",
+      ),
+    ).toEqual([
+      "2025-10-02",
+      "2025-10-02",
+      "2010-10-02",
+      "2030-10-02",
+      "2006-10-02",
+      "2046-10-02",
+      "2026-10-02",
+      "2026-12-31",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+      "2026-10-02",
+    ]);
+    expect(read("YYYY-MM-DD", "5", "0", "1999", "2050", "1999-03", "2004-02-29")).toEqual([
+      "2026-01-01",
+      "2026-01-01",
+      "2026-01-01",
+      "2026-01-01",
+      "2026-03-01",
+      "2026-02-28",
+    ]);
   });
 });

@@ -64,13 +64,14 @@ import {
   Split,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
@@ -817,6 +818,23 @@ export function Register({
     return usesCategory(type, transferType);
   }
 
+  /** A saved row's category cell; "Category not needed" in muted text as YNAB shows it. */
+  function rowCategory(t: Transaction): ReactNode {
+    const notNeeded = categoryNotNeeded({
+      accountType: accountById.get(t.accountId)?.type ?? "checking",
+      transferAccountType: t.transferAccountId
+        ? (accountById.get(t.transferAccountId)?.type ?? null)
+        : null,
+      payeeName: t.payeeName,
+    });
+    if (!notNeeded) return t.categoryName;
+    return (
+      transferCategory(t.accountId, t.transferAccountId) || (
+        <span className="text-muted-foreground">Category not needed</span>
+      )
+    );
+  }
+
   /**
    * The cells of `t` that can be edited, in Tab order. A split's transfer side only takes its
    * memo and category; the split owns the rest.
@@ -1339,7 +1357,7 @@ export function Register({
           );
         }
         if (t.needsCategory) return <NeedsCategoryPill />;
-        return hasCategory(t) ? t.categoryName : transferCategory(t.accountId, t.transferAccountId);
+        return rowCategory(t);
       case "memo":
         return t.memo;
       case "outflow":

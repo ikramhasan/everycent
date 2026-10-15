@@ -21,7 +21,8 @@ const SearchText = z
       "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
       "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), " +
       "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
-      "budget's format; before and after include the day), `Income:` (a month name, full or " +
+      "budget's format, or part of one completed from today: `5` is May 1st in MM/DD/YYYY; " +
+      "before and after include the day), `Income:` (a month name, full or " +
       "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
       "Assign that month, including Starting Balances of budget accounts; no year means this " +
       "year). Split lines are matched one by one.",

@@ -262,6 +262,10 @@ export function PayeeField({
   const hiddenMatch = payees.some(
     (p) => p.hidden && p.name.toLowerCase() === trimmed.toLowerCase(),
   );
+  // YNAB shows the whole list as soon as the field is focused, with the current payee selected so
+  // typing replaces it; the list narrows once something is typed.
+  const [open, setOpen] = useState(Boolean(autoFocus));
+  const [typed, setTyped] = useState(false);
   const groups = useMemo<PayeeGroup[]>(() => {
     const known: PayeeItem[] = payees
       .filter((p) => !p.hidden)
@@ -280,15 +284,18 @@ export function PayeeField({
       };
     });
     const exact = [...known, ...toAccounts].some((p) => matches(p, trimmed));
-    // Payees first and "Create payee" last, so autocomplete picks an existing payee first.
+    // YNAB (2026-10-16): the whole list starts with "Payments and Transfers", then "Saved
+    // Payees"; once something is typed, saved payees come first. "Create payee" stays last here
+    // (YNAB puts it on top), so autocomplete still picks an existing payee first.
+    const saved = { value: "Saved Payees", items: known };
+    const moves = { value: "Payments and Transfers", items: toAccounts };
     return [
-      { value: "Payees", items: known },
-      { value: "Payments and Transfers", items: toAccounts },
+      ...(typed ? [saved, moves] : [moves, saved]),
       ...(trimmed && !exact && !hiddenMatch
         ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
         : []),
     ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, own, trimmed, hiddenMatch]);
+  }, [payees, transfers, own, trimmed, hiddenMatch, typed]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
@@ -304,10 +311,6 @@ export function PayeeField({
     return { name: text, transferAccountId: null, payee: payees.find((p) => p.name === text) };
   }
 
-  // YNAB shows the whole list as soon as the field is focused, with the current payee selected so
-  // typing replaces it; the list narrows once something is typed.
-  const [open, setOpen] = useState(Boolean(autoFocus));
-  const [typed, setTyped] = useState(false);
   return (
     <Autocomplete
       open={open}
@@ -398,16 +401,25 @@ interface CategoryGroupItems {
 
 /** The "Split" entry at the end of the category list. */
 const SPLIT: CategoryOption = { id: "__split", name: "Split", group: "" };
+/** YNAB's "Payment/Transfer" button at the end of the category list. */
+const PAYMENT_TRANSFER: CategoryOption = {
+  id: "__payment_transfer",
+  name: "Payment/Transfer",
+  group: "",
+};
 
 /**
  * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
- * list ends with YNAB's "Split", to spread the transaction across several categories.
+ * list ends with YNAB's "Split", to spread the transaction across several categories; with
+ * `onPaymentTransfer`, with its "Payment/Transfer" (before Split, in cash and card registers alike;
+ * 2026-10-16), which goes to the payee list to pick an account.
  */
 export function CategoryField({
   label = "Category",
   value,
   onChange,
   onSplit,
+  onPaymentTransfer,
   categories,
   autoFocus,
   placeholder = "Uncategorized",
@@ -417,6 +429,7 @@ export function CategoryField({
   value: string | null;
   onChange: (id: string | null) => void;
   onSplit?: () => void;
+  onPaymentTransfer?: () => void;
   categories: readonly CategoryOption[];
   autoFocus?: boolean;
   placeholder?: string;
@@ -429,8 +442,9 @@ export function CategoryField({
     const list = [...byGroup].map(
       ([group, items]): CategoryGroupItems => ({ value: group, items }),
     );
-    return onSplit ? [...list, { value: "", items: [SPLIT] }] : list;
-  }, [categories, onSplit]);
+    const actions = [...(onPaymentTransfer ? [PAYMENT_TRANSFER] : []), ...(onSplit ? [SPLIT] : [])];
+    return actions.length > 0 ? [...list, { value: "", items: actions }] : list;
+  }, [categories, onSplit, onPaymentTransfer]);
   const selected = categories.find((c) => c.id === value) ?? null;
   const [open, setOpen] = useState(Boolean(autoFocus));
 
@@ -442,7 +456,10 @@ export function CategoryField({
       value={selected}
       onValueChange={(option) => {
         if (option?.id === SPLIT.id) onSplit?.();
-        else onChange(option?.id ?? null);
+        else if (option?.id === PAYMENT_TRANSFER.id) {
+          setOpen(false);
+          onPaymentTransfer?.();
+        } else onChange(option?.id ?? null);
       }}
       itemToStringLabel={categoryLabel}
       isItemEqualToValue={(a, b) => a.id === b.id}
@@ -469,6 +486,10 @@ export function CategoryField({
                     {option.id === SPLIT.id ? (
                       <>
                         <Split className="size-4 text-muted-foreground" /> Split
+                      </>
+                    ) : option.id === PAYMENT_TRANSFER.id ? (
+                      <>
+                        <ArrowLeftRight className="size-4 text-muted-foreground" /> Payment/Transfer
                       </>
                     ) : describe ? (
                       <span className="flex w-full items-center justify-between gap-3">

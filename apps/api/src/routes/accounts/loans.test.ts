@@ -147,6 +147,60 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBe(savings.id);
   });
 
+  it("schedules a payment dated after today, once (YNAB, 2026-10-16)", async () => {
+    const { cookie, base, checking, mortgage, payCategory, account, transactions } = await setup();
+    const res = await send(
+      "POST",
+      `${base}/accounts/${mortgage.id}/loan/payments?today=${TODAY}`,
+      cookie,
+      { fromAccountId: checking.id, amount: "1000", date: "2026-10-14", memo: "x-future" },
+    );
+    expect(res.status, await res.clone().text()).toBe(201);
+    // Nothing entered yet: the balance is the opening one, and neither register has the payment.
+    expect((await res.json()) as Account).toMatchObject({
+      balances: { working: "-10000000" },
+    });
+    expect((await transactions(mortgage.id)).map((t) => t.memo)).not.toContain("x-future");
+    expect((await transactions(checking.id)).map((t) => t.memo)).not.toContain("x-future");
+    const scheduled = (
+      (await (
+        await send("GET", `${base}/scheduled-transactions?today=${TODAY}`, cookie)
+      ).json()) as {
+        scheduledTransactions: Array<{
+          kind: string;
+          accountId: string;
+          frequency: string;
+          dateNext: string;
+          amount: string;
+          categoryId: string | null;
+          transferAccountId: string | null;
+          memo: string;
+        }>;
+      }
+    ).scheduledTransactions.filter((s) => s.memo === "x-future");
+    expect(scheduled.find((s) => s.kind === "schedule")).toMatchObject({
+      accountId: mortgage.id,
+      frequency: "never",
+      dateNext: "2026-10-14",
+      amount: "1000",
+      categoryId: payCategory.id,
+      transferAccountId: checking.id,
+    });
+    expect(scheduled.find((s) => s.kind === "transfer")).toMatchObject({
+      accountId: checking.id,
+      amount: "-1000",
+    });
+    expect((await account(mortgage.id))?.balances.working).toBe("-10000000");
+
+    // On its date it's entered like any schedule.
+    const later = await send("GET", `${base}/scheduled-transactions?today=2026-10-14`, cookie);
+    expect(later.status).toBe(200);
+    expect((await transactions(checking.id)).find((t) => t.memo === "x-future")).toMatchObject({
+      date: "2026-10-14",
+      amount: "-1000",
+    });
+  });
+
   it("reports the account a credit card was last paid from, another card included", async () => {
     const { cookie, base, addAccount, checking, account } = await setup();
     const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });

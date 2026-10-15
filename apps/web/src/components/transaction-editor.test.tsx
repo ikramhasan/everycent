@@ -254,6 +254,33 @@ describe("TransactionEditor", () => {
     expect(screen.getByLabelText("Payee")).toHaveValue("Transfer to savings");
   });
 
+  it("lists transfers first until something is typed (YNAB, 2026-10-16)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    const headings = () =>
+      screen
+        .getAllByText(/^(Saved Payees|Payments and Transfers)$/)
+        .map((element) => element.textContent);
+    await user.click(screen.getByLabelText("Payee"));
+    expect(headings()).toEqual(["Payments and Transfers", "Saved Payees"]);
+    await user.type(screen.getByLabelText("Payee"), "a");
+    expect(headings()).toEqual(["Saved Payees", "Payments and Transfers"]);
+  });
+
+  it("offers Payment/Transfer in the category list, back to the payee list (YNAB, 2026-10-16)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Market{Enter}");
+    expect(screen.getByLabelText("Category")).toHaveValue("Groceries");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Payment/Transfer" }));
+    // The payee and category stay; the payee list opens to pick an account.
+    expect(screen.getByLabelText("Payee")).toHaveFocus();
+    expect(screen.getByLabelText("Payee")).toHaveValue("Market");
+    expect(screen.getByLabelText("Category")).toHaveValue("Groceries");
+    expect(screen.getByRole("option", { name: "To/From savings" })).toBeInTheDocument();
+  });
+
   it("splits across categories, with a remaining counter", async () => {
     const { onSave } = renderEditor();
     const user = userEvent.setup();

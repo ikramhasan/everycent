@@ -46,6 +46,7 @@ function LoanDialog({
   info,
   error,
   pending,
+  saveDisabled = false,
   onSubmit,
   onDelete,
   deleteLabel,
@@ -58,6 +59,8 @@ function LoanDialog({
   info?: ReactNode;
   error: string | null;
   pending: boolean;
+  /** Greys Save out; YNAB does that, with no message, for a credit or charge dated after today. */
+  saveDisabled?: boolean;
   onSubmit: () => void;
   onDelete?: () => void;
   deleteLabel?: string;
@@ -74,7 +77,7 @@ function LoanDialog({
           className="grid gap-4"
           onSubmit={(event: FormEvent) => {
             event.preventDefault();
-            onSubmit();
+            if (!saveDisabled) onSubmit();
           }}
         >
           {info && (
@@ -102,7 +105,7 @@ function LoanDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending || saveDisabled}>
                 Save
               </Button>
             </div>
@@ -406,6 +409,9 @@ export function LoanActivityDialog({
       info={copy.info}
       error={error}
       pending={pending}
+      // YNAB (2026-10-16): Record Credit or Refund, Record New Charge and Edit Credit or Refund
+      // grey Save out for a date after today. (Not checked for balance adjustments.)
+      saveDisabled={kind !== "adjustment" && date > todayIso()}
       onDelete={onDelete && (() => void run(onDelete))}
       deleteLabel={copy.remove}
       onSubmit={() => {

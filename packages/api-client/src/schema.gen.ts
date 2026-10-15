@@ -792,7 +792,7 @@ export interface paths {
         put?: never;
         /**
          * Record a loan payment (YNAB's Record Payment)
-         * @description A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.
+         * @description A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared. A date after the user's `today` makes a one-time scheduled transfer instead.
          */
         post: operations["recordLoanPayment"];
         delete?: never;
@@ -2277,7 +2277,7 @@ export interface components {
         /** @description Select all: every transaction this filter matches */
         RegisterFilter: {
             accountId?: string;
-            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
+            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format, or part of one completed from today: `5` is May 1st in MM/DD/YYYY; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
             q?: string;
             /**
              * Format: date
@@ -6325,7 +6325,7 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
-                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
+                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format, or part of one completed from today: `5` is May 1st in MM/DD/YYYY; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
                 q?: string;
                 /** @description On or after this date */
                 from?: string;

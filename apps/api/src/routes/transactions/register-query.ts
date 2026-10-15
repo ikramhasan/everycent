@@ -72,7 +72,7 @@ export interface RegisterFilter {
   to?: string;
   /** The View menu's "Show Reconciled Transactions" turned off. */
   hideReconciled?: boolean;
-  /** The user's today: `Income:` without a year means its year (default: the server's date). */
+  /** The user's today: a year-less `Income:` means its year, and partial dates complete from it. */
   today?: string;
 }
 
@@ -282,12 +282,14 @@ function lineMatches(r: Register, condition: SQL) {
 
 /**
  * The search's terms. A month without a year is the user's current year (YNAB, 2026-10-15), so
- * the register matches the scheduled section around New Year.
+ * the register matches the scheduled section around New Year; partial dates are completed from
+ * the user's today too.
  */
 function searchTerms(filter: RegisterFilter, settings: SearchSettings): SearchTerm[] {
   if (!filter.q) return [];
-  const year = Number((filter.today ?? serverToday()).slice(0, 4));
-  return parseSearch(filter.q, settings).map((t) =>
+  const today = filter.today ?? serverToday();
+  const year = Number(today.slice(0, 4));
+  return parseSearch(filter.q, settings, today).map((t) =>
     t.kind === "income" && t.year === null ? { ...t, year } : t,
   );
 }
