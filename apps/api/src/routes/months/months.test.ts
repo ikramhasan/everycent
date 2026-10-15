@@ -40,6 +40,7 @@ type Month = {
           | "paymentsAndInflows"
           | "underfunded"
           | "overspentCategories"
+          | "creditOverspending"
           | "fundedSpending"
           | "paymentsMade",
           string
@@ -563,6 +564,23 @@ describe("budget months", () => {
         overspentCategories: "0",
       });
       expect((await month("2026-10")).byCategory(rent.id)?.payment).toBeNull();
+    });
+
+    it("reports the card's raw credit overspending for its register (YNAB, 2026-10-15)", async () => {
+      // YNAB's x-c11-159 Card: G1 has $1, the card spends $3 in it ($2 overspent).
+      const { month, put, create, rent, visa } = await cards();
+      await put(rent.id, "2026-10", "100");
+      await create({ accountId: visa.id, date: "2026-10-01", amount: "-300", categoryId: rent.id });
+      const pay = async () => (await month("2026-10")).byCategory(visa.paymentCategoryId)?.payment;
+      expect(await pay()).toMatchObject({ overspentCategories: "200", creditOverspending: "200" });
+      // $5 straight to the payment category covers the card: the inspector's Overspent
+      // Categories drops to $0, the register's Overspending (Oct) stays $2.00.
+      await put(visa.paymentCategoryId, "2026-10", "500");
+      expect(await pay()).toMatchObject({ overspentCategories: "0", creditOverspending: "200" });
+      // Covering G1 clears it; September's overspending isn't October's.
+      await put(rent.id, "2026-10", "300");
+      await create({ accountId: visa.id, date: "2026-09-20", amount: "-400", categoryId: rent.id });
+      expect(await pay()).toMatchObject({ creditOverspending: "0" });
     });
   });
 

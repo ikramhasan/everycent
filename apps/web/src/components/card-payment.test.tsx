@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "@/lib/accounts";
-import { cardPaymentAmount, cardPaymentDraft, PaymentFigure } from "./card-payment";
+import {
+  cardPaymentAmount,
+  cardPaymentDraft,
+  OverspendingFigure,
+  PaymentFigure,
+} from "./card-payment";
 
 vi.mock("@/lib/budget-context", () => ({ useBudget: () => ({ budget: { id: "b1" } }) }));
 vi.mock("@tanstack/react-router", () => ({
@@ -143,5 +148,21 @@ describe("the card register's Payment figure (YNAB, 2026-10-14)", () => {
     expect(screen.getByRole("link", { name: "fix this in your plan." }).getAttribute("href")).toBe(
       "/budgets/b1?category=pay",
     );
+  });
+});
+
+describe("the card register's Overspending figure (YNAB, 2026-10-15)", () => {
+  it("shows this month's credit overspending, labelled with the month", () => {
+    render(<OverspendingFigure amount={200n} month="2026-10" format={format} />);
+    expect(screen.getByText("Overspending (Oct)")).toBeTruthy();
+    expect(screen.getByTitle("$2.00")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("hides at zero", () => {
+    const { container } = render(
+      <OverspendingFigure amount={0n} month="2026-10" format={format} />,
+    );
+    expect(container.textContent).toBe("");
   });
 });

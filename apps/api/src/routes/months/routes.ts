@@ -71,6 +71,10 @@ const PaymentSchema = z
     overspentCategories: zMinorUnits.describe(
       "The part of underfunded that is this month's credit overspending on the card",
     ),
+    creditOverspending: zMinorUnits.describe(
+      "This month's credit overspending on the card, whatever is set aside (the card register's " +
+        '"Overspending (Oct)"); positive',
+    ),
     fundedSpending: zMinorUnits.describe(
       "Money moved in this month for funded card spending, less returns (YNAB's Funded Spending)",
     ),

@@ -24,7 +24,12 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
-import { cardPaymentDraft, PaymentFigure, useCardPayment } from "@/components/card-payment";
+import {
+  cardPaymentDraft,
+  OverspendingFigure,
+  PaymentFigure,
+  useCardPayment,
+} from "@/components/card-payment";
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
@@ -520,7 +525,12 @@ function AccountPage() {
           strong
         />
         {cardPayment && (
-          <div className="ml-auto">
+          <div className="ml-auto flex items-end gap-4">
+            <OverspendingFigure
+              amount={cardPayment.creditOverspending}
+              month={cardPayment.month}
+              format={(minorUnits) => show(minorUnits)}
+            />
             <PaymentFigure
               categoryId={cardPayment.categoryId}
               available={cardPayment.available}

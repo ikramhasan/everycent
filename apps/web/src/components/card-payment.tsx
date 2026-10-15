@@ -8,7 +8,7 @@ import type { Account } from "@/lib/accounts";
 import { useBudget } from "@/lib/budget-context";
 import { isCaution } from "@/lib/budget-view";
 import { type MoneySettings, toMoneyInput } from "@/lib/money-input";
-import { currentMonth, monthQueryOptions } from "@/lib/months";
+import { currentMonth, monthQueryOptions, shortMonthName } from "@/lib/months";
 import { type Draft, directionOf, emptyDraft, transferChoiceLabel } from "@/lib/transactions";
 import { AvailablePill } from "./move-money";
 
@@ -72,7 +72,35 @@ export function useCardPayment(card: Account | undefined) {
     categoryId: card.paymentCategoryId,
     available: BigInt(totals.available),
     caution: isCaution(totals, month, month),
+    month,
+    creditOverspending: BigInt(totals.payment?.creditOverspending ?? "0"),
   };
+}
+
+/**
+ * The yellow "Overspending (Oct)" figure left of a card register's Payment (YNAB, 2026-10-15,
+ * x-c11-159 Card): this month's credit overspending on the card, even once its payment category
+ * covers the balance (the inspector's Overspent Categories is then $0). Plain text; hidden at zero,
+ * and last month's overspending doesn't show.
+ */
+export function OverspendingFigure({
+  amount,
+  month,
+  format,
+}: {
+  amount: bigint;
+  month: string;
+  format: (minorUnits: string) => string;
+}) {
+  if (amount <= 0n) return null;
+  return (
+    <div className="grid justify-items-end">
+      <span title={format(amount.toString())}>
+        <AvailablePill amount={amount.toString()} format={format} caution />
+      </span>
+      <span className="text-muted-foreground text-xs">Overspending ({shortMonthName(month)})</span>
+    </div>
+  );
 }
 
 /**
