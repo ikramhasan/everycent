@@ -48,6 +48,8 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
+  Bookmark,
+  ChevronRight,
   Circle,
   CircleCheck,
   CircleHelp,
@@ -67,6 +69,7 @@ import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
@@ -76,13 +79,8 @@ import {
   type ReconciledWarning,
   rowDeleteScope,
 } from "@/lib/reconciled-warnings";
-import {
-  nextSort,
-  type RegisterSearch,
-  registerQuery,
-  type SortColumn,
-  searchText,
-} from "@/lib/register-filters";
+import { type RegisterSearch, registerQuery, searchText } from "@/lib/register-filters";
+import { DEFAULT_SORT, nextSort, type SortColumn, type SortField } from "@/lib/register-sort";
 import {
   addMonths,
   rangeDates,
@@ -139,15 +137,16 @@ import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
-/** Columns a header click sorts by; the amount columns both sort by amount. */
+/** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
+  flag: "flag",
   account: "account",
   date: "date",
   payee: "payee",
   category: "category",
   memo: "memo",
-  outflow: "amount",
-  inflow: "amount",
+  outflow: "outflow",
+  inflow: "inflow",
   cleared: "cleared",
 };
 
@@ -292,7 +291,8 @@ export function Register({
     [transactions.data],
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
-  const dateOrder = query.sort === "date";
+  // Rows read in the running balance's order only when the date comes first.
+  const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   // The budget starts the month before its oldest transaction (or before this month).
   const monthData = useQuery(monthQueryOptions(budget.id, currentMonth()));
@@ -357,6 +357,8 @@ export function Register({
 
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
+  /** A new transaction in `id`, starting cleared in a cash account (YNAB). */
+  const newDraft = (id: string, date: string) => emptyDraft(id, date, accountById.get(id)?.type);
   const openAccounts = accountList.filter((a) => !a.closed);
   const account = accountId ? accountById.get(accountId) : undefined;
   const options = useMemo(
@@ -384,17 +386,23 @@ export function Register({
     getRowId: (t) => t.id,
   });
   const rows = table.getRowModel().rows;
-  // Split lines sit right under their transaction (read-only; the split is edited as a whole).
+  // Split lines sit right under their transaction (read-only; the split is edited as a whole),
+  // unless it's folded away.
+  const [collapsedSplits, toggleSplit] = useCollapsedSplits();
   const flat = useMemo(
     () =>
       rows.flatMap(({ original: t }): Item[] => [
         { kind: "transaction", key: t.id, t },
-        // Under a search, YNAB shows only the lines that match it.
+        // Under a search, YNAB shows only the lines that match it, folded or not.
         ...t.subtransactions
-          .filter((line) => t.matchingLineIds === null || t.matchingLineIds.includes(line.id))
+          .filter((line) =>
+            t.matchingLineIds === null
+              ? !collapsedSplits[t.id]
+              : t.matchingLineIds.includes(line.id),
+          )
           .map((line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line })),
       ]),
-    [rows],
+    [rows, collapsedSplits],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -437,7 +445,7 @@ export function Register({
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
   // The selection's filter is the register's, without the sort.
-  const { sort: _sort, dir: _dir, hideReconciled, ...rest } = query;
+  const { sort: _sort, hideReconciled, ...rest } = query;
   const selectionFilter = { ...rest, ...(hideReconciled ? { hideReconciled: true } : {}) };
   const summary = $api.useQuery(
     "post",
@@ -875,9 +883,18 @@ export function Register({
     startAdding(makeRepeatingDraft(t, budget));
   }
 
-  async function saveNew(draft: Draft) {
+  /**
+   * After a save: close the new row, or (YNAB's "Save and add another") open a fresh one that
+   * keeps the date, in the register's own account (2026-10-15).
+   */
+  function afterNewSaved(draft: Draft, another: boolean) {
+    if (another && defaultAccountId) startAdding(newDraft(defaultAccountId, draft.date), false);
+    else setAdding(false);
+  }
+
+  async function saveNew(draft: Draft, another = false) {
     if (!draft.date) return setNewError("Enter a date.");
-    if (isScheduled(draft, today)) return saveNewScheduled(draft);
+    if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
     const result = createBody(draft, budget);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -902,7 +919,7 @@ export function Register({
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -913,7 +930,7 @@ export function Register({
    * A new transaction that repeats or is dated ahead is a scheduled one (YNAB). A past date with
    * a repeat enters that one transaction and starts the schedule after today.
    */
-  async function saveNewScheduled(draft: Draft) {
+  async function saveNewScheduled(draft: Draft, another = false) {
     const result = scheduleCreateBody(draft, budget, today);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -952,7 +969,7 @@ export function Register({
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -1172,8 +1189,9 @@ export function Register({
     );
   }
   const q = searchText(search);
-  const sort = query.sort;
-  const dir = query.dir;
+  const [first]: readonly SortField[] = view.sort.length > 0 ? view.sort : DEFAULT_SORT;
+  const sort = first?.column;
+  const dir = first?.dir;
 
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
@@ -1232,8 +1250,23 @@ export function Register({
         if (t.subtransactions.length > 0) {
           const count = new Set(t.subtransactions.map((l) => l.categoryId ?? l.transferAccountId))
             .size;
+          const folded = Boolean(collapsedSplits[t.id]);
           return (
             <span className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="-ml-1 shrink-0"
+                aria-expanded={!folded}
+                aria-label={folded ? "Show split lines" : "Hide split lines"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSplit(t.id);
+                }}
+              >
+                <ChevronRight className={cn("transition-transform", !folded && "rotate-90")} />
+              </Button>
               <Split className="size-4 shrink-0" />
               <span className="truncate">
                 Split ({count} {count === 1 ? "category" : "categories"})
@@ -1455,13 +1488,9 @@ export function Register({
                 const id = header.column.id as ColumnId;
                 const spec = COLUMN_SPECS[id];
                 const sortBy = SORTABLE[id];
-                // Outflow sorts biggest spend first; inflow biggest income first. Both sort by
-                // amount, so the arrow goes on the one whose natural order is showing.
-                const natural = id === "outflow" ? "asc" : id === "inflow" ? "desc" : undefined;
-                const active =
-                  sortBy !== undefined &&
-                  sortBy === sort &&
-                  (sortBy !== "amount" || id === (dir === "asc" ? "outflow" : "inflow"));
+                // The arrow shows on the first sort field; the rest break its ties.
+                const active = sortBy !== undefined && sortBy === sort;
+                const HeaderIcon = id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
                 return (
                   <TableHead
                     key={header.id}
@@ -1493,18 +1522,25 @@ export function Register({
                     ) : id === "balance" ? (
                       <BalanceHeader
                         sorted={!dateOrder}
-                        onResetSort={() => onSearchChange({ sort: undefined, dir: undefined })}
+                        onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
                       />
-                    ) : sortBy && !spec.srOnly ? (
+                    ) : sortBy ? (
                       <button
                         type="button"
                         className={cn(
                           "inline-flex items-center gap-1 uppercase hover:text-foreground",
                           active && "text-foreground",
                         )}
-                        onClick={() => onSearchChange(nextSort(search, sortBy, natural))}
+                        onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
                       >
-                        {spec.header}
+                        {HeaderIcon ? (
+                          <>
+                            <HeaderIcon className="size-3.5" aria-hidden />
+                            <span className="sr-only">{spec.header}</span>
+                          </>
+                        ) : (
+                          spec.header
+                        )}
                         {active &&
                           (dir === "asc" ? (
                             <ArrowUp className="size-3" aria-hidden />
@@ -1526,7 +1562,7 @@ export function Register({
             <TransactionEditor
               transferCategory={transferCategory}
               key={addingKey}
-              initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
+              initial={addingDraft ?? newDraft(defaultAccountId, today)}
               openDatePicker={addingPicker}
               repeat
               columns={columnIds}
@@ -1540,6 +1576,7 @@ export function Register({
               pending={create.isPending || createScheduled.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
+              onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
               onCancel={() => setAdding(false)}
             />
           )}

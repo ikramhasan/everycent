@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDate, parseSearch, type SearchSettings } from "./register-search";
+import { incomeTerm, parseDate, parseSearch, type SearchSettings } from "./register-search";
 
 const settings: SearchSettings = {
   currency: "USD",
@@ -42,6 +42,29 @@ describe("parseSearch", () => {
       { kind: "date", op: "before", date: "2026-01-02" },
       { kind: "date", op: "after", date: "2025-12-31" },
     ]);
+  });
+
+  it("reads Income: as a month name, in full or three letters, with an optional year", () => {
+    // The forms that matched October in YNAB (2026-10-15, EVERYCENT-114).
+    expect(
+      parseSearch(
+        "Income: October 2026, income: oct 2026, INCOME: OCTOBER 2026, Income: Oct, Income: may",
+        settings,
+      ),
+    ).toEqual([
+      { kind: "income", month: 10, year: 2026 },
+      { kind: "income", month: 10, year: 2026 },
+      { kind: "income", month: 10, year: 2026 },
+      { kind: "income", month: 10, year: null },
+      { kind: "income", month: 5, year: null },
+    ]);
+    // And the ones that matched nothing.
+    expect(parseSearch("Income: 10/2026, Income: 2026-10, Income: sept 2026", settings)).toEqual([
+      { kind: "text", text: "Income: 10/2026", amount: null },
+      { kind: "text", text: "Income: 2026-10", amount: null },
+      { kind: "text", text: "Income: sept 2026", amount: null },
+    ]);
+    expect(incomeTerm(10, 2026)).toBe("Income: October 2026");
   });
 
   it("searches a term it can't read as free text", () => {

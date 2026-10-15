@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextSort, registerQuery, registerSearchSchema, searchText } from "./register-filters";
+import { registerQuery, registerSearchSchema, searchText } from "./register-filters";
 import { DEFAULT_VIEW } from "./register-view";
 
 describe("register filters", () => {
@@ -8,34 +8,30 @@ describe("register filters", () => {
       accountId: "a1",
       q: "Payee: costco",
       hideReconciled: "true",
-      sort: "date",
-      dir: "desc",
+      sort: "date:desc",
     });
     expect(
       registerQuery(
         undefined,
-        { sort: "amount", dir: "asc" },
-        { ...DEFAULT_VIEW, showReconciled: true, range: "custom", from: "2026-01", to: "2026-02" },
+        {},
+        {
+          ...DEFAULT_VIEW,
+          showReconciled: true,
+          range: "custom",
+          from: "2026-01",
+          to: "2026-02",
+          sort: [
+            { column: "payee", dir: "asc" },
+            { column: "date", dir: "desc" },
+          ],
+        },
       ),
-    ).toEqual({ from: "2026-01-01", to: "2026-02-28", sort: "amount", dir: "asc" });
+    ).toEqual({ from: "2026-01-01", to: "2026-02-28", sort: "payee:asc,date:desc" });
   });
 
   it("quotes the search without its trailing comma", () => {
     expect(searchText({ q: "Category: Groceries, " })).toBe("Category: Groceries");
     expect(searchText({})).toBe("");
-  });
-
-  it("flips a column's direction and starts new ones in their natural order", () => {
-    expect(nextSort({}, "amount")).toEqual({ sort: "amount", dir: "asc" });
-    expect(nextSort({ sort: "amount", dir: "asc" }, "amount")).toEqual({
-      sort: "amount",
-      dir: "desc",
-    });
-    expect(nextSort({}, "date")).toEqual({ sort: "date", dir: "asc" });
-    expect(nextSort({ sort: "date", dir: "asc" }, "date")).toEqual({
-      sort: undefined,
-      dir: undefined,
-    });
   });
 
   it("drops bad values from the address instead of failing", () => {

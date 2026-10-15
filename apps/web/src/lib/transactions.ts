@@ -2,6 +2,7 @@ import type { components } from "@everycent/api-client";
 import {
   type AccountType,
   accountFamily,
+  distributeSplit,
   isDebtAccount,
   type ScheduleFrequency,
 } from "@everycent/engine";
@@ -187,7 +188,15 @@ export function startSplit(draft: Draft): Draft {
   };
 }
 
-export function emptyDraft(accountId: string, date: string): Draft {
+/**
+ * How a new transaction starts in an account of `type`: cleared in a cash account, otherwise
+ * uncleared (YNAB's web app, 2026-10-15; the editor re-applies it when the account changes).
+ */
+export function clearedFor(type: AccountType | undefined): Draft["cleared"] {
+  return type === "cash" ? "cleared" : "uncleared";
+}
+
+export function emptyDraft(accountId: string, date: string, accountType?: AccountType): Draft {
   return {
     accountId,
     date,
@@ -197,7 +206,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     memo: "",
     outflow: "",
     inflow: "",
-    cleared: "uncleared",
+    cleared: clearedFor(accountType),
     flag: null,
     lines: null,
   };
@@ -268,6 +277,52 @@ export function splitRemaining(
   // Positive while lines are still missing, negative when they go past the total.
   const remaining = total < 0n ? lines - total : total - lines;
   return { total, remaining };
+}
+
+/** A money input's text for a signed amount: an outflow or an inflow, empty at zero. */
+function sides(amount: bigint, settings: MoneySettings): Pick<LineDraft, "outflow" | "inflow"> {
+  return {
+    outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
+    inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
+  };
+}
+
+/**
+ * A split whose lines don't add up to its total, for YNAB's "Something Doesn't Add Up" prompt:
+ * the total, what the lines add up to and what's unassigned (total minus lines), all signed.
+ * Null when it adds up or an amount can't be read.
+ */
+export function splitMismatch(draft: Draft, settings: MoneySettings) {
+  if (!draft.lines) return null;
+  const amounts = draft.lines.map((line) => draftAmount(line, settings));
+  const total = draftAmount(draft, settings);
+  const blank = draft.outflow.trim() === "" && draft.inflow.trim() === "";
+  if (blank || typeof total === "string" || amounts.some((a) => typeof a === "string")) {
+    return null;
+  }
+  const lines = (amounts as bigint[]).reduce((sum, a) => sum + a, 0n);
+  if (lines === total) return null;
+  const unassigned = total - lines;
+  const added = distributeSplit(unassigned, amounts as bigint[]);
+  return {
+    total,
+    lines,
+    unassigned,
+    /** The lines after Auto-Distribute; null when they cancel out and have no proportion. */
+    distributed: added
+      ? draft.lines.map((line, i) => {
+          const amount = (amounts[i] as bigint) + (added[i] ?? 0n);
+          // A $0 line YNAB skips stays as it was (empty).
+          return added[i] === 0n ? line : { ...line, ...sides(amount, settings) };
+        })
+      : null,
+  };
+}
+
+/** YNAB's "Update Total": the transaction takes what its lines add up to. */
+export function withSplitTotal(draft: Draft, settings: MoneySettings): Draft {
+  const mismatch = splitMismatch(draft, settings);
+  return mismatch ? { ...draft, ...sides(mismatch.lines, settings) } : draft;
 }
 
 /** How the editor and errors describe what's left of a split. */

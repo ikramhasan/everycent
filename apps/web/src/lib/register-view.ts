@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { todayIso } from "./dates";
+import { DEFAULT_SORT, readSort, type SortField } from "./register-sort";
 
 /**
  * YNAB's View menu for a register: a date range and what to show. YNAB keeps these per account
@@ -16,6 +17,8 @@ export interface RegisterView {
   showFlags: boolean;
   /** The Scheduled Transactions section folded away (YNAB remembers it per register). */
   scheduledCollapsed: boolean;
+  /** The stacked sort, first field first (YNAB keeps it per register: `…_sortFields`). */
+  sort: SortField[];
 }
 
 export const DATE_RANGES = [
@@ -44,6 +47,7 @@ export const DEFAULT_VIEW: RegisterView = {
   showRunningBalance: false,
   showFlags: true,
   scheduledCollapsed: false,
+  sort: [...DEFAULT_SORT],
 };
 
 /** "2026-10" → the first day, and the last day, of that month. */
@@ -104,7 +108,7 @@ function read(key: string): RegisterView {
     const raw = localStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return DEFAULT_VIEW;
     const value = JSON.parse(raw) as Partial<RegisterView>;
-    return { ...DEFAULT_VIEW, ...value };
+    return { ...DEFAULT_VIEW, ...value, sort: readSort(value.sort) };
   } catch {
     return DEFAULT_VIEW;
   }

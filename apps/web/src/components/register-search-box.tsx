@@ -7,7 +7,7 @@ import {
 } from "@everycent/ui/components/autocomplete";
 import { InputGroupAddon, InputGroupButton } from "@everycent/ui/components/input-group";
 import { cn } from "@everycent/ui/lib/utils";
-import { Bookmark, Search, X } from "lucide-react";
+import { Bookmark, CalendarDays, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FLAG_CLASS } from "@/lib/flags";
 import {
@@ -113,7 +113,7 @@ export function RegisterSearchBox({
           </InputGroupAddon>
         )}
       </AutocompleteInput>
-      <AutocompleteContent align="end" className="w-96">
+      <AutocompleteContent align="end" className="w-auto min-w-96 max-w-[32rem]">
         <AutocompleteList>
           {(item: Item) => (
             <AutocompleteItem key={item.value} value={item} className="gap-3">
@@ -130,6 +130,7 @@ export function RegisterSearchBox({
                   )}
                 />
               )}
+              {item.calendar && <CalendarDays className="size-4 text-primary" />}
               <span className="truncate">{item.text}</span>
             </AutocompleteItem>
           )}

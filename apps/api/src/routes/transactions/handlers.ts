@@ -13,7 +13,7 @@ import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { queryRegister, queryRegisterRow } from "./register-query";
+import { parseSort, queryRegister, queryRegisterRow } from "./register-query";
 import type {
   createTransaction,
   deleteTransaction,
@@ -25,6 +25,7 @@ import {
   assertNotSelf,
   assertOnePayee,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   insertOtherSide,
   lockTransaction,
@@ -52,13 +53,19 @@ async function transactionJson(db: Db, budgetId: string, accountId: string, id: 
 
 export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { sort, dir, limit, cursor, today, ...filter } = c.req.valid("query");
+  const { sort, limit, cursor, today, ...filter } = c.req.valid("query");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
   if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
-  const page = await queryRegister(db, budgetId, filter, { sort, dir, limit, cursor }, budget);
+  const page = await queryRegister(
+    db,
+    budgetId,
+    filter,
+    { sort: parseSort(sort), limit, cursor },
+    budget,
+  );
   return c.json(page, 200);
 };
 
@@ -85,7 +92,8 @@ export interface CreateBody {
   categoryId: string | null;
   memo: string;
   subtransactions?: LineInput[];
-  cleared: ClearedState;
+  /** Left out: by the account (`clearedOnEntry`). */
+  cleared?: ClearedState;
   flag: FlagColor | null;
   approved?: boolean;
   /** A restored transfer's other side, as it was. */
@@ -133,7 +141,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
       ? null
       : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
     memo: body.memo,
-    cleared: body.cleared,
+    cleared: body.cleared ?? clearedOnEntry(account),
     flag: body.flag,
     approved: body.approved,
   });

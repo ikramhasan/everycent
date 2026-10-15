@@ -4,7 +4,7 @@ import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { type Db, serverToday } from "../../lib/ledger";
+import { type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import {
   enterDueScheduled,
   enterIfPast,
@@ -68,12 +68,16 @@ export const listScheduledTransactionsHandler: RouteHandler<
     .select({ color: flagName.color, name: flagName.name })
     .from(flagName)
     .where(eq(flagName.budgetId, budgetId));
-  const flagNames = new Map(names.map((n) => [n.name.toLowerCase(), n.color]));
+  const context = {
+    flagNames: new Map(names.map((n) => [n.name.toLowerCase(), n.color])),
+    readyToAssignId: await internalCategoryId(db, budgetId, "ready_to_assign"),
+    today,
+  };
   const rows = (await scheduledRows(db, budgetId, accountId)).filter(
     (r) =>
       (!from || r.dateNext >= from) &&
       (!to || r.dateNext <= to) &&
-      (terms.length === 0 || scheduledRowMatches(r, terms, flagNames)),
+      (terms.length === 0 || scheduledRowMatches(r, terms, context)),
   );
   return c.json({ scheduledTransactions: rows }, 200);
 };

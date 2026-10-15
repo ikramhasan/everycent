@@ -35,9 +35,10 @@ const account = (id: string, type: Account["type"]): Account => ({
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 
-function renderEditor(accountId = "checking") {
+function renderEditor(accountId = "checking", { another = false } = {}) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
+  const onSaveAndAddAnother = vi.fn();
   const onRenameFlags = vi.fn(async () => {});
   render(
     <table>
@@ -74,12 +75,13 @@ function renderEditor(accountId = "checking") {
               : ""
           }
           onSave={onSave}
+          onSaveAndAddAnother={another ? onSaveAndAddAnother : undefined}
           onCancel={onCancel}
         />
       </tbody>
     </table>,
   );
-  return { onSave, onCancel, onRenameFlags };
+  return { onSave, onCancel, onRenameFlags, onSaveAndAddAnother };
 }
 
 describe("TransactionEditor", () => {
@@ -101,6 +103,58 @@ describe("TransactionEditor", () => {
         inflow: "",
       }),
     );
+  });
+
+  it("offers Save and add another on a new row, and Enter does it (YNAB)", async () => {
+    const { onSave, onSaveAndAddAnother } = renderEditor("checking", { another: true });
+    const user = userEvent.setup();
+    expect(screen.getByRole("button", { name: "Save and add another" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Outflow"), "5{Enter}");
+    expect(onSaveAndAddAnother).toHaveBeenCalledWith(expect.objectContaining({ outflow: "5" }));
+    await user.click(screen.getByRole("button", { name: "Save and add another" }));
+    expect(onSaveAndAddAnother).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts cleared in a cash account, and re-applies it when a new row's account changes", async () => {
+    const user = userEvent.setup();
+    const onSaveAndAddAnother = vi.fn();
+    render(
+      <table>
+        <tbody>
+          <TransactionEditor
+            initial={emptyDraft("wallet", "2026-10-01", "cash")}
+            columns={registerColumns(true)}
+            accounts={[account("wallet", "cash"), account("checking", "checking")]}
+            payees={[]}
+            categories={[]}
+            dateFormat="MM/DD/YYYY"
+            settings={usd}
+            flags={[]}
+            onRenameFlags={vi.fn(async () => {})}
+            pending={false}
+            error={null}
+            onSave={vi.fn()}
+            onSaveAndAddAnother={onSaveAndAddAnother}
+            onCancel={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    // YNAB, 2026-10-15 (EVERYCENT-146).
+    expect(screen.getByRole("button", { name: "Cleared" })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Account"), "checking");
+    expect(screen.getByRole("button", { name: "Uncleared" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Uncleared" }));
+    await user.selectOptions(screen.getByLabelText("Account"), "wallet");
+    await user.selectOptions(screen.getByLabelText("Account"), "checking");
+    expect(screen.getByRole("button", { name: "Uncleared" })).toBeInTheDocument();
+  });
+
+  it("has no Save and add another when editing", () => {
+    renderEditor();
+    expect(screen.queryByRole("button", { name: "Save and add another" })).not.toBeInTheDocument();
   });
 
   it("creates a new payee from typed text", async () => {
@@ -222,6 +276,54 @@ describe("TransactionEditor", () => {
         ],
       }),
     );
+  });
+
+  it("asks what to do with a split that doesn't add up, as YNAB does", async () => {
+    const { onSave, onCancel } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "10");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+    await user.type(screen.getByLabelText("Outflow, line 1"), "3");
+    await user.type(screen.getByLabelText("Outflow, line 2"), "4");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+    const prompt = await screen.findByRole("alertdialog");
+    expect(prompt).toHaveTextContent("Something Doesn't Add Up");
+    expect(prompt).toHaveTextContent(
+      "The total is -$10.00, but the splits add up to -$7.00. How would you like to handle " +
+        "the unassigned -$3.00?",
+    );
+    // Esc closes the prompt, not the row.
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(onCancel).not.toHaveBeenCalled();
+
+    // Auto-Distribute: 3 and 4 share the $3 (YNAB: 4.29 and 5.71); the row stays open.
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Auto-Distribute" }));
+    expect(screen.getByLabelText("Outflow, line 1")).toHaveValue("4.29");
+    expect(screen.getByLabelText("Outflow, line 2")).toHaveValue("5.71");
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates the split's total to its lines' sum, or leaves it to be fixed by hand", async () => {
+    const { onSave } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "10");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+    await user.type(screen.getByLabelText("Outflow, line 1"), "3");
+    await user.type(screen.getByLabelText("Outflow, line 2"), "4");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Adjust Manually" }));
+    expect(screen.getByLabelText("Outflow")).toHaveValue("10");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Update Total" }));
+    expect(screen.getByLabelText("Outflow")).toHaveValue("7.00");
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("doesn't offer a split on a transfer", async () => {

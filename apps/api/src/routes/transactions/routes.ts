@@ -4,7 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
-import { SORT_COLUMNS } from "./register-query";
+import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
 const DateLimitQuery = z.object({
   today: IsoDate.optional().describe(
@@ -21,7 +21,10 @@ const SearchText = z
       "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
       "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), " +
       "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
-      "budget's format; before and after include the day). Split lines are matched one by one.",
+      "budget's format; before and after include the day), `Income:` (a month name, full or " +
+      "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
+      "Assign that month, including Starting Balances of budget accounts; no year means this " +
+      "year). Split lines are matched one by one.",
   );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
@@ -239,8 +242,18 @@ export const listTransactions = createRoute({
         .stringbool()
         .optional()
         .describe('The View menu\'s "Show Reconciled Transactions" turned off'),
-      sort: z.enum(SORT_COLUMNS).default("date"),
-      dir: z.enum(["asc", "desc"]).default("desc"),
+      sort: z
+        .string()
+        .regex(SORT_PATTERN)
+        .default("date:desc")
+        .describe(
+          "YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first " +
+            "(e.g. `payee:desc,date:asc`). Columns: " +
+            SORT_COLUMNS.join(", ") +
+            ". Outflow and inflow each count the other side's rows as zero; flag ascending is " +
+            "none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, " +
+            "cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top.",
+        ),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       cursor: z.string().optional(),
       today: IsoDate.optional().describe(
@@ -280,7 +293,9 @@ export const createTransaction = createRoute({
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
-          cleared: NewCleared.default("uncleared"),
+          cleared: NewCleared.optional().describe(
+            "Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)",
+          ),
           flag: Flag.default(null),
           approved: z
             .boolean()

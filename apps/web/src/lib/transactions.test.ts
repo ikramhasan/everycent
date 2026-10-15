@@ -11,12 +11,14 @@ import {
   emptyDraft,
   emptyLine,
   paymentCategoryCard,
+  splitMismatch,
   splitRemaining,
   startSplit,
   type Transaction,
   transferChoiceLabel,
   transferRowLabel,
   updateBody,
+  withSplitTotal,
 } from "./transactions";
 
 const acc = (name: string, type: AccountType) => ({ name, type });
@@ -109,6 +111,13 @@ const txn: Transaction = {
 };
 
 describe("register drafts", () => {
+  it("starts a new transaction cleared only in a cash account (YNAB)", () => {
+    expect(emptyDraft("w", "2026-10-01", "cash").cleared).toBe("cleared");
+    expect(emptyDraft("c", "2026-10-01", "checking").cleared).toBe("uncleared");
+    expect(emptyDraft("s", "2026-10-01", "savings").cleared).toBe("uncleared");
+    expect(emptyDraft("x", "2026-10-01").cleared).toBe("uncleared");
+  });
+
   it("turns outflow and inflow fields into a signed amount", () => {
     const draft: Draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "1,234.56" };
     expect(createBody(draft, usd)).toEqual({
@@ -280,6 +289,41 @@ describe("splits", () => {
       emptyLine({ categoryId: "household", outflow: "40" }),
     ],
   };
+
+  it("finds a split that doesn't add up, and distributes the rest as YNAB does", () => {
+    expect(splitMismatch(receipt, usd)).toBeNull();
+    expect(splitMismatch({ ...receipt, outflow: "" }, usd)).toBeNull();
+    const short = { ...receipt, outflow: "0.03", lines: [] as Draft["lines"] };
+    const draft: Draft = {
+      ...short,
+      lines: [
+        emptyLine({ outflow: "0.01" }),
+        emptyLine({ outflow: "0.01" }),
+        emptyLine({ outflow: "0" }),
+      ],
+    };
+    const found = splitMismatch(draft, usd);
+    expect(found).toMatchObject({ total: -3n, lines: -2n, unassigned: -1n });
+    // The $0 line is skipped and keeps what was typed.
+    expect(found?.distributed?.map((l) => [l.outflow, l.inflow])).toEqual([
+      ["0.02", ""],
+      ["0.01", ""],
+      ["0", ""],
+    ]);
+    // Every line empty: spread evenly, the first taking the extra cent.
+    const empty: Draft = {
+      ...receipt,
+      outflow: "",
+      inflow: "0.10",
+      lines: [emptyLine(), emptyLine(), emptyLine()],
+    };
+    expect(splitMismatch(empty, usd)?.distributed?.map((l) => l.inflow)).toEqual([
+      "0.04",
+      "0.03",
+      "0.03",
+    ]);
+    expect(withSplitTotal({ ...receipt, outflow: "130" }, usd).outflow).toBe("120.00");
+  });
 
   it("moves the category to the first line when splitting", () => {
     const split = startSplit({ ...emptyDraft("a1", "2026-10-01"), categoryId: "groceries" });

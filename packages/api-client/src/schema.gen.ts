@@ -2130,7 +2130,7 @@ export interface components {
         /** @description Select all: every transaction this filter matches */
         RegisterFilter: {
             accountId?: string;
-            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
+            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
             q?: string;
             /**
              * Format: date
@@ -2203,10 +2203,10 @@ export interface components {
             memo: string;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
             /**
-             * @default uncleared
+             * @description Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)
              * @enum {string}
              */
-            cleared: "uncleared" | "cleared" | "reconciled";
+            cleared?: "uncleared" | "cleared" | "reconciled";
             /**
              * @description One of YNAB's six flag colors; null clears it
              * @default null
@@ -6021,7 +6021,7 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
-                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
+                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
                 q?: string;
                 /** @description On or after this date */
                 from?: string;
@@ -6029,8 +6029,8 @@ export interface operations {
                 to?: string;
                 /** @description The View menu's "Show Reconciled Transactions" turned off */
                 hideReconciled?: string;
-                sort?: "date" | "account" | "payee" | "category" | "memo" | "amount" | "cleared";
-                dir?: "asc" | "desc";
+                /** @description YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first (e.g. `payee:desc,date:asc`). Columns: date, account, payee, category, memo, outflow, inflow, flag, cleared. Outflow and inflow each count the other side's rows as zero; flag ascending is none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top. */
+                sort?: string;
                 limit?: number;
                 cursor?: string;
                 /** @description The user's today: scheduled transactions due by then are entered first */

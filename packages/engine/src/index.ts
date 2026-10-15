@@ -28,6 +28,7 @@ export {
   currencyExponent,
   isCurrencyCode,
 } from "./currency";
+export { distributeSplit } from "./distribute-split";
 export {
   CurrencyMismatchError,
   MoneyError,
@@ -153,6 +154,8 @@ export {
   IS_LABELS,
   IS_STATES,
   type IsState,
+  incomeTerm,
+  MONTH_NAMES,
   parseDate,
   parseSearch,
   type SearchSettings,

@@ -1,7 +1,6 @@
 import { type Database, newId } from "@everycent/db";
 import {
   budgetAccount,
-  type ClearedState,
   category,
   type FlagColor,
   payee,
@@ -27,6 +26,7 @@ import {
   type AccountRow,
   assertNotSelf,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   insertOtherSide,
   resolveCategory,
@@ -51,13 +51,8 @@ import {
 
 export type ScheduleRow = typeof scheduledTransaction.$inferSelect;
 
-/**
- * How an entered occurrence starts out, as YNAB enters it (checked 2026-10-11): uncleared, except
- * in cash accounts, where it's cleared. Each side of a transfer follows its own account.
- */
-export function clearedOnEntry(account: AccountRow): ClearedState {
-  return account.type === "cash" ? "cleared" : "uncleared";
-}
+// Entered occurrences start out like any new transaction (YNAB, checked 2026-10-11).
+export { clearedOnEntry };
 
 async function scheduleLines(db: Db, scheduleIds: readonly string[]) {
   if (scheduleIds.length === 0) return [];
@@ -533,11 +528,19 @@ function contains(value: string | null, text: string) {
 export function scheduledRowMatches(
   row: ScheduledRowJson,
   terms: readonly SearchTerm[],
-  flagNames: FlagNames,
+  context: {
+    flagNames: FlagNames;
+    /** For `Income:`, which matches a scheduled Ready to Assign row by its next date. */
+    readyToAssignId: string;
+    /** The user's today: a year-less `Income:` month is this year's. */
+    today: string;
+  },
 ) {
+  const { flagNames } = context;
   type Unit = {
     payee: string | null;
     category: string | null;
+    categoryId: string | null;
     memo: string;
     amount: bigint;
     split: boolean;
@@ -546,6 +549,7 @@ export function scheduledRowMatches(
     {
       payee: row.payeeName,
       category: row.categoryName,
+      categoryId: row.categoryId,
       memo: row.memo,
       amount: BigInt(row.amount),
       split: row.subtransactions.length > 0,
@@ -553,6 +557,7 @@ export function scheduledRowMatches(
     ...row.subtransactions.map((l) => ({
       payee: l.payeeName ?? row.payeeName,
       category: l.categoryName,
+      categoryId: l.categoryId,
       memo: l.memo,
       amount: BigInt(l.amount),
       split: false,
@@ -600,6 +605,12 @@ export function scheduledRowMatches(
           : term.op === "before"
             ? row.dateNext <= term.date
             : row.dateNext >= term.date;
+      case "income": {
+        // YNAB, 2026-10-15: a scheduled RTA row matches by its next date.
+        const year = term.year ?? Number(context.today.slice(0, 4));
+        const month = `${String(year).padStart(4, "0")}-${String(term.month).padStart(2, "0")}`;
+        return unit.categoryId === context.readyToAssignId && row.dateNext.startsWith(month);
+      }
     }
   };
   return units.some((unit) => terms.every((term) => matches(unit, term)));
