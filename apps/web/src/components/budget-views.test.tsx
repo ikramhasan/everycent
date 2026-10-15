@@ -173,7 +173,7 @@ describe("BudgetFilterBar with custom views", () => {
         onChange={onChange}
         order={["v1", "underfunded", "overfunded", "available", "snoozed", "gone"]}
         custom={[{ id: "v1", name: "Bills" }]}
-        menu={<ViewsMenu full={false} onManage={() => {}} onNew={() => {}} />}
+        menu={() => <ViewsMenu full={false} onManage={() => {}} onNew={() => {}} />}
       />,
     );
     const group = screen.getByRole("radiogroup", { name: "Budget view" });
@@ -193,5 +193,55 @@ describe("BudgetFilterBar with custom views", () => {
     await userEvent.click(screen.getByRole("radio", { name: "Bills" }));
     expect(onChange).toHaveBeenCalledWith("v1");
     expect(screen.getByRole("button", { name: "Views Menu" })).toBeInTheDocument();
+  });
+});
+
+// YNAB, 2026-10-15 (EVERYCENT-164): views past the window's breakpoints move into the Views Menu,
+// except the selected one.
+describe("BudgetFilterBar overflow", () => {
+  it("moves the views that don't fit into the Views Menu", async () => {
+    const onChange = vi.fn();
+    const custom = Array.from({ length: 6 }, (_, i) => ({ id: `v${i + 1}`, name: `V${i + 1}` }));
+    render(
+      <BudgetFilterBar
+        filter="v6"
+        overspent={0}
+        onChange={onChange}
+        order={["underfunded", "overfunded", "available", "snoozed", ...custom.map((v) => v.id)]}
+        custom={custom}
+        viewportWidth={1000}
+        menu={(overflow) => (
+          <ViewsMenu
+            full={false}
+            overflow={overflow}
+            onPick={onChange}
+            onManage={() => {}}
+            onNew={() => {}}
+          />
+        )}
+      />,
+    );
+    // 1000px = 62.5rem: views 0 to 6 fit, and the selected V6.
+    expect(screen.getAllByRole("radio").map((b) => b.textContent)).toEqual([
+      "All",
+      "Underfunded",
+      "Overfunded",
+      "Money Available",
+      "Snoozed",
+      "V1",
+      "V2",
+      "V6",
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "Views Menu" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      "V3",
+      "V4",
+      "V5",
+      "Manage Views",
+      "New View",
+    ]);
+    await userEvent.click(screen.getByRole("menuitem", { name: "V4" }));
+    expect(onChange).toHaveBeenCalledWith("v4");
   });
 });

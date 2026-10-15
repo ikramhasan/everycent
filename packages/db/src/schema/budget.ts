@@ -70,6 +70,8 @@ export const budgetMember = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: text({ enum: BUDGET_ROLES }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** When this member last opened the budget (YNAB's plan list: "Last used 9 minutes ago"). */
+    lastUsedAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     uniqueIndex("budget_member_budget_user_idx").on(t.budgetId, t.userId),

@@ -23,7 +23,14 @@ export const BudgetSchema = z
     archivedAt: z.iso
       .datetime()
       .nullable()
-      .describe("Set when a fresh start replaced this budget; it stays usable"),
+      .describe(
+        "Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); " +
+          "it stays usable. Renaming it without that stamp restores it (clears this).",
+      ),
+    lastUsedAt: z.iso
+      .datetime()
+      .nullable()
+      .describe("When the signed-in user last opened this budget; null if never"),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
@@ -69,7 +76,7 @@ export const listBudgets = createRoute({
   summary: "Budgets the signed-in user belongs to",
   responses: {
     200: {
-      description: "Budgets sorted by name, and the last-used one",
+      description: "Budgets, most recently used first (then by name), and the last-used one",
       content: { "application/json": { schema: BudgetListSchema } },
     },
     401: jsonError("Not signed in"),
@@ -164,9 +171,11 @@ export const freshStartBudget = createRoute({
   middleware: [requireAuth] as const,
   summary: "Fresh start: archive this budget and continue in a copy without transactions",
   description:
-    "Owner only. The new budget keeps the name, settings, partners, categories, payees, " +
-    "accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled " +
-    "transactions. The old one is renamed '(Archived <date>)'.",
+    "Owner only. The new budget is named `name` and keeps the settings, partners, categories " +
+    "(with their notes), payees, flag names, custom views, accounts (each starting at $0 on " +
+    "`date`, as YNAB starts unlinked accounts; starred ones stay starred) and scheduled " +
+    "transactions. The old one gets ' (Archived on <date>)' added to its name. An archived " +
+    "budget can make a fresh start again, as in YNAB.",
   request: {
     params: BudgetParams,
     body: {
@@ -174,7 +183,10 @@ export const freshStartBudget = createRoute({
       content: {
         "application/json": {
           schema: z
-            .object({ date: z.iso.date().describe("The user's today, YYYY-MM-DD") })
+            .object({
+              date: z.iso.date().describe("The user's today, YYYY-MM-DD"),
+              name: BudgetName.describe("The new budget's name (YNAB's \"New Plan Name\")"),
+            })
             .openapi("FreshStart"),
         },
       },
@@ -191,6 +203,5 @@ export const freshStartBudget = createRoute({
       "Only the owner can make a fresh start, or the account's email address isn't confirmed",
     ),
     404: jsonError("No such budget, or the caller isn't a member"),
-    409: jsonError("ALREADY_ARCHIVED: this budget was already replaced by a fresh start"),
   },
 });

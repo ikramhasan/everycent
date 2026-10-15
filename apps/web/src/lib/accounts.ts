@@ -11,7 +11,7 @@ export const accountsQueryOptions = (budgetId: string, today = todayIso()) =>
     params: { path: { budgetId }, query: { today } },
   });
 
-export type SidebarSectionId = "budget" | "loans" | "tracking" | "closed";
+export type SidebarSectionId = "starred" | "budget" | "loans" | "tracking" | "closed";
 
 export interface SidebarSection {
   id: SidebarSectionId;
@@ -29,20 +29,42 @@ const SECTION_OF: Record<AccountFamily, SidebarSectionId> = {
 };
 
 const TITLES: Record<SidebarSectionId, string> = {
+  starred: "Starred",
   budget: "Budget",
   loans: "Loans",
   tracking: "Tracking",
   closed: "Closed",
 };
 
-/** YNAB's sidebar: open accounts by family, then closed ones. Empty sections are left out. */
+/** Whether YNAB shows the account's star: open cash and credit accounts only. */
+export function canStar(account: Account) {
+  return !account.closed && isOnBudget(account.type);
+}
+
+/** In the Starred group: starred, and still starrable (a closed account drops out). */
+export function isStarred(account: Account) {
+  return account.starredOrder !== null && canStar(account);
+}
+
+/**
+ * YNAB's sidebar: Starred first (its own order; the accounts stay in their usual group too),
+ * then open accounts by family, then closed ones. Empty sections are left out.
+ */
 export function sidebarSections(accounts: readonly Account[]): SidebarSection[] {
-  const order: SidebarSectionId[] = ["budget", "loans", "tracking", "closed"];
+  const order: SidebarSectionId[] = ["starred", "budget", "loans", "tracking", "closed"];
+  const inSectionOf = (id: SidebarSectionId) => {
+    if (id === "starred") {
+      return accounts
+        .filter(isStarred)
+        .sort((a, b) => (a.starredOrder ?? 0) - (b.starredOrder ?? 0));
+    }
+    return accounts.filter((a) =>
+      id === "closed" ? a.closed : !a.closed && SECTION_OF[accountFamily(a.type)] === id,
+    );
+  };
   return order
     .map((id) => {
-      const inSection = accounts.filter((a) =>
-        id === "closed" ? a.closed : !a.closed && SECTION_OF[accountFamily(a.type)] === id,
-      );
+      const inSection = inSectionOf(id);
       const total = inSection.reduce((sum, a) => sum + BigInt(a.balances.working), 0n);
       return { id, title: TITLES[id], accounts: inSection, total };
     })

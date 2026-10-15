@@ -322,3 +322,16 @@ export function useProgressBars() {
   }, []);
   return { progressBars: on, setProgressBars: update };
 }
+
+/**
+ * Whether the view at `index` on YNAB's views bar (All is 0) fits a `viewportWidth`-pixel window.
+ * YNAB decides it with fixed breakpoints, not by measuring the buttons (its stylesheet, read
+ * 2026-10-15, EVERYCENT-164): below 20rem only the selected view shows; from 20rem views 0 and 2
+ * do, view 1 from 29.875rem, and each later view 9.875rem after the one before (view i from
+ * 20 + (i - 2) × 9.875rem). The rest go into the Views Menu; the selected view always stays.
+ */
+export function fitsViewsBar(index: number, viewportWidth: number) {
+  const rem = viewportWidth / 16;
+  const from = index === 1 ? 29.875 : 20 + Math.max(index - 2, 0) * 9.875;
+  return rem >= from;
+}

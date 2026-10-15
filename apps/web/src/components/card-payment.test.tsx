@@ -35,6 +35,7 @@ const account = (
   type,
   note: "",
   closed: false,
+  starredOrder: null,
   currency: "USD",
   interestRate: null,
   minimumPayment: null,

@@ -17,7 +17,7 @@ export const FLAG_CLASS: Record<FlagColor, string> = {
   purple: "text-purple-500",
 };
 
-const COLOR_LABEL: Record<FlagColor, string> = {
+export const COLOR_LABEL: Record<FlagColor, string> = {
   red: "Red",
   orange: "Orange",
   yellow: "Yellow",

@@ -211,6 +211,20 @@
       "when": 1791934825668,
       "tag": "0029_wonderful_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792051635539,
+      "tag": "0030_strong_texas_twister",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792054946005,
+      "tag": "0031_smart_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

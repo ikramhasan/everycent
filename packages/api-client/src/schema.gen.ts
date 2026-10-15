@@ -199,7 +199,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget is named `name` and keeps the settings, partners, categories (with their notes), payees, flag names, custom views, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts; starred ones stay starred) and scheduled transactions. The old one gets ' (Archived on <date>)' added to its name. An archived budget can make a fresh start again, as in YNAB.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -673,7 +673,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reopen a closed account (and show its payment category again) */
+        /**
+         * Reopen a closed account (and show its payment category again)
+         * @description Reopening a tracking account that was updated to a loan account erases the link: the loan no longer shows its history, and the account can be updated to a loan again (YNAB's "Erase & Re-open").
+         */
         post: operations["reopenAccount"];
         delete?: never;
         options?: never;
@@ -1453,9 +1456,14 @@ export interface components {
             role: "owner" | "editor";
             /**
              * Format: date-time
-             * @description Set when a fresh start replaced this budget; it stays usable
+             * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
              */
             archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the signed-in user last opened this budget; null if never
+             */
+            lastUsedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1509,6 +1517,8 @@ export interface components {
              * @description The user's today, YYYY-MM-DD
              */
             date: string;
+            /** @description The new budget's name (YNAB's "New Plan Name") */
+            name: string;
         };
         BudgetMembers: {
             /** @description The owner first, then by when they joined */
@@ -1744,6 +1754,8 @@ export interface components {
             type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
             note: string;
             closed: boolean;
+            /** @description Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. Closing an account unstars it. */
+            starredOrder: number | null;
             /**
              * @description ISO 4217 currency code
              * @enum {string}
@@ -1831,6 +1843,8 @@ export interface components {
             escrowAmount?: string | null;
             /** @description Null unpairs */
             pairedCategoryId?: string | null;
+            /** @description Star or unstar the account. Only open cash and credit accounts can be starred; a new star goes to the end of the Starred group. */
+            starred?: boolean;
             /** @description The balance the account should have; negative for money owed */
             workingBalance?: string;
             /**
@@ -1842,6 +1856,8 @@ export interface components {
         MoveAccount: {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
+            /** @description Reorder within the Starred group instead (both accounts must be starred) */
+            starred?: boolean;
         };
         ReconcilePreview: {
             /** @description Signed like the account; zero when it matches */
@@ -3440,7 +3456,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Budgets sorted by name, and the last-used one */
+            /** @description Budgets, most recently used first (then by name), and the last-used one */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3731,15 +3747,6 @@ export interface operations {
             };
             /** @description No such budget, or the caller isn't a member */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description ALREADY_ARCHIVED: this budget was already replaced by a fresh start */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

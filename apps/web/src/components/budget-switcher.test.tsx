@@ -75,5 +75,15 @@ describe("BudgetSwitcher", () => {
       "href",
       "/budgets",
     );
+    // The current budget's own items, as in YNAB's plan menu.
+    expect(screen.getByRole("menuitem", { name: "Edit Flags" })).toBeInTheDocument();
+  });
+
+  it("has no current-budget items outside a budget", async () => {
+    const trigger = await renderSwitcher(undefined);
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    await screen.findByRole("menuitem", { name: "New budget" });
+    expect(screen.queryByRole("menuitem", { name: "Edit Flags" })).not.toBeInTheDocument();
   });
 });

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { currencyName } from "@/components/currency-picker";
-import { type Budget, budgetsQueryOptions } from "@/lib/budgets";
+import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/")({
   component: AllBudgetsPage,
@@ -42,30 +42,22 @@ function AllBudgetsPage() {
         </Empty>
       ) : (
         <>
-          {/* YNAB's plan list: "Your Plans", then "Plans Shared With You". */}
-          <BudgetGrid
-            budgets={budgets.data.budgets.filter((b) => !b.archivedAt && b.role === "owner")}
-          />
+          {/*
+           * YNAB's plan list: "Your Plans", then "Plans Shared With You", most recently used
+           * first (the API's order). Archived budgets are among them, their names stamped
+           * "(Archived on …)" (YNAB, 2026-10-15).
+           */}
+          <BudgetGrid budgets={budgets.data.budgets.filter((b) => b.role === "owner")} />
           <section className="grid gap-3">
             <h2 className="font-medium text-muted-foreground text-sm">Budgets shared with you</h2>
-            {budgets.data.budgets.some((b) => !b.archivedAt && b.role !== "owner") ? (
-              <BudgetGrid
-                budgets={budgets.data.budgets.filter((b) => !b.archivedAt && b.role !== "owner")}
-              />
+            {budgets.data.budgets.some((b) => b.role !== "owner") ? (
+              <BudgetGrid budgets={budgets.data.budgets.filter((b) => b.role !== "owner")} />
             ) : (
               <p className="text-muted-foreground text-sm">
                 No budgets have been shared with you yet.
               </p>
             )}
           </section>
-          {budgets.data.budgets.some((b) => b.archivedAt) && (
-            <section className="grid gap-3">
-              <h2 className="font-medium text-muted-foreground text-sm">
-                Archived by a fresh start
-              </h2>
-              <BudgetGrid budgets={budgets.data.budgets.filter((b) => b.archivedAt)} />
-            </section>
-          )}
         </>
       )}
     </div>
@@ -93,6 +85,7 @@ function BudgetGrid({ budgets }: { budgets: Budget[] }) {
                 {b.role === "owner" ? "Owner" : "Shared with you"} · Created{" "}
                 {formatDate(b.createdAt.slice(0, 10), b.dateFormat)}
               </CardDescription>
+              {b.lastUsedAt && <CardDescription>{lastUsedLabel(b.lastUsedAt)}</CardDescription>}
             </CardHeader>
           </Card>
         </Link>

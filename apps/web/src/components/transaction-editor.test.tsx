@@ -20,6 +20,7 @@ const account = (id: string, type: Account["type"]): Account => ({
   type,
   note: "",
   closed: false,
+  starredOrder: null,
   currency: "USD",
   interestRate: null,
   minimumPayment: null,

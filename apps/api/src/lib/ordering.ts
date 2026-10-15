@@ -18,14 +18,22 @@ export function reorder(ids: readonly string[], movingId: string, beforeId: stri
   return [...rest.slice(0, at), movingId, ...rest.slice(at)];
 }
 
-/** Sets `sort_order` to each id's index in `ids`, in one statement. The table needs both columns. */
-export async function writeOrder(db: Db, table: PgTable, ids: readonly string[]) {
+/**
+ * Sets `column` (default `sort_order`) to each id's index in `ids`, in one statement. The table
+ * needs an `id` column and that one.
+ */
+export async function writeOrder(
+  db: Db,
+  table: PgTable,
+  ids: readonly string[],
+  column: "sort_order" | "starred_sort_order" = "sort_order",
+) {
   if (ids.length === 0) return;
   const values = sql.join(
     ids.map((id, i) => sql`(${id}, ${i}::int)`),
     sql`, `,
   );
   await db.execute(
-    sql`update ${table} set sort_order = v.sort_order from (values ${values}) as v(id, sort_order) where ${table}.id = v.id`,
+    sql`update ${table} set ${sql.identifier(column)} = v.sort_order from (values ${values}) as v(id, sort_order) where ${table}.id = v.id`,
   );
 }

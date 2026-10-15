@@ -113,6 +113,46 @@ describe("custom views", () => {
     expect((await list()).views).toHaveLength(12);
   });
 
+  // YNAB, 2026-10-15 (EVERYCENT-164): "x-c11-151 FS" → "FS2" kept x-c11-164 V1 and V2 and the
+  // Manage Views order (V2 moved first).
+  it("comes along on a fresh start, onto the new categories and in the same order", async () => {
+    const { base, ids, owner, budget, create } = await setup();
+    const [a, b, c] = ids;
+    const v1 = await json<View>(await create({ name: "V1", categoryIds: [a, b] }));
+    const v2 = await json<View>(await create({ name: "V2", categoryIds: [c] }));
+    const order = [v2.id, ...PRESETS, v1.id];
+    await send("PUT", `${base}/views/order`, owner.cookie, { order });
+
+    const fresh = await json<{ id: string }>(
+      await send("POST", `/v1/budgets/${budget.id}/fresh-start`, owner.cookie, {
+        date: "2026-10-15",
+        name: "Fresh",
+      }),
+    );
+    const freshBase = `/v1/budgets/${fresh.id}`;
+    const copied = await json<ViewList>(await send("GET", `${freshBase}/views`, owner.cookie));
+    const names = (id: string) => copied.views.find((v) => v.id === id)?.name ?? id;
+    expect(copied.order.map(names)).toEqual(["V2", ...PRESETS, "V1"]);
+
+    const categories = await json<{ groups: { categories: { id: string; name: string }[] }[] }>(
+      await send("GET", `${freshBase}/categories`, owner.cookie),
+    );
+    const nameOf = new Map(
+      categories.groups.flatMap((g) => g.categories.map((cat) => [cat.id, cat.name] as const)),
+    );
+    const oldNames = await json<{ groups: { categories: { id: string; name: string }[] }[] }>(
+      await send("GET", `${base}/categories`, owner.cookie),
+    );
+    const oldNameOf = new Map(
+      oldNames.groups.flatMap((g) => g.categories.map((cat) => [cat.id, cat.name] as const)),
+    );
+    const v1Copy = copied.views.find((v) => v.name === "V1");
+    expect(v1Copy?.id).not.toBe(v1.id);
+    expect(v1Copy?.categoryIds.map((id) => nameOf.get(id))).toEqual(
+      [a, b].map((id) => oldNameOf.get(id ?? "")),
+    );
+  });
+
   it("reorders presets and custom views together; new views go last", async () => {
     const { base, owner, create, list } = await setup();
     const a = await json<View>(await create({ name: "A", categoryIds: [] }));
