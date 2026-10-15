@@ -906,6 +906,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/payees/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The budget's renaming rules, each payee's in order
+         * @description Rules of transfer payees are included; `transferPayees` gives each account's transfer payee so they can be shown and added to.
+         */
+        get: operations["listPayeeRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/payees/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a renaming rule */
+        delete: operations["deletePayeeRule"];
+        options?: never;
+        head?: never;
+        /** Change a renaming rule's condition or text */
+        patch: operations["updatePayeeRule"];
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/payees/hide": {
         parameters: {
             query?: never;
@@ -977,6 +1015,26 @@ export interface paths {
          * @description Recreates or renames each payee and points the listed rows back at it. Rows that no longer exist are skipped. A name another payee has taken since fails with `PAYEE_NAME_TAKEN`.
          */
         post: operations["restorePayees"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/payees/{payeeId}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a renaming rule to a payee (a transfer payee too)
+         * @description Added after the payee's other rules. The same rule twice is allowed, as in YNAB. Built-in payees like Starting Balance take no rules (`PAYEE_LOCKED`).
+         */
+        post: operations["createPayeeRule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2327,6 +2385,27 @@ export interface components {
              */
             currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
         };
+        PayeeRuleList: {
+            rules: components["schemas"]["PayeeRule"][];
+            transferPayees: {
+                payeeId: string;
+                accountId: string;
+            }[];
+        };
+        PayeeRule: {
+            id: string;
+            /** @description The payee an imported payee meeting the rule is renamed to */
+            payeeId: string;
+            /** @enum {string} */
+            operator: "contains" | "is";
+            text: string;
+        };
+        UpdatePayeeRule: {
+            /** @enum {string} */
+            operator?: "contains" | "is";
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text?: string;
+        };
         SetPayeesHidden: {
             payeeIds: string[];
             hidden: boolean;
@@ -2344,6 +2423,11 @@ export interface components {
             }[];
             /** @description The rows that pointed at each payee */
             uses: components["schemas"]["PayeeUses"][];
+            /**
+             * @description The payees' renaming rules as they were
+             * @default []
+             */
+            rules: components["schemas"]["PayeeRuleSnapshot"][];
         };
         PayeeUses: {
             payeeId: string;
@@ -2351,6 +2435,13 @@ export interface components {
             subTransactionIds: string[];
             scheduledTransactionIds: string[];
             scheduledSubTransactionIds: string[];
+        };
+        PayeeRuleSnapshot: components["schemas"]["PayeeRule"] & {
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text?: string;
+            position: number;
+            /** Format: date-time */
+            createdAt: string;
         };
         PayeeChange: {
             snapshot: components["schemas"]["PayeeSnapshot"];
@@ -2363,6 +2454,12 @@ export interface components {
             payeeIds: string[];
             /** @default null */
             replacementPayeeId: string | null;
+        };
+        CreatePayeeRule: {
+            /** @enum {string} */
+            operator: "contains" | "is";
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text: string;
         };
         UpdatePayee: {
             name?: string;
@@ -6539,6 +6636,166 @@ export interface operations {
             };
         };
     };
+    listPayeeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRuleList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or payee, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deletePayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or rule, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updatePayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePayeeRule"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRule"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or rule, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     setPayeesHidden: {
         parameters: {
             query?: never;
@@ -6809,6 +7066,78 @@ export interface operations {
                 };
             };
             /** @description Name taken (`PAYEE_NAME_TAKEN`) or a transfer/built-in payee (`PAYEE_LOCKED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createPayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                payeeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePayeeRule"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRule"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or payee, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A built-in payee (`PAYEE_LOCKED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

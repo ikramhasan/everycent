@@ -9,6 +9,7 @@ import {
   categoryTarget,
   flagName,
   payee,
+  payeeRule,
   scheduledSubTransaction,
   scheduledTransaction,
 } from "@everycent/db/schema";
@@ -27,7 +28,7 @@ export const ARCHIVED_STAMP = "(Archived on ";
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes, targets), payees, flag names, and
+ * category groups and categories (order, hidden flags, notes, targets), payees and their renaming rules, flag names, and
  * accounts (with their transfer payees), each starting at $0 with a $0 Starting Balance on `date`
  * for the user to update (YNAB: "Unlinked accounts will start with a $0 balance for you to update
  * with today's balance"; "C4 Order FS", 2026-10-12; everycent has no linked accounts), and
@@ -121,6 +122,32 @@ export async function copyIntoFreshStart(
     });
     await tx.insert(payee).values(copies);
   }
+
+  // Renaming rules come along on both kinds of payee, in order (YNAB, "x-c11-151 FS3" →
+  // "x-c12-62 FS", 2026-10-16: a transfer payee's rule was there in the new plan).
+  const rules = await tx
+    .select()
+    .from(payeeRule)
+    .where(eq(payeeRule.budgetId, old.id))
+    .orderBy(asc(payeeRule.createdAt), asc(payeeRule.id));
+  const ruleCopies = rules.flatMap((r) => {
+    const payeeId = payeeIds.get(r.payeeId);
+    return payeeId
+      ? [
+          {
+            id: newId(),
+            budgetId: newBudgetId,
+            payeeId,
+            operator: r.operator,
+            text: r.text,
+            position: r.position,
+            // Keeps which rule is newest when several match.
+            createdAt: r.createdAt,
+          },
+        ]
+      : [];
+  });
+  if (ruleCopies.length > 0) await tx.insert(payeeRule).values(ruleCopies);
 
   const flags = await tx.select().from(flagName).where(eq(flagName.budgetId, old.id));
   if (flags.length > 0) {

@@ -146,6 +146,15 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export {
+  matchPayeeRule,
+  PAYEE_RULE_OPERATOR_LABELS,
+  PAYEE_RULE_OPERATORS,
+  type PayeeRuleCondition,
+  type PayeeRuleOperator,
+  payeeRuleMatches,
+  zPayeeRuleOperator,
+} from "./payee-rules";
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,

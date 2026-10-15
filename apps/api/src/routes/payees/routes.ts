@@ -1,4 +1,4 @@
-import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
+import { zCurrencyCode, zMinorUnits, zPayeeRuleOperator } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -34,6 +34,28 @@ const PayeeUsesSchema = z
   })
   .openapi("PayeeUses");
 
+const RuleText = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((t) => t.trim().length > 0, "Rule text cannot be empty")
+  .describe("Kept as typed, surrounding spaces included (YNAB does the same)");
+
+const PayeeRuleSchema = z
+  .object({
+    id: z.string(),
+    payeeId: z.string().describe("The payee an imported payee meeting the rule is renamed to"),
+    operator: zPayeeRuleOperator,
+    text: z.string(),
+  })
+  .openapi("PayeeRule");
+
+const PayeeRuleSnapshotSchema = PayeeRuleSchema.extend({
+  text: RuleText,
+  position: z.number().int(),
+  createdAt: z.iso.datetime({ offset: true }),
+}).openapi("PayeeRuleSnapshot");
+
 const PayeeSnapshotSchema = z
   .object({
     payees: z
@@ -41,6 +63,11 @@ const PayeeSnapshotSchema = z
       .max(1000)
       .describe("Each payee as it was"),
     uses: z.array(PayeeUsesSchema).max(1000).describe("The rows that pointed at each payee"),
+    rules: z
+      .array(PayeeRuleSnapshotSchema)
+      .max(5000)
+      .default([])
+      .describe("The payees' renaming rules as they were"),
   })
   .openapi("PayeeSnapshot");
 
@@ -256,5 +283,107 @@ export const listPayeeTransactions = createRoute({
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),
     404: notFound,
+  },
+});
+
+const RuleParams = BudgetParams.extend({
+  ruleId: z.string().openapi({ param: { name: "ruleId", in: "path" } }),
+});
+const ruleNotFound = jsonError("No such budget or rule, or the caller isn't a member");
+
+export const listPayeeRules = createRoute({
+  tags: ["Payees"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  method: "get",
+  path: "/budgets/{budgetId}/payees/rules",
+  operationId: "listPayeeRules",
+  summary: "The budget's renaming rules, each payee's in order",
+  description:
+    "Rules of transfer payees are included; `transferPayees` gives each account's transfer payee " +
+    "so they can be shown and added to.",
+  request: { params: BudgetParams },
+  responses: {
+    200: ok(
+      "Rules",
+      z
+        .object({
+          rules: z.array(PayeeRuleSchema),
+          transferPayees: z.array(z.object({ payeeId: z.string(), accountId: z.string() })),
+        })
+        .openapi("PayeeRuleList"),
+    ),
+    401: jsonError("Not signed in"),
+    403: jsonError("The account's email address isn't confirmed"),
+    404: notFound,
+  },
+});
+
+export const createPayeeRule = createRoute({
+  tags: ["Payees"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  method: "post",
+  path: "/budgets/{budgetId}/payees/{payeeId}/rules",
+  operationId: "createPayeeRule",
+  summary: "Add a renaming rule to a payee (a transfer payee too)",
+  description:
+    "Added after the payee's other rules. The same rule twice is allowed, as in YNAB. Built-in " +
+    "payees like Starting Balance take no rules (`PAYEE_LOCKED`).",
+  request: {
+    params: PayeeParams,
+    body: body(
+      z.object({ operator: zPayeeRuleOperator, text: RuleText }).openapi("CreatePayeeRule"),
+    ),
+  },
+  responses: {
+    201: ok("Created", PayeeRuleSchema),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: notFound,
+    409: jsonError("A built-in payee (`PAYEE_LOCKED`)"),
+  },
+});
+
+export const updatePayeeRule = createRoute({
+  tags: ["Payees"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  method: "patch",
+  path: "/budgets/{budgetId}/payees/rules/{ruleId}",
+  operationId: "updatePayeeRule",
+  summary: "Change a renaming rule's condition or text",
+  request: {
+    params: RuleParams,
+    body: body(
+      z
+        .object({ operator: zPayeeRuleOperator.optional(), text: RuleText.optional() })
+        .openapi("UpdatePayeeRule"),
+    ),
+  },
+  responses: {
+    200: ok("Updated", PayeeRuleSchema),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: ruleNotFound,
+  },
+});
+
+export const deletePayeeRule = createRoute({
+  tags: ["Payees"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  method: "delete",
+  path: "/budgets/{budgetId}/payees/rules/{ruleId}",
+  operationId: "deletePayeeRule",
+  summary: "Remove a renaming rule",
+  request: { params: RuleParams },
+  responses: {
+    204: { description: "Removed" },
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: ruleNotFound,
   },
 });
