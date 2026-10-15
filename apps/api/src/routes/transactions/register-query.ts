@@ -20,6 +20,7 @@ import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
+import { needsCategorySql } from "../../lib/review";
 
 export type { SearchSettings };
 
@@ -112,6 +113,9 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         cleared: transaction.cleared,
         flag: transaction.flag,
         approved: transaction.approved,
+        needsCategory: sql<boolean>`${needsCategorySql(transaction.categoryId)}`.as(
+          "needs_category",
+        ),
         transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
         // A split line's transfer points at the split itself.
         transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
@@ -205,6 +209,14 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
           return sql`${r.cleared} <> 'reconciled'`;
         case "cleared_or_reconciled":
           return sql`${r.cleared} in ('cleared', 'reconciled')`;
+        case "approved":
+          return sql`${r.approved}`;
+        case "unapproved":
+          return sql`not ${r.approved}`;
+        case "needs_category":
+          return sql`${r.needsCategory}`;
+        case "unapproved_or_needs_category":
+          return sql`(not ${r.approved} or ${r.needsCategory})`;
       }
       break;
     case "amount": {
@@ -516,6 +528,7 @@ function columns(r: Register) {
     cleared: r.cleared,
     flag: r.flag,
     approved: r.approved,
+    needsCategory: r.needsCategory,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,

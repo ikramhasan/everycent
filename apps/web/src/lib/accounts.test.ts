@@ -21,6 +21,7 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     lastPaymentFromAccountId: null,
     migratedToAccountId: null,
     migratedFromAccountId: null,
+    toReview: 0,
     balances: { cleared: working, uncleared: "0", working },
   };
 }
