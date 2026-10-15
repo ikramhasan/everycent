@@ -75,6 +75,31 @@ describe("budgets", () => {
     expect(await list(cookie)).toEqual({ budgets: [], lastUsedBudgetId: null });
   });
 
+  // YNAB's plan list: "Last used 9 minutes ago", most recent first (2026-10-15, EVERYCENT-151).
+  it("lists the most recently used budgets first, with when each was last used", async () => {
+    const { cookie } = await signUp(app);
+    const zebra = await createBudget(app, cookie, { name: "zebra" });
+    await createBudget(app, cookie, { name: "Apple" });
+    expect((await list(cookie)).budgets.map((b) => b.name)).toEqual(["Apple", "zebra"]);
+    await send("GET", `/v1/budgets/${zebra.id}`, cookie);
+    const { budgets } = (await list(cookie)) as {
+      budgets: (TestBudget & { lastUsedAt: string | null })[];
+    };
+    expect(budgets.map((b) => b.name)).toEqual(["zebra", "Apple"]);
+    expect(Date.now() - Date.parse(budgets[0]?.lastUsedAt ?? "")).toBeLessThan(60_000);
+
+    // Each member has their own.
+    const partner = await signUp(app);
+    const me = (await (await send("GET", "/v1/me", partner.cookie)).json()) as { id: string };
+    await db
+      .insert(budgetMember)
+      .values({ id: newId(), budgetId: zebra.id, userId: me.id, role: "editor" });
+    const shared = (await list(partner.cookie)) as {
+      budgets: (TestBudget & { lastUsedAt: string | null })[];
+    };
+    expect(shared.budgets[0]?.lastUsedAt).toBeNull();
+  });
+
   it("records the last-used budget when one is fetched", async () => {
     const { cookie } = await signUp(app);
     const first = await createBudget(app, cookie, { name: "First" });

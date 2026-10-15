@@ -120,7 +120,10 @@ describe("flags", () => {
     );
 
     const fresh = await json<{ id: string }>(
-      await send("POST", `/v1/budgets/${budget.id}/fresh-start`, owner.cookie, { date: TODAY }),
+      await send("POST", `/v1/budgets/${budget.id}/fresh-start`, owner.cookie, {
+        date: TODAY,
+        name: "Fresh",
+      }),
     );
     const { flags } = await json<{ flags: Flag[] }>(
       await send("GET", `/v1/budgets/${fresh.id}/flags`, owner.cookie),

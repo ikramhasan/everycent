@@ -11,12 +11,18 @@ import {
   scheduledSubTransaction,
   scheduledTransaction,
 } from "@everycent/db/schema";
-import { accountFamily, formatDate, monthOf } from "@everycent/engine";
+import { accountFamily, monthOf } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { insertStartingBalance, internalCategoryId, type Tx, transferPayeeId } from "./ledger";
 import { saveLoanTerms } from "./loans";
 
 type BudgetRow = typeof budget.$inferSelect;
+
+/**
+ * What a fresh start adds to the old budget's name: "Household (Archived on 2026-10-15)", the
+ * date always ISO whatever the budget's date format (YNAB, "x-c11-151 FS", 2026-10-15).
+ */
+export const ARCHIVED_STAMP = "(Archived on ";
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
@@ -78,6 +84,8 @@ export async function copyIntoFreshStart(
       note: a.note,
       sortOrder: a.sortOrder,
       closed: a.closed,
+      // Stars come along (YNAB, "x-c11-151 FS" → "FS2", 2026-10-15).
+      starredSortOrder: a.starredSortOrder,
       currency: a.currency,
       interestRate: a.interestRate,
       minimumPayment: a.minimumPayment,
@@ -217,7 +225,7 @@ export async function copyIntoFreshStart(
   await tx
     .update(budget)
     .set({
-      name: `${old.name} (Archived ${formatDate(date, old.dateFormat)})`,
+      name: `${old.name} ${ARCHIVED_STAMP}${date})`,
       archivedAt: new Date(),
     })
     .where(eq(budget.id, old.id));

@@ -3,8 +3,7 @@ import { budget, budgetMember, userPreference } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { type BudgetAccess, loadBudgetAccess, rememberLastBudget } from "../../lib/budget-access";
-import { AppError } from "../../lib/errors";
-import { copyIntoFreshStart } from "../../lib/fresh-start";
+import { ARCHIVED_STAMP, copyIntoFreshStart } from "../../lib/fresh-start";
 import { seedStarterCategories } from "../../lib/starter-categories";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -19,7 +18,7 @@ import type {
 
 type Env = AppEnv & AuthedEnv;
 
-function toBudgetJson({ budget: b, role }: BudgetAccess) {
+function toBudgetJson({ budget: b, role, lastUsedAt }: BudgetAccess) {
   return {
     id: b.id,
     name: b.name,
@@ -29,6 +28,7 @@ function toBudgetJson({ budget: b, role }: BudgetAccess) {
     dateFormat: b.dateFormat,
     role,
     archivedAt: b.archivedAt?.toISOString() ?? null,
+    lastUsedAt: lastUsedAt?.toISOString() ?? null,
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
   };
@@ -38,11 +38,12 @@ export const listBudgetsHandler: RouteHandler<typeof listBudgets, Env> = async (
   const { db } = c.var.deps;
   const userId = c.var.user.id;
   const rows = await db
-    .select({ budget, role: budgetMember.role })
+    .select({ budget, role: budgetMember.role, lastUsedAt: budgetMember.lastUsedAt })
     .from(budgetMember)
     .innerJoin(budget, eq(budget.id, budgetMember.budgetId))
     .where(eq(budgetMember.userId, userId))
-    .orderBy(sql`lower(${budget.name})`, budget.id);
+    // YNAB's plan list: most recently used first.
+    .orderBy(sql`${budgetMember.lastUsedAt} desc nulls last`, sql`lower(${budget.name})`, budget.id);
   const [pref] = await db
     .select({ lastBudgetId: userPreference.lastBudgetId })
     .from(userPreference)
@@ -72,20 +73,24 @@ export const createBudgetHandler: RouteHandler<typeof createBudget, Env> = async
 
 export const getBudgetHandler: RouteHandler<typeof getBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const access = await loadBudgetAccess(c, budgetId);
+  await loadBudgetAccess(c, budgetId);
   await rememberLastBudget(c.var.deps.db, c.var.user.id, budgetId);
-  return c.json(toBudgetJson(access), 200);
+  return c.json(toBudgetJson(await loadBudgetAccess(c, budgetId)), 200);
 };
 
 export const updateBudgetHandler: RouteHandler<typeof updateBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const data = c.req.valid("json");
-  await loadBudgetAccess(c, budgetId, { organization: ["update"] });
+  const { budget: current } = await loadBudgetAccess(c, budgetId, { organization: ["update"] });
   if (Object.keys(data).length > 0) {
     await c.var.deps.auth.api.updateOrganization({
       body: { organizationId: budgetId, data },
       headers: c.req.raw.headers,
     });
+  }
+  // YNAB's archive is only the name's stamp: renaming it away restores the plan (2026-10-15).
+  if (current.archivedAt && data.name !== undefined && !data.name.includes(ARCHIVED_STAMP)) {
+    await c.var.deps.db.update(budget).set({ archivedAt: null }).where(eq(budget.id, budgetId));
   }
   return c.json(toBudgetJson(await loadBudgetAccess(c, budgetId)), 200);
 };
@@ -102,20 +107,14 @@ export const deleteBudgetHandler: RouteHandler<typeof deleteBudget, Env> = async
 
 export const freshStartBudgetHandler: RouteHandler<typeof freshStartBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { date } = c.req.valid("json");
+  const { date, name } = c.req.valid("json");
   const { auth, db } = c.var.deps;
+  // An archived budget can start fresh again: YNAB's plan menu still offers it (2026-10-15).
   const { budget: old } = await loadBudgetAccess(c, budgetId, { budget: ["fresh_start"] });
-  if (old.archivedAt) {
-    throw new AppError(
-      409,
-      "ALREADY_ARCHIVED",
-      "This budget was already replaced by a fresh start",
-    );
-  }
 
   const created = await auth.api.createOrganization({
     body: {
-      name: old.name,
+      name,
       currency: old.currency,
       numberFormat: old.numberFormat,
       currencySymbolPosition: old.currencySymbolPosition,

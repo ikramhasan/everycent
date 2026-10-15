@@ -506,7 +506,15 @@
               "null"
             ],
             "format": "date-time",
-            "description": "Set when a fresh start replaced this budget; it stays usable"
+            "description": "Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this)."
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the signed-in user last opened this budget; null if never"
           },
           "createdAt": {
             "type": "string",
@@ -526,6 +534,7 @@
           "dateFormat",
           "role",
           "archivedAt",
+          "lastUsedAt",
           "createdAt",
           "updatedAt"
         ]
@@ -795,10 +804,17 @@
             "type": "string",
             "format": "date",
             "description": "The user's today, YYYY-MM-DD"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "The new budget's name (YNAB's \"New Plan Name\")"
           }
         },
         "required": [
-          "date"
+          "date",
+          "name"
         ]
       },
       "BudgetMembers": {
@@ -7163,7 +7179,7 @@
         "summary": "Budgets the signed-in user belongs to",
         "responses": {
           "200": {
-            "description": "Budgets sorted by name, and the last-used one",
+            "description": "Budgets, most recently used first (then by name), and the last-used one",
             "content": {
               "application/json": {
                 "schema": {
@@ -7478,7 +7494,7 @@
           }
         ],
         "summary": "Fresh start: archive this budget and continue in a copy without transactions",
-        "description": "Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.",
+        "description": "Owner only. The new budget is named `name` and keeps the settings, partners, categories (with their notes), payees, flag names, custom views, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts; starred ones stay starred) and scheduled transactions. The old one gets ' (Archived on <date>)' added to its name. An archived budget can make a fresh start again, as in YNAB.",
         "parameters": [
           {
             "schema": {
@@ -7542,16 +7558,6 @@
           },
           "404": {
             "description": "No such budget, or the caller isn't a member",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ALREADY_ARCHIVED: this budget was already replaced by a fresh start",
             "content": {
               "application/json": {
                 "schema": {

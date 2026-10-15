@@ -199,7 +199,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget is named `name` and keeps the settings, partners, categories (with their notes), payees, flag names, custom views, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts; starred ones stay starred) and scheduled transactions. The old one gets ' (Archived on <date>)' added to its name. An archived budget can make a fresh start again, as in YNAB.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -1453,9 +1453,14 @@ export interface components {
             role: "owner" | "editor";
             /**
              * Format: date-time
-             * @description Set when a fresh start replaced this budget; it stays usable
+             * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
              */
             archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the signed-in user last opened this budget; null if never
+             */
+            lastUsedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1509,6 +1514,8 @@ export interface components {
              * @description The user's today, YYYY-MM-DD
              */
             date: string;
+            /** @description The new budget's name (YNAB's "New Plan Name") */
+            name: string;
         };
         BudgetMembers: {
             /** @description The owner first, then by when they joined */
@@ -3442,7 +3449,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Budgets sorted by name, and the last-used one */
+            /** @description Budgets, most recently used first (then by name), and the last-used one */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3733,15 +3740,6 @@ export interface operations {
             };
             /** @description No such budget, or the caller isn't a member */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description ALREADY_ARCHIVED: this budget was already replaced by a fresh start */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -22,6 +22,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { BudgetMembers } from "@/components/budget-members";
+import { FreshStartDialog } from "@/components/fresh-start-dialog";
 import { useManagePayees } from "@/components/manage-payees";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -75,11 +76,11 @@ function BudgetSettingsPage() {
     toast.success(`Deleted “${budget.name}”`);
   }
 
-  async function handleFreshStart() {
+  async function handleFreshStart(name: string) {
     try {
       const created = await freshStart.mutateAsync({
         params: { path },
-        body: { date: todayIso() },
+        body: { date: todayIso(), name },
       });
       await invalidateBudgets(queryClient);
       await navigate({ to: "/budgets/$budgetId", params: { budgetId: created.id } });
@@ -128,7 +129,8 @@ function BudgetSettingsPage() {
         </CardContent>
       </Card>
 
-      {budget.role === "owner" && !budget.archivedAt && (
+      {/* An archived budget can start fresh again, as in YNAB. */}
+      {budget.role === "owner" && (
         <Card>
           <CardHeader>
             <CardTitle>Fresh start</CardTitle>
@@ -139,26 +141,7 @@ function BudgetSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline">Make a fresh start</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Make a fresh start with “{budget.name}”?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You'll continue in a new copy without any transactions. This budget will be
-                    archived and stays available under All budgets.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleFreshStart}>
-                    Make a fresh start
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <FreshStartDialog onContinue={handleFreshStart} />
           </CardContent>
         </Card>
       )}
