@@ -17,7 +17,7 @@ import {
   rateThousandths,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -82,6 +82,7 @@ function toAccountJson(
     type: a.type,
     note: a.note,
     closed: a.closed,
+    starredOrder: a.starredSortOrder,
     currency: a.currency,
     interestRate: terms ? terms.interestRate : a.interestRate,
     minimumPayment: (terms ? terms.minimumPayment : a.minimumPayment)?.toString() ?? null,
@@ -429,7 +430,7 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
 
 export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { workingBalance, date = serverToday(), ...body } = c.req.valid("json");
+  const { workingBalance, date = serverToday(), starred, ...body } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(
     c,
@@ -444,6 +445,11 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     if (account.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to change its balance");
     }
+  }
+
+  // YNAB's star: open cash and credit accounts only (checked 2026-10-15, EVERYCENT-149).
+  if (starred && (account.closed || !isOnBudget(account.type))) {
+    throw new AppError(400, "BAD_REQUEST", "Only open cash and credit accounts can be starred");
   }
 
   const type = body.type ?? account.type;
@@ -491,6 +497,9 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     }
     if (body.pairedCategoryId !== undefined) {
       await pairCategory(tx, account, body.pairedCategoryId);
+    }
+    if (starred !== undefined && starred !== (account.starredSortOrder !== null)) {
+      await setStarred(tx, account, starred);
     }
     // A payment category and the transfer payee are named after their account.
     if (body.name !== undefined) {
@@ -654,13 +663,51 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
 
+/** Stars an account at the end of the Starred group, or unstars it. */
+async function setStarred(tx: Db, account: AccountRow, starred: boolean) {
+  let order: number | null = null;
+  if (starred) {
+    const [last] = await tx
+      .select({ value: max(budgetAccount.starredSortOrder) })
+      .from(budgetAccount)
+      .where(eq(budgetAccount.budgetId, account.budgetId));
+    order = (last?.value ?? -1) + 1;
+  }
+  await tx
+    .update(budgetAccount)
+    .set({ starredSortOrder: order })
+    .where(eq(budgetAccount.id, account.id));
+}
+
 export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { beforeAccountId } = c.req.valid("json");
+  const { beforeAccountId, starred } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await db.transaction(async (tx) => {
-    await findAccount(tx, budgetId, accountId);
+    const account = await findAccount(tx, budgetId, accountId);
+    if (starred) {
+      if (account.starredSortOrder === null) {
+        throw new AppError(400, "BAD_REQUEST", "That account isn't starred");
+      }
+      const rows = await tx
+        .select({ id: budgetAccount.id })
+        .from(budgetAccount)
+        .where(and(eq(budgetAccount.budgetId, budgetId), isNotNull(budgetAccount.starredSortOrder)))
+        .orderBy(asc(budgetAccount.starredSortOrder), asc(budgetAccount.id))
+        .for("update");
+      await writeOrder(
+        tx,
+        budgetAccount,
+        reorder(
+          rows.map((r) => r.id),
+          accountId,
+          beforeAccountId,
+        ),
+        "starred_sort_order",
+      );
+      return;
+    }
     const rows = await tx
       .select({ id: budgetAccount.id })
       .from(budgetAccount)

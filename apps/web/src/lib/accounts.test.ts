@@ -8,6 +8,7 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     type,
     note: "",
     closed,
+    starredOrder: null,
     currency: "USD",
     interestRate: null,
     minimumPayment: null,
@@ -38,6 +39,22 @@ describe("sidebarSections", () => {
       ["loans", ["mortgage"], -2500000n],
       ["tracking", ["house"], 40000000n],
       ["closed", ["old"], 0n],
+    ]);
+  });
+
+  // YNAB, 2026-10-15 (EVERYCENT-149).
+  it("puts starred open cash and credit accounts first, in their own order", () => {
+    const star = (a: Account, order: number) => ({ ...a, starredOrder: order });
+    const sections = sidebarSections([
+      star(account("checking", "checking", "1000"), 1),
+      star(account("visa", "credit_card", "-300"), 0),
+      account("savings", "savings", "50"),
+      star(account("closed", "savings", "0", true), 2),
+    ]);
+    expect(sections.map((s) => [s.id, s.title, s.accounts.map((a) => a.id), s.total])).toEqual([
+      ["starred", "Starred", ["visa", "checking"], 700n],
+      ["budget", "Budget", ["checking", "visa", "savings"], 750n],
+      ["closed", "Closed", ["closed"], 0n],
     ]);
   });
 

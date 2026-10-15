@@ -34,7 +34,10 @@ import { apiErrorMessage, type Budget } from "@/lib/budgets";
 import { nextId } from "@/lib/categories";
 import { AddAccountDialog } from "./add-account-dialog";
 
-/** YNAB's account list in the sidebar: sections by type with totals, drag to reorder. */
+/**
+ * YNAB's account list in the sidebar: sections by type with totals, drag to reorder. A starred
+ * account shows twice (Starred and its own group); each group has its own order.
+ */
 export function AccountsNav({ budget }: { budget: Budget }) {
   const queryClient = useQueryClient();
   const accounts = useQuery(accountsQueryOptions(budget.id));
@@ -57,11 +60,11 @@ export function AccountsNav({ budget }: { budget: Budget }) {
   );
   const format = (minorUnits: bigint) => formatAmount(money(minorUnits, budget.currency), budget);
 
-  async function handleMove(accountId: string, beforeAccountId: string | null) {
+  async function handleMove(accountId: string, beforeAccountId: string | null, starred: boolean) {
     try {
       const result = await moveAccount.mutateAsync({
         params: { path: { budgetId: budget.id, accountId } },
-        body: { beforeAccountId },
+        body: { beforeAccountId, ...(starred && { starred }) },
       });
       queryClient.setQueryData(accountsQueryOptions(budget.id).queryKey, result);
     } catch (error) {
@@ -76,7 +79,15 @@ export function AccountsNav({ budget }: { budget: Budget }) {
         onDragOver={(event) => {
           const section = event.operation.source?.data?.section as string | undefined;
           if (!section) return;
-          setOrder((o) => ({ ...o, [section]: move(o[section] ?? [], event) }));
+          // Sortable ids are `section:accountId`; the order keeps account ids.
+          const prefix = `${section}:`;
+          setOrder((o) => ({
+            ...o,
+            [section]: move(
+              (o[section] ?? []).map((id) => prefix + id),
+              event,
+            ).map((key) => key.slice(prefix.length)),
+          }));
         }}
         onDragEnd={(event) => {
           const source = event.operation.source;
@@ -86,11 +97,13 @@ export function AccountsNav({ budget }: { budget: Budget }) {
             );
             return;
           }
-          const id = String(source.id);
+          const id = source.data?.accountId as string;
           const section = source.data?.section as string;
           const now = order[section] ?? [];
           const was = serverSections.find((s) => s.id === section)?.accounts.map((a) => a.id) ?? [];
-          if (nextId(now, id) !== nextId(was, id)) void handleMove(id, nextId(now, id));
+          if (nextId(now, id) !== nextId(was, id)) {
+            void handleMove(id, nextId(now, id), section === "starred");
+          }
         }}
       >
         {serverSections.map((section) => (
@@ -184,12 +197,13 @@ function AccountItem({
   format: (minorUnits: bigint) => string;
 }) {
   const { ref, isDragSource } = useSortable({
-    id: account.id,
+    // A starred account is in two sections, so its id here includes the section.
+    id: `${section}:${account.id}`,
     index,
     group: section,
     type: `account-${section}`,
     accept: [`account-${section}`],
-    data: { section },
+    data: { section, accountId: account.id },
   });
   const working = BigInt(account.balances.working);
   return (

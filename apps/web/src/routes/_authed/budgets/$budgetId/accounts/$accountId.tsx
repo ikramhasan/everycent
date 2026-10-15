@@ -29,6 +29,7 @@ import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
+import { StarButton } from "@/components/star-button";
 import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -447,6 +448,11 @@ function AccountPage() {
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
+            <StarButton
+              budgetId={budget.id}
+              account={account}
+              accounts={accounts.data?.accounts ?? []}
+            />
             {account.closed && <Badge variant="secondary">Closed</Badge>}
           </div>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">

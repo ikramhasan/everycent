@@ -15,6 +15,7 @@ type Account = {
   type: string;
   note: string;
   closed: boolean;
+  starredOrder: number | null;
   currency: string;
   interestRate: string | null;
   minimumPayment: string | null;
@@ -204,6 +205,61 @@ describe("accounts", () => {
     const b = await addAccount({ name: "B", type: "savings", balance: "0" });
     await send("POST", `${base}/accounts/${b.id}/move`, cookie, { beforeAccountId: a.id });
     expect((await accounts()).map((x) => x.name)).toEqual(["B", "A"]);
+  });
+
+  // YNAB, 2026-10-15 (EVERYCENT-149): open cash and credit accounts only, plan-wide, new stars
+  // at the end of the Starred group, reorderable within it.
+  it("stars accounts for everyone on the budget, in their own order", async () => {
+    const { cookie, budget, base, addAccount, accounts } = await setup();
+    const a = await addAccount({ name: "A", type: "checking", balance: "0" });
+    const b = await addAccount({ name: "B", type: "credit_card", balance: "0" });
+    const t = await addAccount({ name: "T", type: "asset", balance: "0" });
+    const star = (id: string, starred: boolean, who = cookie) =>
+      send("PATCH", `${base}/accounts/${id}`, who, { starred });
+    const starredNames = async () =>
+      (await accounts())
+        .filter((x) => x.starredOrder !== null)
+        .sort((x, y) => (x.starredOrder ?? 0) - (y.starredOrder ?? 0))
+        .map((x) => x.name);
+
+    expect(a.starredOrder).toBeNull();
+    expect(await (await star(b.id, true)).json()).toMatchObject({ starredOrder: 0 });
+    expect((await star(a.id, true)).status).toBe(200);
+    expect(await starredNames()).toEqual(["B", "A"]);
+    // Starring again keeps its place.
+    await star(b.id, true);
+    expect(await starredNames()).toEqual(["B", "A"]);
+
+    const moved = await send("POST", `${base}/accounts/${a.id}/move`, cookie, {
+      beforeAccountId: b.id,
+      starred: true,
+    });
+    expect(moved.status).toBe(200);
+    expect(await starredNames()).toEqual(["A", "B"]);
+    // The sidebar order is untouched.
+    expect((await accounts()).map((x) => x.name)).toEqual(["A", "B", "T"]);
+    expect(
+      (
+        await send("POST", `${base}/accounts/${a.id}/move`, cookie, {
+          beforeAccountId: t.id,
+          starred: true,
+        })
+      ).status,
+    ).toBe(400);
+
+    // Tracking accounts can't be starred, nor closed ones.
+    expect(((await (await star(t.id, true)).json()) as ErrorBody).error.code).toBe("BAD_REQUEST");
+    await send("POST", `${base}/accounts/${t.id}/close`, cookie, { date: TODAY });
+    expect((await star(t.id, true)).status).toBe(400);
+
+    // Another member sees and changes the same stars.
+    const partner = await signUp(app);
+    const me = (await (await send("GET", "/v1/me", partner.cookie)).json()) as { id: string };
+    await db
+      .insert(budgetMember)
+      .values({ id: newId(), budgetId: budget.id, userId: me.id, role: "editor" });
+    expect((await star(a.id, false, partner.cookie)).status).toBe(200);
+    expect(await starredNames()).toEqual(["B"]);
   });
 
   it("closes an account, zeroing its balance and keeping its payment category", async () => {

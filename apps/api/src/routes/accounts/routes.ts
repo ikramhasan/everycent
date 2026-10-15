@@ -32,6 +32,14 @@ export const AccountSchema = z
     type: zAccountType,
     note: z.string(),
     closed: z.boolean(),
+    starredOrder: z
+      .number()
+      .int()
+      .nullable()
+      .describe(
+        "Position in the sidebar's Starred group (ascending); null when not starred. Shared " +
+          "by everyone on the budget. A closed account keeps it but isn't shown as starred.",
+      ),
     currency: zCurrencyCode,
     interestRate: z.string().nullable(),
     minimumPayment: zMinorUnits.nullable(),
@@ -190,6 +198,13 @@ export const updateAccount = createRoute({
           minimumPayment: zMinorUnits.nullable().optional(),
           escrowAmount: zMinorUnits.nullable().optional(),
           pairedCategoryId: PairedCategoryId.nullable().optional().describe("Null unpairs"),
+          starred: z
+            .boolean()
+            .optional()
+            .describe(
+              "Star or unstar the account. Only open cash and credit accounts can be starred; " +
+                "a new star goes to the end of the Starred group.",
+            ),
           workingBalance: zMinorUnits
             .optional()
             .describe("The balance the account should have; negative for money owed"),
@@ -325,6 +340,10 @@ export const moveAccount = createRoute({
             .string()
             .nullable()
             .describe("Place it right before this account; null moves it to the end"),
+          starred: z
+            .boolean()
+            .optional()
+            .describe("Reorder within the Starred group instead (both accounts must be starred)"),
         })
         .openapi("MoveAccount"),
     ),

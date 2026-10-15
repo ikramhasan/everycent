@@ -1624,6 +1624,13 @@
           "closed": {
             "type": "boolean"
           },
+          "starredOrder": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. A closed account keeps it but isn't shown as starred."
+          },
           "currency": {
             "type": "string",
             "enum": [
@@ -1874,6 +1881,7 @@
           "type",
           "note",
           "closed",
+          "starredOrder",
           "currency",
           "interestRate",
           "minimumPayment",
@@ -2204,6 +2212,10 @@
             ],
             "description": "Null unpairs"
           },
+          "starred": {
+            "type": "boolean",
+            "description": "Star or unstar the account. Only open cash and credit accounts can be starred; a new star goes to the end of the Starred group."
+          },
           "workingBalance": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
@@ -2226,6 +2238,10 @@
               "null"
             ],
             "description": "Place it right before this account; null moves it to the end"
+          },
+          "starred": {
+            "type": "boolean",
+            "description": "Reorder within the Starred group instead (both accounts must be starred)"
           }
         },
         "required": [

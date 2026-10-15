@@ -1744,6 +1744,8 @@ export interface components {
             type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
             note: string;
             closed: boolean;
+            /** @description Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. A closed account keeps it but isn't shown as starred. */
+            starredOrder: number | null;
             /**
              * @description ISO 4217 currency code
              * @enum {string}
@@ -1831,6 +1833,8 @@ export interface components {
             escrowAmount?: string | null;
             /** @description Null unpairs */
             pairedCategoryId?: string | null;
+            /** @description Star or unstar the account. Only open cash and credit accounts can be starred; a new star goes to the end of the Starred group. */
+            starred?: boolean;
             /** @description The balance the account should have; negative for money owed */
             workingBalance?: string;
             /**
@@ -1842,6 +1846,8 @@ export interface components {
         MoveAccount: {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
+            /** @description Reorder within the Starred group instead (both accounts must be starred) */
+            starred?: boolean;
         };
         ReconcilePreview: {
             /** @description Signed like the account; zero when it matches */

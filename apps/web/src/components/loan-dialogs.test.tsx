@@ -16,6 +16,7 @@ const account = (id: string, type: Account["type"], closed = false): Account => 
   type,
   note: "",
   closed,
+  starredOrder: null,
   currency: "USD",
   interestRate: null,
   minimumPayment: null,
