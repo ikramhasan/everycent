@@ -156,11 +156,14 @@ describe("restoring a deleted transaction (undo)", () => {
       amount: "-1000",
       memo: "checking side",
     });
-    await ctx.patch(out.transferTransactionId ?? "", {
-      cleared: "cleared",
-      flag: "red",
-      memo: "savings side",
+    await ctx.patch(out.transferTransactionId ?? "", { cleared: "cleared", flag: "red" });
+    // A single edit's memo shows on both sides; the bulk Memo action sets one side's
+    // (EVERYCENT-158).
+    const bulk = await send("POST", `${ctx.base}/transactions/bulk`, ctx.cookie, {
+      selection: { ids: [out.transferTransactionId] },
+      action: { type: "memo", memo: "savings side" },
     });
+    expect(bulk.status).toBe(200);
     const [before] = await ctx.register(checking.id);
     expect(before?.transferSide).toEqual({
       memo: "savings side",

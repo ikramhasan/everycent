@@ -291,7 +291,9 @@ export async function applyUpdate(
   if (other && !transferTo) {
     await tx.delete(transaction).where(eq(transaction.id, other.id));
   } else if (other && transferTo) {
-    // Date and amount are shared; memo, cleared and category stay per side.
+    // Date, amount and memo are shared; cleared, flag and category stay per side. YNAB copies a
+    // memo edit on either side to the other (2026-10-15, EVERYCENT-158); only a changed memo is
+    // copied, so saving a row leaves a memo set apart by the bulk Memo action alone.
     const keep = usesCategory(transferTo, account) ? other.categoryId : null;
     await tx
       .update(transaction)
@@ -305,6 +307,7 @@ export async function applyUpdate(
           moved || retargeted
             ? await resolveCategory(tx, budgetId, transferTo, account, keep)
             : undefined,
+        memo: body.memo !== undefined && body.memo !== existing.memo ? body.memo : undefined,
       })
       .where(eq(transaction.id, other.id));
   } else if (transferTo) {
@@ -363,7 +366,8 @@ function categoryOnSplit(): never {
 
 /**
  * The other side of a split's transfer line: the split owns its date, amount, account and payee,
- * so only memo, cleared and (where one applies) the category change here.
+ * so only memo, cleared and (where one applies) the category change here. The memo is shared
+ * with the line, as in YNAB (2026-10-15, EVERYCENT-158).
  */
 async function updateSplitTransferSide(
   tx: Db,
@@ -398,5 +402,11 @@ async function updateSplitTransferSide(
       flag: body.flag,
     })
     .where(eq(transaction.id, existing.id));
+  if (body.memo !== undefined && body.memo !== existing.memo && existing.transferSubTransactionId) {
+    await tx
+      .update(subTransaction)
+      .set({ memo: body.memo })
+      .where(eq(subTransaction.id, existing.transferSubTransactionId));
+  }
   return account.id;
 }

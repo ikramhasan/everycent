@@ -231,6 +231,8 @@ describe("split transactions", () => {
     expect(await code(await patch(otherId, { amount: "5000" }))).toBe("TRANSFER_IN_SPLIT");
     expect(await code(await patch(otherId, { date: "2026-10-05" }))).toBe("TRANSFER_IN_SPLIT");
     expect((await patch(otherId, { memo: "mine", cleared: "cleared" })).status).toBe(200);
+    // The memo is the line's too (YNAB, EVERYCENT-158).
+    expect((await find(split.id))?.subtransactions[1]?.memo).toBe("mine");
     expect(await code(await send("DELETE", `${base}/transactions/${otherId}`, cookie))).toBe(
       "TRANSFER_IN_SPLIT",
     );
@@ -241,7 +243,7 @@ describe("split transactions", () => {
       amount: "-12000",
       subtransactions: [
         { id: split.subtransactions[0]?.id, amount: "-7000", categoryId: groceries.id },
-        { id: line?.id, amount: "-5000", transferAccountId: savings.id },
+        { id: line?.id, amount: "-5000", transferAccountId: savings.id, memo: "mine" },
       ],
     });
     expect(await find(otherId)).toMatchObject({

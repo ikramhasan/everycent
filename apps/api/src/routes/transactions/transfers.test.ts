@@ -163,7 +163,7 @@ describe("transfers", () => {
     expect(both.status).toBe(400);
   });
 
-  it("syncs date and amount to the other side, keeps memo and cleared per side", async () => {
+  it("syncs date, amount and memo to the other side, keeps cleared per side", async () => {
     const { addAccount, transfer, patch, find } = await setup();
     const checking = await addAccount("Checking", "checking", "100000");
     const savings = await addAccount("Savings", "savings");
@@ -174,7 +174,8 @@ describe("transfers", () => {
     expect(await find(out.id)).toMatchObject({
       amount: "-30000",
       date: "2026-10-03",
-      memo: "",
+      // YNAB copies a memo edit to the other side (EVERYCENT-158).
+      memo: "mine",
       cleared: "uncleared",
     });
     expect(await find(otherId)).toMatchObject({ memo: "mine", cleared: "cleared" });
