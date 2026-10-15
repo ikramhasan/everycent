@@ -202,7 +202,7 @@ export const CategoryGroupSchema = z
   })
   .openapi("CategoryGroup");
 
-const CategoryListSchema = z
+export const CategoryListSchema = z
   .object({
     groups: z.array(CategoryGroupSchema).describe("In display order"),
     readyToAssignCategoryId: z

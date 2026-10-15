@@ -545,6 +545,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/category-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** YNAB's category template gallery, with amounts in the budget's currency */
+        get: operations["listCategoryTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/category-templates/{templateId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a template's picked categories to the budget (YNAB's Import Category Template)
+         * @description Nothing already there changes: a group the budget has (by name) takes the categories it's missing at its top; the rest become new groups at the bottom. Categories the group already has (by name) are skipped. Each new category with an example amount gets a 'Have a balance of' target, due eventually, from `month` on.
+         */
+        post: operations["importCategoryTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts": {
         parameters: {
             query?: never;
@@ -1739,6 +1776,36 @@ export interface components {
              * @description The user's today. Defaults to the server's UTC date.
              */
             today?: string;
+        };
+        CategoryTemplateList: {
+            templates: components["schemas"]["CategoryTemplate"][];
+        };
+        CategoryTemplate: {
+            id: string;
+            name: string;
+            description: string;
+            categoryCount: number;
+            /** @description In the template's order */
+            groups: {
+                name: string;
+                categories: {
+                    /** @description The category's id within the template */
+                    id: string;
+                    name: string;
+                    /** @description The example amount in the budget's currency, which becomes a 'Have a balance of' target; 0 for none */
+                    amount: string;
+                }[];
+            }[];
+        };
+        ImportCategoryTemplateResult: {
+            added: number;
+            categories: components["schemas"]["CategoryList"];
+        };
+        ImportCategoryTemplate: {
+            /** @description The template categories to add (ids from the template list) */
+            categoryIds: string[];
+            /** @description The user's current month, YYYY-MM: when the new targets start */
+            month: string;
         };
         AccountList: {
             /** @description In sidebar order, closed ones included */
@@ -5166,6 +5233,118 @@ export interface operations {
             };
             /** @description MANAGED_CATEGORY: credit card payment targets can't be snoozed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCategoryTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every template, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTemplateList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or template, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importCategoryTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCategoryTemplate"];
+            };
+        };
+        responses: {
+            /** @description How many categories were added, and the budget's categories now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCategoryTemplateResult"];
+                };
+            };
+            /** @description Invalid input, or a category id that isn't in the template */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or template, or the caller isn't a member */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

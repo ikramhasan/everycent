@@ -3,7 +3,7 @@ import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Pencil, Plus } from "lucide-react";
+import { LayoutTemplate, Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import {
   PaymentInspector,
 } from "@/components/category-inspector";
 import { type CategoryFigures, CategoryList } from "@/components/category-list";
+import { ImportTemplateDialog, TemplateGallery } from "@/components/category-templates";
 import { PairedLoanSection, PairedWith, usePairedLoan } from "@/components/loan-inspector";
 import { useLoanPlan } from "@/components/loan-page";
 import { MonthNav } from "@/components/month-nav";
@@ -54,6 +55,7 @@ import {
 import { MAX_CUSTOM_VIEWS, useViewActions, viewsQueryOptions } from "@/lib/budget-views";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { useCategoryTemplates } from "@/lib/category-templates";
 import { todayIso } from "@/lib/dates";
 import { useFixThisMonths } from "@/lib/fix-this";
 import { parseMoneyInput, toMoneyInput } from "@/lib/money-input";
@@ -87,6 +89,9 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
     // simulator's "Copy and go to my plan").
     category: z.string().optional().catch(undefined),
     assign: z.boolean().optional().catch(undefined),
+    // A category template to import, its dialog open on arrival (where "Choose Another Budget"
+    // and a new budget started from a template lead).
+    template: z.string().optional().catch(undefined),
   }),
   component: BudgetPage,
 });
@@ -114,6 +119,11 @@ function BudgetPage() {
   const viewportWidth = useViewportWidth();
   const viewActions = useViewActions(budget.id);
   const [viewDialog, setViewDialog] = useState<ViewDialog>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const templates = useCategoryTemplates(budget.id, galleryOpen || Boolean(search.template));
+  const importing = templates.templates?.find((t) => t.id === search.template);
+  const setTemplate = (template: string | undefined) =>
+    void navigate({ search: (s) => ({ ...s, template }), replace: true });
   // The custom view on, if the stored view is one; an unknown id (a deleted view) shows All.
   const customView = isPresetFilter(filter)
     ? undefined
@@ -561,6 +571,28 @@ function BudgetPage() {
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
+      <TemplateGallery
+        open={galleryOpen}
+        onOpenChange={setGalleryOpen}
+        templates={templates.templates}
+        format={(amount) => formatAmount(toMoney(amount, budget.currency))}
+        onPick={(t) => {
+          setGalleryOpen(false);
+          setTemplate(t.id);
+        }}
+      />
+      <ImportTemplateDialog
+        template={importing}
+        budgetName={budget.name}
+        onCancel={() => setTemplate(undefined)}
+        onChooseAnother={() =>
+          void navigate({ to: "/budgets", search: { template: search.template } })
+        }
+        onImport={async (categoryIds) => {
+          if (!importing) return;
+          if (await templates.importTemplate(importing.id, categoryIds)) setTemplate(undefined);
+        }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="grid gap-1">
           <h1 className="truncate font-semibold text-muted-foreground text-sm">{budget.name}</h1>
@@ -709,6 +741,9 @@ function BudgetPage() {
                       }
                     />
                   )}
+                  <Button variant="ghost" size="sm" onClick={() => setGalleryOpen(true)}>
+                    <LayoutTemplate /> Templates
+                  </Button>
                   {customView && (
                     <Button
                       variant="ghost"
