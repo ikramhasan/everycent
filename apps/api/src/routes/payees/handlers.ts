@@ -8,11 +8,17 @@ import {
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
+import type { PayeeCategorization } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
+import {
+  type PayeeCategories,
+  type PayeeCategorySettings,
+  payeeCategories,
+} from "../../lib/payee-categories";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
@@ -40,27 +46,60 @@ interface PayeeUses {
   scheduledSubTransactionIds: string[];
 }
 
+interface SnapshotPayee {
+  id: string;
+  name: string;
+  hidden: boolean;
+  categorization?: PayeeCategorization;
+  defaultCategoryId?: string | null;
+  carriedCategoryId?: string | null;
+}
+
 interface PayeeSnapshot {
-  payees: { id: string; name: string; hidden: boolean }[];
+  payees: SnapshotPayee[];
   uses: PayeeUses[];
 }
 
+function snapshotOf(p: typeof payee.$inferSelect): SnapshotPayee {
+  return {
+    id: p.id,
+    name: p.name,
+    hidden: p.hidden,
+    categorization: p.categorization,
+    defaultCategoryId: p.defaultCategoryId,
+    carriedCategoryId: p.carriedCategoryId,
+  };
+}
+
 function payeeColumns() {
-  // YNAB suggests the category last used with a payee; Uncategorized isn't worth remembering.
-  const lastCategoryId = sql<string | null>`(
-    select t.category_id from ${transaction} t
-    join ${category} c on c.id = t.category_id
-    where t.payee_id = ${payee}.id and c.internal_kind is distinct from 'uncategorized'
-    order by t.date desc, t.created_at desc, t.id desc
-    limit 1
-  )`;
   const useCount = sql<number>`(
     (select count(*) from ${transaction} t where t.payee_id = ${payee}.id)
     + (select count(*) from ${subTransaction} s where s.payee_id = ${payee}.id)
     + (select count(*) from ${scheduledTransaction} st where st.payee_id = ${payee}.id)
     + (select count(*) from ${scheduledSubTransaction} ss where ss.payee_id = ${payee}.id)
   )::int`;
-  return { id: payee.id, name: payee.name, hidden: payee.hidden, useCount, lastCategoryId };
+  return {
+    id: payee.id,
+    name: payee.name,
+    hidden: payee.hidden,
+    useCount,
+    categorization: payee.categorization,
+    defaultCategoryId: payee.defaultCategoryId,
+    carriedCategoryId: payee.carriedCategoryId,
+  };
+}
+
+/** Rows from `payeeColumns` with what their transactions say about their categories. */
+async function withCategories<T extends PayeeCategorySettings>(
+  db: Db,
+  budgetId: string,
+  rows: T[],
+) {
+  const categories = await payeeCategories(db, budgetId, rows);
+  return rows.map(({ carriedCategoryId: _, ...row }) => ({
+    ...row,
+    ...(categories.get(row.id) as PayeeCategories),
+  }));
 }
 
 /** People's payees: not a transfer payee or a built-in one like "Starting Balance". */
@@ -166,8 +205,9 @@ async function repoint(db: Db, budgetId: string, from: readonly string[], to: st
     .where(inArray(scheduledSubTransaction.payeeId, from));
 }
 
-async function readPayee(db: Db, id: string) {
-  const [row] = await db.select(payeeColumns()).from(payee).where(eq(payee.id, id));
+async function readPayee(db: Db, budgetId: string, id: string) {
+  const rows = await db.select(payeeColumns()).from(payee).where(eq(payee.id, id));
+  const [row] = await withCategories(db, budgetId, rows);
   if (!row) throw new Error(`Payee ${id} missing`);
   return row;
 }
@@ -176,13 +216,50 @@ export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c)
   const { budgetId } = c.req.valid("param");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
-  const payees = await db
+  const rows = await db
     .select(payeeColumns())
     .from(payee)
     .where(peoplesPayee(budgetId))
     .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
-  return c.json({ payees }, 200);
+  return c.json({ payees: await withCategories(db, budgetId, rows) }, 200);
 };
+
+/**
+ * The categorization columns to set for an update, if it changes them. "Always use my choice"
+ * needs a category the category list offers; the other two settings forget it, as YNAB does.
+ */
+async function categorizationChange(
+  db: Db,
+  budgetId: string,
+  current: { categorization: PayeeCategorization; defaultCategoryId: string | null } | undefined,
+  input: { categorization?: PayeeCategorization; defaultCategoryId?: string | null },
+) {
+  if (input.categorization === undefined && input.defaultCategoryId === undefined) return {};
+  const categorization = input.categorization ?? current?.categorization ?? "auto";
+  if (categorization !== "always") return { categorization, defaultCategoryId: null };
+  const defaultCategoryId =
+    input.defaultCategoryId === undefined
+      ? (current?.defaultCategoryId ?? null)
+      : input.defaultCategoryId;
+  if (defaultCategoryId === null) {
+    throw new AppError(400, "CATEGORY_REQUIRED", "Choose the category to always use");
+  }
+  const [row] = await db
+    .select({ id: category.id })
+    .from(category)
+    .where(
+      and(
+        eq(category.id, defaultCategoryId),
+        eq(category.budgetId, budgetId),
+        sql`${category.internalKind} is distinct from 'uncategorized'`,
+        isNull(category.linkedAccountId),
+      ),
+    );
+  if (!row) {
+    throw new AppError(400, "INVALID_CATEGORY", "That category can't be a payee's default");
+  }
+  return { categorization, defaultCategoryId };
+}
 
 export const updatePayeeHandler: RouteHandler<typeof updatePayee, Env> = async (c) => {
   const { budgetId, payeeId } = c.req.valid("param");
@@ -190,15 +267,20 @@ export const updatePayeeHandler: RouteHandler<typeof updatePayee, Env> = async (
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, EDIT);
   const row = await db.transaction(async (tx) => {
-    await lockPayees(tx, budgetId, [payeeId]);
+    const [current] = await lockPayees(tx, budgetId, [payeeId]);
     if (input.name !== undefined && (await payeeNamed(tx, budgetId, input.name, payeeId))) {
       throw NAME_TAKEN();
     }
     await tx
       .update(payee)
-      .set({ name: input.name, hidden: input.hidden, updatedAt: sql`now()` })
+      .set({
+        name: input.name,
+        hidden: input.hidden,
+        ...(await categorizationChange(tx, budgetId, current, input)),
+        updatedAt: sql`now()`,
+      })
       .where(eq(payee.id, payeeId));
-    return readPayee(tx, payeeId);
+    return readPayee(tx, budgetId, payeeId);
   });
   return c.json(row, 200);
 };
@@ -234,7 +316,7 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
     const others = selected.filter((p) => p.id !== target.id);
     const affected = [target, ...others];
     const snapshot: PayeeSnapshot = {
-      payees: affected.map((p) => ({ id: p.id, name: p.name, hidden: p.hidden })),
+      payees: affected.map(snapshotOf),
       uses: await usesOf(
         tx,
         budgetId,
@@ -256,7 +338,7 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
       );
     }
     await tx.update(payee).set({ name, updatedAt: sql`now()` }).where(eq(payee.id, target.id));
-    return { payee: await readPayee(tx, target.id), snapshot };
+    return { payee: await readPayee(tx, budgetId, target.id), snapshot };
   });
   return c.json(result, 200);
 };
@@ -283,7 +365,7 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
       }
     }
     const snapshot: PayeeSnapshot = {
-      payees: doomed.map((p) => ({ id: p.id, name: p.name, hidden: p.hidden })),
+      payees: doomed.map(snapshotOf),
       uses: await usesOf(tx, budgetId, ids),
     };
     await repoint(tx, budgetId, ids, replacementPayeeId);
@@ -292,6 +374,30 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
   });
   return c.json({ snapshot }, 200);
 };
+
+/**
+ * A snapshot's categorization settings, for putting a payee back. Categories that are gone or
+ * belong to another budget are dropped (a snapshot comes from the client).
+ */
+async function restorableCategories(db: Db, budgetId: string, p: SnapshotPayee) {
+  if (p.categorization === undefined) return {};
+  const ids = [p.defaultCategoryId, p.carriedCategoryId].filter(
+    (id): id is string => typeof id === "string",
+  );
+  const known =
+    ids.length === 0
+      ? []
+      : await db
+          .select({ id: category.id })
+          .from(category)
+          .where(and(eq(category.budgetId, budgetId), inArray(category.id, ids)));
+  const keep = (id: string | null | undefined) =>
+    id && known.some((k) => k.id === id) ? id : null;
+  const defaultCategoryId = keep(p.defaultCategoryId);
+  const categorization: PayeeCategorization =
+    p.categorization === "always" && !defaultCategoryId ? "auto" : p.categorization;
+  return { categorization, defaultCategoryId, carriedCategoryId: keep(p.carriedCategoryId) };
+}
 
 export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
@@ -327,12 +433,13 @@ export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = asy
         );
     }
     for (const p of snapshot.payees) {
+      const settings = await restorableCategories(tx, budgetId, p);
       await tx
         .insert(payee)
-        .values({ id: p.id, budgetId, name: p.name, hidden: p.hidden })
+        .values({ id: p.id, budgetId, name: p.name, hidden: p.hidden, ...settings })
         .onConflictDoUpdate({
           target: payee.id,
-          set: { name: p.name, hidden: p.hidden, updatedAt: sql`now()` },
+          set: { name: p.name, hidden: p.hidden, ...settings, updatedAt: sql`now()` },
         });
     }
     for (const use of snapshot.uses) {
@@ -485,8 +592,10 @@ export const listPayeeTransactionsHandler: RouteHandler<typeof listPayeeTransact
       ),
   ]);
   const rows = [
-    ...[...txns, ...lines].map((r) => ({ ...r, kind: "transaction" as const })),
-    ...[...scheduled, ...scheduledLines].map((r) => ({ ...r, kind: "scheduled" as const })),
+    ...txns.map((r) => ({ ...r, kind: "transaction" as const, splitLine: false })),
+    ...lines.map((r) => ({ ...r, kind: "transaction" as const, splitLine: true })),
+    ...scheduled.map((r) => ({ ...r, kind: "scheduled" as const, splitLine: false })),
+    ...scheduledLines.map((r) => ({ ...r, kind: "scheduled" as const, splitLine: true })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
     .map((r) => ({ ...r, amount: r.amount.toString() }));

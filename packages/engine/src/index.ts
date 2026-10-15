@@ -146,6 +146,16 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export {
+  PAYEE_CATEGORIZATIONS,
+  PAYEE_SUGGESTION_LIMIT,
+  type PayeeCategorization,
+  payeeAutoCategory,
+  payeePrefillCategory,
+  payeeRecentCategories,
+  payeeSuggestions,
+  zPayeeCategorization,
+} from "./payee-category";
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,

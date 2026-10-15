@@ -106,8 +106,28 @@ describe("CellEditor", () => {
 
   it("opens the whole payee list, as YNAB does, and narrows it once you type", async () => {
     const payees = [
-      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
-      { id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null },
+      {
+        id: "p1",
+        name: "Market",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+      {
+        id: "p2",
+        name: "Bakery",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
     ];
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
@@ -122,8 +142,28 @@ describe("CellEditor", () => {
 
   it("leaves hidden payees out of the list, but typing one's name uses it", async () => {
     const payees = [
-      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
-      { id: "p2", name: "Trip Cafe", hidden: true, useCount: 1, lastCategoryId: null },
+      {
+        id: "p1",
+        name: "Market",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+      {
+        id: "p2",
+        name: "Trip Cafe",
+        hidden: true,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
     ];
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
@@ -138,7 +178,19 @@ describe("CellEditor", () => {
   });
 
   it("keeps the payee when Enter is pressed without picking", async () => {
-    const payees = [{ id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null }];
+    const payees = [
+      {
+        id: "p2",
+        name: "Bakery",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+    ];
     const { onCommit } = renderCell("payee", txn, payees);
     await userEvent.setup().keyboard("{Enter}");
     expect(onCommit).toHaveBeenCalledWith("Market", "stay", null);

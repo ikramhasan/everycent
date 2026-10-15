@@ -225,6 +225,13 @@
       "when": 1792054946005,
       "tag": "0031_smart_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792088584148,
+      "tag": "0032_conscious_mystique",
+      "breakpoints": true
     }
   ]
 }

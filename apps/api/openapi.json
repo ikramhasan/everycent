@@ -3855,12 +3855,42 @@
             "type": "integer",
             "description": "Transactions and scheduled transactions (split lines included) using the payee"
           },
-          "lastCategoryId": {
+          "categorization": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Manage Payees' Categorization: \"auto\" (Auto-categorize based on payee history), \"always\" (Always use my choice) or \"never\" (Do not auto-categorize)"
+          },
+          "defaultCategoryId": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Category of the payee's latest categorized transaction, suggested for the next"
+            "description": "The \"Always use my choice\" category; null unless `categorization` is \"always\""
+          },
+          "autoCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Current default category from the payee's history: the first categorization, changed only when two of the last three (by date; splits and Uncategorized left out) agree"
+          },
+          "prefillCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The category a new transaction for this payee starts with, by `categorization`"
+          },
+          "recentCategoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Categories used with the payee, most recent first, each once, split lines included (up to six: the category list suggests five besides the selected one)"
           }
         },
         "required": [
@@ -3868,7 +3898,11 @@
           "name",
           "hidden",
           "useCount",
-          "lastCategoryId"
+          "categorization",
+          "defaultCategoryId",
+          "autoCategoryId",
+          "prefillCategoryId",
+          "recentCategoryIds"
         ]
       },
       "PayeeTransactionList": {
@@ -3898,6 +3932,10 @@
               "transaction",
               "scheduled"
             ]
+          },
+          "splitLine": {
+            "type": "boolean",
+            "description": "A line of a split transaction or scheduled split"
           },
           "accountId": {
             "type": "string"
@@ -4091,6 +4129,7 @@
         "required": [
           "id",
           "kind",
+          "splitLine",
           "accountId",
           "accountName",
           "date",
@@ -4156,6 +4195,26 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "categorization": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "always",
+                    "never"
+                  ]
+                },
+                "defaultCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "carriedCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -4287,6 +4346,20 @@
           },
           "hidden": {
             "type": "boolean"
+          },
+          "categorization": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ]
+          },
+          "defaultCategoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -12040,8 +12113,8 @@
           }
         ],
         "operationId": "updatePayee",
-        "summary": "Rename, hide or unhide a payee",
-        "description": "Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`).",
+        "summary": "Rename, hide or unhide a payee, or change how it categorizes",
+        "description": "Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`). `categorization` \"always\" needs a `defaultCategoryId` (`CATEGORY_REQUIRED`): one of the budget's categories other than Uncategorized and credit card payment ones (`INVALID_CATEGORY`). Switching to \"auto\" or \"never\" forgets the chosen category, as YNAB does.",
         "parameters": [
           {
             "schema": {
@@ -12082,7 +12155,7 @@
             }
           },
           "400": {
-            "description": "Invalid input",
+            "description": "Invalid input, a missing (`CATEGORY_REQUIRED`) or unusable (`INVALID_CATEGORY`) category",
             "content": {
               "application/json": {
                 "schema": {

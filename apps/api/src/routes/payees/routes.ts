@@ -1,4 +1,4 @@
-import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
+import { zCurrencyCode, zMinorUnits, zPayeeCategorization } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -17,10 +17,31 @@ const PayeeSchema = z
       .number()
       .int()
       .describe("Transactions and scheduled transactions (split lines included) using the payee"),
-    lastCategoryId: z
+    categorization: zPayeeCategorization.describe(
+      'Manage Payees\' Categorization: "auto" (Auto-categorize based on payee history), "always" ' +
+        '(Always use my choice) or "never" (Do not auto-categorize)',
+    ),
+    defaultCategoryId: z
       .string()
       .nullable()
-      .describe("Category of the payee's latest categorized transaction, suggested for the next"),
+      .describe('The "Always use my choice" category; null unless `categorization` is "always"'),
+    autoCategoryId: z
+      .string()
+      .nullable()
+      .describe(
+        "Current default category from the payee's history: the first categorization, changed " +
+          "only when two of the last three (by date; splits and Uncategorized left out) agree",
+      ),
+    prefillCategoryId: z
+      .string()
+      .nullable()
+      .describe("The category a new transaction for this payee starts with, by `categorization`"),
+    recentCategoryIds: z
+      .array(z.string())
+      .describe(
+        "Categories used with the payee, most recent first, each once, split lines included " +
+          "(up to six: the category list suggests five besides the selected one)",
+      ),
   })
   .openapi("Payee");
 
@@ -37,7 +58,16 @@ const PayeeUsesSchema = z
 const PayeeSnapshotSchema = z
   .object({
     payees: z
-      .array(z.object({ id: z.string(), name: PayeeName, hidden: z.boolean() }))
+      .array(
+        z.object({
+          id: z.string(),
+          name: PayeeName,
+          hidden: z.boolean(),
+          categorization: zPayeeCategorization.optional(),
+          defaultCategoryId: z.string().nullable().optional(),
+          carriedCategoryId: z.string().nullable().optional(),
+        }),
+      )
       .max(1000)
       .describe("Each payee as it was"),
     uses: z.array(PayeeUsesSchema).max(1000).describe("The rows that pointed at each payee"),
@@ -86,21 +116,31 @@ export const updatePayee = createRoute({
   method: "patch",
   path: "/budgets/{budgetId}/payees/{payeeId}",
   operationId: "updatePayee",
-  summary: "Rename, hide or unhide a payee",
+  summary: "Rename, hide or unhide a payee, or change how it categorizes",
   description:
     "Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and " +
-    "built-in payees can't be changed (`PAYEE_LOCKED`).",
+    'built-in payees can\'t be changed (`PAYEE_LOCKED`). `categorization` "always" needs a ' +
+    "`defaultCategoryId` (`CATEGORY_REQUIRED`): one of the budget's categories other than " +
+    'Uncategorized and credit card payment ones (`INVALID_CATEGORY`). Switching to "auto" or ' +
+    '"never" forgets the chosen category, as YNAB does.',
   request: {
     params: PayeeParams,
     body: body(
       z
-        .object({ name: PayeeName.optional(), hidden: z.boolean().optional() })
+        .object({
+          name: PayeeName.optional(),
+          hidden: z.boolean().optional(),
+          categorization: zPayeeCategorization.optional(),
+          defaultCategoryId: z.string().nullable().optional(),
+        })
         .openapi("UpdatePayee"),
     ),
   },
   responses: {
     200: ok("Updated", PayeeSchema),
-    400: jsonError("Invalid input"),
+    400: jsonError(
+      "Invalid input, a missing (`CATEGORY_REQUIRED`) or unusable (`INVALID_CATEGORY`) category",
+    ),
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
@@ -218,6 +258,7 @@ const PayeeTransactionSchema = z
   .object({
     id: z.string().describe("The transaction, split line or scheduled transaction"),
     kind: z.enum(["transaction", "scheduled"]),
+    splitLine: z.boolean().describe("A line of a split transaction or scheduled split"),
     accountId: z.string(),
     accountName: z.string(),
     date: z.string().describe("A scheduled transaction's next date"),

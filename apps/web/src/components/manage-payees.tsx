@@ -37,6 +37,7 @@ import {
   transferLabel,
 } from "@/lib/transactions";
 import type { UndoCommand } from "@/lib/undo";
+import { type CategorizationChange, PayeeCategorizationSection } from "./payee-categorization";
 
 type Snapshot = components["schemas"]["PayeeSnapshot"];
 
@@ -198,6 +199,17 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
         await update.mutateAsync({ params: { path: { ...path, payeeId: p.id } }, body: { name } });
       },
     });
+
+  const categorize = (p: Payee, change: CategorizationChange) => {
+    const apply = (body: CategorizationChange) => async () => {
+      await update.mutateAsync({ params: { path: { ...path, payeeId: p.id } }, body });
+    };
+    return run({
+      label: "Change categorization",
+      undo: apply({ categorization: p.categorization, defaultCategoryId: p.defaultCategoryId }),
+      redo: apply(change),
+    });
+  };
 
   const setHidden = (ids: string[], hidden: boolean) => {
     const apply = (value: boolean) => () =>
@@ -397,6 +409,7 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
                 error={error}
                 onError={setError}
                 onRename={(p, name) => rename(p, name).catch(() => {})}
+                onCategorize={(p, change) => categorize(p, change).catch(() => {})}
                 onCombine={(name) => combineInto(name).catch(() => {})}
                 onHide={(hidden) =>
                   setHidden(
@@ -444,6 +457,7 @@ function PayeeEditor({
   error,
   onError,
   onRename,
+  onCategorize,
   onCombine,
   onHide,
   onDelete,
@@ -454,6 +468,7 @@ function PayeeEditor({
   error: string | null;
   onError: (message: string | null) => void;
   onRename: (payee: Payee, name: string) => Promise<void>;
+  onCategorize: (payee: Payee, change: CategorizationChange) => Promise<void>;
   onCombine: (name: string) => Promise<void>;
   onHide: (hidden: boolean) => Promise<void>;
   onDelete: (replacementPayeeId: string | null) => Promise<void>;
@@ -567,6 +582,14 @@ function PayeeEditor({
             )}
           </section>
         </>
+      )}
+
+      {single && (
+        <PayeeCategorizationSection
+          payee={first}
+          busy={busy}
+          onChange={(change) => onCategorize(first, change)}
+        />
       )}
 
       {deleting ? (
