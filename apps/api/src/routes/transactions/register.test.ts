@@ -311,25 +311,20 @@ describe("register search, filters, sort and paging", () => {
     const payees = async (query: Record<string, string>) =>
       (await list(query)).transactions.map((t) => t.payeeName);
     // Case-insensitive, as people read names.
-    expect(await payees({ sort: "payee", dir: "asc" })).toEqual([
+    expect(await payees({ sort: "payee:asc" })).toEqual([
       "Apple",
       "banana",
       "cherry",
       "Starting Balance",
     ]);
-    expect(await payees({ sort: "amount", dir: "asc" })).toEqual([
+    expect(await payees({ sort: "outflow:desc" })).toEqual([
       "banana",
       "cherry",
       "Apple",
       "Starting Balance",
     ]);
-    const first = await list({ sort: "payee", dir: "desc", limit: "2" });
-    const rest = await list({
-      sort: "payee",
-      dir: "desc",
-      limit: "10",
-      cursor: first.nextCursor ?? "",
-    });
+    const first = await list({ sort: "payee:desc", limit: "2" });
+    const rest = await list({ sort: "payee:desc", limit: "10", cursor: first.nextCursor ?? "" });
     expect([...first.transactions, ...rest.transactions].map((t) => t.payeeName)).toEqual([
       "Starting Balance",
       "cherry",
@@ -338,18 +333,144 @@ describe("register search, filters, sort and paging", () => {
     ]);
   });
 
-  it("rejects a cursor from another sort", async () => {
+  it("stacks sorts as YNAB does, and pages through each without gaps or repeats", async () => {
+    const { add, list } = await setup();
+    // The rows of YNAB's "x-c11-29 Chk" (2026-10-15, EVERYCENT-29).
+    const rows = [
+      ["x29 Bravo", "2026-10-01", "-10000", "red", "cleared"],
+      ["x29 Alpha", "2026-10-02", "-30000", "blue", "uncleared"],
+      ["x29 Alpha", "2026-10-03", "20000", null, "cleared"],
+      ["x29 Charlie", "2026-10-01", "5000", "green", "uncleared"],
+      ["x29 Bravo", "2026-10-03", "-30000", null, "uncleared"],
+      ["x29 Charlie", "2026-10-02", "-10000", "purple", "cleared"],
+      ["x29 Alpha", "2026-10-04", "-5000", "red", "uncleared"],
+      ["x29 Bravo", "2026-10-04", "50000", "orange", "cleared"],
+      ["x29 Alpha", "2026-10-02", "15000", "yellow", "uncleared"],
+    ] as const;
+    const label = new Map<string, string>();
+    for (const [payeeName, date, amount, flag, cleared] of rows) {
+      const t = await add({ date, amount, payeeName, flag, cleared });
+      label.set(t.id, `${payeeName.slice(4)} ${date.slice(5)} ${amount}`);
+      if (payeeName === "x29 Charlie" && amount === "-10000") {
+        await db.update(transaction).set({ cleared: "reconciled" }).where(eq(transaction.id, t.id));
+      }
+    }
+    const order = async (sort: string) =>
+      (await list({ sort })).transactions.flatMap((t) => label.get(t.id) ?? []);
+
+    expect(await order("payee:desc,date:desc")).toEqual([
+      "Charlie 10-02 -10000",
+      "Charlie 10-01 5000",
+      "Bravo 10-04 50000",
+      "Bravo 10-03 -30000",
+      "Bravo 10-01 -10000",
+      "Alpha 10-04 -5000",
+      "Alpha 10-03 20000",
+      "Alpha 10-02 -30000",
+      "Alpha 10-02 15000",
+    ]);
+    // An earlier column breaks ties in its own direction.
+    expect(await order("date:asc,payee:desc")).toEqual([
+      "Charlie 10-01 5000",
+      "Bravo 10-01 -10000",
+      "Charlie 10-02 -10000",
+      "Alpha 10-02 -30000",
+      "Alpha 10-02 15000",
+      "Bravo 10-03 -30000",
+      "Alpha 10-03 20000",
+      "Bravo 10-04 50000",
+      "Alpha 10-04 -5000",
+    ]);
+    // Outflow and Inflow each count the other side as zero.
+    expect(await order("outflow:desc,payee:desc,date:desc")).toEqual([
+      "Bravo 10-03 -30000",
+      "Alpha 10-02 -30000",
+      "Charlie 10-02 -10000",
+      "Bravo 10-01 -10000",
+      "Alpha 10-04 -5000",
+      "Charlie 10-01 5000",
+      "Bravo 10-04 50000",
+      "Alpha 10-03 20000",
+      "Alpha 10-02 15000",
+    ]);
+    expect(await order("inflow:asc,outflow:asc,payee:desc,date:desc")).toEqual([
+      "Alpha 10-04 -5000",
+      "Charlie 10-02 -10000",
+      "Bravo 10-01 -10000",
+      "Bravo 10-03 -30000",
+      "Alpha 10-02 -30000",
+      "Charlie 10-01 5000",
+      "Alpha 10-02 15000",
+      "Alpha 10-03 20000",
+      "Bravo 10-04 50000",
+    ]);
+    // Flags: none, red, orange, yellow, green, blue, purple.
+    expect(await order("flag:desc,date:desc")).toEqual([
+      "Charlie 10-02 -10000",
+      "Alpha 10-02 -30000",
+      "Charlie 10-01 5000",
+      "Alpha 10-02 15000",
+      "Bravo 10-04 50000",
+      "Alpha 10-04 -5000",
+      "Bravo 10-01 -10000",
+      "Bravo 10-03 -30000",
+      "Alpha 10-03 20000",
+    ]);
+    // Cleared: reconciled, cleared, uncleared.
+    expect(await order("cleared:desc,flag:asc,date:desc")).toEqual([
+      "Bravo 10-03 -30000",
+      "Alpha 10-04 -5000",
+      "Alpha 10-02 15000",
+      "Charlie 10-01 5000",
+      "Alpha 10-02 -30000",
+      "Alpha 10-03 20000",
+      "Bravo 10-01 -10000",
+      "Bravo 10-04 50000",
+      "Charlie 10-02 -10000",
+    ]);
+    expect((await order("cleared:asc,flag:asc,date:desc"))[0]).toBe("Charlie 10-02 -10000");
+
+    for (const sort of [
+      "date:desc",
+      "date:asc",
+      "account:asc,date:desc",
+      "payee:desc,date:asc",
+      "category:asc",
+      "memo:desc,payee:asc",
+      "outflow:asc,inflow:desc",
+      "inflow:desc",
+      "flag:asc,cleared:desc,payee:asc",
+      "cleared:asc",
+    ]) {
+      const all = (await list({ sort, limit: "100" })).transactions.map((t) => t.id);
+      const seen: string[] = [];
+      let cursor: string | null | undefined;
+      do {
+        const page = await list({ sort, limit: "2", ...(cursor ? { cursor } : {}) });
+        seen.push(...page.transactions.map((t) => t.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(seen, sort).toEqual(all);
+      expect(seen).toHaveLength(10);
+    }
+  });
+
+  it("rejects a cursor from another sort, and a sort it can't read", async () => {
     const { base, cookie, account, add, list } = await setup();
     await add({ date: "2026-02-01", amount: "-100" });
     const { nextCursor } = await list({ limit: "1" });
     const res = await send(
       "GET",
-      `${base}/transactions?accountId=${account.id}&sort=payee&cursor=${nextCursor}`,
+      `${base}/transactions?accountId=${account.id}&sort=payee:asc&cursor=${nextCursor}`,
       cookie,
     );
     expect(res.status).toBe(400);
     expect((await json<{ error: { code: string } }>(res)).error.code).toBe("INVALID_CURSOR");
     const junk = await send("GET", `${base}/transactions?cursor=nope`, cookie);
     expect(junk.status).toBe(400);
+    for (const sort of ["payee", "amount:asc", "date:up", "date:desc,"]) {
+      const bad = await send("GET", `${base}/transactions?sort=${sort}`, cookie);
+      expect(bad.status, sort).toBe(400);
+    }
   });
 });

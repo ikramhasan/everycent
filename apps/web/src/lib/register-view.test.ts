@@ -24,6 +24,7 @@ describe("register view", () => {
       showRunningBalance: false,
       showFlags: true,
       scheduledCollapsed: false,
+      sort: [{ column: "date", dir: "desc" }],
     });
   });
 });

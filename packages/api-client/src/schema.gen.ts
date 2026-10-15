@@ -6013,8 +6013,8 @@ export interface operations {
                 to?: string;
                 /** @description The View menu's "Show Reconciled Transactions" turned off */
                 hideReconciled?: string;
-                sort?: "date" | "account" | "payee" | "category" | "memo" | "amount" | "cleared";
-                dir?: "asc" | "desc";
+                /** @description YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first (e.g. `payee:desc,date:asc`). Columns: date, account, payee, category, memo, outflow, inflow, flag, cleared. Outflow and inflow each count the other side's rows as zero; flag ascending is none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top. */
+                sort?: string;
                 limit?: number;
                 cursor?: string;
                 /** @description The user's today: scheduled transactions due by then are entered first */

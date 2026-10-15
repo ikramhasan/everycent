@@ -25,16 +25,43 @@ export type { SearchSettings };
 
 const ON_BUDGET_TYPES = ACCOUNT_TYPES.filter(isOnBudget);
 
+/** What a register can sort by: YNAB's sortable columns (Outflow and Inflow apart). */
 export const SORT_COLUMNS = [
   "date",
   "account",
   "payee",
   "category",
   "memo",
-  "amount",
+  "outflow",
+  "inflow",
+  "flag",
   "cleared",
 ] as const;
 export type SortColumn = (typeof SORT_COLUMNS)[number];
+export type SortDir = "asc" | "desc";
+export interface SortField {
+  column: SortColumn;
+  dir: SortDir;
+}
+
+/** `payee:desc,date:asc`: YNAB's stacked sort, first field first. */
+export const SORT_PATTERN = new RegExp(
+  `^(${SORT_COLUMNS.join("|")}):(asc|desc)(,(${SORT_COLUMNS.join("|")}):(asc|desc))*$`,
+);
+
+/** The fields of a `SORT_PATTERN` string, a column's first mention winning. */
+export function parseSort(text: string): SortField[] {
+  const fields: SortField[] = [];
+  for (const part of text.split(",")) {
+    const [column, dir] = part.split(":") as [SortColumn, SortDir];
+    if (!fields.some((f) => f.column === column)) fields.push({ column, dir });
+  }
+  return fields;
+}
+
+function formatSort(fields: readonly SortField[]) {
+  return fields.map((f) => `${f.column}:${f.dir}`).join(",");
+}
 
 export interface RegisterFilter {
   accountId?: string;
@@ -47,8 +74,7 @@ export interface RegisterFilter {
 }
 
 export interface RegisterPage {
-  sort: SortColumn;
-  dir: "asc" | "desc";
+  sort: readonly SortField[];
   limit: number;
   cursor?: string;
 }
@@ -287,10 +313,12 @@ export function matchingTransactions(
     .as("matching");
 }
 
-/** The sort column as SQL, plus the type its cursor value is cast back to. */
-function sortKey(r: Register, sort: SortColumn): { key: SQL; cast: SQL } {
+/** A sort column as SQL (never null), plus the type its cursor value is cast back to. */
+function sortKey(r: Register, column: SortColumn): { key: SQL; cast: SQL } {
   const text = sql.raw("text");
-  switch (sort) {
+  const int = sql.raw("int");
+  const bigint = sql.raw("bigint");
+  switch (column) {
     case "date":
       return { key: sql`${r.date}`, cast: sql.raw("date") };
     case "account":
@@ -301,45 +329,76 @@ function sortKey(r: Register, sort: SortColumn): { key: SQL; cast: SQL } {
       return { key: sql`lower(coalesce(${r.categoryName}, ''))`, cast: text };
     case "memo":
       return { key: sql`lower(${r.memo})`, cast: text };
-    case "amount":
-      return { key: sql`${r.amount}`, cast: sql.raw("bigint") };
+    // Each amount column on its own: the other side's rows count as zero (YNAB, 2026-10-15).
+    case "outflow":
+      return { key: sql`greatest(-${r.amount}, 0)`, cast: bigint };
+    case "inflow":
+      return { key: sql`greatest(${r.amount}, 0)`, cast: bigint };
+    // YNAB's order, ascending: no flag, then the flag menu's colors.
+    case "flag":
+      return {
+        key: sql`(case ${r.flag} when 'red' then 1 when 'orange' then 2 when 'yellow' then 3
+          when 'green' then 4 when 'blue' then 5 when 'purple' then 6 else 0 end)`,
+        cast: int,
+      };
+    // Ascending: reconciled, cleared, uncleared.
     case "cleared":
       return {
-        key: sql`(case ${r.cleared} when 'uncleared' then 0 when 'cleared' then 1 else 2 end)`,
-        cast: sql.raw("int"),
+        key: sql`(case ${r.cleared} when 'reconciled' then 0 when 'cleared' then 1 else 2 end)`,
+        cast: int,
       };
   }
 }
 
-type Cursor = [
-  sort: SortColumn,
-  key: string,
-  date: string,
-  /** The amount, negated: a day's largest outflow sorts first. */
-  tie: string,
-  createdAt: string,
-  id: string,
-];
+/**
+ * `[sort, ...one key per sort field, date, tie, createdAt, id]`: the last row's place. `tie` is
+ * the amount negated (a day's largest outflow first).
+ */
+type Cursor = string[];
 
 function encodeCursor(cursor: Cursor) {
   return Buffer.from(JSON.stringify(cursor)).toString("base64url");
 }
 
-function decodeCursor(text: string, sort: SortColumn): Cursor {
+function decodeCursor(text: string, sort: readonly SortField[]): Cursor {
   try {
     const value: unknown = JSON.parse(Buffer.from(text, "base64url").toString());
     if (
       Array.isArray(value) &&
-      value.length === 6 &&
+      value.length === sort.length + 5 &&
       value.every((v) => typeof v === "string") &&
-      value[0] === sort
+      value[0] === formatSort(sort)
     ) {
-      return value as Cursor;
+      return value;
     }
   } catch {
     // Falls through to the error below.
   }
   throw new AppError(400, "INVALID_CURSOR", "The cursor doesn't belong to this register or sort");
+}
+
+/**
+ * Rows after `cursor` in the order `keys` (each with its own direction), then the fixed tiebreak
+ * `tail` (descending): the first key that differs decides.
+ */
+function afterCursor(
+  keys: readonly { key: SQL; cast: SQL; dir: SortDir }[],
+  tail: SQL,
+  cursor: Cursor,
+) {
+  const values = cursor.slice(1);
+  const [d, t, c, id] = values.slice(keys.length);
+  const tailAfter = sql`${tail} < (${d}::date, ${t}::bigint, ${c}::timestamptz, ${id})`;
+  const levels: SQL[] = [];
+  const equal: SQL[] = [];
+  keys.forEach(({ key, cast, dir }, i) => {
+    const value = sql`${values[i]}::${cast}`;
+    const op = sql.raw(dir === "asc" ? ">" : "<");
+    levels.push(and(...equal, sql`${key} ${op} ${value}`) as SQL);
+    equal.push(sql`${key} = ${value}`);
+  });
+  levels.push(and(...equal, tailAfter) as SQL);
+  return sql`(${sql.join(levels, sql` or `)})`;
 }
 
 /** Lines of the given split transactions, grouped by transaction. */
@@ -499,30 +558,33 @@ export function registerPageQuery(
   settings: SearchSettings,
 ) {
   const r = registerCte(db, budgetId, filter.accountId);
-  const { key, cast } = sortKey(r, page.sort);
-  const dir = page.dir === "asc" ? sql.raw("asc") : sql.raw("desc");
-  // Ties break by date, then amount (newest first, a day's largest outflow on top, as YNAB sorts
-  // by default), then creation, then id, all in the sort's direction, so the order is total and
+  const keys = page.sort.map((f) => ({ ...sortKey(r, f.column), dir: f.dir }));
+  // After the sort's fields, ties break by date, then amount (newest first, a day's largest
+  // outflow on top, as YNAB sorts by default), then creation, then id, so the order is total and
   // keyset paging never skips or repeats a row.
   const tie = sql`(-${r.amount})`;
-  let after: SQL | undefined;
-  if (page.cursor) {
-    const [, k, d, t, c, id] = decodeCursor(page.cursor, page.sort);
-    const op = page.dir === "asc" ? sql.raw(">") : sql.raw("<");
-    after = sql`(${key}, ${r.date}, ${tie}, ${r.createdAt}::timestamptz, ${r.id}) ${op}
-      (${k}::${cast}, ${d}::date, ${t}::bigint, ${c}::timestamptz, ${id})`;
-  }
+  const tail = sql`(${r.date}, ${tie}, ${r.createdAt}::timestamptz, ${r.id})`;
+  const after = page.cursor
+    ? afterCursor(keys, tail, decodeCursor(page.cursor, page.sort))
+    : undefined;
   return db
     .with(r)
-    .select({ ...columns(r), sortKey: sql<string>`(${key})::text`, tie: sql<string>`${tie}::text` })
+    .select({
+      ...columns(r),
+      sortKeys: sql<string[]>`array[${sql.join(
+        keys.map(({ key }) => sql`(${key})::text`),
+        sql`, `,
+      )}]::text[]`,
+      tie: sql<string>`${tie}::text`,
+    })
     .from(r)
     .where(and(filterWhere(r, budgetId, filter, settings), after))
     .orderBy(
-      sql`${key} ${dir}`,
-      sql`${r.date} ${dir}`,
-      sql`${tie} ${dir}`,
-      sql`${r.createdAt}::timestamptz ${dir}`,
-      sql`${r.id} ${dir}`,
+      ...keys.map(({ key, dir }) => sql`${key} ${sql.raw(dir)}`),
+      sql`${r.date} desc`,
+      sql`${tie} desc`,
+      sql`${r.createdAt}::timestamptz desc`,
+      sql`${r.id} desc`,
     )
     .limit(page.limit + 1);
 }
@@ -556,7 +618,14 @@ export async function queryRegister(
     someHidden: page.cursor ? null : await someHidden(db, budgetId, filter, settings),
     nextCursor:
       more && last
-        ? encodeCursor([page.sort, last.sortKey, last.date, last.tie, last.createdAt, last.id])
+        ? encodeCursor([
+            formatSort(page.sort),
+            ...last.sortKeys,
+            last.date,
+            last.tie,
+            last.createdAt,
+            last.id,
+          ])
         : null,
   };
 }

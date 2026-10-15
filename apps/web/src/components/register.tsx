@@ -48,6 +48,7 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
+  Bookmark,
   Circle,
   CircleCheck,
   CircleHelp,
@@ -76,13 +77,8 @@ import {
   type ReconciledWarning,
   rowDeleteScope,
 } from "@/lib/reconciled-warnings";
-import {
-  nextSort,
-  type RegisterSearch,
-  registerQuery,
-  type SortColumn,
-  searchText,
-} from "@/lib/register-filters";
+import { type RegisterSearch, registerQuery, searchText } from "@/lib/register-filters";
+import { DEFAULT_SORT, nextSort, type SortColumn, type SortField } from "@/lib/register-sort";
 import {
   addMonths,
   rangeDates,
@@ -136,15 +132,16 @@ import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
-/** Columns a header click sorts by; the amount columns both sort by amount. */
+/** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
+  flag: "flag",
   account: "account",
   date: "date",
   payee: "payee",
   category: "category",
   memo: "memo",
-  outflow: "amount",
-  inflow: "amount",
+  outflow: "outflow",
+  inflow: "inflow",
   cleared: "cleared",
 };
 
@@ -284,7 +281,8 @@ export function Register({
     [transactions.data],
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
-  const dateOrder = query.sort === "date";
+  // Rows read in the running balance's order only when the date comes first.
+  const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   // The budget starts the month before its oldest transaction (or before this month).
   const monthData = useQuery(monthQueryOptions(budget.id, currentMonth()));
@@ -429,7 +427,7 @@ export function Register({
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
   // The selection's filter is the register's, without the sort.
-  const { sort: _sort, dir: _dir, hideReconciled, ...rest } = query;
+  const { sort: _sort, hideReconciled, ...rest } = query;
   const selectionFilter = { ...rest, ...(hideReconciled ? { hideReconciled: true } : {}) };
   const summary = $api.useQuery(
     "post",
@@ -1101,8 +1099,9 @@ export function Register({
     );
   }
   const q = searchText(search);
-  const sort = query.sort;
-  const dir = query.dir;
+  const [first]: readonly SortField[] = view.sort.length > 0 ? view.sort : DEFAULT_SORT;
+  const sort = first?.column;
+  const dir = first?.dir;
 
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
@@ -1375,13 +1374,9 @@ export function Register({
                 const id = header.column.id as ColumnId;
                 const spec = COLUMN_SPECS[id];
                 const sortBy = SORTABLE[id];
-                // Outflow sorts biggest spend first; inflow biggest income first. Both sort by
-                // amount, so the arrow goes on the one whose natural order is showing.
-                const natural = id === "outflow" ? "asc" : id === "inflow" ? "desc" : undefined;
-                const active =
-                  sortBy !== undefined &&
-                  sortBy === sort &&
-                  (sortBy !== "amount" || id === (dir === "asc" ? "outflow" : "inflow"));
+                // The arrow shows on the first sort field; the rest break its ties.
+                const active = sortBy !== undefined && sortBy === sort;
+                const HeaderIcon = id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
                 return (
                   <TableHead
                     key={header.id}
@@ -1413,18 +1408,25 @@ export function Register({
                     ) : id === "balance" ? (
                       <BalanceHeader
                         sorted={!dateOrder}
-                        onResetSort={() => onSearchChange({ sort: undefined, dir: undefined })}
+                        onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
                       />
-                    ) : sortBy && !spec.srOnly ? (
+                    ) : sortBy ? (
                       <button
                         type="button"
                         className={cn(
                           "inline-flex items-center gap-1 uppercase hover:text-foreground",
                           active && "text-foreground",
                         )}
-                        onClick={() => onSearchChange(nextSort(search, sortBy, natural))}
+                        onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
                       >
-                        {spec.header}
+                        {HeaderIcon ? (
+                          <>
+                            <HeaderIcon className="size-3.5" aria-hidden />
+                            <span className="sr-only">{spec.header}</span>
+                          </>
+                        ) : (
+                          spec.header
+                        )}
                         {active &&
                           (dir === "asc" ? (
                             <ArrowUp className="size-3" aria-hidden />

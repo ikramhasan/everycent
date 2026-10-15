@@ -3,7 +3,7 @@ import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
-import { SORT_COLUMNS } from "./register-query";
+import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
 const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
 const SearchText = z
@@ -236,8 +236,18 @@ export const listTransactions = createRoute({
         .stringbool()
         .optional()
         .describe('The View menu\'s "Show Reconciled Transactions" turned off'),
-      sort: z.enum(SORT_COLUMNS).default("date"),
-      dir: z.enum(["asc", "desc"]).default("desc"),
+      sort: z
+        .string()
+        .regex(SORT_PATTERN)
+        .default("date:desc")
+        .describe(
+          "YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first " +
+            "(e.g. `payee:desc,date:asc`). Columns: " +
+            SORT_COLUMNS.join(", ") +
+            ". Outflow and inflow each count the other side's rows as zero; flag ascending is " +
+            "none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, " +
+            "cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top.",
+        ),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       cursor: z.string().optional(),
       today: IsoDate.optional().describe(
