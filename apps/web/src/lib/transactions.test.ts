@@ -1,3 +1,4 @@
+import type { AccountType } from "@everycent/engine";
 import { describe, expect, it } from "vitest";
 import type { CategoryList } from "./categories";
 import type { MoneySettings } from "./money-input";
@@ -9,11 +10,71 @@ import {
   draftFrom,
   emptyDraft,
   emptyLine,
+  paymentCategoryCard,
   splitRemaining,
   startSplit,
   type Transaction,
+  transferChoiceLabel,
+  transferRowLabel,
   updateBody,
 } from "./transactions";
+
+const acc = (name: string, type: AccountType) => ({ name, type });
+
+describe("YNAB's transfer wording (2026-10-15, \"ihni7's Plan\")", () => {
+  const brac = acc("Brac", "checking");
+  const cardA = acc("Card A", "credit_card");
+  const cardB = acc("Card B", "credit_card");
+  const track = acc("Track", "asset");
+  const liab = acc("Liab", "liability");
+  const loc = acc("LOC", "line_of_credit");
+  const mort = acc("Mort", "mortgage");
+
+  it("words the payee list by direction in a card", () => {
+    expect(transferChoiceLabel("credit_card", brac, "in")).toBe("Payment from Brac");
+    expect(transferChoiceLabel("credit_card", track, "in")).toBe("Payment from Track");
+    expect(transferChoiceLabel("credit_card", cardB, "in")).toBe("Transfer from Card B");
+    expect(transferChoiceLabel("credit_card", liab, "in")).toBe("Transfer from Liab");
+    expect(transferChoiceLabel("credit_card", loc, "in")).toBe("Transfer from LOC");
+    expect(transferChoiceLabel("credit_card", brac, "out")).toBe("Transfer to Brac");
+    expect(transferChoiceLabel("credit_card", brac, null)).toBe("To/From Brac");
+    expect(transferChoiceLabel("credit_card", mort, "in")).toBe("Payment: Mort");
+  });
+
+  it("words the payee list by direction in a cash account", () => {
+    expect(transferChoiceLabel("checking", cardA, "out")).toBe("Payment to Card A");
+    expect(transferChoiceLabel("checking", track, "out")).toBe("Transfer to Track");
+    expect(transferChoiceLabel("checking", cardA, "in")).toBe("Transfer from Card A");
+    expect(transferChoiceLabel("checking", mort, "out")).toBe("Payment: Mort");
+    expect(transferChoiceLabel("checking", mort, null)).toBe("Payment: Mort");
+  });
+
+  it("names a saved transfer the same way on both sides", () => {
+    // Brac → Card A (a payment), on each side.
+    expect(transferRowLabel("checking", cardA, -500n)).toBe("Payment: Card A");
+    expect(transferRowLabel("credit_card", brac, 500n)).toBe("Payment: Brac");
+    // Card A → Brac (a cash advance), Card B → Card A, Brac → Savings.
+    expect(transferRowLabel("credit_card", brac, -100n)).toBe("Transfer: Brac");
+    expect(transferRowLabel("checking", cardA, 100n)).toBe("Transfer: Card A");
+    expect(transferRowLabel("credit_card", cardB, 300n)).toBe("Transfer: Card B");
+    expect(transferRowLabel("checking", acc("Savings", "savings"), -100n)).toBe(
+      "Transfer: Savings",
+    );
+    // Tracking → card, and a loan payment.
+    expect(transferRowLabel("credit_card", track, 100n)).toBe("Payment: Track");
+    expect(transferRowLabel("asset", cardA, -100n)).toBe("Payment: Card A");
+    expect(transferRowLabel("cash", mort, -90000n)).toBe("Payment: Mort");
+    expect(transferRowLabel("mortgage", acc("Wallet", "cash"), 90000n)).toBe("Payment: Wallet");
+  });
+
+  it("shows the card's payment category between a card and a cash account only", () => {
+    expect(paymentCategoryCard(brac, cardA)).toBe(cardA);
+    expect(paymentCategoryCard(cardA, brac)).toBe(cardA);
+    expect(paymentCategoryCard(cardA, cardB)).toBeNull();
+    expect(paymentCategoryCard(cardA, track)).toBeNull();
+    expect(paymentCategoryCard(brac, acc("Savings", "savings"))).toBeNull();
+  });
+});
 
 const usd: MoneySettings = {
   currency: "USD",

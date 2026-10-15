@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "@/lib/accounts";
-import { cardPaymentAmount, cardPaymentDraft, PaymentFigure } from "./card-payment";
+import {
+  cardPaymentAmount,
+  cardPaymentDraft,
+  OverspendingFigure,
+  PaymentFigure,
+} from "./card-payment";
 
 vi.mock("@/lib/budget-context", () => ({ useBudget: () => ({ budget: { id: "b1" } }) }));
 vi.mock("@tanstack/react-router", () => ({
@@ -75,7 +80,7 @@ describe("a card's Record Payment (YNAB, 2026-10-14)", () => {
     expect(draft).toMatchObject({
       accountId: "x-130 Card",
       date: "2026-10-14",
-      payeeName: "Transfer : F Cash",
+      payeeName: "Payment from F Cash",
       transferAccountId: "F Cash",
       inflow: "1.00",
       outflow: "",
@@ -93,6 +98,23 @@ describe("a card's Record Payment (YNAB, 2026-10-14)", () => {
       today: "2026-10-14",
     });
     expect(draft).toMatchObject({ payeeName: "", transferAccountId: null, inflow: "" });
+  });
+
+  it("prefills another card the card was last paid from (YNAB, 2026-10-15)", () => {
+    const other = account("x-c11-163 Card B", "credit_card");
+    const card = account("Card", "credit_card", { lastPaymentFromAccountId: other.id }, "-100");
+    const draft = cardPaymentDraft({
+      card,
+      accounts: [other, card],
+      available: 0n,
+      settings: usd,
+      today: "2026-10-15",
+    });
+    expect(draft).toMatchObject({
+      transferAccountId: other.id,
+      // Nothing set aside, so no amount: YNAB reads "To/From" then.
+      payeeName: "To/From x-c11-163 Card B",
+    });
   });
 
   it("doesn't prefill a closed account", () => {
@@ -126,5 +148,21 @@ describe("the card register's Payment figure (YNAB, 2026-10-14)", () => {
     expect(screen.getByRole("link", { name: "fix this in your plan." }).getAttribute("href")).toBe(
       "/budgets/b1?category=pay",
     );
+  });
+});
+
+describe("the card register's Overspending figure (YNAB, 2026-10-15)", () => {
+  it("shows this month's credit overspending, labelled with the month", () => {
+    render(<OverspendingFigure amount={200n} month="2026-10" format={format} />);
+    expect(screen.getByText("Overspending (Oct)")).toBeTruthy();
+    expect(screen.getByTitle("$2.00")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("hides at zero", () => {
+    const { container } = render(
+      <OverspendingFigure amount={0n} month="2026-10" format={format} />,
+    );
+    expect(container.textContent).toBe("");
   });
 });

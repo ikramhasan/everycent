@@ -24,7 +24,12 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
-import { cardPaymentDraft, PaymentFigure, useCardPayment } from "@/components/card-payment";
+import {
+  cardPaymentDraft,
+  OverspendingFigure,
+  PaymentFigure,
+  useCardPayment,
+} from "@/components/card-payment";
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
@@ -44,10 +49,14 @@ import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
   /**
-   * `transaction`: scroll to and highlight it (the other side of a transfer). The rest is the
-   * register's search, filters and sort.
+   * `transaction`: scroll to and highlight it (the other side of a transfer). `recordPayment`:
+   * open a card's Record Payment row (the payment inspector's button). The rest is the register's
+   * search, filters and sort.
    */
-  validateSearch: registerSearchSchema.extend({ transaction: z.string().optional() }),
+  validateSearch: registerSearchSchema.extend({
+    transaction: z.string().optional(),
+    recordPayment: z.boolean().optional(),
+  }),
   component: AccountPage,
 });
 
@@ -55,7 +64,7 @@ type Confirm = "close" | "delete" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
-  const { transaction, ...registerSearch } = Route.useSearch();
+  const { transaction, recordPayment: openPayment, ...registerSearch } = Route.useSearch();
   const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -65,6 +74,15 @@ function AccountPage() {
         to: ".",
         search: (prev) => ({ ...prev, ...patch, transaction: undefined }),
         replace,
+      }),
+    [navigate],
+  );
+  const onRecordPaymentOpened = useCallback(
+    () =>
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, recordPayment: undefined }),
+        replace: true,
       }),
     [navigate],
   );
@@ -513,7 +531,12 @@ function AccountPage() {
           strong
         />
         {cardPayment && (
-          <div className="ml-auto">
+          <div className="ml-auto flex items-end gap-4">
+            <OverspendingFigure
+              amount={cardPayment.creditOverspending}
+              month={cardPayment.month}
+              format={(minorUnits) => show(minorUnits)}
+            />
             <PaymentFigure
               categoryId={cardPayment.categoryId}
               available={cardPayment.available}
@@ -552,6 +575,9 @@ function AccountPage() {
                 })
             : undefined
         }
+        // The prefill needs the card's payment Available and the accounts.
+        openRecordPayment={openPayment === true && cardPayment !== null && accounts.isSuccess}
+        onRecordPaymentOpened={onRecordPaymentOpened}
       />
 
       {editDialog}

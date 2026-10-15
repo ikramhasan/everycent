@@ -52,6 +52,11 @@ export function monthName(month: BudgetMonth) {
   return format(parse(month, "yyyy-MM", new Date()), "MMMM");
 }
 
+/** "Oct" for 2026-10. */
+export function shortMonthName(month: BudgetMonth) {
+  return format(parse(month, "yyyy-MM", new Date()), "MMM");
+}
+
 export const toMoney = (amount: string, currency: CurrencyCode): Money =>
   money(BigInt(amount), currency);
 

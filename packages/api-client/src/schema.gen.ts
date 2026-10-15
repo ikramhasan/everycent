@@ -2718,6 +2718,8 @@ export interface components {
             underfunded: string;
             /** @description The part of underfunded that is this month's credit overspending on the card */
             overspentCategories: string;
+            /** @description This month's credit overspending on the card, whatever is set aside (the card register's "Overspending (Oct)"); positive */
+            creditOverspending: string;
             /** @description Money moved in this month for funded card spending, less returns (YNAB's Funded Spending) */
             fundedSpending: string;
             /** @description This month's payments to the card, negative */

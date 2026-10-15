@@ -1,4 +1,4 @@
-import { type DateFormat, usesCategory } from "@everycent/engine";
+import { accountFamily, type DateFormat, usesCategory } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
@@ -19,6 +19,7 @@ import {
   remainingLabel,
   splitRemaining,
   startSplit,
+  type TransferDirection,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
 import type { ColumnId } from "./register-columns";
@@ -45,6 +46,7 @@ export function TransactionEditor({
   openDatePicker = false,
   pending,
   error,
+  transferCategory,
   onSave,
   onCancel,
 }: {
@@ -68,6 +70,8 @@ export function TransactionEditor({
   openDatePicker?: boolean;
   pending: boolean;
   error: string | null;
+  /** An in-budget transfer's category text ("Credit Card Payments: <card>"), or "". */
+  transferCategory?: (accountId: string, transferAccountId: string | null) => string;
   onSave: (draft: Draft) => void;
   onCancel: () => void;
 }) {
@@ -80,6 +84,18 @@ export function TransactionEditor({
   const transfers = accounts.filter((a) => a.id !== draft.accountId);
   const lines = draft.lines;
   const canSplit = account ? usesCategory(account.type, null) && !draft.transferAccountId : false;
+  // Remounts the payee field focused, after the card's "Payment to <card>" is picked.
+  const [payeeFocus, setPayeeFocus] = useState(0);
+  // YNAB (2026-10-15): a card's category list has "Payment to <card>" under "Credit Cards".
+  // Picking it clears the payee and category and moves to the payee list, to pick the account
+  // the payment comes from.
+  const pickable =
+    account && accountFamily(account.type) === "credit"
+      ? [
+          ...categories,
+          { id: CARD_PAYMENT, name: `Payment to ${account.name}`, group: "Credit Cards" },
+        ]
+      : categories;
 
   function setLine(key: string, patch: Partial<LineDraft>) {
     setDraft((d) => ({
@@ -159,9 +175,12 @@ export function TransactionEditor({
       case "payee":
         return (
           <PayeeField
+            key={payeeFocus}
+            autoFocus={payeeFocus > 0}
             value={draft.payeeName}
             payees={payees}
             transfers={lines ? [] : transfers}
+            own={account && { type: account.type, direction: typedDirection(draft) }}
             onChange={({ name, transferAccountId, payee }) =>
               setDraft((d) => {
                 const to = accounts.find((a) => a.id === transferAccountId);
@@ -192,12 +211,21 @@ export function TransactionEditor({
         return needsCategory ? (
           <CategoryField
             value={draft.categoryId}
-            onChange={(categoryId) => set({ categoryId })}
+            onChange={(categoryId) => {
+              if (categoryId !== CARD_PAYMENT) {
+                set({ categoryId });
+                return;
+              }
+              set({ categoryId: null, payeeName: "", transferAccountId: null });
+              setPayeeFocus((n) => n + 1);
+            }}
             onSplit={canSplit ? () => setDraft(startSplit) : undefined}
-            categories={categories}
+            categories={pickable}
           />
         ) : (
-          <p className="px-2 text-muted-foreground text-sm italic">Category not needed</p>
+          <p className="truncate px-2 text-muted-foreground text-sm italic">
+            {transferCategory?.(draft.accountId, draft.transferAccountId) || "Category not needed"}
+          </p>
         );
       case "memo":
         return (
@@ -263,6 +291,7 @@ export function TransactionEditor({
             value={line.payeeName}
             payees={payees}
             transfers={transfers}
+            own={account && { type: account.type, direction: typedDirection(line) }}
             onChange={({ name: payeeName, transferAccountId, payee }) => {
               const toAccount = accounts.find((a) => a.id === transferAccountId);
               const uses = account ? usesCategory(account.type, toAccount?.type) : true;
@@ -405,4 +434,14 @@ export function TransactionEditor({
       </TableRow>
     </>
   );
+}
+
+/** The card's own "Payment to <card>" entry in its category list. */
+const CARD_PAYMENT = "__card_payment";
+
+/** Which way the typed amount goes: YNAB words its transfers by it ("Payment from …"). */
+function typedDirection(amounts: { outflow: string; inflow: string }): TransferDirection {
+  if (amounts.inflow.trim()) return "in";
+  if (amounts.outflow.trim()) return "out";
+  return null;
 }

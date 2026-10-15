@@ -92,7 +92,7 @@ describe("CellEditor", () => {
     const { onCommit } = renderCell("payee");
     const user = userEvent.setup();
     await user.keyboard("{Control>}a{/Control}sav");
-    expect(screen.getByText("Transfers")).toBeInTheDocument();
+    expect(screen.getByText("Payments and Transfers")).toBeInTheDocument();
     await user.click(await screen.findByRole("option", { name: "Savings" }));
     expect(onCommit).toHaveBeenCalledWith("Transfer : Savings", "stay", "savings");
   });

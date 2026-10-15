@@ -119,11 +119,13 @@ import {
   draftFrom,
   emptyDraft,
   payeesQueryOptions,
+  paymentCategoryCard,
   REGISTER_PAGE_SIZE,
   type SubTransaction,
   startSplit,
   type Transaction,
   transactionsQueryPrefix,
+  transferRowLabel,
   updateBody,
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
@@ -197,6 +199,8 @@ export function Register({
   search,
   onSearchChange,
   recordPayment,
+  openRecordPayment = false,
+  onRecordPaymentOpened,
 }: {
   accountId?: string;
   focusId?: string;
@@ -204,6 +208,9 @@ export function Register({
   onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
   /** A credit card's Record Payment: the new row it opens (YNAB's toolbar button). */
   recordPayment?: () => Draft;
+  /** Open Record Payment's row now (the payment inspector's button, YNAB 2026-10-15). */
+  openRecordPayment?: boolean;
+  onRecordPaymentOpened?: () => void;
 }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const history = useUndo();
@@ -742,6 +749,34 @@ export function Register({
     });
   }
 
+  /** A transfer's payee as YNAB's register words it ("Payment: X" / "Transfer: X"). */
+  function rowPayee(
+    accountId: string,
+    transferAccountId: string | null,
+    amount: bigint,
+    stored: string | null,
+  ) {
+    const own = accountById.get(accountId);
+    const other = transferAccountId ? accountById.get(transferAccountId) : undefined;
+    return own && other ? transferRowLabel(own.type, other, amount) : stored;
+  }
+
+  /**
+   * An in-budget transfer's category cell: "Credit Card Payments: <card>" between a card and a
+   * cash account (`paymentCategoryCard`), otherwise nothing.
+   */
+  function transferCategory(accountId: string, transferAccountId: string | null) {
+    const own = accountById.get(accountId);
+    const other = transferAccountId ? accountById.get(transferAccountId) : undefined;
+    const card = own && other ? paymentCategoryCard(own, other) : null;
+    if (!card?.paymentCategoryId) return "";
+    const group = categories.data?.groups.find((g) =>
+      g.categories.some((c) => c.id === card.paymentCategoryId),
+    );
+    const category = group?.categories.find((c) => c.id === card.paymentCategoryId);
+    return group && category ? `${group.name}: ${category.name}` : "";
+  }
+
   /** Whether `t` has a category: not in tracking accounts, nor on in-budget transfers. */
   function hasCategory(t: Transaction) {
     const type = accountById.get(t.accountId)?.type ?? "checking";
@@ -1115,6 +1150,19 @@ export function Register({
   const defaultAccountId = accountId ?? openAccounts[0]?.id;
   const canAdd = defaultAccountId !== undefined && (allAccounts || account?.closed === false);
 
+  // Arriving from the payment inspector's Record Payment opens the same row the toolbar does.
+  const startPayment = recordPayment && canAdd && openRecordPayment ? recordPayment : null;
+  const paymentOpened = useRef(false);
+  useEffect(() => {
+    if (!openRecordPayment) paymentOpened.current = false;
+    if (!startPayment || paymentOpened.current) return;
+    // Once per arrival; the route then drops `openRecordPayment` from the URL.
+    paymentOpened.current = true;
+    startAdding(startPayment(), false);
+    onRecordPaymentOpened?.();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: startAdding is a plain function
+  }, [openRecordPayment, startPayment, onRecordPaymentOpened]);
+
   if (transactions.isPending) return <Skeleton className="h-64" />;
   if (transactions.isError) {
     return (
@@ -1173,7 +1221,9 @@ export function Register({
             >
               <ArrowLeftRight />
             </Button>
-            <span className="truncate">{t.payeeName}</span>
+            <span className="truncate">
+              {rowPayee(t.accountId, t.transferAccountId, amount, t.payeeName)}
+            </span>
           </span>
         ) : (
           t.payeeName
@@ -1191,7 +1241,7 @@ export function Register({
             </span>
           );
         }
-        return hasCategory(t) ? t.categoryName : "";
+        return hasCategory(t) ? t.categoryName : transferCategory(t.accountId, t.transferAccountId);
       case "memo":
         return t.memo;
       case "outflow":
@@ -1262,13 +1312,17 @@ export function Register({
             {line.transferAccountId && (
               <ArrowLeftRight className="size-3.5 shrink-0" aria-label="Transfer" />
             )}
-            <span className="truncate">{line.payeeName}</span>
+            <span className="truncate">
+              {rowPayee(t.accountId, line.transferAccountId, amount, line.payeeName)}
+            </span>
           </span>
         );
       case "category": {
         const type = accountById.get(t.accountId)?.type ?? "checking";
         const to = line.transferAccountId ? accountById.get(line.transferAccountId)?.type : null;
-        return usesCategory(type, to) ? line.categoryName : "";
+        return usesCategory(type, to)
+          ? line.categoryName
+          : transferCategory(t.accountId, line.transferAccountId);
       }
       case "memo":
         return line.memo;
@@ -1470,6 +1524,7 @@ export function Register({
         <TableBody ref={measureScheduled}>
           {adding && defaultAccountId && (
             <TransactionEditor
+              transferCategory={transferCategory}
               key={addingKey}
               initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
               openDatePicker={addingPicker}
@@ -1515,6 +1570,7 @@ export function Register({
               if (row.kind === "line") return null;
               return (
                 <TransactionEditor
+                  transferCategory={transferCategory}
                   key={t.id}
                   initial={editingSplit.draft}
                   label="Edit transaction"
