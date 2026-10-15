@@ -423,9 +423,11 @@ export async function lastLoanPayments(db: Db, budgetId: string, today: string) 
  * default followed the newest payment per loan, from Record Payment or a register transfer, even
  * one back-dated to before the others.
  *
- * For each credit card, the cash account it was last paid from: a card's Record Payment prefills
- * it (YNAB, 2026-10-14: "Payment from F Cash" after paying x-130 Card from F Cash). Money from
- * another card is a balance transfer ("Transfer from F Card" in YNAB's payee list), not counted.
+ * For each credit card, the cash or credit account of the transfer into it entered last: a card's
+ * Record Payment prefills it (YNAB, 2026-10-14: "Payment from F Cash"). YNAB (2026-10-15, "ihni7's
+ * Plan", x-c11-163 Card C): a transfer from another card entered after a cash payment became the
+ * default ("Transfer from x-c11-163 Card B"), and a later payment back-dated before both replaced
+ * it, as for loans.
  */
 export async function lastPaymentSources(db: Db, budgetId: string) {
   const loan = alias(budgetAccount, "paid_to");
@@ -442,10 +444,8 @@ export async function lastPaymentSources(db: Db, budgetId: string) {
     .where(
       and(
         eq(transaction.budgetId, budgetId),
-        or(
-          and(inArray(loan.type, LOAN_TYPES), inArray(from.type, PAYING_TYPES)),
-          and(inArray(loan.type, CREDIT_TYPES), inArray(from.type, CASH_TYPES)),
-        ),
+        inArray(loan.type, [...LOAN_TYPES, ...CREDIT_TYPES]),
+        inArray(from.type, PAYING_TYPES),
         sql`${transaction.amount} > 0`,
       ),
     )

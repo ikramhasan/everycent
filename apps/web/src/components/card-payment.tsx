@@ -1,4 +1,4 @@
-import { accountFamily } from "@everycent/engine";
+import { isOnBudget } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { useQuery } from "@tanstack/react-query";
@@ -24,9 +24,9 @@ export function cardPaymentAmount(available: bigint, cleared: bigint): bigint {
 
 /**
  * YNAB's Record Payment on a credit card (2026-10-14) opens a new register row rather than a
- * dialog: today's date, a transfer from the cash account the card was last paid from
- * ("Payment from F Cash"), for `cardPaymentAmount` as an inflow. With no earlier payment the payee
- * is left empty.
+ * dialog: today's date, a transfer from the account of the transfer into the card entered last
+ * ("Payment from F Cash", or "Transfer from" another card: 2026-10-15), for `cardPaymentAmount` as
+ * an inflow. With no earlier payment the payee is left empty.
  */
 export function cardPaymentDraft({
   card,
@@ -42,7 +42,7 @@ export function cardPaymentDraft({
   today: string;
 }): Draft {
   const from = accounts.find(
-    (a) => a.id === card.lastPaymentFromAccountId && !a.closed && accountFamily(a.type) === "cash",
+    (a) => a.id === card.lastPaymentFromAccountId && !a.closed && isOnBudget(a.type),
   );
   const amount = cardPaymentAmount(available, BigInt(card.balances.cleared));
   return {

@@ -95,6 +95,19 @@ describe("a card's Record Payment (YNAB, 2026-10-14)", () => {
     expect(draft).toMatchObject({ payeeName: "", transferAccountId: null, inflow: "" });
   });
 
+  it("prefills another card the card was last paid from (YNAB, 2026-10-15)", () => {
+    const other = account("x-c11-163 Card B", "credit_card");
+    const card = account("Card", "credit_card", { lastPaymentFromAccountId: other.id }, "-100");
+    const draft = cardPaymentDraft({
+      card,
+      accounts: [other, card],
+      available: 0n,
+      settings: usd,
+      today: "2026-10-15",
+    });
+    expect(draft.transferAccountId).toBe(other.id);
+  });
+
   it("doesn't prefill a closed account", () => {
     const closed = account("Old", "checking", { closed: true });
     const card = account("Card", "credit_card", { lastPaymentFromAccountId: "Old" }, "-100");
