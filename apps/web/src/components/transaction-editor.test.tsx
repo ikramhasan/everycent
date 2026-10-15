@@ -35,9 +35,10 @@ const account = (id: string, type: Account["type"]): Account => ({
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 
-function renderEditor(accountId = "checking") {
+function renderEditor(accountId = "checking", { another = false } = {}) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
+  const onSaveAndAddAnother = vi.fn();
   const onRenameFlags = vi.fn(async () => {});
   render(
     <table>
@@ -68,12 +69,13 @@ function renderEditor(accountId = "checking") {
           pending={false}
           error={null}
           onSave={onSave}
+          onSaveAndAddAnother={another ? onSaveAndAddAnother : undefined}
           onCancel={onCancel}
         />
       </tbody>
     </table>,
   );
-  return { onSave, onCancel, onRenameFlags };
+  return { onSave, onCancel, onRenameFlags, onSaveAndAddAnother };
 }
 
 describe("TransactionEditor", () => {
@@ -95,6 +97,23 @@ describe("TransactionEditor", () => {
         inflow: "",
       }),
     );
+  });
+
+  it("offers Save and add another on a new row, and Enter does it (YNAB)", async () => {
+    const { onSave, onSaveAndAddAnother } = renderEditor("checking", { another: true });
+    const user = userEvent.setup();
+    expect(screen.getByRole("button", { name: "Save and add another" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Outflow"), "5{Enter}");
+    expect(onSaveAndAddAnother).toHaveBeenCalledWith(expect.objectContaining({ outflow: "5" }));
+    await user.click(screen.getByRole("button", { name: "Save and add another" }));
+    expect(onSaveAndAddAnother).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no Save and add another when editing", () => {
+    renderEditor();
+    expect(screen.queryByRole("button", { name: "Save and add another" })).not.toBeInTheDocument();
   });
 
   it("creates a new payee from typed text", async () => {

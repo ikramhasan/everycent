@@ -832,9 +832,18 @@ export function Register({
     startAdding(makeRepeatingDraft(t, budget));
   }
 
-  async function saveNew(draft: Draft) {
+  /**
+   * After a save: close the new row, or (YNAB's "Save and add another") open a fresh one that
+   * keeps the date, in the register's own account (2026-10-15).
+   */
+  function afterNewSaved(draft: Draft, another: boolean) {
+    if (another && defaultAccountId) startAdding(emptyDraft(defaultAccountId, draft.date), false);
+    else setAdding(false);
+  }
+
+  async function saveNew(draft: Draft, another = false) {
     if (!draft.date) return setNewError("Enter a date.");
-    if (isScheduled(draft, today)) return saveNewScheduled(draft);
+    if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
     const result = createBody(draft, budget);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -859,7 +868,7 @@ export function Register({
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -870,7 +879,7 @@ export function Register({
    * A new transaction that repeats or is dated ahead is a scheduled one (YNAB). A past date with
    * a repeat enters that one transaction and starts the schedule after today.
    */
-  async function saveNewScheduled(draft: Draft) {
+  async function saveNewScheduled(draft: Draft, another = false) {
     const result = scheduleCreateBody(draft, budget, today);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -909,7 +918,7 @@ export function Register({
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -1484,6 +1493,7 @@ export function Register({
               pending={create.isPending || createScheduled.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
+              onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
               onCancel={() => setAdding(false)}
             />
           )}

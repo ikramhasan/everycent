@@ -58,6 +58,7 @@ export function TransactionEditor({
   pending,
   error,
   onSave,
+  onSaveAndAddAnother,
   onCancel,
 }: {
   initial: Draft;
@@ -81,6 +82,8 @@ export function TransactionEditor({
   pending: boolean;
   error: string | null;
   onSave: (draft: Draft) => void;
+  /** A new row's "Save and add another" (also its Enter); the next row keeps the date. */
+  onSaveAndAddAnother?: (draft: Draft) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
@@ -105,9 +108,10 @@ export function TransactionEditor({
 
   // YNAB's "Something Doesn't Add Up": saving a split whose lines miss its total asks first.
   const [mismatch, setMismatch] = useState<ReturnType<typeof splitMismatch>>(null);
-  function save() {
+  function save(another = false) {
     const found = splitMismatch(draft, settings);
     if (found) setMismatch(found);
+    else if (another && onSaveAndAddAnother) onSaveAndAddAnother(draft);
     else onSave(draft);
   }
   const show = (amount: bigint) => formatAmount(money(amount, settings.currency), settings);
@@ -120,7 +124,8 @@ export function TransactionEditor({
       onCancel();
     } else if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
       event.preventDefault();
-      save();
+      // On a new row, YNAB's Enter is "Save and add another" (2026-10-15).
+      save(true);
     }
   }
 
@@ -141,6 +146,8 @@ export function TransactionEditor({
         return (
           <NativeSelect
             aria-label="Account"
+            // First field of the row (the date is, without an account column).
+            autoFocus
             value={draft.accountId}
             onChange={(e) => {
               const next = accounts.find((a) => a.id === e.target.value);
@@ -419,9 +426,14 @@ export function TransactionEditor({
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={save} disabled={pending}>
+            <Button type="button" size="sm" onClick={() => save()} disabled={pending}>
               Save
             </Button>
+            {onSaveAndAddAnother && (
+              <Button type="button" size="sm" onClick={() => save(true)} disabled={pending}>
+                Save and add another
+              </Button>
+            )}
           </div>
           <AlertDialog open={mismatch !== null} onOpenChange={(open) => !open && setMismatch(null)}>
             <AlertDialogContent className="data-[size=default]:sm:max-w-md">
