@@ -1591,6 +1591,122 @@
           "snoozed"
         ]
       },
+      "CategoryTemplateList": {
+        "type": "object",
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryTemplate"
+            }
+          }
+        },
+        "required": [
+          "templates"
+        ]
+      },
+      "CategoryTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "categoryCount": {
+            "type": "integer"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The category's id within the template"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^(0|-?[1-9]\\d*)$",
+                        "description": "The example amount in the budget's currency, which becomes a 'Have a balance of' target; 0 for none"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "amount"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "categories"
+              ]
+            },
+            "description": "In the template's order"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "categoryCount",
+          "groups"
+        ]
+      },
+      "ImportCategoryTemplateResult": {
+        "type": "object",
+        "properties": {
+          "added": {
+            "type": "integer"
+          },
+          "categories": {
+            "$ref": "#/components/schemas/CategoryList"
+          }
+        },
+        "required": [
+          "added",
+          "categories"
+        ]
+      },
+      "ImportCategoryTemplate": {
+        "type": "object",
+        "properties": {
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "description": "The template categories to add (ids from the template list)"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "The user's current month, YYYY-MM: when the new targets start"
+          }
+        },
+        "required": [
+          "categoryIds",
+          "month"
+        ]
+      },
       "AccountList": {
         "type": "object",
         "properties": {
@@ -9728,6 +9844,167 @@
           },
           "409": {
             "description": "MANAGED_CATEGORY: credit card payment targets can't be snoozed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/category-templates": {
+      "get": {
+        "operationId": "listCategoryTemplates",
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "YNAB's category template gallery, with amounts in the budget's currency",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every template, by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTemplateList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or template, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/category-templates/{templateId}/import": {
+      "post": {
+        "operationId": "importCategoryTemplate",
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Add a template's picked categories to the budget (YNAB's Import Category Template)",
+        "description": "Nothing already there changes: a group the budget has (by name) takes the categories it's missing at its top; the rest become new groups at the bottom. Categories the group already has (by name) are skipped. Each new category with an example amount gets a 'Have a balance of' target, due eventually, from `month` on.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "templateId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCategoryTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many categories were added, and the budget's categories now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCategoryTemplateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a category id that isn't in the template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't edit categories, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or template, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {
