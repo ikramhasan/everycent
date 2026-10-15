@@ -151,7 +151,9 @@ describe("email verification (EVERYCENT-44)", () => {
   it(`sends one address at most ${EMAILS_PER_ADDRESS_PER_HOUR} links an hour, however often it's asked`, async () => {
     const email = fresh();
     await signUpOnly(email);
-    for (let i = 0; i < EMAILS_PER_ADDRESS_PER_HOUR + 3; i++) {
+    // Sign-up sent one, so this asks for one more than the limit allows. Each signed-out resend
+    // takes at least 500 ms (Better Auth's constant-time floor), so the loop stays short.
+    for (let i = 0; i < EMAILS_PER_ADDRESS_PER_HOUR; i++) {
       const res = await post("/api/auth/send-verification-email", { email });
       expect(res.status).toBe(200);
     }

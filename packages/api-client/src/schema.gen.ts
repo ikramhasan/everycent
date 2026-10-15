@@ -2150,6 +2150,8 @@ export interface components {
             before: components["schemas"]["Transaction"][];
             /** @description `duplicate`: the new transactions' ids (empty for other actions) */
             created: string[];
+            /** @description `duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions) */
+            copies: string[];
         };
         BulkAction: {
             /** @enum {string} */

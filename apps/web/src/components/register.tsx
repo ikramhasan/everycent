@@ -97,6 +97,7 @@ import {
   type ScheduledTransaction,
   scheduleCreateBody,
   scheduledQueryPrefix,
+  scheduledSplits,
   scheduleRestoreBody,
 } from "@/lib/scheduled";
 import {
@@ -506,7 +507,8 @@ export function Register({
         count += result.updated;
         if (action.type === "duplicate") {
           commands.push(duplicateCommand(async () => (await run()).created, result.created));
-          nextSelection = { mode: "some", ids: new Set(result.created) };
+          // Every copy row whose original was ticked: both sides of a transfer ticked from both.
+          nextSelection = { mode: "some", ids: new Set(result.copies) };
         } else if (result.updated > 0) {
           commands.push(bulkCommand(action, result.before));
         }
@@ -1335,6 +1337,9 @@ export function Register({
           pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
           scheduledCount={scheduledSelection.size}
+          scheduledSplits={scheduledSplits(
+            scheduledRows.filter((row) => scheduledSelection.has(row.id)),
+          )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}

@@ -509,6 +509,13 @@ export const bulkUpdateTransactions = createRoute({
           created: z
             .array(z.string())
             .describe("`duplicate`: the new transactions' ids (empty for other actions)"),
+          copies: z
+            .array(z.string())
+            .describe(
+              "`duplicate`: every row of the copies whose original row was selected, so a " +
+                "transfer selected from both sides has both sides of its copy here (empty for " +
+                "other actions)",
+            ),
         })
         .openapi("BulkUpdateResult"),
     ),

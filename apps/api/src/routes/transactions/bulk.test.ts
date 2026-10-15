@@ -375,7 +375,7 @@ describe("bulk edit", () => {
   });
 
   it("only touches the caller's budget, and needs edit rights", async () => {
-    const { add, bulk, all } = await setup();
+    const { add, bulk, all, cookie } = await setup();
     const mine = await add({ payeeName: "Mine" });
     const other = await setup();
     const theirs = await other.add({ payeeName: "Theirs" });
@@ -385,8 +385,9 @@ describe("bulk edit", () => {
     expect((await other.all()).find((t) => t.id === theirs.id)?.flag).toBeNull();
     expect((await all()).find((t) => t.id === mine.id)?.flag).toBe("blue");
 
-    const stranger = await signUp(app);
-    const outsider = await send("POST", `${other.base}/transactions/bulk`, stranger.cookie, {
+    // I'm not a member of the other budget, so addressing it directly is a 404. This reuses my
+    // user instead of signing up a third: each sign-up hashes the password twice, which is slow.
+    const outsider = await send("POST", `${other.base}/transactions/bulk`, cookie, {
       selection: { ids: [theirs.id] },
       action: { type: "flag", flag: "red" },
     });
@@ -450,5 +451,63 @@ describe("bulk edit", () => {
     // Each transfer and transfer line copy has its own other side.
     const savingsRows = await all(savings.id);
     expect(savingsRows.filter((t) => t.payeeName !== "Starting Balance")).toHaveLength(4);
+  });
+
+  // YNAB, 2026-10-15 (x-c11-135-tr in All Accounts): both sides ticked, both sides of the copy
+  // come back ticked.
+  it("names the copy rows whose originals were selected, other sides included", async () => {
+    const { add, bulk, all, addAccount, household, base, cookie } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const both = await add({ transferAccountId: savings.id, amount: "-500", memo: "both" });
+    const one = await add({ transferAccountId: savings.id, amount: "-700", memo: "one" });
+    await add({
+      payeeName: "Split",
+      amount: "-300",
+      memo: "split",
+      subtransactions: [
+        { amount: "-100", categoryId: household.id },
+        { amount: "-200", transferAccountId: savings.id },
+      ],
+    });
+    const splitSide = (await all(savings.id)).find((t) => t.amount === "200");
+    if (!splitSide || !both.transferTransactionId) throw new Error("setup");
+    const result = await json<{ created: string[]; copies: string[] }>(
+      await bulk(
+        // A transfer from both sides, another from its checking side, a split from its other side.
+        { ids: [both.id, both.transferTransactionId, one.id, splitSide.id] },
+        { type: "duplicate" },
+      ),
+    );
+    expect(result.created).toHaveLength(3);
+    const copiesOf = async (memo: string) =>
+      [...(await all()), ...(await all(savings.id))]
+        .filter((t) => t.memo === memo && result.copies.includes(t.id))
+        .map((t) => `${t.accountId === savings.id ? "savings" : "checking"} ${t.amount}`)
+        .sort();
+    expect(await copiesOf("both")).toEqual(["checking -500", "savings 500"]);
+    expect(await copiesOf("one")).toEqual(["checking -700"]);
+    // The split's other side was selected, not the split: the copy's other side is selected.
+    expect(await copiesOf("split")).toEqual([]);
+    const savingsRows = await all(savings.id);
+    const copySide = savingsRows.find(
+      (t) => t.amount === "200" && t.id !== splitSide.id && result.copies.includes(t.id),
+    );
+    expect(copySide).toBeDefined();
+    expect(result.copies).toHaveLength(4);
+    // Deleting `created` (undo) removes every copy, other sides included.
+    for (const id of result.created) {
+      expect((await send("DELETE", `${base}/transactions/${id}`, cookie)).status).toBe(204);
+    }
+    expect((await all(savings.id)).filter((t) => result.copies.includes(t.id))).toEqual([]);
+    expect((await all()).filter((t) => result.copies.includes(t.id))).toEqual([]);
+  });
+
+  it("returns no copies for other actions", async () => {
+    const { add, bulk } = await setup();
+    const a = await add({});
+    const result = await json<{ created: string[]; copies: string[] }>(
+      await bulk({ ids: [a.id] }, { type: "flag", flag: "red" }),
+    );
+    expect(result).toMatchObject({ created: [], copies: [] });
   });
 });
