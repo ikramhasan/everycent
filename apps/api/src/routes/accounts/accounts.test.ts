@@ -251,6 +251,12 @@ describe("accounts", () => {
     expect(((await (await star(t.id, true)).json()) as ErrorBody).error.code).toBe("BAD_REQUEST");
     await send("POST", `${base}/accounts/${t.id}/close`, cookie, { date: TODAY });
     expect((await star(t.id, true)).status).toBe(400);
+    // Closing drops the star; reopened, the account isn't starred (EVERYCENT-170).
+    const c = await addAccount({ name: "C", type: "cash", balance: "0" });
+    await star(c.id, true);
+    await send("POST", `${base}/accounts/${c.id}/close`, cookie, { date: TODAY });
+    const reopened = await send("POST", `${base}/accounts/${c.id}/reopen`, cookie);
+    expect(await reopened.json()).toMatchObject({ closed: false, starredOrder: null });
 
     // Another member sees and changes the same stars.
     const partner = await signUp(app);

@@ -753,10 +753,11 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
     }
     // The payment category stays visible with whatever is set aside (YNAB, 2026-10-11: Card Y
     // kept $6 after closing); hiding it is up to the user. A loan's paired category is unpaired
-    // (YNAB's help center, "Loan Accounts").
+    // (YNAB's help center, "Loan Accounts"). Closing also drops the star: reopened, it isn't
+    // starred (YNAB, "x-c11-151 FS3", 2026-10-15, EVERYCENT-170).
     await tx
       .update(budgetAccount)
-      .set({ closed: true, pairedCategoryId: null })
+      .set({ closed: true, pairedCategoryId: null, starredSortOrder: null })
       .where(eq(budgetAccount.id, accountId));
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);

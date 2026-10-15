@@ -38,7 +38,7 @@ export const AccountSchema = z
       .nullable()
       .describe(
         "Position in the sidebar's Starred group (ascending); null when not starred. Shared " +
-          "by everyone on the budget. A closed account keeps it but isn't shown as starred.",
+          "by everyone on the budget. Closing an account unstars it.",
       ),
     currency: zCurrencyCode,
     interestRate: z.string().nullable(),

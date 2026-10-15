@@ -41,7 +41,8 @@ export const budgetAccount = pgTable(
     closed: boolean().notNull().default(false),
     /**
      * Position in the sidebar's Starred group (ascending); null when not starred. Shared by
-     * everyone on the budget, like YNAB's web `is_favorite` / `sortable_favorite_index`.
+     * everyone on the budget, like YNAB's web `is_favorite` / `sortable_favorite_index`. Closing
+     * the account clears it.
      */
     starredSortOrder: integer(),
     /** Currency of every amount in this account. For now always the budget's (see Design notes). */

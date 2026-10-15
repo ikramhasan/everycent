@@ -1751,7 +1751,7 @@ export interface components {
             type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
             note: string;
             closed: boolean;
-            /** @description Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. A closed account keeps it but isn't shown as starred. */
+            /** @description Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. Closing an account unstars it. */
             starredOrder: number | null;
             /**
              * @description ISO 4217 currency code
