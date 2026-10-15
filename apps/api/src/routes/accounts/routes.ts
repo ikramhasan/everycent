@@ -396,7 +396,7 @@ export const reopenAccount = createRoute({
   description:
     "Reopening a tracking account that was updated to a loan account erases the link: the " +
     "loan no longer shows its history, and the account can be updated to a loan again (YNAB's " +
-    "\"Erase & Re-open\").",
+    '"Erase & Re-open").',
   request: { params: AccountParams },
   responses: {
     200: ok("Reopened", AccountSchema),

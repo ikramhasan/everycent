@@ -43,7 +43,11 @@ export const listBudgetsHandler: RouteHandler<typeof listBudgets, Env> = async (
     .innerJoin(budget, eq(budget.id, budgetMember.budgetId))
     .where(eq(budgetMember.userId, userId))
     // YNAB's plan list: most recently used first.
-    .orderBy(sql`${budgetMember.lastUsedAt} desc nulls last`, sql`lower(${budget.name})`, budget.id);
+    .orderBy(
+      sql`${budgetMember.lastUsedAt} desc nulls last`,
+      sql`lower(${budget.name})`,
+      budget.id,
+    );
   const [pref] = await db
     .select({ lastBudgetId: userPreference.lastBudgetId })
     .from(userPreference)
