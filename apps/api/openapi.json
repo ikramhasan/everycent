@@ -3374,6 +3374,11 @@
           },
           "hideReconciled": {
             "type": "boolean"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today, as sent with the register list: a year-less `Income:` term means its year"
           }
         },
         "description": "Select all: every transaction this filter matches"

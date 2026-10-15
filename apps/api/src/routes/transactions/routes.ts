@@ -406,6 +406,9 @@ const RegisterFilterSchema = z
     from: IsoDate.optional(),
     to: IsoDate.optional(),
     hideReconciled: z.boolean().optional(),
+    today: IsoDate.optional().describe(
+      "The user's today, as sent with the register list: a year-less `Income:` term means its year",
+    ),
   })
   .describe("The same filter as the register's query parameters")
   .openapi("RegisterFilter");

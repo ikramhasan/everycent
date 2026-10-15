@@ -150,6 +150,22 @@ describe("bulk edit", () => {
     expect(rows.find((t) => t.payeeName === "Bakery")?.flag).toBeNull();
   });
 
+  it("reads a year-less Income: in the filter with the user's today, as the register does", async () => {
+    const { base, cookie, checking, add, bulk, summary, all } = await setup();
+    const { readyToAssignCategoryId } = await json<{ readyToAssignCategoryId: string }>(
+      await send("GET", `${base}/categories`, cookie),
+    );
+    const income = (date: string) =>
+      add({ date, amount: "500", payeeName: "Pay", categoryId: readyToAssignCategoryId });
+    const old = await income("2025-01-05");
+    await income("2026-01-05");
+    // A user still on 31 December 2025, whatever the server's year.
+    const filter = { accountId: checking.id, q: "Income: January", today: "2025-12-31" };
+    expect(await summary({ filter, exclude: [] })).toMatchObject({ count: 1, total: "500" });
+    await bulk({ filter, exclude: [] }, { type: "flag", flag: "red" });
+    expect((await all()).filter((t) => t.flag === "red").map((t) => t.id)).toEqual([old.id]);
+  });
+
   it("sums up what the action bar needs to know about the selection", async () => {
     const { addAccount, add, summary, groceries, household } = await setup();
     const savings = await addAccount("Savings", "savings");

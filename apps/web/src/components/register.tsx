@@ -444,9 +444,14 @@ export function Register({
     return () => clearTimeout(timer);
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
-  // The selection's filter is the register's, without the sort.
+  // The selection's filter is the register's, without the sort, and with the list's today so a
+  // year-less `Income:` matches the same rows.
   const { sort: _sort, hideReconciled, ...rest } = query;
-  const selectionFilter = { ...rest, ...(hideReconciled ? { hideReconciled: true } : {}) };
+  const selectionFilter = {
+    ...rest,
+    today,
+    ...(hideReconciled ? { hideReconciled: true } : {}),
+  };
   const summary = $api.useQuery(
     "post",
     "/v1/budgets/{budgetId}/transactions/selection",

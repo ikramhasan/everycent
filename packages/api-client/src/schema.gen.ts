@@ -2159,6 +2159,11 @@ export interface components {
              */
             to?: string;
             hideReconciled?: boolean;
+            /**
+             * Format: date
+             * @description The user's today, as sent with the register list: a year-less `Income:` term means its year
+             */
+            today?: string;
         };
         BulkUpdateResult: {
             updated: number;
