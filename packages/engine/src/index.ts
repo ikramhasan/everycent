@@ -149,6 +149,7 @@ export {
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,
+  completeDate,
   DATE_LABELS,
   type DateOp,
   IS_LABELS,
@@ -156,7 +157,6 @@ export {
   type IsState,
   incomeTerm,
   MONTH_NAMES,
-  parseDate,
   parseSearch,
   type SearchSettings,
   type SearchTerm,

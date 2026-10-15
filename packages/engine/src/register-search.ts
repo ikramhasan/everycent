@@ -80,27 +80,39 @@ export interface SearchSettings {
   dateFormat: DateFormat;
 }
 
-/** The terms of a search box's text. Empty terms (",,") are skipped. */
-export function parseSearch(text: string, settings: SearchSettings): SearchTerm[] {
+/**
+ * The terms of a search box's text. Empty terms (",,") are skipped. `today` (YYYY-MM-DD, the
+ * user's; the UTC date when left out) completes partial dates (`completeDate`).
+ */
+export function parseSearch(
+  text: string,
+  settings: SearchSettings,
+  today = new Date().toISOString().slice(0, 10),
+): SearchTerm[] {
   return text
     .split(",")
     .map((t) => t.trim())
     .filter((t) => t.length > 0)
-    .map((t) => parseTerm(t, settings));
+    .map((t) => parseTerm(t, settings, today));
 }
 
-function parseTerm(term: string, settings: SearchSettings): SearchTerm {
+function parseTerm(term: string, settings: SearchSettings, today: string): SearchTerm {
   const colon = term.indexOf(":");
   if (colon > 0) {
     const label = term.slice(0, colon).trim().toLowerCase();
     const value = term.slice(colon + 1).trim();
-    const parsed = value ? labelled(label, value, settings) : null;
+    const parsed = value ? labelled(label, value, settings, today) : null;
     if (parsed) return parsed;
   }
   return { kind: "text", text: term, amount: searchAmount(term, settings) };
 }
 
-function labelled(label: string, value: string, settings: SearchSettings): SearchTerm | null {
+function labelled(
+  label: string,
+  value: string,
+  settings: SearchSettings,
+  today: string,
+): SearchTerm | null {
   switch (label) {
     case "payee":
     case "memo":
@@ -129,7 +141,7 @@ function labelled(label: string, value: string, settings: SearchSettings): Searc
     case "on":
     case "before":
     case "after": {
-      const date = parseDate(value, settings.dateFormat);
+      const date = completeDate(value, settings.dateFormat, today);
       return date ? { kind: "date", op: label, date } : null;
     }
     default:
@@ -166,25 +178,62 @@ function searchAmount(text: string, settings: SearchSettings): bigint | null {
   }
 }
 
+const DATE_PARTS = /(YYYY|MM|DD)/;
+
+function daysIn(year: number, month: number) {
+  // setUTCFullYear, unlike Date.UTC, keeps years below 100 as typed.
+  const date = new Date(0);
+  date.setUTCFullYear(year, month, 0);
+  return date.getUTCDate();
+}
+
 /**
- * A full date typed in the budget's date format (any of `/ . -` between the parts, single digits
- * allowed) as YYYY-MM-DD, or null.
+ * The date YNAB's search reads in `text` (YYYY-MM-DD), or null. It's what moment.js's forgiving
+ * parse with the budget's date format gives, then a year window (YNAB's web app, checked
+ * 2026-10-15/16 in MM/DD/YYYY, DD/MM/YYYY and YYYY-MM-DD plans; EVERYCENT-167):
+ *
+ * - The format's parts are read in order, each from the first digits found in what's left
+ *   (month and day take one or two, the year one to four), skipping whatever comes before them;
+ *   a separator in the format is skipped up to its next occurrence. So in MM/DD/YYYY `5` is May
+ *   1st, `105` is 10/05, `10/2026` is 10/20/2026 (day "20", year "26"), and `Card 5` and
+ *   `x-c11-135` (11/13) read as dates too.
+ * - Year, then month, then day take today's until the first part typed; after it a missing month
+ *   is January and a missing day the 1st (DD/MM/YYYY: `5` is the 5th of this month).
+ * - A two-digit year is 2000–2068 or 1969–1999. A month or day that doesn't exist gives null.
+ * - A year more than 20 years from today's becomes this year (`10/02/1999` → 10/02/2026), with
+ *   February 29th moved to the 28th when this year has none.
  */
-export function parseDate(text: string, format: DateFormat): string | null {
-  const parts = text.trim().split(/[/.-]/);
-  const order = format.split(/[/.-]/);
-  if (parts.length !== 3 || order.length !== 3) return null;
-  const value: Record<string, number> = {};
-  for (const [i, key] of order.entries()) {
-    const part = parts[i] ?? "";
-    if (!/^\d+$/.test(part)) return null;
-    if (key === "YYYY" ? part.length !== 4 : part.length > 2) return null;
-    value[key] = Number(part);
+export function completeDate(text: string, format: DateFormat, today: string): string | null {
+  let rest = text;
+  const typed: Partial<Record<"YYYY" | "MM" | "DD", number>> = {};
+  for (const token of format.split(DATE_PARTS).filter(Boolean)) {
+    if (token === "YYYY" || token === "MM" || token === "DD") {
+      const match = (token === "YYYY" ? /\d{1,4}/ : /\d{1,2}/).exec(rest);
+      if (!match) continue;
+      rest = rest.slice(match.index + match[0].length);
+      const n = Number(match[0]);
+      typed[token] = token === "YYYY" && match[0].length === 2 ? n + (n > 68 ? 1900 : 2000) : n;
+    } else {
+      const at = rest.indexOf(token);
+      if (at >= 0) rest = rest.slice(at + token.length);
+    }
   }
-  const { YYYY: y = 0, MM: m = 0, DD: d = 0 } = value;
-  const date = new Date(Date.UTC(y, m - 1, d));
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) {
+  const [thisYear = 0, thisMonth = 1, thisDay = 1] = today.split("-").map(Number);
+  let [year, month, day] = [thisYear, thisMonth, thisDay];
+  if (typed.YYYY !== undefined) {
+    [year, month, day] = [typed.YYYY, typed.MM ?? 1, typed.DD ?? 1];
+  } else if (typed.MM !== undefined) {
+    [month, day] = [typed.MM, typed.DD ?? 1];
+  } else if (typed.DD !== undefined) {
+    day = typed.DD;
+  } else {
     return null;
   }
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  if (month < 1 || month > 12 || day < 1 || day > daysIn(year, month)) return null;
+  if (Math.abs(year - thisYear) > 20) {
+    year = thisYear;
+    day = Math.min(day, daysIn(year, month));
+  }
+  const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  return `${pad(year, 4)}-${pad(month)}-${pad(day)}`;
 }
