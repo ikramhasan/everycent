@@ -1,7 +1,6 @@
 import { type Database, newId } from "@everycent/db";
 import {
   budgetAccount,
-  type ClearedState,
   category,
   type FlagColor,
   payee,
