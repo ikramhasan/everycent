@@ -27,6 +27,7 @@ import {
   type AccountRow,
   assertNotSelf,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   insertOtherSide,
   resolveCategory,
@@ -50,13 +51,8 @@ import {
 
 export type ScheduleRow = typeof scheduledTransaction.$inferSelect;
 
-/**
- * How an entered occurrence starts out, as YNAB enters it (checked 2026-10-11): uncleared, except
- * in cash accounts, where it's cleared. Each side of a transfer follows its own account.
- */
-export function clearedOnEntry(account: AccountRow): ClearedState {
-  return account.type === "cash" ? "cleared" : "uncleared";
-}
+// Entered occurrences start out like any new transaction (YNAB, checked 2026-10-11).
+export { clearedOnEntry };
 
 async function scheduleLines(db: Db, scheduleIds: readonly string[]) {
   if (scheduleIds.length === 0) return [];

@@ -1,5 +1,5 @@
 import type { components } from "@everycent/api-client";
-import { distributeSplit, type ScheduleFrequency } from "@everycent/engine";
+import { type AccountType, distributeSplit, type ScheduleFrequency } from "@everycent/engine";
 import { $api } from "./api";
 import type { CategoryList } from "./categories";
 import type { FlagColor } from "./flags";
@@ -115,7 +115,15 @@ export function startSplit(draft: Draft): Draft {
   };
 }
 
-export function emptyDraft(accountId: string, date: string): Draft {
+/**
+ * How a new transaction starts in an account of `type`: cleared in a cash account, otherwise
+ * uncleared (YNAB's web app, 2026-10-15; the editor re-applies it when the account changes).
+ */
+export function clearedFor(type: AccountType | undefined): Draft["cleared"] {
+  return type === "cash" ? "cleared" : "uncleared";
+}
+
+export function emptyDraft(accountId: string, date: string, accountType?: AccountType): Draft {
   return {
     accountId,
     date,
@@ -125,7 +133,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     memo: "",
     outflow: "",
     inflow: "",
-    cleared: "uncleared",
+    cleared: clearedFor(accountType),
     flag: null,
     lines: null,
   };

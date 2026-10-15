@@ -22,6 +22,7 @@ import type { Flag } from "@/lib/flags";
 import type { MoneySettings } from "@/lib/money-input";
 import {
   type CategoryOption,
+  clearedFor,
   type Draft,
   emptyLine,
   type LineDraft,
@@ -155,6 +156,9 @@ export function TransactionEditor({
               const self = draft.transferAccountId === e.target.value;
               set({
                 accountId: e.target.value,
+                // On a new row (the one with "Save and add another") YNAB re-applies the
+                // account's starting state, over a manual toggle.
+                ...(onSaveAndAddAnother ? { cleared: clearedFor(next?.type) } : {}),
                 ...(self ? { payeeName: "", transferAccountId: null } : {}),
                 ...(next && !usesCategory(next.type, self ? null : transferTo?.type)
                   ? { categoryId: null, lines: null }

@@ -50,6 +50,13 @@ const txn: Transaction = {
 };
 
 describe("register drafts", () => {
+  it("starts a new transaction cleared only in a cash account (YNAB)", () => {
+    expect(emptyDraft("w", "2026-10-01", "cash").cleared).toBe("cleared");
+    expect(emptyDraft("c", "2026-10-01", "checking").cleared).toBe("uncleared");
+    expect(emptyDraft("s", "2026-10-01", "savings").cleared).toBe("uncleared");
+    expect(emptyDraft("x", "2026-10-01").cleared).toBe("uncleared");
+  });
+
   it("turns outflow and inflow fields into a signed amount", () => {
     const draft: Draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "1,234.56" };
     expect(createBody(draft, usd)).toEqual({

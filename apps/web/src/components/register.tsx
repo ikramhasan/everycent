@@ -349,6 +349,8 @@ export function Register({
 
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
+  /** A new transaction in `id`, starting cleared in a cash account (YNAB). */
+  const newDraft = (id: string, date: string) => emptyDraft(id, date, accountById.get(id)?.type);
   const openAccounts = accountList.filter((a) => !a.closed);
   const account = accountId ? accountById.get(accountId) : undefined;
   const options = useMemo(
@@ -837,7 +839,7 @@ export function Register({
    * keeps the date, in the register's own account (2026-10-15).
    */
   function afterNewSaved(draft: Draft, another: boolean) {
-    if (another && defaultAccountId) startAdding(emptyDraft(defaultAccountId, draft.date), false);
+    if (another && defaultAccountId) startAdding(newDraft(defaultAccountId, draft.date), false);
     else setAdding(false);
   }
 
@@ -1479,7 +1481,7 @@ export function Register({
           {adding && defaultAccountId && (
             <TransactionEditor
               key={addingKey}
-              initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
+              initial={addingDraft ?? newDraft(defaultAccountId, today)}
               openDatePicker={addingPicker}
               repeat
               columns={columnIds}

@@ -111,6 +111,41 @@ describe("TransactionEditor", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
+  it("starts cleared in a cash account, and re-applies it when a new row's account changes", async () => {
+    const user = userEvent.setup();
+    const onSaveAndAddAnother = vi.fn();
+    render(
+      <table>
+        <tbody>
+          <TransactionEditor
+            initial={emptyDraft("wallet", "2026-10-01", "cash")}
+            columns={registerColumns(true)}
+            accounts={[account("wallet", "cash"), account("checking", "checking")]}
+            payees={[]}
+            categories={[]}
+            dateFormat="MM/DD/YYYY"
+            settings={usd}
+            flags={[]}
+            onRenameFlags={vi.fn(async () => {})}
+            pending={false}
+            error={null}
+            onSave={vi.fn()}
+            onSaveAndAddAnother={onSaveAndAddAnother}
+            onCancel={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    // YNAB, 2026-10-15 (EVERYCENT-146).
+    expect(screen.getByRole("button", { name: "Cleared" })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Account"), "checking");
+    expect(screen.getByRole("button", { name: "Uncleared" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Uncleared" }));
+    await user.selectOptions(screen.getByLabelText("Account"), "wallet");
+    await user.selectOptions(screen.getByLabelText("Account"), "checking");
+    expect(screen.getByRole("button", { name: "Uncleared" })).toBeInTheDocument();
+  });
+
   it("has no Save and add another when editing", () => {
     renderEditor();
     expect(screen.queryByRole("button", { name: "Save and add another" })).not.toBeInTheDocument();

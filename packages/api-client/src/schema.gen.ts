@@ -2201,10 +2201,10 @@ export interface components {
             memo: string;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
             /**
-             * @default uncleared
+             * @description Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)
              * @enum {string}
              */
-            cleared: "uncleared" | "cleared" | "reconciled";
+            cleared?: "uncleared" | "cleared" | "reconciled";
             /**
              * @description One of YNAB's six flag colors; null clears it
              * @default null

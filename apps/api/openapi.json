@@ -3575,7 +3575,7 @@
               "cleared",
               "reconciled"
             ],
-            "default": "uncleared"
+            "description": "Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)"
           },
           "flag": {
             "type": [

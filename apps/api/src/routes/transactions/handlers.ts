@@ -24,6 +24,7 @@ import {
   assertNotSelf,
   assertOnePayee,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   insertOtherSide,
   lockTransaction,
@@ -86,7 +87,8 @@ export interface CreateBody {
   categoryId: string | null;
   memo: string;
   subtransactions?: LineInput[];
-  cleared: ClearedState;
+  /** Left out: by the account (`clearedOnEntry`). */
+  cleared?: ClearedState;
   flag: FlagColor | null;
   approved?: boolean;
   /** A restored transfer's other side, as it was. */
@@ -134,7 +136,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
       ? null
       : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
     memo: body.memo,
-    cleared: body.cleared,
+    cleared: body.cleared ?? clearedOnEntry(account),
     flag: body.flag,
     approved: body.approved,
   });

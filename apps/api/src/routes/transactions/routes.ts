@@ -286,7 +286,9 @@ export const createTransaction = createRoute({
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
-          cleared: NewCleared.default("uncleared"),
+          cleared: NewCleared.optional().describe(
+            "Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)",
+          ),
           flag: Flag.default(null),
           approved: z
             .boolean()

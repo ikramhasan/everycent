@@ -89,7 +89,17 @@ export function assertOnePayee(body: { payeeName?: string | null; transferAccoun
   }
 }
 
-/** How the other side of a new transfer starts out (by default uncleared and approved). */
+/**
+ * How a new transaction starts out in `account`: uncleared, except in cash accounts, where it's
+ * cleared. Each side of a transfer follows its own account, whichever side it was entered from
+ * (YNAB's web app, 2026-10-11 for scheduled entries and 2026-10-15 for new transactions; its
+ * public API doesn't do this).
+ */
+export function clearedOnEntry(account: Pick<AccountRow, "type">): ClearedState {
+  return account.type === "cash" ? "cleared" : "uncleared";
+}
+
+/** How the other side of a new transfer starts out (by default by its account, and approved). */
 export interface OtherSideOptions {
   /** The other side's category, when the transfer's category belongs on that side. */
   categoryId?: string | null;
@@ -135,7 +145,7 @@ export async function insertOtherSide(
       options.categoryId ?? null,
     ),
     memo: options.memo ?? side.memo,
-    cleared: options.cleared ?? "uncleared",
+    cleared: options.cleared ?? clearedOnEntry(transferTo),
     approved: options.approved,
     flag: options.flag,
     transferTransactionId: side.id,
