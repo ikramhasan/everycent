@@ -164,6 +164,34 @@ describe("unapproved transactions (EVERYCENT-65)", () => {
     expect((await row(otherId, savings.id)).approved).toBe(false);
   });
 
+  it("approves a split's transfer lines' other sides with it, both ways", async () => {
+    const { checking, groceries, addAccount, add, patch, row, rows, bulk } = await setup();
+    const savings = await addAccount("Savings", "savings");
+    const split = await add({
+      categoryId: null,
+      subtransactions: [
+        { amount: "-40", categoryId: groceries.id },
+        { amount: "-60", transferAccountId: savings.id },
+      ],
+    });
+    const counterpart = (await rows("", savings.id)).find(
+      (t) => t.payeeName !== "Starting Balance",
+    );
+    if (!counterpart) throw new Error("no transfer line counterpart");
+
+    // Unapproving (an undo) either side takes the other along.
+    await patch(counterpart.id, { approved: false });
+    expect((await row(split.id)).approved).toBe(false);
+    await patch(split.id, { approved: true });
+    expect((await row(counterpart.id, savings.id)).approved).toBe(true);
+
+    await patch(split.id, { approved: false });
+    expect((await row(counterpart.id, savings.id)).approved).toBe(false);
+    await bulk({ ids: [counterpart.id] }, { type: "approve" });
+    expect((await row(split.id, checking.id)).approved).toBe(true);
+    expect((await row(counterpart.id, savings.id)).approved).toBe(true);
+  });
+
   it("approves on any edit but a flag, unless the edit says otherwise", async () => {
     const { add, patch } = await setup();
     const t = await add({ approved: false });

@@ -1,5 +1,5 @@
 import { sql } from "@everycent/db";
-import { category, transaction } from "@everycent/db/schema";
+import { category, subTransaction, transaction } from "@everycent/db/schema";
 import { and, count, eq, or, type SQL } from "drizzle-orm";
 import type { Db } from "./ledger";
 
@@ -31,4 +31,38 @@ export async function transactionsToReview(db: Db, budgetId: string) {
     )
     .groupBy(transaction.accountId);
   return new Map(rows.map((r) => [r.accountId, r.count]));
+}
+
+/**
+ * Sets `approved` on these transactions and every transaction linked to them as a transfer:
+ * plain transfers' other sides, and a split's transfer lines' counterparts (both ways). Approving
+ * one side of a transfer approves the other in YNAB (2026-10-16); an undo takes them all back.
+ */
+export async function setApproval(db: Db, ids: readonly string[], approved: boolean) {
+  if (ids.length === 0) return;
+  const list = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  // The splits involved: the rows themselves, and the split of a counterpart among them.
+  const splits = sql`(
+    select ${transaction.id} from ${transaction} where ${transaction.id} in (${list})
+    union
+    select ${subTransaction.transactionId} from ${subTransaction}
+    join ${transaction} on ${transaction.transferSubTransactionId} = ${subTransaction.id}
+    where ${transaction.id} in (${list})
+  )`;
+  await db.execute(sql`
+    update ${transaction} set approved = ${approved}
+    where ${transaction.id} in (
+      select id from ${splits} as linked(id)
+      union
+      select ${transaction.transferTransactionId} from ${transaction}
+      where ${transaction.id} in (${list}) and ${transaction.transferTransactionId} is not null
+      union
+      select counterpart.id from ${transaction} counterpart
+      join ${subTransaction} line on line.id = counterpart.transfer_sub_transaction_id
+      where line.transaction_id in (select id from ${splits} as split(id))
+    )
+  `);
 }

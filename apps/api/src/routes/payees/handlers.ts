@@ -2,6 +2,7 @@ import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
   category,
+  categoryGroup,
   payee,
   payeeRule,
   scheduledSubTransaction,
@@ -281,15 +282,20 @@ async function categorizationChange(
   if (defaultCategoryId === null) {
     throw new AppError(400, "CATEGORY_REQUIRED", "Choose the category to always use");
   }
+  // A new choice must be one the category list offers: hidden categories aren't listed.
+  const choosing = input.defaultCategoryId !== undefined;
   const [row] = await db
     .select({ id: category.id })
     .from(category)
+    .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
     .where(
       and(
         eq(category.id, defaultCategoryId),
         eq(category.budgetId, budgetId),
         sql`${category.internalKind} is distinct from 'uncategorized'`,
         isNull(category.linkedAccountId),
+        choosing ? eq(category.hidden, false) : undefined,
+        choosing ? eq(categoryGroup.hidden, false) : undefined,
       ),
     );
   if (!row) {

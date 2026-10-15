@@ -172,6 +172,23 @@ describe("payee categorization", () => {
     expect((await payee("Market")).categorization).toBe("auto");
   });
 
+  it("refuses a hidden category as a new choice, but keeps one chosen before it was hidden", async () => {
+    const { owner, base, a, b, spend, payee, update } = await setup();
+    await spend("Market", a.id);
+    const market = await payee("Market");
+    expect(
+      (await update(market.id, { categorization: "always", defaultCategoryId: a.id })).status,
+    ).toBe(200);
+    const hide = await send("PATCH", `${base}/categories/${b.id}`, owner.cookie, { hidden: true });
+    expect(hide.status).toBe(200);
+    const res = await update(market.id, { categorization: "always", defaultCategoryId: b.id });
+    expect(res.status).toBe(400);
+    expect((await json<ErrorBody>(res)).error.code).toBe("INVALID_CATEGORY");
+    // Hiding the chosen category later doesn't block other changes to the payee.
+    await send("PATCH", `${base}/categories/${a.id}`, owner.cookie, { hidden: true });
+    expect((await update(market.id, { categorization: "always" })).status).toBe(200);
+  });
+
   it("keeps the setting through a delete and its undo", async () => {
     const { owner, base, a, b, spend, payee, update } = await setup();
     await spend("Market", a.id);

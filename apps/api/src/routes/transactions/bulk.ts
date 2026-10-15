@@ -7,6 +7,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
+import { setApproval } from "../../lib/review";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { applyUpdate, deleteWithTransfers, insertNewTransaction } from "./handlers";
@@ -286,18 +287,17 @@ async function categorize(tx: Db, budgetId: string, rows: SelectedRow[], categor
 }
 
 /**
- * Approves the unapproved rows among `ids`, with their transfers' other sides (approving one side
- * approves both in YNAB, 2026-10-16). Returns the rows it approved.
+ * Approves the unapproved rows among `ids`, with their transfers' other sides, split transfer
+ * lines' included (approving one side approves both in YNAB, 2026-10-16). Returns the rows it
+ * approved.
  */
 async function approve(tx: Db, rows: readonly SelectedRow[], ids: readonly string[]) {
   const wanted = new Set(ids);
   const unapproved = rows.filter((r) => wanted.has(r.id) && !r.approved);
   if (unapproved.length === 0) return [];
-  const sides = unapproved.flatMap((r) =>
-    r.transferTransactionId ? [r.id, r.transferTransactionId] : [r.id],
-  );
-  await tx.update(transaction).set({ approved: true }).where(selectedIds(sides));
-  return unapproved.map((r) => r.id);
+  const approved = unapproved.map((r) => r.id);
+  await setApproval(tx, approved, true);
+  return approved;
 }
 
 /**

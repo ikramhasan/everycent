@@ -10,6 +10,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -302,6 +303,10 @@ export async function applyUpdate(
       transferTransactionId: transferTo ? undefined : null,
     })
     .where(eq(transaction.id, transactionId));
+  if (body.approved !== undefined && body.approved !== existing.approved) {
+    // The other sides follow, a split's transfer lines' counterparts included.
+    await setApproval(tx, [transactionId], body.approved);
+  }
 
   if (split || wasSplit) {
     await syncLines(
@@ -431,6 +436,10 @@ async function updateSplitTransferSide(
       approved: body.approved,
     })
     .where(eq(transaction.id, existing.id));
+  if (body.approved !== undefined && body.approved !== existing.approved) {
+    // Approving a split's transfer side approves the split (and its other transfer lines).
+    await setApproval(tx, [existing.id], body.approved);
+  }
   if (body.memo !== undefined && body.memo !== existing.memo && existing.transferSubTransactionId) {
     await tx
       .update(subTransaction)

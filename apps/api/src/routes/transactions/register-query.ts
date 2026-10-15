@@ -20,7 +20,6 @@ import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
-import { needsCategorySql } from "../../lib/review";
 
 export type { SearchSettings };
 
@@ -113,7 +112,8 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         cleared: transaction.cleared,
         flag: transaction.flag,
         approved: transaction.approved,
-        needsCategory: sql<boolean>`${needsCategorySql(transaction.categoryId)}`.as(
+        // YNAB's "This needs a category": left Uncategorized (see `needsCategorySql`).
+        needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`.as(
           "needs_category",
         ),
         transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
