@@ -1778,7 +1778,7 @@ export interface components {
             /** @description A loan made by updating a tracking liability: the original (closed) account */
             migratedFromAccountId: string | null;
         };
-        /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
+        /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
         AccountBalances: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             cleared: string;
@@ -1835,7 +1835,7 @@ export interface components {
             workingBalance?: string;
             /**
              * Format: date
-             * @description The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to the server's UTC date.
+             * @description The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to `today`, then the server's UTC date.
              */
             date?: string;
         };
@@ -5332,7 +5332,10 @@ export interface operations {
     };
     updateAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5395,7 +5398,10 @@ export interface operations {
     };
     moveAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5638,7 +5644,10 @@ export interface operations {
     };
     reopenAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5876,7 +5885,10 @@ export interface operations {
     };
     recordLoanPayment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;

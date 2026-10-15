@@ -32,6 +32,7 @@ import {
 import { $api } from "@/lib/api";
 import { apiErrorMessage, type Budget } from "@/lib/budgets";
 import { nextId } from "@/lib/categories";
+import { todayIso } from "@/lib/dates";
 import { AddAccountDialog } from "./add-account-dialog";
 
 /** YNAB's account list in the sidebar: sections by type with totals, drag to reorder. */
@@ -60,7 +61,7 @@ export function AccountsNav({ budget }: { budget: Budget }) {
   async function handleMove(accountId: string, beforeAccountId: string | null) {
     try {
       const result = await moveAccount.mutateAsync({
-        params: { path: { budgetId: budget.id, accountId } },
+        params: { path: { budgetId: budget.id, accountId }, query: { today: todayIso() } },
         body: { beforeAccountId },
       });
       queryClient.setQueryData(accountsQueryOptions(budget.id).queryKey, result);

@@ -487,7 +487,7 @@ export function LoanPage({
             save(
               () =>
                 recordPayment.mutateAsync({
-                  params: { path },
+                  params: { path, query: { today: todayIso() } },
                   body: { ...input, amount: input.amount.toString() },
                 }),
               "Couldn't record the payment.",
@@ -646,7 +646,7 @@ export function LoanPage({
             save(async () => {
               const categoryId = await pairCategory(choice);
               await updateAccount.mutateAsync({
-                params: { path },
+                params: { path, query: { today: todayIso() } },
                 body: { pairedCategoryId: categoryId },
               });
               toast.success("Category paired");

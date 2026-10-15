@@ -1913,7 +1913,7 @@
           "uncleared",
           "working"
         ],
-        "description": "Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date."
+        "description": "Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date."
       },
       "CreateAccount": {
         "type": "object",
@@ -2212,7 +2212,7 @@
           "date": {
             "type": "string",
             "format": "date",
-            "description": "The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to the server's UTC date."
+            "description": "The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to `today`, then the server's UTC date."
           }
         },
         "additionalProperties": false
@@ -9696,6 +9696,17 @@
             "required": true,
             "name": "accountId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -9865,6 +9876,17 @@
             "required": true,
             "name": "accountId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -10234,6 +10256,17 @@
             "required": true,
             "name": "accountId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "responses": {
@@ -10595,6 +10628,17 @@
             "required": true,
             "name": "accountId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "requestBody": {

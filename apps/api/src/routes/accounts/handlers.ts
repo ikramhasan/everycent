@@ -429,7 +429,8 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
 
 export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { workingBalance, date = serverToday(), ...body } = c.req.valid("json");
+  const { today } = c.req.valid("query");
+  const { workingBalance, date = today ?? serverToday(), ...body } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(
     c,
@@ -519,7 +520,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       }
     }
   });
-  return c.json(await accountJson(db, budgetId, accountId, date), 200);
+  return c.json(await accountJson(db, budgetId, accountId, today ?? date), 200);
 };
 
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
@@ -657,6 +658,7 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
 export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
   const { beforeAccountId } = c.req.valid("json");
+  const { today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await db.transaction(async (tx) => {
@@ -677,7 +679,7 @@ export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (
       ),
     );
   });
-  return c.json({ accounts: await listAccountJson(db, budgetId, serverToday()) }, 200);
+  return c.json({ accounts: await listAccountJson(db, budgetId, today) }, 200);
 };
 
 export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async (c) => {
@@ -717,11 +719,12 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
 
 export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await findAccount(db, budgetId, accountId);
   await db.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
-  return c.json(await accountJson(db, budgetId, accountId), 200);
+  return c.json(await accountJson(db, budgetId, accountId, today), 200);
 };
 
 export const deleteAccountHandler: RouteHandler<typeof deleteAccount, Env> = async (c) => {

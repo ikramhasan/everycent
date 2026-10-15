@@ -7,6 +7,7 @@ import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
+import { todayIso } from "@/lib/dates";
 import { progressMessage } from "@/lib/loan-planner";
 import { dayLabel } from "@/lib/loans";
 import { RecordPaymentDialog } from "./loan-dialogs";
@@ -143,7 +144,10 @@ export function PairedLoanSection({
           onSave={async (input) => {
             try {
               await record.mutateAsync({
-                params: { path: { budgetId: budget.id, accountId: loan.id } },
+                params: {
+                  path: { budgetId: budget.id, accountId: loan.id },
+                  query: { today: todayIso() },
+                },
                 body: { ...input, amount: input.amount.toString() },
               });
               await refresh();

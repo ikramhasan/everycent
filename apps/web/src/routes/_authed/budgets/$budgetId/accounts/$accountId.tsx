@@ -291,7 +291,10 @@ function AccountPage() {
                 onClick={() =>
                   run(
                     () =>
-                      update.mutateAsync({ params: { path }, body: { pairedCategoryId: null } }),
+                      update.mutateAsync({
+                        params: { path, query: { today: todayIso() } },
+                        body: { pairedCategoryId: null },
+                      }),
                     "Category unpaired",
                     "Couldn't unpair the category.",
                   )
@@ -328,7 +331,7 @@ function AccountPage() {
               size="sm"
               onClick={() =>
                 run(
-                  () => reopen.mutateAsync({ params: { path } }),
+                  () => reopen.mutateAsync({ params: { path, query: { today: todayIso() } } }),
                   "Account reopened",
                   "Couldn't reopen the account.",
                 )
@@ -380,7 +383,10 @@ function AccountPage() {
       onSave={async (choice) => {
         try {
           const pairedCategoryId = await pairCategory(choice);
-          await update.mutateAsync({ params: { path }, body: { pairedCategoryId } });
+          await update.mutateAsync({
+            params: { path, query: { today: todayIso() } },
+            body: { pairedCategoryId },
+          });
           await refresh();
           return null;
         } catch (error) {
