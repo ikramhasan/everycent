@@ -175,6 +175,7 @@ export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> 
 export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
   const { fromAccountId, amount, date, memo } = c.req.valid("json");
+  const { today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
   const value = BigInt(amount);
@@ -209,5 +210,6 @@ export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, En
       cleared: "cleared",
     });
   });
-  return c.json(await accountJson(db, budgetId, accountId, date), 201);
+  // Balances as of the user's today, not the payment's date (which may be back-dated).
+  return c.json(await accountJson(db, budgetId, accountId, today), 201);
 };

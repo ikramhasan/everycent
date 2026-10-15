@@ -208,6 +208,8 @@ export async function syncLines(
             moved || retargeted
               ? await resolveCategory(tx, budgetId, transferTo, account, keep)
               : undefined,
+          // A line's memo is its other side's too (YNAB, 2026-10-15, EVERYCENT-158).
+          memo: spec.memo !== undefined && spec.memo !== old?.memo ? spec.memo : undefined,
         })
         .where(eq(transaction.id, other.id));
     } else if (transferTo) {

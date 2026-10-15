@@ -27,6 +27,7 @@ import { accountsQueryOptions } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
+import { todayIso } from "@/lib/dates";
 import { formatDuration, type LoanPlan } from "@/lib/loan-planner";
 import { formatRate } from "@/lib/loans";
 import { type CategoryTarget, ordinal, type TargetInput } from "@/lib/targets";
@@ -289,7 +290,7 @@ function PairWithLoan({ categoryId, onPaired }: { categoryId: string; onPaired: 
   async function choose(accountId: string) {
     try {
       await pair.mutateAsync({
-        params: { path: { budgetId: budget.id, accountId } },
+        params: { path: { budgetId: budget.id, accountId }, query: { today: todayIso() } },
         body: { pairedCategoryId: categoryId },
       });
       await refresh();
