@@ -35,6 +35,11 @@ export const IS_STATES = [
   "reconciled",
   "unreconciled",
   "cleared_or_reconciled",
+  // YNAB lists "Matched" here (EVERYCENT-68, not built).
+  "approved",
+  "unapproved",
+  "needs_category",
+  "unapproved_or_needs_category",
 ] as const;
 export type IsState = (typeof IS_STATES)[number];
 
@@ -45,6 +50,10 @@ export const IS_LABELS: Record<IsState, string> = {
   reconciled: "Reconciled",
   unreconciled: "Unreconciled",
   cleared_or_reconciled: "Cleared or Reconciled",
+  approved: "Approved",
+  unapproved: "Unapproved",
+  needs_category: "Needs Category",
+  unapproved_or_needs_category: "Unapproved or Needs Category",
 };
 
 export type AmountOp = "eq" | "gte" | "lte";

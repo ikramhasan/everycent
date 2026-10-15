@@ -194,6 +194,7 @@ describe("bulk edit", () => {
       reconciled: 0,
       reconciledTransfers: 0,
       categorizable: 3,
+      unapproved: 0,
       splits: 2,
       splitsWithTransfers: 1,
       deletable: 4,

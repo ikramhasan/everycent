@@ -44,6 +44,20 @@ describe("parseSearch", () => {
     ]);
   });
 
+  it("reads the approval terms (YNAB, 2026-10-16, EVERYCENT-65)", () => {
+    expect(
+      parseSearch(
+        "Is: Approved, is: unapproved, IS: NEEDS CATEGORY, Is: Unapproved or Needs Category",
+        settings,
+      ),
+    ).toEqual([
+      { kind: "is", state: "approved" },
+      { kind: "is", state: "unapproved" },
+      { kind: "is", state: "needs_category" },
+      { kind: "is", state: "unapproved_or_needs_category" },
+    ]);
+  });
+
   it("reads Income: as a month name, in full or three letters, with an optional year", () => {
     // The forms that matched October in YNAB (2026-10-15, EVERYCENT-114).
     expect(

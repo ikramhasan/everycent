@@ -19,7 +19,7 @@ const SearchText = z
     "YNAB's search: comma-separated terms that must all match, each free text (payee, " +
       "category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` " +
       "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
-      "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), " +
+      "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), " +
       "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
       "budget's format; before and after include the day), `Income:` (a month name, full or " +
       "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
@@ -87,7 +87,16 @@ export const TransactionSchema = z
     flag: Flag,
     approved: z
       .boolean()
-      .describe("False for a scheduled transaction entered on its date, until it's approved"),
+      .describe(
+        "False until it's approved (e.g. a scheduled transaction entered on its date); it " +
+          "counts in balances and the plan either way",
+      ),
+    needsCategory: z
+      .boolean()
+      .describe(
+        'Left Uncategorized (YNAB\'s "This needs a category"); transfers within the budget, ' +
+          "tracking accounts and splits have no category and never need one",
+      ),
     transferAccountId: z
       .string()
       .nullable()
@@ -360,6 +369,14 @@ export const updateTransaction = createRoute({
           cleared: SettableCleared.optional(),
           flag: Flag.optional(),
           subtransactions: SubTransactions.optional(),
+          approved: z
+            .boolean()
+            .optional()
+            .describe(
+              "Approve it (or un-approve it, as an undo does); a transfer's other side follows. " +
+                "Left out, any change but a flag approves an unapproved transaction, as saving " +
+                "it or clicking its cleared state does in YNAB",
+            ),
         })
         .openapi("UpdateTransaction"),
     ),
@@ -434,6 +451,8 @@ const BulkActionSchema = z
     z.strictObject({ type: z.literal("move"), accountId: z.string() }),
     z.strictObject({ type: z.literal("delete") }),
     z.strictObject({ type: z.literal("duplicate") }),
+    z.strictObject({ type: z.literal("approve") }),
+    z.strictObject({ type: z.literal("reject") }),
   ])
   .openapi("BulkAction");
 
@@ -469,6 +488,10 @@ export const summarizeSelection = createRoute({
             .describe(
               "Transactions that take a category (not transfers within the budget, nor tracking accounts)",
             ),
+          unapproved: z
+            .number()
+            .int()
+            .describe("Unapproved transactions (the action bar then offers Approve and Reject)"),
           splits: z.number().int(),
           splitsWithTransfers: z
             .number()
@@ -506,7 +529,10 @@ export const bulkUpdateTransactions = createRoute({
     "single edit (a transfer keeps its other side, which then points at the new account) and " +
     "skips rows already there, transfers into their own other account and splits with a " +
     "transfer line to it. `delete` deletes transfers' other sides too and skips the other " +
-    "sides of splits' transfer lines (they go with the split). `duplicate` copies each row as " +
+    "sides of splits' transfer lines (they go with the split). `approve` approves the " +
+    "unapproved rows (and their transfers' other sides); `reject` deletes the unapproved rows " +
+    "(as `delete` does) and skips the rest; `cleared` and `categorize` approve the rows they " +
+    "change, as in YNAB. `duplicate` copies each row as " +
     "YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, " +
     "a transfer with a new other side; a split's transfer side copies its whole split, and a " +
     "transfer selected from both sides is copied once. Rows in (or transferring to) closed " +

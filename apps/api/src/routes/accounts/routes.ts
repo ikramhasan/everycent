@@ -75,6 +75,13 @@ export const AccountSchema = z
       .string()
       .nullable()
       .describe("A loan made by updating a tracking liability: the original (closed) account"),
+    toReview: z
+      .number()
+      .int()
+      .describe(
+        "Transactions that are unapproved or need a category (YNAB's \"N new transactions to " +
+          'approve or categorize" and the dot by the account in the sidebar)',
+      ),
   })
   .openapi("Account");
 
