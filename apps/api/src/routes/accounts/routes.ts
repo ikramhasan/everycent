@@ -624,7 +624,8 @@ export const recordLoanPayment = createRoute({
   summary: "Record a loan payment (YNAB's Record Payment)",
   description:
     "A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out " +
-    "of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.",
+    "of the loan's paired category (Uncategorized when it has none); the loan's side is cleared. " +
+    "A date after the user's `today` makes a one-time scheduled transfer instead.",
   request: {
     params: AccountParams,
     query: TodayQuery,

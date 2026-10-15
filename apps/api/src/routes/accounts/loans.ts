@@ -3,6 +3,7 @@ import { accountFamily, isOnBudget, monthEndBalances, monthOf } from "@everycent
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import {
   type Db,
@@ -12,6 +13,7 @@ import {
   transferPayeeId,
 } from "../../lib/ledger";
 import { type LoanState, loanStates, setLoanCharge } from "../../lib/loans";
+import { writeSchedule } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { insertOtherSide } from "../transactions/rules";
@@ -175,7 +177,9 @@ export const setLoanChargeHandler: RouteHandler<typeof setLoanChargeRoute, Env> 
 export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
   const { fromAccountId, amount, date, memo } = c.req.valid("json");
-  const { today = serverToday() } = c.req.valid("query");
+  const query = c.req.valid("query");
+  const today = query.today ?? serverToday();
+  const latest = latestTransactionDate(c.var.deps, query.today);
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
   const value = BigInt(amount);
@@ -191,6 +195,23 @@ export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, En
     }
     if (loan.closed || from.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to record a payment");
+    }
+    if (latest !== null && date > latest) {
+      // YNAB (2026-10-16, EVERYCENT-169): a payment dated after today becomes a one-time
+      // scheduled transfer on the loan, out of the same category as an entered one.
+      await writeSchedule(tx, budgetId, {
+        accountId: loan.id,
+        frequency: "never",
+        date,
+        dateFirst: date,
+        amount: value,
+        payee: { transferAccountId: from.id },
+        categoryId: loan.pairedCategoryId,
+        memo,
+        flag: null,
+        lines: null,
+      });
+      return;
     }
     // YNAB (2026-10-13): the paying side is uncleared and comes out of the paired category, or
     // Uncategorized; the loan's side, entered from the loan, is cleared.
