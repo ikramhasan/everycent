@@ -44,10 +44,14 @@ import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
   /**
-   * `transaction`: scroll to and highlight it (the other side of a transfer). The rest is the
-   * register's search, filters and sort.
+   * `transaction`: scroll to and highlight it (the other side of a transfer). `recordPayment`:
+   * open a card's Record Payment row (the payment inspector's button). The rest is the register's
+   * search, filters and sort.
    */
-  validateSearch: registerSearchSchema.extend({ transaction: z.string().optional() }),
+  validateSearch: registerSearchSchema.extend({
+    transaction: z.string().optional(),
+    recordPayment: z.boolean().optional(),
+  }),
   component: AccountPage,
 });
 
@@ -55,7 +59,7 @@ type Confirm = "close" | "delete" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
-  const { transaction, ...registerSearch } = Route.useSearch();
+  const { transaction, recordPayment: openPayment, ...registerSearch } = Route.useSearch();
   const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -65,6 +69,15 @@ function AccountPage() {
         to: ".",
         search: (prev) => ({ ...prev, ...patch, transaction: undefined }),
         replace,
+      }),
+    [navigate],
+  );
+  const onRecordPaymentOpened = useCallback(
+    () =>
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, recordPayment: undefined }),
+        replace: true,
       }),
     [navigate],
   );
@@ -546,6 +559,9 @@ function AccountPage() {
                 })
             : undefined
         }
+        // The prefill needs the card's payment Available and the accounts.
+        openRecordPayment={openPayment === true && cardPayment !== null && accounts.isSuccess}
+        onRecordPaymentOpened={onRecordPaymentOpened}
       />
 
       {editDialog}

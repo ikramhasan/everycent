@@ -198,6 +198,8 @@ export function Register({
   search,
   onSearchChange,
   recordPayment,
+  openRecordPayment = false,
+  onRecordPaymentOpened,
 }: {
   accountId?: string;
   focusId?: string;
@@ -205,6 +207,9 @@ export function Register({
   onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
   /** A credit card's Record Payment: the new row it opens (YNAB's toolbar button). */
   recordPayment?: () => Draft;
+  /** Open Record Payment's row now (the payment inspector's button, YNAB 2026-10-15). */
+  openRecordPayment?: boolean;
+  onRecordPaymentOpened?: () => void;
 }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const history = useUndo();
@@ -1121,6 +1126,19 @@ export function Register({
 
   const defaultAccountId = accountId ?? openAccounts[0]?.id;
   const canAdd = defaultAccountId !== undefined && (allAccounts || account?.closed === false);
+
+  // Arriving from the payment inspector's Record Payment opens the same row the toolbar does.
+  const startPayment = recordPayment && canAdd && openRecordPayment ? recordPayment : null;
+  const paymentOpened = useRef(false);
+  useEffect(() => {
+    if (!openRecordPayment) paymentOpened.current = false;
+    if (!startPayment || paymentOpened.current) return;
+    // Once per arrival; the route then drops `openRecordPayment` from the URL.
+    paymentOpened.current = true;
+    startAdding(startPayment(), false);
+    onRecordPaymentOpened?.();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: startAdding is a plain function
+  }, [openRecordPayment, startPayment, onRecordPaymentOpened]);
 
   if (transactions.isPending) return <Skeleton className="h-64" />;
   if (transactions.isError) {

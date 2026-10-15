@@ -361,6 +361,7 @@ export function PaymentInspector({
   past = false,
   target,
   onCoverOverspent,
+  onRecordPayment,
   upcoming,
 }: {
   name: string;
@@ -376,6 +377,8 @@ export function PaymentInspector({
   past?: boolean;
   /** "Cover Overspent Categories": shows the Overspent view. */
   onCoverOverspent?: () => void;
+  /** Record Payment, once the balance is covered. */
+  onRecordPayment?: () => void;
   /** The Target section, which shows the alert itself when no target applies. */
   target?: ReactNode;
   /** Scheduled payments still to come, in Available for Payment (YNAB, 2026-10-12: Card W). */
@@ -385,7 +388,11 @@ export function PaymentInspector({
     <Panel label={`${name} inspector`}>
       <h2 className="truncate font-semibold">{name}</h2>
       {target ??
-        (!past && <PaymentAlert {...{ name, totals, payment, format, warn, onCoverOverspent }} />)}
+        (!past && (
+          <PaymentAlert
+            {...{ name, totals, payment, format, warn, onCoverOverspent, onRecordPayment }}
+          />
+        ))}
       {!past && (
         <FoldingSection
           storageKey="current-balance"
@@ -479,7 +486,9 @@ function FoldingSection({
  * YNAB's Payment alert: the payment was more than was set aside (red), this month's overspent
  * categories or the rest of the balance still to cover, or the card paid off. While the balance
  * isn't covered it offers "Create a Debt Payoff Target" (`onCreateTarget`), then Total
- * Underfunded with its parts.
+ * Underfunded with its parts. Once Available covers what's owed it offers Record Payment (YNAB,
+ * 2026-10-15, x-c11-163 Card C: covered or exactly covered, this month or later; not when only
+ * part is covered, nor on a paid-off card).
  */
 export function PaymentAlert({
   name,
@@ -489,6 +498,7 @@ export function PaymentAlert({
   warn,
   onCreateTarget,
   onCoverOverspent,
+  onRecordPayment,
 }: {
   name: string;
   totals: Pick<Breakdown, "available">;
@@ -498,10 +508,13 @@ export function PaymentAlert({
   onCreateTarget?: () => void;
   /** YNAB's "Cover Overspent Categories": switches the budget to the Overspent view. */
   onCoverOverspent?: () => void;
+  /** Opens the card's register with Record Payment's row. */
+  onRecordPayment?: () => void;
 }) {
   const f = (n: bigint) => format(n.toString());
   const rest = payment.underfunded - payment.overspentCategories;
   const overpaid = totals.available < 0n;
+  const covered = !overpaid && warn && payment.balance < 0n && totals.available >= -payment.balance;
   return (
     <>
       <section aria-label="Payment" className="grid gap-2 text-sm">
@@ -521,6 +534,20 @@ export function PaymentAlert({
             <span className="font-medium">Underfunded.</span> You need to assign{" "}
             {f(payment.underfunded)} more to pay off your current balance.
           </p>
+        ) : covered ? (
+          <>
+            <p>
+              <span className="font-medium">
+                You have enough money to pay off your current balance!
+              </span>{" "}
+              You can make this payment anytime.
+            </p>
+            {onRecordPayment && (
+              <Button size="sm" onClick={onRecordPayment}>
+                Record Payment
+              </Button>
+            )}
+          </>
         ) : payment.balance >= 0n ? (
           <p>Your {name} is paid off! Being debt free is a wonderful thing.</p>
         ) : null}

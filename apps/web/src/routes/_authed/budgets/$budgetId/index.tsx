@@ -788,6 +788,10 @@ function Inspector({
   const only = selection.size === 1 ? [...selection][0] : undefined;
   const pairedLoan = usePairedLoan(only);
   const loanPlan = useLoanPlan(pairedLoan);
+  const accounts = useQuery(accountsQueryOptions(budget.id));
+  const paidCard = accounts.data?.accounts.find(
+    (a) => only !== undefined && a.paymentCategoryId === only && !a.closed,
+  );
   if (only === UNCATEGORIZED && month.uncategorized) {
     return (
       <CategoryInspector
@@ -848,6 +852,15 @@ function Inspector({
         format,
         warn: month.month >= figures.currentMonth,
         onCoverOverspent: onShowOverspent,
+        // YNAB (2026-10-15): opens the card's register with Record Payment's row.
+        onRecordPayment: paidCard
+          ? () =>
+              void navigate({
+                to: "/budgets/$budgetId/accounts/$accountId",
+                params: { budgetId: budget.id, accountId: paidCard.id },
+                search: { recordPayment: true },
+              })
+          : undefined,
       };
       const past = month.month < figures.currentMonth;
       return (
