@@ -179,6 +179,43 @@ describe("PaymentInspector", () => {
     }
   });
 
+  it("offers Record Payment once Available covers the balance (YNAB, 2026-10-15)", async () => {
+    const record = (available: bigint, balance: bigint, warn = true) => {
+      cleanup();
+      const onRecordPayment = vi.fn();
+      render(
+        <PaymentInspector
+          name="Card C"
+          totals={{ ...totals, available }}
+          payment={{ ...base, balance, underfunded: 0n, overspentCategories: 0n }}
+          format={format}
+          available={<span>pill</span>}
+          note=""
+          onNoteChange={vi.fn()}
+          warn={warn}
+          onRecordPayment={onRecordPayment}
+        />,
+      );
+      return onRecordPayment;
+    };
+    const message = /You have enough money to pay off your current balance!/;
+    // Covered ($10 for $6 owed) and exactly covered.
+    const onRecordPayment = record(1000n, -600n);
+    expect(screen.getByText(message)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Record Payment" }));
+    expect(onRecordPayment).toHaveBeenCalled();
+    record(600n, -600n);
+    expect(screen.getByRole("button", { name: "Record Payment" })).toBeInTheDocument();
+    // Partly covered, paid off, or a past month: no Record Payment.
+    record(300n, -600n);
+    expect(screen.queryByRole("button", { name: "Record Payment" })).not.toBeInTheDocument();
+    record(500n, 200n);
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(screen.getByText(/is paid off!/)).toBeInTheDocument();
+    record(1000n, -600n, false);
+    expect(screen.queryByRole("button", { name: "Record Payment" })).not.toBeInTheDocument();
+  });
+
   it("folds Current Balance and Available for Payment, and remembers it", async () => {
     const user = userEvent.setup();
     localStorage.clear();

@@ -1,11 +1,17 @@
 import { CLEARED_STATES, FLAG_COLORS } from "@everycent/db/schema";
 import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
+import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
-import { SORT_COLUMNS } from "./register-query";
+import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
-const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
+const DateLimitQuery = z.object({
+  today: IsoDate.optional().describe(
+    "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are " +
+      "scheduled transactions). Without it, dates after the server's UTC date plus a day are refused.",
+  ),
+});
 const SearchText = z
   .string()
   .max(500)
@@ -15,7 +21,10 @@ const SearchText = z
       "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
       "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), " +
       "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
-      "budget's format; before and after include the day). Split lines are matched one by one.",
+      "budget's format; before and after include the day), `Income:` (a month name, full or " +
+      "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
+      "Assign that month, including Starting Balances of budget accounts; no year means this " +
+      "year). Split lines are matched one by one.",
   );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
@@ -233,8 +242,18 @@ export const listTransactions = createRoute({
         .stringbool()
         .optional()
         .describe('The View menu\'s "Show Reconciled Transactions" turned off'),
-      sort: z.enum(SORT_COLUMNS).default("date"),
-      dir: z.enum(["asc", "desc"]).default("desc"),
+      sort: z
+        .string()
+        .regex(SORT_PATTERN)
+        .default("date:desc")
+        .describe(
+          "YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first " +
+            "(e.g. `payee:desc,date:asc`). Columns: " +
+            SORT_COLUMNS.join(", ") +
+            ". Outflow and inflow each count the other side's rows as zero; flag ascending is " +
+            "none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, " +
+            "cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top.",
+        ),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       cursor: z.string().optional(),
       today: IsoDate.optional().describe(
@@ -262,6 +281,7 @@ export const createTransaction = createRoute({
   description: `${categoryRules} ${transferRules} ${splitRules}`,
   request: {
     params: BudgetParams,
+    query: DateLimitQuery,
     body: json(
       z
         .object({
@@ -273,7 +293,9 @@ export const createTransaction = createRoute({
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
-          cleared: NewCleared.default("uncleared"),
+          cleared: NewCleared.optional().describe(
+            "Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)",
+          ),
           flag: Flag.default(null),
           approved: z
             .boolean()
@@ -294,8 +316,8 @@ export const createTransaction = createRoute({
   responses: {
     201: ok("Created", TransactionSchema.describe("The side in `accountId`")),
     400: jsonError(
-      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
-        "same account",
+      "Invalid input, a closed account, a category the account can't use, a transfer to the " +
+        "same account, or a date after today (DATE_IN_FUTURE)",
     ),
     401: jsonError("Not signed in"),
     403: forbidden,
@@ -312,17 +334,19 @@ export const updateTransaction = createRoute({
   middleware: [requireAuth] as const,
   summary: "Edit a transaction, move it to another account, or toggle cleared",
   description:
-    `${categoryRules} ${transferRules} On a transfer, date and amount changes apply to both ` +
-    "sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back " +
+    `${categoryRules} ${transferRules} On a transfer, date, amount and memo changes apply to ` +
+    "both sides; cleared, flag and category are per side. Setting `payeeName` turns a transfer back " +
     "into a normal transaction and deletes the other side. A reconciled other side follows " +
     "and stays reconciled. A reconciled transaction can be edited but stays reconciled, so " +
     "`cleared` can't be set on it. Moving it to an account that can't use its category resets " +
     "the category. " +
     `${splitRules} Sending \`subtransactions\` replaces a split's lines (matched by \`id\`); ` +
     "changing a split's amount needs new lines too. Giving a split a `categoryId` (or making " +
-    "it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
+    "it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and " +
+    "category; its memo is the split line's too.",
   request: {
     params: TransactionParams,
+    query: DateLimitQuery,
     body: json(
       z
         .strictObject({
@@ -343,8 +367,8 @@ export const updateTransaction = createRoute({
   responses: {
     200: ok("Updated", TransactionSchema),
     400: jsonError(
-      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
-        "same account",
+      "Invalid input, a closed account, a category the account can't use, a transfer to the " +
+        "same account, or a date after today (DATE_IN_FUTURE)",
     ),
     401: jsonError("Not signed in"),
     403: forbidden,
@@ -382,6 +406,9 @@ const RegisterFilterSchema = z
     from: IsoDate.optional(),
     to: IsoDate.optional(),
     hideReconciled: z.boolean().optional(),
+    today: IsoDate.optional().describe(
+      "The user's today, as sent with the register list: a year-less `Income:` term means its year",
+    ),
   })
   .describe("The same filter as the register's query parameters")
   .openapi("RegisterFilter");
@@ -474,7 +501,8 @@ export const bulkUpdateTransactions = createRoute({
     "counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within " +
     "the budget and tracking-account rows; it un-splits splits, except splits with a transfer " +
     "line, which stay split with every other line given the category. `memo` replaces the " +
-    "memo (a split's own, not its lines'). `move` moves rows to another account like a " +
+    "memo (a split's own, not its lines'; on the selected side of a transfer only, as YNAB's " +
+    "Edit Memo does). `move` moves rows to another account like a " +
     "single edit (a transfer keeps its other side, which then points at the new account) and " +
     "skips rows already there, transfers into their own other account and splits with a " +
     "transfer line to it. `delete` deletes transfers' other sides too and skips the other " +
@@ -499,6 +527,13 @@ export const bulkUpdateTransactions = createRoute({
           created: z
             .array(z.string())
             .describe("`duplicate`: the new transactions' ids (empty for other actions)"),
+          copies: z
+            .array(z.string())
+            .describe(
+              "`duplicate`: every row of the copies whose original row was selected, so a " +
+                "transfer selected from both sides has both sides of its copy here (empty for " +
+                "other actions)",
+            ),
         })
         .openapi("BulkUpdateResult"),
     ),

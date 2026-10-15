@@ -4,7 +4,7 @@ import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { type Db, serverToday } from "../../lib/ledger";
+import { type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import {
   enterDueScheduled,
   enterIfPast,
@@ -64,18 +64,23 @@ export const listScheduledTransactionsHandler: RouteHandler<
   const { budget } = await loadBudgetAccess(c, budgetId);
   await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   const terms = q ? parseSearch(q, budget) : [];
+  const rows = await scheduledRows(db, budgetId, accountId);
+  const inRange = rows.filter((r) => (!from || r.dateNext >= from) && (!to || r.dateNext <= to));
+  if (terms.length === 0) return c.json({ scheduledTransactions: inRange }, 200);
+  // Flag names and Ready to Assign are looked up only for a search.
   const names = await db
     .select({ color: flagName.color, name: flagName.name })
     .from(flagName)
     .where(eq(flagName.budgetId, budgetId));
-  const flagNames = new Map(names.map((n) => [n.name.toLowerCase(), n.color]));
-  const rows = (await scheduledRows(db, budgetId, accountId)).filter(
-    (r) =>
-      (!from || r.dateNext >= from) &&
-      (!to || r.dateNext <= to) &&
-      (terms.length === 0 || scheduledRowMatches(r, terms, flagNames)),
+  const context = {
+    flagNames: new Map(names.map((n) => [n.name.toLowerCase(), n.color])),
+    readyToAssignId: await internalCategoryId(db, budgetId, "ready_to_assign"),
+    today,
+  };
+  return c.json(
+    { scheduledTransactions: inRange.filter((r) => scheduledRowMatches(r, terms, context)) },
+    200,
   );
-  return c.json({ scheduledTransactions: rows }, 200);
 };
 
 export const createScheduledTransactionHandler: RouteHandler<

@@ -630,6 +630,27 @@ describe("scheduled transactions", () => {
     expect(await names("from=2026-11-01&to=2026-11-30")).toEqual(["Water Co"]);
   });
 
+  it("finds scheduled Ready to Assign rows with Income: by their next date", async () => {
+    const ctx = await setup();
+    const checking = await ctx.addAccount("Checking", "checking");
+    const { readyToAssignCategoryId } = await json<{ readyToAssignCategoryId: string }>(
+      await send("GET", `${ctx.base}/categories`, ctx.cookie),
+    );
+    for (const [date, payeeName, categoryId] of [
+      ["2026-10-25", "Pay Oct", readyToAssignCategoryId],
+      ["2026-11-25", "Pay Nov", readyToAssignCategoryId],
+      ["2026-10-26", "Refund", ctx.groceries.id],
+    ] as const) {
+      await ctx.schedule({ accountId: checking.id, date, amount: "1000", payeeName, categoryId });
+    }
+    const names = async (q: string, today = TODAY) =>
+      (await ctx.list(`q=${encodeURIComponent(q)}&today=${today}`)).map((r) => r.payeeName);
+    // YNAB, 2026-10-15 (EVERYCENT-114).
+    expect(await names("Income: October 2026")).toEqual(["Pay Oct"]);
+    expect(await names("Income: nov")).toEqual(["Pay Nov"]);
+    expect(await names("Income: nov", "2027-01-10")).toEqual([]);
+  });
+
   it("leaves a closed account's schedules waiting, but Enter Now still works", async () => {
     const ctx = await setup();
     const old = await ctx.addAccount("Old", "checking", "0");

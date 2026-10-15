@@ -17,7 +17,7 @@ import {
   rateThousandths,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -82,6 +82,7 @@ function toAccountJson(
     type: a.type,
     note: a.note,
     closed: a.closed,
+    starredOrder: a.starredSortOrder,
     currency: a.currency,
     interestRate: terms ? terms.interestRate : a.interestRate,
     minimumPayment: (terms ? terms.minimumPayment : a.minimumPayment)?.toString() ?? null,
@@ -429,7 +430,8 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
 
 export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { workingBalance, date = serverToday(), ...body } = c.req.valid("json");
+  const { today } = c.req.valid("query");
+  const { workingBalance, date = today ?? serverToday(), starred, ...body } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(
     c,
@@ -444,6 +446,11 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     if (account.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to change its balance");
     }
+  }
+
+  // YNAB's star: open cash and credit accounts only (checked 2026-10-15, EVERYCENT-149).
+  if (starred && (account.closed || !isOnBudget(account.type))) {
+    throw new AppError(400, "BAD_REQUEST", "Only open cash and credit accounts can be starred");
   }
 
   const type = body.type ?? account.type;
@@ -492,6 +499,9 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
     if (body.pairedCategoryId !== undefined) {
       await pairCategory(tx, account, body.pairedCategoryId);
     }
+    if (starred !== undefined && starred !== (account.starredSortOrder !== null)) {
+      await setStarred(tx, account, starred);
+    }
     // A payment category and the transfer payee are named after their account.
     if (body.name !== undefined) {
       await tx
@@ -519,7 +529,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       }
     }
   });
-  return c.json(await accountJson(db, budgetId, accountId, date), 200);
+  return c.json(await accountJson(db, budgetId, accountId, today ?? date), 200);
 };
 
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
@@ -654,13 +664,54 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
 };
 
+/** Stars an account at the end of the Starred group, or unstars it. */
+async function setStarred(tx: Db, account: AccountRow, starred: boolean) {
+  let order: number | null = null;
+  if (starred) {
+    // Locks the budget's accounts (as a move does) so two stars at once can't share a place.
+    const rows = await tx
+      .select({ order: budgetAccount.starredSortOrder })
+      .from(budgetAccount)
+      .where(eq(budgetAccount.budgetId, account.budgetId))
+      .for("update");
+    order = Math.max(-1, ...rows.map((r) => r.order ?? -1)) + 1;
+  }
+  await tx
+    .update(budgetAccount)
+    .set({ starredSortOrder: order })
+    .where(eq(budgetAccount.id, account.id));
+}
+
 export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
-  const { beforeAccountId } = c.req.valid("json");
+  const { beforeAccountId, starred } = c.req.valid("json");
+  const { today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await db.transaction(async (tx) => {
-    await findAccount(tx, budgetId, accountId);
+    const account = await findAccount(tx, budgetId, accountId);
+    if (starred) {
+      if (account.starredSortOrder === null) {
+        throw new AppError(400, "BAD_REQUEST", "That account isn't starred");
+      }
+      const rows = await tx
+        .select({ id: budgetAccount.id })
+        .from(budgetAccount)
+        .where(and(eq(budgetAccount.budgetId, budgetId), isNotNull(budgetAccount.starredSortOrder)))
+        .orderBy(asc(budgetAccount.starredSortOrder), asc(budgetAccount.id))
+        .for("update");
+      await writeOrder(
+        tx,
+        budgetAccount,
+        reorder(
+          rows.map((r) => r.id),
+          accountId,
+          beforeAccountId,
+        ),
+        "starred_sort_order",
+      );
+      return;
+    }
     const rows = await tx
       .select({ id: budgetAccount.id })
       .from(budgetAccount)
@@ -677,7 +728,7 @@ export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (
       ),
     );
   });
-  return c.json({ accounts: await listAccountJson(db, budgetId, serverToday()) }, 200);
+  return c.json({ accounts: await listAccountJson(db, budgetId, today) }, 200);
 };
 
 export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async (c) => {
@@ -706,10 +757,11 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
     }
     // The payment category stays visible with whatever is set aside (YNAB, 2026-10-11: Card Y
     // kept $6 after closing); hiding it is up to the user. A loan's paired category is unpaired
-    // (YNAB's help center, "Loan Accounts").
+    // (YNAB's help center, "Loan Accounts"). Closing also drops the star: reopened, it isn't
+    // starred (YNAB, "x-c11-151 FS3", 2026-10-15, EVERYCENT-170).
     await tx
       .update(budgetAccount)
-      .set({ closed: true, pairedCategoryId: null })
+      .set({ closed: true, pairedCategoryId: null, starredSortOrder: null })
       .where(eq(budgetAccount.id, accountId));
   });
   return c.json(await accountJson(db, budgetId, accountId, date), 200);
@@ -717,11 +769,17 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
 
 export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await findAccount(db, budgetId, accountId);
-  await db.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
-  return c.json(await accountJson(db, budgetId, accountId), 200);
+  // YNAB's "Erase & Re-open" (2026-10-15, EVERYCENT-165): reopening an updated tracking account
+  // erases the information migrated to its loan, so it can be updated again.
+  await db
+    .update(budgetAccount)
+    .set({ closed: false, migratedToAccountId: null })
+    .where(eq(budgetAccount.id, accountId));
+  return c.json(await accountJson(db, budgetId, accountId, today), 200);
 };
 
 export const deleteAccountHandler: RouteHandler<typeof deleteAccount, Env> = async (c) => {

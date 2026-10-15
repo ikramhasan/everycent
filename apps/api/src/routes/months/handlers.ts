@@ -685,7 +685,7 @@ async function monthState(
     const underfunded = owed > setAside ? owed - setAside : 0n;
     const overspentNow = creditOverspent.get(accountId)?.get(month) ?? 0n;
     const fromOverspending = overspentNow < underfunded ? overspentNow : underfunded;
-    return { accountId, balance, owed, underfunded, fromOverspending };
+    return { accountId, balance, owed, underfunded, fromOverspending, overspentNow };
   };
 
   // A payment target asks nothing in months before its card was opened (YNAB, 2026-10-12, Card E3
@@ -941,6 +941,7 @@ export async function budgetMonthJson(
           paymentsAndInflows: reg?.inflows ?? "0",
           underfunded: l.payment.underfunded.toString(),
           overspentCategories: l.payment.fromOverspending.toString(),
+          creditOverspending: l.payment.overspentNow.toString(),
           fundedSpending: l.figures.fundedSpending.toString(),
           paymentsMade: l.figures.payments.toString(),
           hasUncategorized: Number(reg?.uncategorized ?? 0) > 0,

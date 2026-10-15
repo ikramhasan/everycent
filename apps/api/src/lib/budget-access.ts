@@ -12,6 +12,7 @@ export type BudgetRow = typeof budget.$inferSelect;
 export interface BudgetAccess {
   budget: BudgetRow;
   role: BudgetRole;
+  lastUsedAt: Date | null;
 }
 
 /**
@@ -25,7 +26,7 @@ export async function loadBudgetAccess(
   permission?: BudgetPermission,
 ): Promise<BudgetAccess> {
   const [row] = await c.var.deps.db
-    .select({ budget, role: budgetMember.role })
+    .select({ budget, role: budgetMember.role, lastUsedAt: budgetMember.lastUsedAt })
     .from(budget)
     .innerJoin(
       budgetMember,
@@ -40,8 +41,17 @@ export async function loadBudgetAccess(
   return row;
 }
 
-/** Remembers the budget the user last opened, across devices. */
-export async function rememberLastBudget(db: Database, userId: string, budgetId: string) {
+/** Remembers the budget the user last opened, across devices; returns the time it stored. */
+export async function rememberLastBudget(
+  db: Database,
+  userId: string,
+  budgetId: string,
+): Promise<Date | null> {
+  const [member] = await db
+    .update(budgetMember)
+    .set({ lastUsedAt: sql`now()` })
+    .where(and(eq(budgetMember.budgetId, budgetId), eq(budgetMember.userId, userId)))
+    .returning({ lastUsedAt: budgetMember.lastUsedAt });
   await db
     .insert(userPreference)
     .values({ userId, lastBudgetId: budgetId })
@@ -49,4 +59,5 @@ export async function rememberLastBudget(db: Database, userId: string, budgetId:
       target: userPreference.userId,
       set: { lastBudgetId: budgetId, updatedAt: sql`now()` },
     });
+  return member?.lastUsedAt ?? null;
 }

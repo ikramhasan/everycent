@@ -19,8 +19,9 @@ const sources: SuggestionSources = {
     currencySymbolPosition: "before",
     dateFormat: "MM/DD/YYYY",
   },
+  today: "2026-10-15",
 };
-const terms = (typed: string) => searchSuggestions(typed, sources).map((s) => s.term);
+const terms = (typed: string, from = sources) => searchSuggestions(typed, from).map((s) => s.term);
 const FIND = (t: string) => [t, `Payee: ${t}`, `Category: ${t}`, `Memo: ${t}`];
 
 describe("search suggestions", () => {
@@ -57,7 +58,7 @@ describe("search suggestions", () => {
   });
 
   it("reads amounts and dates", () => {
-    expect(searchSuggestions("25", sources).slice(0, 3)).toEqual([
+    expect(searchSuggestions("25", sources).slice(1, 4)).toEqual([
       { label: "Outflow:", text: "Outflow equals $25.00", term: "Outflow: 25" },
       { label: "Outflow:", text: "Outflow more or equal to $25.00", term: "Outflow: >=25" },
       { label: "Outflow:", text: "Outflow less or equal to $25.00", term: "Outflow: <=25" },
@@ -67,6 +68,29 @@ describe("search suggestions", () => {
       "Before: 10/02/2026",
       "After: 10/02/2026",
     ]);
+  });
+
+  it("offers Income: for this month after a start of 'income' or a digit", () => {
+    const income = {
+      label: "Income:",
+      text: "Enter month like 'Income: October 2026'",
+      term: "Income: October 2026",
+      calendar: true,
+    };
+    for (const typed of ["i", "inco", "income", "Income:", "income: ", "5", "2026"]) {
+      expect(searchSuggestions(typed, sources)[0], typed).toEqual(income);
+    }
+    // After the date options, before the amounts.
+    expect(terms("10/02/2026").slice(0, 4)).toEqual([
+      "On: 10/02/2026",
+      "Before: 10/02/2026",
+      "After: 10/02/2026",
+      "Income: October 2026",
+    ]);
+    for (const typed of ["oct", "October", "income: o", "ix"]) {
+      expect(terms(typed), typed).not.toContain("Income: October 2026");
+    }
+    expect(terms("i", { ...sources, today: "2027-01-03" })[0]).toBe("Income: January 2027");
   });
 
   it("replaces what's being typed with the picked term", () => {

@@ -39,6 +39,12 @@ export const budgetAccount = pgTable(
     /** Display order in the sidebar (ascending; gaps allowed). */
     sortOrder: integer().notNull(),
     closed: boolean().notNull().default(false),
+    /**
+     * Position in the sidebar's Starred group (ascending); null when not starred. Shared by
+     * everyone on the budget, like YNAB's web `is_favorite` / `sortable_favorite_index`. Closing
+     * the account clears it.
+     */
+    starredSortOrder: integer(),
     /** Currency of every amount in this account. For now always the budget's (see Design notes). */
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
     /** Loan accounts: annual interest rate in percent, e.g. "6.125". */

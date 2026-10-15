@@ -1,3 +1,4 @@
+import type { AccountType } from "@everycent/engine";
 import { describe, expect, it } from "vitest";
 import type { CategoryList } from "./categories";
 import type { MoneySettings } from "./money-input";
@@ -9,11 +10,73 @@ import {
   draftFrom,
   emptyDraft,
   emptyLine,
+  paymentCategoryCard,
+  splitMismatch,
   splitRemaining,
   startSplit,
   type Transaction,
+  transferChoiceLabel,
+  transferRowLabel,
   updateBody,
+  withSplitTotal,
 } from "./transactions";
+
+const acc = (name: string, type: AccountType) => ({ name, type });
+
+describe("YNAB's transfer wording (2026-10-15, \"ihni7's Plan\")", () => {
+  const brac = acc("Brac", "checking");
+  const cardA = acc("Card A", "credit_card");
+  const cardB = acc("Card B", "credit_card");
+  const track = acc("Track", "asset");
+  const liab = acc("Liab", "liability");
+  const loc = acc("LOC", "line_of_credit");
+  const mort = acc("Mort", "mortgage");
+
+  it("words the payee list by direction in a card", () => {
+    expect(transferChoiceLabel("credit_card", brac, "in")).toBe("Payment from Brac");
+    expect(transferChoiceLabel("credit_card", track, "in")).toBe("Payment from Track");
+    expect(transferChoiceLabel("credit_card", cardB, "in")).toBe("Transfer from Card B");
+    expect(transferChoiceLabel("credit_card", liab, "in")).toBe("Transfer from Liab");
+    expect(transferChoiceLabel("credit_card", loc, "in")).toBe("Transfer from LOC");
+    expect(transferChoiceLabel("credit_card", brac, "out")).toBe("Transfer to Brac");
+    expect(transferChoiceLabel("credit_card", brac, null)).toBe("To/From Brac");
+    expect(transferChoiceLabel("credit_card", mort, "in")).toBe("Payment: Mort");
+  });
+
+  it("words the payee list by direction in a cash account", () => {
+    expect(transferChoiceLabel("checking", cardA, "out")).toBe("Payment to Card A");
+    expect(transferChoiceLabel("checking", track, "out")).toBe("Transfer to Track");
+    expect(transferChoiceLabel("checking", cardA, "in")).toBe("Transfer from Card A");
+    expect(transferChoiceLabel("checking", mort, "out")).toBe("Payment: Mort");
+    expect(transferChoiceLabel("checking", mort, null)).toBe("Payment: Mort");
+  });
+
+  it("names a saved transfer the same way on both sides", () => {
+    // Brac → Card A (a payment), on each side.
+    expect(transferRowLabel("checking", cardA, -500n)).toBe("Payment: Card A");
+    expect(transferRowLabel("credit_card", brac, 500n)).toBe("Payment: Brac");
+    // Card A → Brac (a cash advance), Card B → Card A, Brac → Savings.
+    expect(transferRowLabel("credit_card", brac, -100n)).toBe("Transfer: Brac");
+    expect(transferRowLabel("checking", cardA, 100n)).toBe("Transfer: Card A");
+    expect(transferRowLabel("credit_card", cardB, 300n)).toBe("Transfer: Card B");
+    expect(transferRowLabel("checking", acc("Savings", "savings"), -100n)).toBe(
+      "Transfer: Savings",
+    );
+    // Tracking → card, and a loan payment.
+    expect(transferRowLabel("credit_card", track, 100n)).toBe("Payment: Track");
+    expect(transferRowLabel("asset", cardA, -100n)).toBe("Payment: Card A");
+    expect(transferRowLabel("cash", mort, -90000n)).toBe("Payment: Mort");
+    expect(transferRowLabel("mortgage", acc("Wallet", "cash"), 90000n)).toBe("Payment: Wallet");
+  });
+
+  it("shows the card's payment category between a card and a cash account only", () => {
+    expect(paymentCategoryCard(brac, cardA)).toBe(cardA);
+    expect(paymentCategoryCard(cardA, brac)).toBe(cardA);
+    expect(paymentCategoryCard(cardA, cardB)).toBeNull();
+    expect(paymentCategoryCard(cardA, track)).toBeNull();
+    expect(paymentCategoryCard(brac, acc("Savings", "savings"))).toBeNull();
+  });
+});
 
 const usd: MoneySettings = {
   currency: "USD",
@@ -48,6 +111,13 @@ const txn: Transaction = {
 };
 
 describe("register drafts", () => {
+  it("starts a new transaction cleared only in a cash account (YNAB)", () => {
+    expect(emptyDraft("w", "2026-10-01", "cash").cleared).toBe("cleared");
+    expect(emptyDraft("c", "2026-10-01", "checking").cleared).toBe("uncleared");
+    expect(emptyDraft("s", "2026-10-01", "savings").cleared).toBe("uncleared");
+    expect(emptyDraft("x", "2026-10-01").cleared).toBe("uncleared");
+  });
+
   it("turns outflow and inflow fields into a signed amount", () => {
     const draft: Draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "1,234.56" };
     expect(createBody(draft, usd)).toEqual({
@@ -219,6 +289,41 @@ describe("splits", () => {
       emptyLine({ categoryId: "household", outflow: "40" }),
     ],
   };
+
+  it("finds a split that doesn't add up, and distributes the rest as YNAB does", () => {
+    expect(splitMismatch(receipt, usd)).toBeNull();
+    expect(splitMismatch({ ...receipt, outflow: "" }, usd)).toBeNull();
+    const short = { ...receipt, outflow: "0.03", lines: [] as Draft["lines"] };
+    const draft: Draft = {
+      ...short,
+      lines: [
+        emptyLine({ outflow: "0.01" }),
+        emptyLine({ outflow: "0.01" }),
+        emptyLine({ outflow: "0" }),
+      ],
+    };
+    const found = splitMismatch(draft, usd);
+    expect(found).toMatchObject({ total: -3n, lines: -2n, unassigned: -1n });
+    // The $0 line is skipped and keeps what was typed.
+    expect(found?.distributed?.map((l) => [l.outflow, l.inflow])).toEqual([
+      ["0.02", ""],
+      ["0.01", ""],
+      ["0", ""],
+    ]);
+    // Every line empty: spread evenly, the first taking the extra cent.
+    const empty: Draft = {
+      ...receipt,
+      outflow: "",
+      inflow: "0.10",
+      lines: [emptyLine(), emptyLine(), emptyLine()],
+    };
+    expect(splitMismatch(empty, usd)?.distributed?.map((l) => l.inflow)).toEqual([
+      "0.04",
+      "0.03",
+      "0.03",
+    ]);
+    expect(withSplitTotal({ ...receipt, outflow: "130" }, usd).outflow).toBe("120.00");
+  });
 
   it("moves the category to the first line when splitting", () => {
     const split = startSplit({ ...emptyDraft("a1", "2026-10-01"), categoryId: "groceries" });

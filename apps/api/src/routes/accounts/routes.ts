@@ -7,11 +7,11 @@ import {
   zMinorUnits,
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
+import { IsoDate, TodayQuery } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
-const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
 const InterestRate = z
   .string()
   .regex(/^\d{1,3}(\.\d{1,3})?$/, "Expected a percentage like 6.125")
@@ -21,8 +21,8 @@ const BalancesSchema = z
   .object({ cleared: zMinorUnits, uncleared: zMinorUnits, working: zMinorUnits })
   .openapi("AccountBalances", {
     description:
-      "Future-dated transactions don't count until their date. `listAccounts` takes the user's " +
-      "today; other responses use the request's `date`, or the server's UTC date.",
+      "Future-dated transactions don't count until their date: responses take the user's " +
+      "`today` (or a request's `date` that is the user's today), else the server's UTC date.",
   });
 
 export const AccountSchema = z
@@ -32,6 +32,14 @@ export const AccountSchema = z
     type: zAccountType,
     note: z.string(),
     closed: z.boolean(),
+    starredOrder: z
+      .number()
+      .int()
+      .nullable()
+      .describe(
+        "Position in the sidebar's Starred group (ascending); null when not starred. Shared " +
+          "by everyone on the budget. Closing an account unstars it.",
+      ),
     currency: zCurrencyCode,
     interestRate: z.string().nullable(),
     minimumPayment: zMinorUnits.nullable(),
@@ -106,12 +114,7 @@ export const listAccounts = createRoute({
   summary: "The budget's accounts with their balances",
   request: {
     params: BudgetParams,
-    query: z.object({
-      today: IsoDate.optional().describe(
-        "The user's today; later transactions are left out of balances. Defaults to the " +
-          "server's UTC date.",
-      ),
-    }),
+    query: TodayQuery,
   },
   responses: {
     200: ok("Accounts in sidebar order", AccountListSchema),
@@ -178,6 +181,7 @@ export const updateAccount = createRoute({
     "escrow apply from `date`'s month on.",
   request: {
     params: AccountParams,
+    query: TodayQuery,
     body: json(
       z
         .strictObject({
@@ -190,12 +194,19 @@ export const updateAccount = createRoute({
           minimumPayment: zMinorUnits.nullable().optional(),
           escrowAmount: zMinorUnits.nullable().optional(),
           pairedCategoryId: PairedCategoryId.nullable().optional().describe("Null unpairs"),
+          starred: z
+            .boolean()
+            .optional()
+            .describe(
+              "Star or unstar the account. Only open cash and credit accounts can be starred; " +
+                "a new star goes to the end of the Starred group.",
+            ),
           workingBalance: zMinorUnits
             .optional()
             .describe("The balance the account should have; negative for money owed"),
           date: IsoDate.optional().describe(
             "The user's today: the adjustment's date, the day the working balance is read at, " +
-              "and the month new loan terms start in. Defaults to the server's UTC date.",
+              "and the month new loan terms start in. Defaults to `today`, then the server's UTC date.",
           ),
         })
         .openapi("UpdateAccount"),
@@ -318,6 +329,7 @@ export const moveAccount = createRoute({
   summary: "Move an account before another one, or to the end",
   request: {
     params: AccountParams,
+    query: TodayQuery,
     body: json(
       z
         .object({
@@ -325,6 +337,10 @@ export const moveAccount = createRoute({
             .string()
             .nullable()
             .describe("Place it right before this account; null moves it to the end"),
+          starred: z
+            .boolean()
+            .optional()
+            .describe("Reorder within the Starred group instead (both accounts must be starred)"),
         })
         .openapi("MoveAccount"),
     ),
@@ -374,7 +390,11 @@ export const reopenAccount = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Reopen a closed account (and show its payment category again)",
-  request: { params: AccountParams },
+  description:
+    "Reopening a tracking account that was updated to a loan account erases the link: the " +
+    "loan no longer shows its history, and the account can be updated to a loan again (YNAB's " +
+    '"Erase & Re-open").',
+  request: { params: AccountParams, query: TodayQuery },
   responses: {
     200: ok("Reopened", AccountSchema),
     401: jsonError("Not signed in"),
@@ -607,6 +627,7 @@ export const recordLoanPayment = createRoute({
     "of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.",
   request: {
     params: AccountParams,
+    query: TodayQuery,
     body: json(
       z
         .object({

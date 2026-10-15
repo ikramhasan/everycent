@@ -48,6 +48,8 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
+  Bookmark,
+  ChevronRight,
   Circle,
   CircleCheck,
   CircleHelp,
@@ -67,6 +69,7 @@ import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
@@ -76,13 +79,8 @@ import {
   type ReconciledWarning,
   rowDeleteScope,
 } from "@/lib/reconciled-warnings";
-import {
-  nextSort,
-  type RegisterSearch,
-  registerQuery,
-  type SortColumn,
-  searchText,
-} from "@/lib/register-filters";
+import { type RegisterSearch, registerQuery, searchText } from "@/lib/register-filters";
+import { DEFAULT_SORT, nextSort, type SortColumn, type SortField } from "@/lib/register-sort";
 import {
   addMonths,
   rangeDates,
@@ -97,6 +95,7 @@ import {
   type ScheduledTransaction,
   scheduleCreateBody,
   scheduledQueryPrefix,
+  scheduledSplits,
   scheduleRestoreBody,
 } from "@/lib/scheduled";
 import {
@@ -118,11 +117,13 @@ import {
   draftFrom,
   emptyDraft,
   payeesQueryOptions,
+  paymentCategoryCard,
   REGISTER_PAGE_SIZE,
   type SubTransaction,
   startSplit,
   type Transaction,
   transactionsQueryPrefix,
+  transferRowLabel,
   updateBody,
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
@@ -136,15 +137,16 @@ import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
-/** Columns a header click sorts by; the amount columns both sort by amount. */
+/** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
+  flag: "flag",
   account: "account",
   date: "date",
   payee: "payee",
   category: "category",
   memo: "memo",
-  outflow: "amount",
-  inflow: "amount",
+  outflow: "outflow",
+  inflow: "inflow",
   cleared: "cleared",
 };
 
@@ -196,6 +198,8 @@ export function Register({
   search,
   onSearchChange,
   recordPayment,
+  openRecordPayment = false,
+  onRecordPaymentOpened,
 }: {
   accountId?: string;
   focusId?: string;
@@ -203,6 +207,9 @@ export function Register({
   onSearchChange: (patch: Partial<RegisterSearch>, replace?: boolean) => void;
   /** A credit card's Record Payment: the new row it opens (YNAB's toolbar button). */
   recordPayment?: () => Draft;
+  /** Open Record Payment's row now (the payment inspector's button, YNAB 2026-10-15). */
+  openRecordPayment?: boolean;
+  onRecordPaymentOpened?: () => void;
 }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const history = useUndo();
@@ -284,7 +291,8 @@ export function Register({
     [transactions.data],
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
-  const dateOrder = query.sort === "date";
+  // Rows read in the running balance's order only when the date comes first.
+  const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
   // The budget starts the month before its oldest transaction (or before this month).
   const monthData = useQuery(monthQueryOptions(budget.id, currentMonth()));
@@ -349,6 +357,8 @@ export function Register({
 
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
+  /** A new transaction in `id`, starting cleared in a cash account (YNAB). */
+  const newDraft = (id: string, date: string) => emptyDraft(id, date, accountById.get(id)?.type);
   const openAccounts = accountList.filter((a) => !a.closed);
   const account = accountId ? accountById.get(accountId) : undefined;
   const options = useMemo(
@@ -376,17 +386,23 @@ export function Register({
     getRowId: (t) => t.id,
   });
   const rows = table.getRowModel().rows;
-  // Split lines sit right under their transaction (read-only; the split is edited as a whole).
+  // Split lines sit right under their transaction (read-only; the split is edited as a whole),
+  // unless it's folded away.
+  const [collapsedSplits, toggleSplit] = useCollapsedSplits();
   const flat = useMemo(
     () =>
       rows.flatMap(({ original: t }): Item[] => [
         { kind: "transaction", key: t.id, t },
-        // Under a search, YNAB shows only the lines that match it.
+        // Under a search, YNAB shows only the lines that match it, folded or not.
         ...t.subtransactions
-          .filter((line) => t.matchingLineIds === null || t.matchingLineIds.includes(line.id))
+          .filter((line) =>
+            t.matchingLineIds === null
+              ? !collapsedSplits[t.id]
+              : t.matchingLineIds.includes(line.id),
+          )
           .map((line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line })),
       ]),
-    [rows],
+    [rows, collapsedSplits],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -428,9 +444,14 @@ export function Register({
     return () => clearTimeout(timer);
   }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
-  // The selection's filter is the register's, without the sort.
-  const { sort: _sort, dir: _dir, hideReconciled, ...rest } = query;
-  const selectionFilter = { ...rest, ...(hideReconciled ? { hideReconciled: true } : {}) };
+  // The selection's filter is the register's, without the sort, and with the list's today so a
+  // year-less `Income:` matches the same rows.
+  const { sort: _sort, hideReconciled, ...rest } = query;
+  const selectionFilter = {
+    ...rest,
+    today,
+    ...(hideReconciled ? { hideReconciled: true } : {}),
+  };
   const summary = $api.useQuery(
     "post",
     "/v1/budgets/{budgetId}/transactions/selection",
@@ -506,7 +527,8 @@ export function Register({
         count += result.updated;
         if (action.type === "duplicate") {
           commands.push(duplicateCommand(async () => (await run()).created, result.created));
-          nextSelection = { mode: "some", ids: new Set(result.created) };
+          // Every copy row whose original was ticked: both sides of a transfer ticked from both.
+          nextSelection = { mode: "some", ids: new Set(result.copies) };
         } else if (result.updated > 0) {
           commands.push(bulkCommand(action, result.before));
         }
@@ -678,7 +700,7 @@ export function Register({
           for (const transaction of before) {
             restored.push(
               await create.mutateAsync({
-                params: { path: { budgetId: budget.id } },
+                params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
                 body: createBodyFromTransaction(transaction),
               }),
             );
@@ -687,7 +709,10 @@ export function Register({
         } else {
           for (const transaction of before) {
             await update.mutateAsync({
-              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+              params: {
+                path: { budgetId: budget.id, transactionId: transaction.id },
+                query: { today: todayIso() },
+              },
               body: updateBodyFromTransaction(transaction),
             });
           }
@@ -716,19 +741,53 @@ export function Register({
       label,
       undo: async () => {
         await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: before.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: before.id },
+            query: { today: todayIso() },
+          },
           body: updateBodyFromTransaction(before),
         });
         await refresh();
       },
       redo: async () => {
         await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: after.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: after.id },
+            query: { today: todayIso() },
+          },
           body: updateBodyFromTransaction(after),
         });
         await refresh();
       },
     });
+  }
+
+  /** A transfer's payee as YNAB's register words it ("Payment: X" / "Transfer: X"). */
+  function rowPayee(
+    accountId: string,
+    transferAccountId: string | null,
+    amount: bigint,
+    stored: string | null,
+  ) {
+    const own = accountById.get(accountId);
+    const other = transferAccountId ? accountById.get(transferAccountId) : undefined;
+    return own && other ? transferRowLabel(own.type, other, amount) : stored;
+  }
+
+  /**
+   * An in-budget transfer's category cell: "Credit Card Payments: <card>" between a card and a
+   * cash account (`paymentCategoryCard`), otherwise nothing.
+   */
+  function transferCategory(accountId: string, transferAccountId: string | null) {
+    const own = accountById.get(accountId);
+    const other = transferAccountId ? accountById.get(transferAccountId) : undefined;
+    const card = own && other ? paymentCategoryCard(own, other) : null;
+    if (!card?.paymentCategoryId) return "";
+    const group = categories.data?.groups.find((g) =>
+      g.categories.some((c) => c.id === card.paymentCategoryId),
+    );
+    const category = group?.categories.find((c) => c.id === card.paymentCategoryId);
+    return group && category ? `${group.name}: ${category.name}` : "";
   }
 
   /** Whether `t` has a category: not in tracking accounts, nor on in-budget transfers. */
@@ -777,7 +836,10 @@ export function Register({
     try {
       if (Object.keys(result.body).length > 0) {
         const after = await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: t.id },
+            query: { today: todayIso() },
+          },
           body: result.body,
         });
         recordUpdate("transaction edit", t, after);
@@ -826,14 +888,23 @@ export function Register({
     startAdding(makeRepeatingDraft(t, budget));
   }
 
-  async function saveNew(draft: Draft) {
+  /**
+   * After a save: close the new row, or (YNAB's "Save and add another") open a fresh one that
+   * keeps the date, in the register's own account (2026-10-15).
+   */
+  function afterNewSaved(draft: Draft, another: boolean) {
+    if (another && defaultAccountId) startAdding(newDraft(defaultAccountId, draft.date), false);
+    else setAdding(false);
+  }
+
+  async function saveNew(draft: Draft, another = false) {
     if (!draft.date) return setNewError("Enter a date.");
-    if (isScheduled(draft, today)) return saveNewScheduled(draft);
+    if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
     const result = createBody(draft, budget);
     if (!result.ok) return setNewError(result.error);
     try {
       const created = await create.mutateAsync({
-        params: { path: { budgetId: budget.id } },
+        params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
         body: result.body,
       });
       let current = created;
@@ -847,13 +918,13 @@ export function Register({
         },
         redo: async () => {
           current = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(created),
           });
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -864,7 +935,7 @@ export function Register({
    * A new transaction that repeats or is dated ahead is a scheduled one (YNAB). A past date with
    * a repeat enters that one transaction and starts the schedule after today.
    */
-  async function saveNewScheduled(draft: Draft) {
+  async function saveNewScheduled(draft: Draft, another = false) {
     const result = scheduleCreateBody(draft, budget, today);
     if (!result.ok) return setNewError(result.error);
     try {
@@ -903,7 +974,7 @@ export function Register({
           await refresh();
         },
       });
-      setAdding(false);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -931,7 +1002,7 @@ export function Register({
         undo: async () => {
           // The transaction first: if it can't come back, the schedule stays.
           restored = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(t),
           });
           const id = written.scheduledTransaction?.id;
@@ -985,7 +1056,10 @@ export function Register({
     const save = async () => {
       try {
         const after = await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: t.id },
+            query: { today: todayIso() },
+          },
           body: result.body,
         });
         recordUpdate("transaction edit", t, after);
@@ -1012,7 +1086,10 @@ export function Register({
   async function setFlag(t: Transaction, flag: FlagColor | null) {
     try {
       const after = await update.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
+        params: {
+          path: { budgetId: budget.id, transactionId: t.id },
+          query: { today: todayIso() },
+        },
         body: { flag },
       });
       recordUpdate("transaction flag", t, after);
@@ -1042,7 +1119,10 @@ export function Register({
   async function toggleCleared(t: Transaction) {
     try {
       const after = await update.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
+        params: {
+          path: { budgetId: budget.id, transactionId: t.id },
+          query: { today: todayIso() },
+        },
         body: { cleared: t.cleared === "uncleared" ? "cleared" : "uncleared" },
       });
       recordUpdate("transaction cleared state", t, after);
@@ -1068,7 +1148,7 @@ export function Register({
         label: "deleted transaction",
         undo: async () => {
           current = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(t),
           });
           await refresh();
@@ -1092,6 +1172,19 @@ export function Register({
   const defaultAccountId = accountId ?? openAccounts[0]?.id;
   const canAdd = defaultAccountId !== undefined && (allAccounts || account?.closed === false);
 
+  // Arriving from the payment inspector's Record Payment opens the same row the toolbar does.
+  const startPayment = recordPayment && canAdd && openRecordPayment ? recordPayment : null;
+  const paymentOpened = useRef(false);
+  useEffect(() => {
+    if (!openRecordPayment) paymentOpened.current = false;
+    if (!startPayment || paymentOpened.current) return;
+    // Once per arrival; the route then drops `openRecordPayment` from the URL.
+    paymentOpened.current = true;
+    startAdding(startPayment(), false);
+    onRecordPaymentOpened?.();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: startAdding is a plain function
+  }, [openRecordPayment, startPayment, onRecordPaymentOpened]);
+
   if (transactions.isPending) return <Skeleton className="h-64" />;
   if (transactions.isError) {
     return (
@@ -1101,8 +1194,9 @@ export function Register({
     );
   }
   const q = searchText(search);
-  const sort = query.sort;
-  const dir = query.dir;
+  const [first]: readonly SortField[] = view.sort.length > 0 ? view.sort : DEFAULT_SORT;
+  const sort = first?.column;
+  const dir = first?.dir;
 
   function display(t: Transaction, id: ColumnId) {
     const amount = BigInt(t.amount);
@@ -1150,7 +1244,9 @@ export function Register({
             >
               <ArrowLeftRight />
             </Button>
-            <span className="truncate">{t.payeeName}</span>
+            <span className="truncate">
+              {rowPayee(t.accountId, t.transferAccountId, amount, t.payeeName)}
+            </span>
           </span>
         ) : (
           t.payeeName
@@ -1159,8 +1255,23 @@ export function Register({
         if (t.subtransactions.length > 0) {
           const count = new Set(t.subtransactions.map((l) => l.categoryId ?? l.transferAccountId))
             .size;
+          const folded = Boolean(collapsedSplits[t.id]);
           return (
             <span className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="-ml-1 shrink-0"
+                aria-expanded={!folded}
+                aria-label={folded ? "Show split lines" : "Hide split lines"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSplit(t.id);
+                }}
+              >
+                <ChevronRight className={cn("transition-transform", !folded && "rotate-90")} />
+              </Button>
               <Split className="size-4 shrink-0" />
               <span className="truncate">
                 Split ({count} {count === 1 ? "category" : "categories"})
@@ -1168,7 +1279,7 @@ export function Register({
             </span>
           );
         }
-        return hasCategory(t) ? t.categoryName : "";
+        return hasCategory(t) ? t.categoryName : transferCategory(t.accountId, t.transferAccountId);
       case "memo":
         return t.memo;
       case "outflow":
@@ -1239,13 +1350,17 @@ export function Register({
             {line.transferAccountId && (
               <ArrowLeftRight className="size-3.5 shrink-0" aria-label="Transfer" />
             )}
-            <span className="truncate">{line.payeeName}</span>
+            <span className="truncate">
+              {rowPayee(t.accountId, line.transferAccountId, amount, line.payeeName)}
+            </span>
           </span>
         );
       case "category": {
         const type = accountById.get(t.accountId)?.type ?? "checking";
         const to = line.transferAccountId ? accountById.get(line.transferAccountId)?.type : null;
-        return usesCategory(type, to) ? line.categoryName : "";
+        return usesCategory(type, to)
+          ? line.categoryName
+          : transferCategory(t.accountId, line.transferAccountId);
       }
       case "memo":
         return line.memo;
@@ -1314,6 +1429,9 @@ export function Register({
           pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
           scheduledCount={scheduledSelection.size}
+          scheduledSplits={scheduledSplits(
+            scheduledRows.filter((row) => scheduledSelection.has(row.id)),
+          )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}
@@ -1375,13 +1493,9 @@ export function Register({
                 const id = header.column.id as ColumnId;
                 const spec = COLUMN_SPECS[id];
                 const sortBy = SORTABLE[id];
-                // Outflow sorts biggest spend first; inflow biggest income first. Both sort by
-                // amount, so the arrow goes on the one whose natural order is showing.
-                const natural = id === "outflow" ? "asc" : id === "inflow" ? "desc" : undefined;
-                const active =
-                  sortBy !== undefined &&
-                  sortBy === sort &&
-                  (sortBy !== "amount" || id === (dir === "asc" ? "outflow" : "inflow"));
+                // The arrow shows on the first sort field; the rest break its ties.
+                const active = sortBy !== undefined && sortBy === sort;
+                const HeaderIcon = id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
                 return (
                   <TableHead
                     key={header.id}
@@ -1413,18 +1527,25 @@ export function Register({
                     ) : id === "balance" ? (
                       <BalanceHeader
                         sorted={!dateOrder}
-                        onResetSort={() => onSearchChange({ sort: undefined, dir: undefined })}
+                        onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
                       />
-                    ) : sortBy && !spec.srOnly ? (
+                    ) : sortBy ? (
                       <button
                         type="button"
                         className={cn(
                           "inline-flex items-center gap-1 uppercase hover:text-foreground",
                           active && "text-foreground",
                         )}
-                        onClick={() => onSearchChange(nextSort(search, sortBy, natural))}
+                        onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
                       >
-                        {spec.header}
+                        {HeaderIcon ? (
+                          <>
+                            <HeaderIcon className="size-3.5" aria-hidden />
+                            <span className="sr-only">{spec.header}</span>
+                          </>
+                        ) : (
+                          spec.header
+                        )}
                         {active &&
                           (dir === "asc" ? (
                             <ArrowUp className="size-3" aria-hidden />
@@ -1444,8 +1565,9 @@ export function Register({
         <TableBody ref={measureScheduled}>
           {adding && defaultAccountId && (
             <TransactionEditor
+              transferCategory={transferCategory}
               key={addingKey}
-              initial={addingDraft ?? emptyDraft(defaultAccountId, today)}
+              initial={addingDraft ?? newDraft(defaultAccountId, today)}
               openDatePicker={addingPicker}
               repeat
               columns={columnIds}
@@ -1459,6 +1581,7 @@ export function Register({
               pending={create.isPending || createScheduled.isPending}
               error={newError}
               onSave={(draft) => void saveNew(draft)}
+              onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
               onCancel={() => setAdding(false)}
             />
           )}
@@ -1489,6 +1612,7 @@ export function Register({
               if (row.kind === "line") return null;
               return (
                 <TransactionEditor
+                  transferCategory={transferCategory}
                   key={t.id}
                   initial={editingSplit.draft}
                   label="Edit transaction"

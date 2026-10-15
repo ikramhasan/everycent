@@ -7,6 +7,7 @@ import {
   type AccountRow,
   assertNotSelf,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   resolveCategory,
   type TransferSideInput,
@@ -96,7 +97,7 @@ export async function syncLines(
     account: AccountRow;
     /** The parent moved to `account` from another one. */
     moved: boolean;
-    /** How new transfer lines' other sides start out (by default uncleared and approved). */
+    /** How new transfer lines' other sides start out (by default by their account, approved). */
     counterpart?: { cleared: (account: AccountRow) => ClearedState; approved: boolean };
     /** An undo bringing back a deleted split: its transfer lines may reach closed accounts. */
     restore?: boolean;
@@ -208,6 +209,8 @@ export async function syncLines(
             moved || retargeted
               ? await resolveCategory(tx, budgetId, transferTo, account, keep)
               : undefined,
+          // A line's memo is its other side's too (YNAB, 2026-10-15, EVERYCENT-158).
+          memo: spec.memo !== undefined && spec.memo !== old?.memo ? spec.memo : undefined,
         })
         .where(eq(transaction.id, other.id));
     } else if (transferTo) {
@@ -227,7 +230,8 @@ export async function syncLines(
           side?.categoryId ?? null,
         ),
         memo: side?.memo ?? spec.memo ?? "",
-        cleared: side?.cleared ?? ctx.counterpart?.cleared(transferTo) ?? "uncleared",
+        cleared:
+          side?.cleared ?? ctx.counterpart?.cleared(transferTo) ?? clearedOnEntry(transferTo),
         approved: side?.approved ?? ctx.counterpart?.approved,
         flag: side?.flag,
         transferSubTransactionId: lineId,

@@ -48,7 +48,6 @@ import {
 import { useId, useRef, useState } from "react";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel } from "@/lib/flags";
 import { type CategoryOption, categoryLabel } from "@/lib/transactions";
-import { CategoryField } from "./register-fields";
 
 export type BulkAction =
   | { type: "cleared"; cleared: "cleared" | "uncleared" }
@@ -62,6 +61,8 @@ export type BulkAction =
   | { type: "enterNow" };
 
 type Summary = components["schemas"]["SelectionSummary"];
+
+const NO_SPLITS = { splits: 0, splitsWithTransfers: 0 };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -84,6 +85,7 @@ export function SelectionBar({
   pending,
   onAction,
   scheduledCount = 0,
+  scheduledSplits = NO_SPLITS,
   onMakeRepeating,
 }: {
   /** The selected transactions' summary; undefined while it loads. */
@@ -102,15 +104,21 @@ export function SelectionBar({
   onAction: (action: BulkAction) => void;
   /** Selected scheduled rows. */
   scheduledCount?: number;
+  /** The selected scheduled splits (see `scheduledSplits`), counted in the un-split warning. */
+  scheduledSplits?: { splits: number; splitsWithTransfers: number };
   /** Set when exactly one plain transaction is selected. */
   onMakeRepeating?: () => void;
 }) {
   const [flagOpen, setFlagOpen] = useState(false);
-  const [categoryOpen, setCategoryOpen] = useState(false);
   const [unsplitFor, setUnsplitFor] = useState<string | null>(null);
   const [memoOpen, setMemoOpen] = useState(false);
-  // Set while More opens the memo dialog, so the closing menu leaves the focus to the dialog.
+  // Set while a menu opens a dialog (More's memo, Categorize's un-split warning), so the closing
+  // menu leaves the focus to the dialog.
   const openingDialog = useRef(false);
+  const keepDialogFocus = (e: Event) => {
+    if (openingDialog.current) e.preventDefault();
+    openingDialog.current = false;
+  };
 
   const count = summary ? summary.count + scheduledCount : null;
   const s = summary;
@@ -122,15 +130,21 @@ export function SelectionBar({
     s && s.count > 0 && scheduledCount === 0 && s.uncleared === s.count ? "cleared" : null;
   const markCleared = !toggle && s ? s.uncleared > 0 : false;
   const markUncleared = !toggle && s ? s.cleared > 0 : false;
-  // Splits without a transfer line get un-split; YNAB asks first.
-  const unsplits = s ? s.splits - s.splitsWithTransfers : 0;
+  // Splits without a transfer line get un-split; YNAB asks first. Its warning counts every
+  // selected split, scheduled ones too, and mentions transfers when any has a transfer line
+  // (checked 2026-10-15, EVERYCENT-136).
+  const splits = (s?.splits ?? 0) + scheduledSplits.splits;
+  const splitsWithTransfers = (s?.splitsWithTransfers ?? 0) + scheduledSplits.splitsWithTransfers;
+  const unsplits = splits - splitsWithTransfers;
 
   function categorize(categoryId: string) {
-    setCategoryOpen(false);
-    if (unsplits > 0) setUnsplitFor(categoryId);
-    else onAction({ type: "categorize", categoryId });
+    if (unsplits > 0) {
+      openingDialog.current = true;
+      setUnsplitFor(categoryId);
+    } else onAction({ type: "categorize", categoryId });
   }
   const unsplitName = categories.find((c) => c.id === unsplitFor);
+  const unsplitLabel = unsplitName ? categoryLabel(unsplitName) : "";
 
   return (
     <section
@@ -169,22 +183,30 @@ export function SelectionBar({
           </Button>
         )}
         {s && (s.categorizable > 0 || scheduledCount > 0) && (
-          <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
-            <PopoverTrigger asChild>
+          // YNAB's Categorize is a menu of category groups, each opening its categories (checked
+          // 2026-10-15, EVERYCENT-134): Inflow → Ready to Assign first, then the visible groups
+          // in plan order, without payment or hidden categories, and no search box.
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="sm" disabled={pending}>
                 <Tag /> Categorize
               </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-2">
-              <CategoryField
-                label="Category for selected"
-                value={null}
-                categories={categories}
-                autoFocus
-                onChange={(id) => id && categorize(id)}
-              />
-            </PopoverContent>
-          </Popover>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={keepDialogFocus}>
+              {groupOptions(categories).map((group, i) => (
+                <DropdownMenuSub key={`${i}-${group.name}`}>
+                  <DropdownMenuSubTrigger>{group.name}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                    {group.categories.map((c) => (
+                      <DropdownMenuItem key={c.id} onSelect={() => categorize(c.id)}>
+                        {c.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <Popover open={flagOpen} onOpenChange={setFlagOpen}>
           <PopoverTrigger asChild>
@@ -242,14 +264,7 @@ export function SelectionBar({
               <MoreHorizontal /> More
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="w-56"
-            onCloseAutoFocus={(e) => {
-              if (openingDialog.current) e.preventDefault();
-              openingDialog.current = false;
-            }}
-          >
+          <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={keepDialogFocus}>
             {markCleared && (
               <DropdownMenuItem onSelect={() => onAction({ type: "cleared", cleared: "cleared" })}>
                 <CircleCheck /> Mark as Cleared
@@ -315,30 +330,37 @@ export function SelectionBar({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {s?.splits === 1
+              {splits === 1
                 ? "Un-split and Categorize Split Transaction?"
                 : "Un-split and Categorize Split Transactions?"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="grid gap-2">
-                {s?.splits === 1 ? (
+                {splits === 1 ? (
                   <>
                     <p>A quick heads up: You have a split transaction selected.</p>
                     <p>
-                      If you categorize the split transaction as "
-                      {unsplitName ? categoryLabel(unsplitName) : ""}" we will un-split it.
+                      If you categorize the split transaction as "{unsplitLabel}" we will un-split
+                      it.
                     </p>
                   </>
                 ) : (
                   <>
-                    <p>A quick heads up: You have {s?.splits} split transactions selected.</p>
-                    <p>
-                      If you categorize them as "{unsplitName ? categoryLabel(unsplitName) : ""}" we
-                      will un-split the transactions, as long as they don't contain transfers. If
-                      they do contain transfers, we'll leave them as split transactions and
-                      categorize all the non-transfer sub-transactions as "
-                      {unsplitName ? categoryLabel(unsplitName) : ""}."
-                    </p>
+                    <p>A quick heads up: You have {splits} split transactions selected.</p>
+                    {splitsWithTransfers > 0 ? (
+                      <p>
+                        If you categorize them as "{unsplitLabel}" we will un-split the
+                        transactions, as long as they don't contain transfers.
+                        <br />
+                        If they do contain transfers, we'll leave them as split transactions and
+                        categorize all the non-transfer sub-transactions as "{unsplitLabel}."
+                      </p>
+                    ) : (
+                      <p>
+                        If you categorize these split transactions as "{unsplitLabel}" we will
+                        un-split them.
+                      </p>
+                    )}
                   </>
                 )}
               </div>
@@ -369,6 +391,17 @@ export function SelectionBar({
       />
     </section>
   );
+}
+
+/** The flat category options as their groups, in order (each group's run of options). */
+export function groupOptions(options: readonly CategoryOption[]) {
+  const groups: { name: string; categories: CategoryOption[] }[] = [];
+  for (const option of options) {
+    const last = groups.at(-1);
+    if (last?.name === option.group) last.categories.push(option);
+    else groups.push({ name: option.group, categories: [option] });
+  }
+  return groups;
 }
 
 /** YNAB's "Edit Memo (N Transactions)": the memo replaces each selected transaction's. */

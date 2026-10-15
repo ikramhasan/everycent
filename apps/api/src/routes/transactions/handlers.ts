@@ -7,12 +7,13 @@ import {
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { queryRegister, queryRegisterRow } from "./register-query";
+import { parseSort, queryRegister, queryRegisterRow } from "./register-query";
 import type {
   createTransaction,
   deleteTransaction,
@@ -24,6 +25,7 @@ import {
   assertNotSelf,
   assertOnePayee,
   assertOpen,
+  clearedOnEntry,
   findAccount,
   insertOtherSide,
   lockTransaction,
@@ -51,21 +53,32 @@ async function transactionJson(db: Db, budgetId: string, accountId: string, id: 
 
 export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { sort, dir, limit, cursor, today, ...filter } = c.req.valid("query");
+  const { sort, limit, cursor, today, ...filter } = c.req.valid("query");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
   if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
-  const page = await queryRegister(db, budgetId, filter, { sort, dir, limit, cursor }, budget);
+  const page = await queryRegister(
+    db,
+    budgetId,
+    { ...filter, today },
+    { sort: parseSort(sort), limit, cursor },
+    budget,
+  );
   return c.json(page, 200);
 };
 
 export const createTransactionHandler: RouteHandler<typeof createTransaction, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
+  // Future-dated entries are scheduled transactions (EVERYCENT-137). An undo restore brings a row
+  // back as it was, so one dated ahead (older data, or the server's UTC + 1) isn't refused, as an
+  // edit that keeps its date isn't.
+  if (!body.restore) assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
   const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };
@@ -80,7 +93,8 @@ export interface CreateBody {
   categoryId: string | null;
   memo: string;
   subtransactions?: LineInput[];
-  cleared: ClearedState;
+  /** Left out: by the account (`clearedOnEntry`). */
+  cleared?: ClearedState;
   flag: FlagColor | null;
   approved?: boolean;
   /** A restored transfer's other side, as it was. */
@@ -128,7 +142,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
       ? null
       : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
     memo: body.memo,
-    cleared: body.cleared,
+    cleared: body.cleared ?? clearedOnEntry(account),
     flag: body.flag,
     approved: body.approved,
   });
@@ -154,10 +168,14 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
 export const updateTransactionHandler: RouteHandler<typeof updateTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   assertOnePayee(body);
-  const accountId = await db.transaction((tx) => applyUpdate(tx, budgetId, transactionId, body));
+  const latest = latestTransactionDate(c.var.deps, today);
+  const accountId = await db.transaction((tx) =>
+    applyUpdate(tx, budgetId, transactionId, body, latest),
+  );
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
 
@@ -181,9 +199,15 @@ export async function applyUpdate(
   budgetId: string,
   transactionId: string,
   body: UpdateBody,
+  /** The latest date it may be moved to (see `latestTransactionDate`); null for no limit. */
+  latestDate: string | null = null,
 ) {
   const existing = await lockTransaction(tx, budgetId, transactionId);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  // Only a new date is checked, so a row already dated ahead (from before EVERYCENT-137) can
+  // still be edited.
+  if (body.date !== undefined && body.date !== existing.date)
+    assertNotFuture(body.date, latestDate);
   if (existing.cleared === "reconciled" && body.cleared !== undefined) reconciledStays();
   if (existing.transferSubTransactionId) {
     return updateSplitTransferSide(tx, budgetId, existing, body);
@@ -276,7 +300,9 @@ export async function applyUpdate(
   if (other && !transferTo) {
     await tx.delete(transaction).where(eq(transaction.id, other.id));
   } else if (other && transferTo) {
-    // Date and amount are shared; memo, cleared and category stay per side.
+    // Date, amount and memo are shared; cleared, flag and category stay per side. YNAB copies a
+    // memo edit on either side to the other (2026-10-15, EVERYCENT-158); only a changed memo is
+    // copied, so saving a row leaves a memo set apart by the bulk Memo action alone.
     const keep = usesCategory(transferTo, account) ? other.categoryId : null;
     await tx
       .update(transaction)
@@ -290,6 +316,7 @@ export async function applyUpdate(
           moved || retargeted
             ? await resolveCategory(tx, budgetId, transferTo, account, keep)
             : undefined,
+        memo: body.memo !== undefined && body.memo !== existing.memo ? body.memo : undefined,
       })
       .where(eq(transaction.id, other.id));
   } else if (transferTo) {
@@ -348,7 +375,8 @@ function categoryOnSplit(): never {
 
 /**
  * The other side of a split's transfer line: the split owns its date, amount, account and payee,
- * so only memo, cleared and (where one applies) the category change here.
+ * so only memo, cleared and (where one applies) the category change here. The memo is shared
+ * with the line, as in YNAB (2026-10-15, EVERYCENT-158).
  */
 async function updateSplitTransferSide(
   tx: Db,
@@ -383,5 +411,11 @@ async function updateSplitTransferSide(
       flag: body.flag,
     })
     .where(eq(transaction.id, existing.id));
+  if (body.memo !== undefined && body.memo !== existing.memo && existing.transferSubTransactionId) {
+    await tx
+      .update(subTransaction)
+      .set({ memo: body.memo })
+      .where(eq(subTransaction.id, existing.transferSubTransactionId));
+  }
   return account.id;
 }

@@ -19,6 +19,7 @@ type Account = {
   type: string;
   note: string;
   closed: boolean;
+  starredOrder: number | null;
   paymentCategoryId: string | null;
   pairedCategoryId: string | null;
   balances: { working: string };
@@ -55,8 +56,8 @@ async function setup() {
   return { owner, budget, base, addAccount };
 }
 
-const freshStart = (budgetId: string, cookie: string) =>
-  send("POST", `/v1/budgets/${budgetId}/fresh-start`, cookie, { date: TODAY });
+const freshStart = (budgetId: string, cookie: string, name = "Household") =>
+  send("POST", `/v1/budgets/${budgetId}/fresh-start`, cookie, { date: TODAY, name });
 
 describe("fresh start", () => {
   it("archives the old budget and continues in a copy without transactions", async () => {
@@ -95,11 +96,14 @@ describe("fresh start", () => {
     const costco = await json<{ payeeId: string }>(spend);
     await send("PATCH", `${base}/payees/${costco.payeeId}`, owner.cookie, { hidden: true });
 
-    const res = await freshStart(budget.id, owner.cookie);
+    // A starred account stays starred (YNAB, "x-c11-151 FS" → "FS2", 2026-10-15).
+    await send("PATCH", `${base}/accounts/${visa.id}`, owner.cookie, { starred: true });
+
+    const res = await freshStart(budget.id, owner.cookie, "Household 2027");
     expect(res.status).toBe(201);
     const fresh = await json<Budget>(res);
     expect(fresh).toMatchObject({
-      name: "Household",
+      name: "Household 2027",
       currency: budget.currency,
       numberFormat: budget.numberFormat,
       dateFormat: budget.dateFormat,
@@ -115,7 +119,8 @@ describe("fresh start", () => {
     expect(list.lastUsedBudgetId).toBe(fresh.id);
 
     const archived = await json<Budget>(await send("GET", base, owner.cookie));
-    expect(archived.name).toBe("Household (Archived 10/01/2026)");
+    // YNAB stamps the ISO date whatever the date format ("x-c11-151 FS", 2026-10-15).
+    expect(archived.name).toBe("Household (Archived on 2026-10-01)");
     expect(archived.archivedAt).not.toBeNull();
 
     const freshBase = `/v1/budgets/${fresh.id}`;
@@ -128,6 +133,7 @@ describe("fresh start", () => {
       ["Visa", "credit_card", false, "0"],
       ["Mortgage", "mortgage", false, "0"],
     ]);
+    expect(accounts.map((a) => a.starredOrder)).toEqual([null, 0, null]);
     const newVisa = accounts.find((a) => a.name === "Visa");
     const visaTxns = (
       await json<{ transactions: Txn[] }>(
@@ -217,7 +223,8 @@ describe("fresh start", () => {
     const list = async (b: string) =>
       (
         await json<{ scheduledTransactions: Row[] }>(
-          await send("GET", `${b}/scheduled-transactions`, owner.cookie),
+          // Pinned `today`: the server's date would enter the schedules once the clock passes them.
+          await send("GET", `${b}/scheduled-transactions?today=${TODAY}`, owner.cookie),
         )
       ).scheduledTransactions.filter((r) => r.kind === "schedule");
     const accounts = (
@@ -281,12 +288,33 @@ describe("fresh start", () => {
     expect((await freshStart(budget.id, partner.cookie)).status).toBe(403);
   });
 
-  it("can't fresh-start an archived budget twice", async () => {
-    const { owner, budget } = await setup();
+  // YNAB, 2026-10-15 (EVERYCENT-151): an archived plan is an ordinary plan with a stamp in its
+  // name. Its menu still offers a fresh start, and renaming the stamp away restores it.
+  it("restores an archived budget by renaming it, and lets it start fresh again", async () => {
+    const { owner, budget, base } = await setup();
     expect((await freshStart(budget.id, owner.cookie)).status).toBe(201);
-    const again = await freshStart(budget.id, owner.cookie);
-    expect(again.status).toBe(409);
-    expect((await json<{ error: { code: string } }>(again)).error.code).toBe("ALREADY_ARCHIVED");
+    const renamed = await json<Budget>(
+      await send("PATCH", base, owner.cookie, { name: "Household (Archived on 2026-10-01) old" }),
+    );
+    expect(renamed.archivedAt).not.toBeNull();
+    const restored = await json<Budget>(
+      await send("PATCH", base, owner.cookie, { name: "Household old" }),
+    );
+    expect(restored).toMatchObject({ name: "Household old", archivedAt: null });
+
+    expect((await freshStart(budget.id, owner.cookie, "Household again")).status).toBe(201);
+    const again = await json<Budget>(await send("GET", base, owner.cookie));
+    expect(again.name).toBe("Household old (Archived on 2026-10-01)");
+    expect((await freshStart(budget.id, owner.cookie, "Third")).status).toBe(201);
+  });
+
+  it("needs a name for the new budget", async () => {
+    const { owner, budget } = await setup();
+    expect((await freshStart(budget.id, owner.cookie, "   ")).status).toBe(400);
+    const res = await send("POST", `/v1/budgets/${budget.id}/fresh-start`, owner.cookie, {
+      date: TODAY,
+    });
+    expect(res.status).toBe(400);
   });
 
   it("copies targets, starting in the fresh start's month", async () => {

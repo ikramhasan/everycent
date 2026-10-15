@@ -147,7 +147,7 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await account(mortgage.id))?.lastPaymentFromAccountId).toBe(savings.id);
   });
 
-  it("reports the cash account a credit card was last paid from", async () => {
+  it("reports the account a credit card was last paid from, another card included", async () => {
     const { cookie, base, addAccount, checking, account } = await setup();
     const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });
     const other = await addAccount({ name: "Amex", type: "credit_card", balance: "0" });
@@ -166,11 +166,16 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     expect((await account(card.id))?.lastPaymentFromAccountId).toBeNull();
     await transfer(checking.id, card.id, "2026-10-05");
     expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
-    // A balance transfer from another card isn't a payment; a cash advance goes the other way.
+    // YNAB (2026-10-15, x-c11-163 Card C): a transfer from another card entered later becomes
+    // the default; a cash advance goes the other way and doesn't.
     await transfer(other.id, card.id, "2026-10-06");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(other.id);
     await transfer(card.id, checking.id, "2026-10-07");
-    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(other.id);
     expect((await account(checking.id))?.lastPaymentFromAccountId).toBeNull();
+    // The one entered last counts, even back-dated before the others.
+    await transfer(checking.id, card.id, "2026-10-01");
+    expect((await account(card.id))?.lastPaymentFromAccountId).toBe(checking.id);
   });
 
   it("charges escrow and interest on the months with payments", async () => {

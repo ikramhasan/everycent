@@ -18,6 +18,21 @@ export function isScheduled(draft: Pick<Draft, "date" | "frequency">, today: str
   return (draft.frequency ?? "never") !== "never" || draft.date > today;
 }
 
+/**
+ * The selected scheduled splits, for bulk Categorize's un-split warning (YNAB counts them with
+ * the transactions, 2026-10-15). A split's other sides (`splitTransfer` rows) aren't the split:
+ * bulk actions skip them.
+ */
+export function scheduledSplits(rows: readonly ScheduledTransaction[]) {
+  const splits = rows.filter((row) => row.kind === "schedule" && row.subtransactions.length > 0);
+  return {
+    splits: splits.length,
+    splitsWithTransfers: splits.filter((row) =>
+      row.subtransactions.some((line) => line.transferAccountId !== null),
+    ).length,
+  };
+}
+
 /** The editor's fields for a scheduled row, in that row's account (a transfer's other side too). */
 export function draftFromScheduled(row: ScheduledTransaction, settings: MoneySettings): Draft {
   const amount = BigInt(row.amount);

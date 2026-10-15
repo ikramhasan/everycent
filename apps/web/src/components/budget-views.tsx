@@ -26,6 +26,7 @@ import { type FormEvent, useEffect, useId, useState } from "react";
 import { type CustomView, MAX_CUSTOM_VIEWS, type ViewActions } from "@/lib/budget-views";
 import { apiErrorMessage } from "@/lib/budgets";
 import type { CategoryList } from "@/lib/categories";
+import type { OverflowView } from "./budget-filter-bar";
 
 const PRESET_LABELS: Record<string, string> = {
   underfunded: "Underfunded",
@@ -42,14 +43,21 @@ export type ViewDialog =
   | { kind: "manage" }
   | { kind: "edit"; view: CustomView | null; preselected?: readonly string[] };
 
-/** YNAB's Views Menu after the views: Manage Views and New View (disabled at the limit). */
+/**
+ * YNAB's Views Menu after the views: the views that didn't fit the bar, then Manage Views and
+ * New View (disabled at the limit).
+ */
 export function ViewsMenu({
   full,
+  overflow = [],
+  onPick,
   onManage,
   onNew,
 }: {
   /** The budget has as many custom views as YNAB allows. */
   full: boolean;
+  overflow?: readonly OverflowView[];
+  onPick?: (key: string) => void;
   onManage: () => void;
   onNew: () => void;
 }) {
@@ -61,6 +69,12 @@ export function ViewsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
+        {overflow.map((view) => (
+          <DropdownMenuItem key={view.key} onSelect={() => onPick?.(view.key)}>
+            <span className="truncate">{view.label}</span>
+          </DropdownMenuItem>
+        ))}
+        {overflow.length > 0 && <DropdownMenuSeparator />}
         <DropdownMenuItem onSelect={onManage}>
           <ListPlus /> Manage Views
         </DropdownMenuItem>

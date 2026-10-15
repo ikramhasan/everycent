@@ -117,7 +117,7 @@ async function setup() {
   const scheduled = async () =>
     (
       await json<{ scheduledTransactions: Array<{ memo: string }> }>(
-        await send("GET", `${base}/scheduled-transactions`, cookie),
+        await send("GET", `${base}/scheduled-transactions?today=${TODAY}`, cookie),
       )
     ).scheduledTransactions.map((s) => s.memo);
   const readyToAssign = async () =>
@@ -222,6 +222,23 @@ describe("update to a loan account", () => {
       await send("GET", `${s.base}/accounts/${other.id}/loan?today=${TODAY}`, s.cookie),
     );
     expect(plain.originalHistory).toBeNull();
+  });
+
+  // YNAB, 2026-10-15 (EVERYCENT-165): "Re-open Account … Re-opening this account will erase the
+  // information that was migrated." Afterwards it can be updated again.
+  it("erases the link when the original is reopened", async () => {
+    const s = await setup();
+    const { loan } = await json<{ loan: Account }>(await s.update(s.heloc.id, {}));
+    const reopened = await json<Account>(
+      await send("POST", `${s.base}/accounts/${s.heloc.id}/reopen`, s.cookie),
+    );
+    expect(reopened).toMatchObject({ closed: false, migratedToAccountId: null });
+    const activity = await json<{ originalHistory: unknown }>(
+      await send("GET", `${s.base}/accounts/${loan.id}/loan?today=${TODAY}`, s.cookie),
+    );
+    expect(activity.originalHistory).toBeNull();
+    expect((await s.accounts()).find((a) => a.id === loan.id)?.migratedFromAccountId).toBeNull();
+    expect((await s.update(s.heloc.id, { name: "HELOC again" })).status).toBe(201);
   });
 
   it("drops escrow from a loan that isn't a mortgage", async () => {

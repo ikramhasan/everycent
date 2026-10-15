@@ -1,4 +1,20 @@
-import { type DateFormat, usesCategory } from "@everycent/engine";
+import {
+  accountFamily,
+  type DateFormat,
+  formatAmount,
+  money,
+  usesCategory,
+} from "@everycent/engine";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
@@ -12,13 +28,17 @@ import type { Flag } from "@/lib/flags";
 import type { MoneySettings } from "@/lib/money-input";
 import {
   type CategoryOption,
+  clearedFor,
   type Draft,
   emptyLine,
   type LineDraft,
   type Payee,
   remainingLabel,
+  splitMismatch,
   splitRemaining,
   startSplit,
+  type TransferDirection,
+  withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
 import type { ColumnId } from "./register-columns";
@@ -45,7 +65,9 @@ export function TransactionEditor({
   openDatePicker = false,
   pending,
   error,
+  transferCategory,
   onSave,
+  onSaveAndAddAnother,
   onCancel,
 }: {
   initial: Draft;
@@ -68,7 +90,11 @@ export function TransactionEditor({
   openDatePicker?: boolean;
   pending: boolean;
   error: string | null;
+  /** An in-budget transfer's category text ("Credit Card Payments: <card>"), or "". */
+  transferCategory?: (accountId: string, transferAccountId: string | null) => string;
   onSave: (draft: Draft) => void;
+  /** A new row's "Save and add another" (also its Enter); the next row keeps the date. */
+  onSaveAndAddAnother?: (draft: Draft) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
@@ -80,6 +106,18 @@ export function TransactionEditor({
   const transfers = accounts.filter((a) => a.id !== draft.accountId);
   const lines = draft.lines;
   const canSplit = account ? usesCategory(account.type, null) && !draft.transferAccountId : false;
+  // Remounts the payee field focused, after the card's "Payment to <card>" is picked.
+  const [payeeFocus, setPayeeFocus] = useState(0);
+  // YNAB (2026-10-15): a card's category list has "Payment to <card>" under "Credit Cards".
+  // Picking it clears the payee and category and moves to the payee list, to pick the account
+  // the payment comes from.
+  const pickable =
+    account && accountFamily(account.type) === "credit"
+      ? [
+          ...categories,
+          { id: CARD_PAYMENT, name: `Payment to ${account.name}`, group: "Credit Cards" },
+        ]
+      : categories;
 
   function setLine(key: string, patch: Partial<LineDraft>) {
     setDraft((d) => ({
@@ -91,14 +129,26 @@ export function TransactionEditor({
     setDraft((d) => ({ ...d, lines: d.lines?.filter((l) => l.key !== key) ?? null }));
   }
 
+  // YNAB's "Something Doesn't Add Up": saving a split whose lines miss its total asks first.
+  const [mismatch, setMismatch] = useState<ReturnType<typeof splitMismatch>>(null);
+  function save(another = false) {
+    const found = splitMismatch(draft, settings);
+    if (found) setMismatch(found);
+    else if (another && onSaveAndAddAnother) onSaveAndAddAnother(draft);
+    else onSave(draft);
+  }
+  const show = (amount: bigint) => formatAmount(money(amount, settings.currency), settings);
+
   function handleKeyDown(event: KeyboardEvent) {
-    if (listOwnsKey(event)) return;
+    // The prompt's keys reach the row through the portal; they're the prompt's own.
+    if (listOwnsKey(event) || mismatch) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel();
     } else if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
       event.preventDefault();
-      onSave(draft);
+      // On a new row, YNAB's Enter is "Save and add another" (2026-10-15).
+      save(true);
     }
   }
 
@@ -119,6 +169,8 @@ export function TransactionEditor({
         return (
           <NativeSelect
             aria-label="Account"
+            // First field of the row (the date is, without an account column).
+            autoFocus
             value={draft.accountId}
             onChange={(e) => {
               const next = accounts.find((a) => a.id === e.target.value);
@@ -126,6 +178,9 @@ export function TransactionEditor({
               const self = draft.transferAccountId === e.target.value;
               set({
                 accountId: e.target.value,
+                // On a new row (the one with "Save and add another") YNAB re-applies the
+                // account's starting state, over a manual toggle.
+                ...(onSaveAndAddAnother ? { cleared: clearedFor(next?.type) } : {}),
                 ...(self ? { payeeName: "", transferAccountId: null } : {}),
                 ...(next && !usesCategory(next.type, self ? null : transferTo?.type)
                   ? { categoryId: null, lines: null }
@@ -159,9 +214,12 @@ export function TransactionEditor({
       case "payee":
         return (
           <PayeeField
+            key={payeeFocus}
+            autoFocus={payeeFocus > 0}
             value={draft.payeeName}
             payees={payees}
             transfers={lines ? [] : transfers}
+            own={account && { type: account.type, direction: typedDirection(draft) }}
             onChange={({ name, transferAccountId, payee }) =>
               setDraft((d) => {
                 const to = accounts.find((a) => a.id === transferAccountId);
@@ -192,12 +250,21 @@ export function TransactionEditor({
         return needsCategory ? (
           <CategoryField
             value={draft.categoryId}
-            onChange={(categoryId) => set({ categoryId })}
+            onChange={(categoryId) => {
+              if (categoryId !== CARD_PAYMENT) {
+                set({ categoryId });
+                return;
+              }
+              set({ categoryId: null, payeeName: "", transferAccountId: null });
+              setPayeeFocus((n) => n + 1);
+            }}
             onSplit={canSplit ? () => setDraft(startSplit) : undefined}
-            categories={categories}
+            categories={pickable}
           />
         ) : (
-          <p className="px-2 text-muted-foreground text-sm italic">Category not needed</p>
+          <p className="truncate px-2 text-muted-foreground text-sm italic">
+            {transferCategory?.(draft.accountId, draft.transferAccountId) || "Category not needed"}
+          </p>
         );
       case "memo":
         return (
@@ -263,6 +330,7 @@ export function TransactionEditor({
             value={line.payeeName}
             payees={payees}
             transfers={transfers}
+            own={account && { type: account.type, direction: typedDirection(line) }}
             onChange={({ name: payeeName, transferAccountId, payee }) => {
               const toAccount = accounts.find((a) => a.id === transferAccountId);
               const uses = account ? usesCategory(account.type, toAccount?.type) : true;
@@ -397,12 +465,60 @@ export function TransactionEditor({
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={() => onSave(draft)} disabled={pending}>
+            <Button type="button" size="sm" onClick={() => save()} disabled={pending}>
               Save
             </Button>
+            {onSaveAndAddAnother && (
+              <Button type="button" size="sm" onClick={() => save(true)} disabled={pending}>
+                Save and add another
+              </Button>
+            )}
           </div>
+          <AlertDialog open={mismatch !== null} onOpenChange={(open) => !open && setMismatch(null)}>
+            <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Something Doesn't Add Up</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {mismatch &&
+                    `The total is ${show(mismatch.total)}, but the splits add up to ${show(
+                      mismatch.lines,
+                    )}. How would you like to handle the unassigned ${show(mismatch.unassigned)}?`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {/* YNAB's order; each leaves the row open to check before saving. */}
+              <AlertDialogFooter>
+                {mismatch?.distributed && (
+                  <AlertDialogAction
+                    onClick={() => {
+                      const lines = mismatch.distributed;
+                      setDraft((d) => ({ ...d, lines }));
+                    }}
+                  >
+                    Auto-Distribute
+                  </AlertDialogAction>
+                )}
+                <AlertDialogAction
+                  variant="outline"
+                  onClick={() => setDraft((d) => withSplitTotal(d, settings))}
+                >
+                  Update Total
+                </AlertDialogAction>
+                <AlertDialogCancel>Adjust Manually</AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TableCell>
       </TableRow>
     </>
   );
+}
+
+/** The card's own "Payment to <card>" entry in its category list. */
+const CARD_PAYMENT = "__card_payment";
+
+/** Which way the typed amount goes: YNAB words its transfers by it ("Payment from …"). */
+function typedDirection(amounts: { outflow: string; inflow: string }): TransferDirection {
+  if (amounts.inflow.trim()) return "in";
+  if (amounts.outflow.trim()) return "out";
+  return null;
 }

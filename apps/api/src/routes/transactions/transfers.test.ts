@@ -109,6 +109,52 @@ describe("transfers", () => {
     expect(await working(savings.id)).toBe("25000");
   });
 
+  it("starts new transactions cleared in cash accounts, each transfer side by its own", async () => {
+    // YNAB's web app, 2026-10-15 (EVERYCENT-146).
+    const { addAccount, post, transfer, find, groceries } = await setup();
+    const checking = await addAccount("Checking", "checking", "100000");
+    const wallet = await addAccount("Wallet", "cash", "10000");
+    const savings = await addAccount("Savings", "savings");
+    const created = async (input: Record<string, unknown>) => {
+      const res = await post(input);
+      expect(res.status, await res.clone().text()).toBe(201);
+      return json<Txn>(res);
+    };
+    const spend = { amount: "-500", payeeName: "Kiosk", categoryId: groceries.id };
+    expect((await created({ accountId: wallet.id, ...spend })).cleared).toBe("cleared");
+    expect((await created({ accountId: checking.id, ...spend })).cleared).toBe("uncleared");
+    expect((await created({ accountId: savings.id, ...spend })).cleared).toBe("uncleared");
+    // Said explicitly, it's kept.
+    expect((await created({ accountId: wallet.id, ...spend, cleared: "uncleared" })).cleared).toBe(
+      "uncleared",
+    );
+
+    // Entered from the checking side: the cash side is cleared all the same.
+    const toCash = await transfer(checking, wallet, "-2000", { cleared: "uncleared" });
+    expect(toCash.cleared).toBe("uncleared");
+    expect((await find(toCash.transferTransactionId ?? ""))?.cleared).toBe("cleared");
+    const fromCash = await transfer(wallet, checking, "-1000");
+    expect(fromCash.cleared).toBe("cleared");
+    expect((await find(fromCash.transferTransactionId ?? ""))?.cleared).toBe("uncleared");
+
+    // A split's transfer line into cash.
+    const split = await created({
+      accountId: checking.id,
+      amount: "-3000",
+      payeeName: "Mixed",
+      cleared: "uncleared",
+      subtransactions: [
+        { amount: "-1000", categoryId: groceries.id },
+        { amount: "-2000", payeeName: null, transferAccountId: wallet.id, categoryId: null },
+      ],
+    });
+    const line = (await find(split.id)) as unknown as {
+      subtransactions: { transferTransactionId: string | null }[];
+    };
+    const other = line.subtransactions.find((l) => l.transferTransactionId)?.transferTransactionId;
+    expect((await find(other ?? ""))?.cleared).toBe("cleared");
+  });
+
   it("categorizes only the budget side of a transfer to a tracking account", async () => {
     const { addAccount, post, transfer, find, groceries } = await setup();
     const checking = await addAccount("Checking", "checking", "100000");
@@ -163,7 +209,7 @@ describe("transfers", () => {
     expect(both.status).toBe(400);
   });
 
-  it("syncs date and amount to the other side, keeps memo and cleared per side", async () => {
+  it("syncs date, amount and memo to the other side, keeps cleared per side", async () => {
     const { addAccount, transfer, patch, find } = await setup();
     const checking = await addAccount("Checking", "checking", "100000");
     const savings = await addAccount("Savings", "savings");
@@ -174,7 +220,8 @@ describe("transfers", () => {
     expect(await find(out.id)).toMatchObject({
       amount: "-30000",
       date: "2026-10-03",
-      memo: "",
+      // YNAB copies a memo edit to the other side (EVERYCENT-158).
+      memo: "mine",
       cleared: "uncleared",
     });
     expect(await find(otherId)).toMatchObject({ memo: "mine", cleared: "cleared" });

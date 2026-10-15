@@ -1,5 +1,11 @@
 import type { components } from "@everycent/api-client";
-import type { ScheduleFrequency } from "@everycent/engine";
+import {
+  type AccountType,
+  accountFamily,
+  distributeSplit,
+  isDebtAccount,
+  type ScheduleFrequency,
+} from "@everycent/engine";
 import { $api } from "./api";
 import type { CategoryList } from "./categories";
 import type { FlagColor } from "./flags";
@@ -55,6 +61,73 @@ export function categoryLabel(option: CategoryOption) {
 /** How the register names an account's transfer payee (the API stores the same). */
 export function transferLabel(accountName: string) {
   return `Transfer : ${accountName}`;
+}
+
+/** Which way money moves for the account being edited; null before an amount is typed. */
+export type TransferDirection = "in" | "out" | null;
+
+/** An account on the other side of a transfer. */
+interface TransferAccount {
+  name: string;
+  type: AccountType;
+}
+
+/**
+ * Whether money moving from `from` to `to` is a payment in YNAB's wording (2026-10-15, "ihni7's
+ * Plan"): into a loan, or into a credit account from a cash or asset account. Money between two
+ * cards, into a cash account, or from a liability is a transfer.
+ */
+function isPayment(from: AccountType, to: AccountType) {
+  const family = accountFamily(to);
+  return family === "loan" || (family === "credit" && !isDebtAccount(from));
+}
+
+/**
+ * How YNAB's payee list names a transfer to or from `other` while editing in an `own` account
+ * (2026-10-15): "Payment from Brac" / "Transfer from Card B" for an inflow, "Payment to Card A" /
+ * "Transfer to Savings" for an outflow, "To/From X" before an amount is typed. A loan always reads
+ * "Payment: X".
+ */
+export function transferChoiceLabel(
+  own: AccountType,
+  other: TransferAccount,
+  direction: TransferDirection,
+) {
+  if (accountFamily(other.type) === "loan") return `Payment: ${other.name}`;
+  if (direction === "in") {
+    return `${isPayment(other.type, own) ? "Payment" : "Transfer"} from ${other.name}`;
+  }
+  if (direction === "out") {
+    return `${isPayment(own, other.type) ? "Payment" : "Transfer"} to ${other.name}`;
+  }
+  return `To/From ${other.name}`;
+}
+
+/** The direction of a typed or saved amount. */
+export function directionOf(amount: bigint): TransferDirection {
+  return amount > 0n ? "in" : amount < 0n ? "out" : null;
+}
+
+/**
+ * How a register row names its transfer payee (YNAB, 2026-10-15, every register and All
+ * Accounts): "Payment: X" on both sides of a payment (`isPayment`), "Transfer: X" otherwise. The
+ * stored payee stays "Transfer : X", as in YNAB's own data.
+ */
+export function transferRowLabel(own: AccountType, other: TransferAccount, amount: bigint) {
+  const payment = amount > 0n ? isPayment(other.type, own) : isPayment(own, other.type);
+  return `${payment ? "Payment" : "Transfer"}: ${other.name}`;
+}
+
+/**
+ * A transfer between a credit and a cash account shows the card's payment category on both
+ * sides, whichever way the money goes (YNAB, 2026-10-15: "Credit Card Payments: x-c11-163 Card A"
+ * on a payment and on a cash advance). Returns the card, or null.
+ */
+export function paymentCategoryCard<A extends { type: AccountType }>(own: A, other: A): A | null {
+  const pair = [own, other];
+  const card = pair.find((a) => accountFamily(a.type) === "credit");
+  const cash = pair.find((a) => accountFamily(a.type) === "cash");
+  return card && cash ? card : null;
 }
 
 /** The fields of the inline editor, as typed. */
@@ -115,7 +188,15 @@ export function startSplit(draft: Draft): Draft {
   };
 }
 
-export function emptyDraft(accountId: string, date: string): Draft {
+/**
+ * How a new transaction starts in an account of `type`: cleared in a cash account, otherwise
+ * uncleared (YNAB's web app, 2026-10-15; the editor re-applies it when the account changes).
+ */
+export function clearedFor(type: AccountType | undefined): Draft["cleared"] {
+  return type === "cash" ? "cleared" : "uncleared";
+}
+
+export function emptyDraft(accountId: string, date: string, accountType?: AccountType): Draft {
   return {
     accountId,
     date,
@@ -125,7 +206,7 @@ export function emptyDraft(accountId: string, date: string): Draft {
     memo: "",
     outflow: "",
     inflow: "",
-    cleared: "uncleared",
+    cleared: clearedFor(accountType),
     flag: null,
     lines: null,
   };
@@ -196,6 +277,52 @@ export function splitRemaining(
   // Positive while lines are still missing, negative when they go past the total.
   const remaining = total < 0n ? lines - total : total - lines;
   return { total, remaining };
+}
+
+/** A money input's text for a signed amount: an outflow or an inflow, empty at zero. */
+function sides(amount: bigint, settings: MoneySettings): Pick<LineDraft, "outflow" | "inflow"> {
+  return {
+    outflow: amount < 0n ? toMoneyInput(-amount, settings) : "",
+    inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
+  };
+}
+
+/**
+ * A split whose lines don't add up to its total, for YNAB's "Something Doesn't Add Up" prompt:
+ * the total, what the lines add up to and what's unassigned (total minus lines), all signed.
+ * Null when it adds up or an amount can't be read.
+ */
+export function splitMismatch(draft: Draft, settings: MoneySettings) {
+  if (!draft.lines) return null;
+  const amounts = draft.lines.map((line) => draftAmount(line, settings));
+  const total = draftAmount(draft, settings);
+  const blank = draft.outflow.trim() === "" && draft.inflow.trim() === "";
+  if (blank || typeof total === "string" || amounts.some((a) => typeof a === "string")) {
+    return null;
+  }
+  const lines = (amounts as bigint[]).reduce((sum, a) => sum + a, 0n);
+  if (lines === total) return null;
+  const unassigned = total - lines;
+  const added = distributeSplit(unassigned, amounts as bigint[]);
+  return {
+    total,
+    lines,
+    unassigned,
+    /** The lines after Auto-Distribute; null when they cancel out and have no proportion. */
+    distributed: added
+      ? draft.lines.map((line, i) => {
+          const amount = (amounts[i] as bigint) + (added[i] ?? 0n);
+          // A $0 line YNAB skips stays as it was (empty).
+          return added[i] === 0n ? line : { ...line, ...sides(amount, settings) };
+        })
+      : null,
+  };
+}
+
+/** YNAB's "Update Total": the transaction takes what its lines add up to. */
+export function withSplitTotal(draft: Draft, settings: MoneySettings): Draft {
+  const mismatch = splitMismatch(draft, settings);
+  return mismatch ? { ...draft, ...sides(mismatch.lines, settings) } : draft;
 }
 
 /** How the editor and errors describe what's left of a split. */

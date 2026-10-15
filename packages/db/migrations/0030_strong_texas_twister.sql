@@ -1,0 +1,1 @@
+ALTER TABLE "budget_account" ADD COLUMN "starred_sort_order" integer;

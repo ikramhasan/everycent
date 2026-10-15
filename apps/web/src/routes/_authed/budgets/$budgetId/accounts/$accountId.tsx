@@ -24,11 +24,17 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
-import { cardPaymentDraft, PaymentFigure, useCardPayment } from "@/components/card-payment";
+import {
+  cardPaymentDraft,
+  OverspendingFigure,
+  PaymentFigure,
+  useCardPayment,
+} from "@/components/card-payment";
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
+import { StarButton } from "@/components/star-button";
 import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -44,18 +50,22 @@ import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
   /**
-   * `transaction`: scroll to and highlight it (the other side of a transfer). The rest is the
-   * register's search, filters and sort.
+   * `transaction`: scroll to and highlight it (the other side of a transfer). `recordPayment`:
+   * open a card's Record Payment row (the payment inspector's button). The rest is the register's
+   * search, filters and sort.
    */
-  validateSearch: registerSearchSchema.extend({ transaction: z.string().optional() }),
+  validateSearch: registerSearchSchema.extend({
+    transaction: z.string().optional(),
+    recordPayment: z.boolean().optional(),
+  }),
   component: AccountPage,
 });
 
-type Confirm = "close" | "delete" | null;
+type Confirm = "close" | "delete" | "reopen" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
-  const { transaction, ...registerSearch } = Route.useSearch();
+  const { transaction, recordPayment: openPayment, ...registerSearch } = Route.useSearch();
   const { budget, formatAmount } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -65,6 +75,15 @@ function AccountPage() {
         to: ".",
         search: (prev) => ({ ...prev, ...patch, transaction: undefined }),
         replace,
+      }),
+    [navigate],
+  );
+  const onRecordPaymentOpened = useCallback(
+    () =>
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, recordPayment: undefined }),
+        replace: true,
       }),
     [navigate],
   );
@@ -99,6 +118,12 @@ function AccountPage() {
   const reconcilable = account !== undefined && !isLoan;
   const isCard = account !== undefined && accountFamily(account.type) === "credit";
   const cardPayment = useCardPayment(isCard ? account : undefined);
+  // A Record Payment link to an account that can't take one (closed, or not a card) is dropped,
+  // so it can't open a payment row later (after a reopen) on its own.
+  const paymentImpossible = account !== undefined && (!isCard || account.closed);
+  useEffect(() => {
+    if (openPayment && paymentImpossible) onRecordPaymentOpened();
+  }, [openPayment, paymentImpossible, onRecordPaymentOpened]);
 
   // A reconciliation in progress belongs to the account it started on.
   useEffect(() => setReconcilingTo(null), [accountId]);
@@ -209,9 +234,50 @@ function AccountPage() {
     void closeNow();
   }
 
+  const reopenNow = () =>
+    run(
+      () => reopen.mutateAsync({ params: { path, query: { today: todayIso() } } }),
+      "Account reopened",
+      "Couldn't reopen the account.",
+    );
+
   function confirmDialog() {
     if (!account) return null;
     const closing = closeAccountNotice(account.type, working);
+    if (confirm === "reopen") {
+      const loanName =
+        accounts.data?.accounts.find((a) => a.id === account.migratedToAccountId)?.name ?? "";
+      // YNAB's Re-open Account for an updated tracking account (2026-10-15, EVERYCENT-165).
+      return (
+        <AlertDialog open onOpenChange={(o) => !o && setConfirm(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Re-open Account</AlertDialogTitle>
+              <AlertDialogDescription>
+                The history in this closed account was migrated to your {loanName} loan account.
+                Re-opening this account will erase the information that was migrated.
+              </AlertDialogDescription>
+              <AlertDialogDescription className="font-medium">
+                This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={async () => {
+                  setConfirm(null);
+                  setEditing(false);
+                  await reopenNow();
+                }}
+              >
+                Erase &amp; Re-open
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      );
+    }
     return (
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
@@ -291,7 +357,10 @@ function AccountPage() {
                 onClick={() =>
                   run(
                     () =>
-                      update.mutateAsync({ params: { path }, body: { pairedCategoryId: null } }),
+                      update.mutateAsync({
+                        params: { path, query: { today: todayIso() } },
+                        body: { pairedCategoryId: null },
+                      }),
                     "Category unpaired",
                     "Couldn't unpair the category.",
                   )
@@ -327,11 +396,7 @@ function AccountPage() {
               variant="outline"
               size="sm"
               onClick={() =>
-                run(
-                  () => reopen.mutateAsync({ params: { path } }),
-                  "Account reopened",
-                  "Couldn't reopen the account.",
-                )
+                account.migratedToAccountId ? setConfirm("reopen") : void reopenNow()
               }
             >
               Re-open
@@ -380,7 +445,10 @@ function AccountPage() {
       onSave={async (choice) => {
         try {
           const pairedCategoryId = await pairCategory(choice);
-          await update.mutateAsync({ params: { path }, body: { pairedCategoryId } });
+          await update.mutateAsync({
+            params: { path, query: { today: todayIso() } },
+            body: { pairedCategoryId },
+          });
           await refresh();
           return null;
         } catch (error) {
@@ -447,6 +515,11 @@ function AccountPage() {
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
+            <StarButton
+              budgetId={budget.id}
+              account={account}
+              accounts={accounts.data?.accounts ?? []}
+            />
             {account.closed && <Badge variant="secondary">Closed</Badge>}
           </div>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
@@ -507,7 +580,12 @@ function AccountPage() {
           strong
         />
         {cardPayment && (
-          <div className="ml-auto">
+          <div className="ml-auto flex items-end gap-4">
+            <OverspendingFigure
+              amount={cardPayment.creditOverspending}
+              month={cardPayment.month}
+              format={(minorUnits) => show(minorUnits)}
+            />
             <PaymentFigure
               categoryId={cardPayment.categoryId}
               available={cardPayment.available}
@@ -546,6 +624,9 @@ function AccountPage() {
                 })
             : undefined
         }
+        // The prefill needs the card's payment Available and the accounts.
+        openRecordPayment={openPayment === true && cardPayment !== null && accounts.isSuccess}
+        onRecordPaymentOpened={onRecordPaymentOpened}
       />
 
       {editDialog}

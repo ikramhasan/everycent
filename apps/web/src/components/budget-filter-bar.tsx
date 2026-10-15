@@ -1,6 +1,12 @@
 import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
 import type { ReactNode } from "react";
-import { type BudgetFilter, isPresetFilter } from "@/lib/budget-view";
+import { type BudgetFilter, fitsViewsBar, isPresetFilter } from "@/lib/budget-view";
+
+/** A view that didn't fit the bar, for the Views Menu. */
+export interface OverflowView {
+  key: string;
+  label: string;
+}
 
 /** The views Manage Views can't move: always first, in this order. */
 const FIXED: readonly BudgetFilter[] = ["all", "overspent"];
@@ -8,7 +14,8 @@ const FIXED: readonly BudgetFilter[] = ["all", "overspent"];
 /**
  * YNAB's views above the budget list: All, Overspent (with its count), then Underfunded,
  * Overfunded, Money Available, Snoozed and the custom views in the plan's order, and the Views
- * Menu after them.
+ * Menu after them. Views that don't fit the window (`fitsViewsBar`) move into the Views Menu,
+ * except the selected one.
  */
 export function BudgetFilterBar({
   filter,
@@ -17,6 +24,7 @@ export function BudgetFilterBar({
   onChange,
   order = ["underfunded", "overfunded", "available", "snoozed"],
   custom = [],
+  viewportWidth = Number.POSITIVE_INFINITY,
   menu,
 }: {
   /** A preset view or a custom view's id. */
@@ -29,8 +37,10 @@ export function BudgetFilterBar({
   /** The rearrangeable views in order: preset keys and custom view ids. */
   order?: readonly string[];
   custom?: readonly { id: string; name: string }[];
-  /** The Views Menu (Manage Views, New View). */
-  menu?: ReactNode;
+  /** The window's width in CSS pixels, which decides how many views fit the bar. */
+  viewportWidth?: number;
+  /** The Views Menu (the views that didn't fit, Manage Views, New View). */
+  menu?: (overflow: readonly OverflowView[]) => ReactNode;
 }) {
   const labels: Record<BudgetFilter, string> = {
     all: "All",
@@ -41,7 +51,17 @@ export function BudgetFilterBar({
     snoozed: "Snoozed",
   };
   const names = new Map(custom.map((v) => [v.id, v.name]));
-  const keys = [...FIXED, ...order].filter((key) => isPresetFilter(key) || names.has(key));
+  // YNAB leaves Overspent out when nothing is, unless that view is on ("0 Overspent").
+  const keys = [...FIXED, ...order].filter(
+    (key) =>
+      (isPresetFilter(key) || names.has(key)) &&
+      (key !== "overspent" || overspent > 0 || filter === key),
+  );
+  const label = (key: string) => (isPresetFilter(key) ? labels[key] : (names.get(key) ?? key));
+  const onBar = keys.filter((key, i) => key === filter || fitsViewsBar(i, viewportWidth));
+  const overflow = keys
+    .filter((key) => !onBar.includes(key))
+    .map((key) => ({ key, label: label(key) }));
   return (
     <div className="flex flex-wrap items-center gap-1">
       <ToggleGroup
@@ -55,26 +75,23 @@ export function BudgetFilterBar({
         }}
         className="flex-wrap justify-start"
       >
-        {/* YNAB leaves Overspent out when nothing is, unless that view is on ("0 Overspent"). */}
-        {keys
-          .filter((f) => f !== "overspent" || overspent > 0 || filter === f)
-          .map((f) => (
-            <ToggleGroupItem
-              key={f}
-              value={f}
-              className={
-                f === "overspent" && overspent > 0
-                  ? onlyCredit
-                    ? "text-yellow-700 data-[state=on]:text-yellow-700 dark:text-yellow-400 dark:data-[state=on]:text-yellow-400"
-                    : "text-destructive data-[state=on]:text-destructive"
-                  : undefined
-              }
-            >
-              {isPresetFilter(f) ? labels[f] : names.get(f)}
-            </ToggleGroupItem>
-          ))}
+        {onBar.map((f) => (
+          <ToggleGroupItem
+            key={f}
+            value={f}
+            className={
+              f === "overspent" && overspent > 0
+                ? onlyCredit
+                  ? "text-yellow-700 data-[state=on]:text-yellow-700 dark:text-yellow-400 dark:data-[state=on]:text-yellow-400"
+                  : "text-destructive data-[state=on]:text-destructive"
+                : undefined
+            }
+          >
+            {label(f)}
+          </ToggleGroupItem>
+        ))}
       </ToggleGroup>
-      {menu}
+      {menu?.(overflow)}
     </div>
   );
 }

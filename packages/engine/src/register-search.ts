@@ -22,7 +22,12 @@ export type SearchTerm =
   | { kind: "flag"; text: string }
   | { kind: "is"; state: IsState }
   | { kind: "amount"; direction: "outflow" | "inflow"; op: AmountOp; amount: bigint }
-  | { kind: "date"; op: DateOp; date: string };
+  | { kind: "date"; op: DateOp; date: string }
+  /**
+   * `Income: October 2026`: what went to or came from Ready to Assign in that month (`month`
+   * 1–12). Without a year it's the current year, which the caller knows.
+   */
+  | { kind: "income"; month: number; year: number | null };
 
 export const IS_STATES = [
   "uncleared",
@@ -47,6 +52,27 @@ export type DateOp = "on" | "before" | "after";
 
 /** `On:` is that day; `Before:`/`After:` include the day itself ("On or before"). */
 export const DATE_LABELS: Record<DateOp, string> = { on: "On", before: "Before", after: "After" };
+
+/** English month names, as YNAB's `Income:` term reads and writes them. */
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** `Income: October 2026` for a month (1–12) of a year. */
+export function incomeTerm(month: number, year: number) {
+  return `Income: ${MONTH_NAMES[month - 1]} ${year}`;
+}
 
 export interface SearchSettings {
   currency: CurrencyCode;
@@ -98,6 +124,8 @@ function labelled(label: string, value: string, settings: SearchSettings): Searc
       const op: AmountOp = match?.[1] === ">=" ? "gte" : match?.[1] === "<=" ? "lte" : "eq";
       return { kind: "amount", direction: label, op, amount };
     }
+    case "income":
+      return parseIncomeMonth(value);
     case "on":
     case "before":
     case "after": {
@@ -107,6 +135,21 @@ function labelled(label: string, value: string, settings: SearchSettings): Searc
     default:
       return null;
   }
+}
+
+/**
+ * A month name, in full or its first three letters, in any case, then an optional four-digit year
+ * ("October 2026", "oct", "OCTOBER"). YNAB reads nothing else ("10/2026", "Sept" match nothing).
+ */
+function parseIncomeMonth(value: string): SearchTerm | null {
+  const match = /^([a-z]+)(?:\s+(\d{4}))?$/i.exec(value);
+  if (!match?.[1]) return null;
+  const name = match[1].toLowerCase();
+  const index = MONTH_NAMES.findIndex(
+    (m) => m.toLowerCase() === name || m.slice(0, 3).toLowerCase() === name,
+  );
+  if (index < 0) return null;
+  return { kind: "income", month: index + 1, year: match[2] ? Number(match[2]) : null };
 }
 
 /** The unsigned amount (minor units) `text` reads as, if it's a number. */

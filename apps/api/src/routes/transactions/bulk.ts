@@ -164,14 +164,13 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       .where(where)
       .orderBy(transaction.id)
       .for("update");
-    if (locked.length === 0) return { updated: 0, before: [], created: [] };
+    if (locked.length === 0) return { updated: 0, before: [], created: [], copies: [] };
     const lockedIds = locked.map((r) => r.id);
     const beforeRows = await queryRegisterRows(tx, budgetId, lockedIds);
     const beforeById = new Map(beforeRows.map((row) => [row.id, row]));
     const rows = await selectedRows(tx, selectedIds(lockedIds));
 
     let updatedIds: string[];
-    let created: string[] = [];
     switch (action.type) {
       case "cleared": {
         const ids = rows.filter((r) => r.cleared !== "reconciled").map((r) => r.id);
@@ -198,9 +197,10 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       case "delete":
         updatedIds = await remove(tx, budgetId, lockedIds);
         break;
-      case "duplicate":
-        created = await duplicate(tx, budgetId, lockedIds);
-        return { updated: created.length, before: [], created };
+      case "duplicate": {
+        const { created, copies } = await duplicate(tx, budgetId, lockedIds);
+        return { updated: created.length, before: [], created, copies };
+      }
     }
     return {
       updated: updatedIds.length,
@@ -208,7 +208,8 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         const row = beforeById.get(id);
         return row ? [row] : [];
       }),
-      created,
+      created: [],
+      copies: [],
     };
   });
   return c.json(result, 200);
@@ -359,10 +360,15 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
  * YNAB's Duplicate: a copy of each row, same date and fields, cleared state kept (a reconciled
  * one comes back cleared) and approved; a transfer gets a new other side. A split's transfer side
  * copies its split; a transfer picked from both sides is copied once. Rows that would add a
- * transaction to a closed account are skipped. Returns the copies' ids.
+ * transaction to a closed account are skipped. Returns the copies' ids (`created`; deleting one
+ * takes its other sides along) and, in `copies`, each copy row whose original row was selected:
+ * YNAB selects both sides of a transfer's copy when both sides were selected (EVERYCENT-135).
  */
 async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
   const created: string[] = [];
+  const copies: string[] = [];
+  const made: [Awaited<ReturnType<typeof queryRegisterRows>>[number], string][] = [];
+  const selected = new Set(ids);
   const done = new Set<string>();
   for (const id of ids) {
     const row = await lockTransaction(tx, budgetId, id);
@@ -393,34 +399,55 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
       .where(inArray(budgetAccount.id, accountIds));
     if (accounts.some((a) => a.closed)) continue;
     const split = source.subtransactions.length > 0;
-    created.push(
-      await insertNewTransaction(tx, budgetId, {
-        accountId: source.accountId,
-        date: source.date,
-        amount: source.amount,
-        ...(source.transferAccountId
-          ? { payeeName: null, transferAccountId: source.transferAccountId }
-          : { payeeName: source.payeeName }),
-        categoryId: split ? null : source.categoryId,
-        memo: source.memo,
-        cleared: source.cleared === "reconciled" ? "cleared" : source.cleared,
-        flag: source.flag,
-        ...(split
-          ? {
-              subtransactions: source.subtransactions.map((l) => ({
-                amount: l.amount,
-                ...(l.transferAccountId
-                  ? { payeeName: null, transferAccountId: l.transferAccountId }
-                  : { payeeName: l.payeeName }),
-                categoryId: l.categoryId,
-                memo: l.memo,
-              })),
-            }
-          : {}),
-      }),
-    );
+    const copyId = await insertNewTransaction(tx, budgetId, {
+      accountId: source.accountId,
+      date: source.date,
+      amount: source.amount,
+      ...(source.transferAccountId
+        ? { payeeName: null, transferAccountId: source.transferAccountId }
+        : { payeeName: source.payeeName }),
+      categoryId: split ? null : source.categoryId,
+      memo: source.memo,
+      cleared: source.cleared === "reconciled" ? "cleared" : source.cleared,
+      flag: source.flag,
+      ...(split
+        ? {
+            subtransactions: source.subtransactions.map((l) => ({
+              amount: l.amount,
+              ...(l.transferAccountId
+                ? { payeeName: null, transferAccountId: l.transferAccountId }
+                : { payeeName: l.payeeName }),
+              categoryId: l.categoryId,
+              memo: l.memo,
+            })),
+          }
+        : {}),
+    });
+    created.push(copyId);
+    made.push([source, copyId]);
   }
-  return created;
+  // Every copy read in one query, after the loop.
+  const copyRows = new Map(
+    (await queryRegisterRows(tx, budgetId, created)).map((r) => [r.id, r] as const),
+  );
+  for (const [source, copyId] of made) {
+    const copy = copyRows.get(copyId);
+    if (!copy) continue;
+    // Each row of the original against the same row of its copy: the transaction, its transfer's
+    // other side and its lines' other sides (lines keep their order).
+    const pairs: [string | null, string | null][] = [
+      [source.id, copy.id],
+      [source.transferTransactionId, copy.transferTransactionId],
+      ...source.subtransactions.map((l, i): [string | null, string | null] => [
+        l.transferTransactionId,
+        copy.subtransactions[i]?.transferTransactionId ?? null,
+      ]),
+    ];
+    for (const [original, row] of pairs) {
+      if (original && row && selected.has(original)) copies.push(row);
+    }
+  }
+  return { created, copies };
 }
 
 /** One array parameter rather than one per id, so big selections stay one statement. */

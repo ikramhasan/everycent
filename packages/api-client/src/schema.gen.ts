@@ -199,7 +199,7 @@ export interface paths {
         put?: never;
         /**
          * Fresh start: archive this budget and continue in a copy without transactions
-         * @description Owner only. The new budget keeps the name, settings, partners, categories, payees, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts) and scheduled transactions. The old one is renamed '(Archived <date>)'.
+         * @description Owner only. The new budget is named `name` and keeps the settings, partners, categories (with their notes), payees, flag names, custom views, accounts (each starting at $0 on `date`, as YNAB starts unlinked accounts; starred ones stay starred) and scheduled transactions. The old one gets ' (Archived on <date>)' added to its name. An archived budget can make a fresh start again, as in YNAB.
          */
         post: operations["freshStartBudget"];
         delete?: never;
@@ -673,7 +673,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reopen a closed account (and show its payment category again) */
+        /**
+         * Reopen a closed account (and show its payment category again)
+         * @description Reopening a tracking account that was updated to a loan account erases the link: the loan no longer shows its history, and the account can be updated to a loan again (YNAB's "Erase & Re-open").
+         */
         post: operations["reopenAccount"];
         delete?: never;
         options?: never;
@@ -833,7 +836,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to every selected transaction it applies to
-         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
+         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'; on the selected side of a transfer only, as YNAB's Edit Memo does). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
          */
         post: operations["bulkUpdateTransactions"];
         delete?: never;
@@ -861,7 +864,7 @@ export interface paths {
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date and amount changes apply to both sides; memo, cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date, amount and memo changes apply to both sides; cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category; its memo is the split line's too.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -1453,9 +1456,14 @@ export interface components {
             role: "owner" | "editor";
             /**
              * Format: date-time
-             * @description Set when a fresh start replaced this budget; it stays usable
+             * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
              */
             archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the signed-in user last opened this budget; null if never
+             */
+            lastUsedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1509,6 +1517,8 @@ export interface components {
              * @description The user's today, YYYY-MM-DD
              */
             date: string;
+            /** @description The new budget's name (YNAB's "New Plan Name") */
+            name: string;
         };
         BudgetMembers: {
             /** @description The owner first, then by when they joined */
@@ -1744,6 +1754,8 @@ export interface components {
             type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
             note: string;
             closed: boolean;
+            /** @description Position in the sidebar's Starred group (ascending); null when not starred. Shared by everyone on the budget. Closing an account unstars it. */
+            starredOrder: number | null;
             /**
              * @description ISO 4217 currency code
              * @enum {string}
@@ -1778,7 +1790,7 @@ export interface components {
             /** @description A loan made by updating a tracking liability: the original (closed) account */
             migratedFromAccountId: string | null;
         };
-        /** @description Future-dated transactions don't count until their date. `listAccounts` takes the user's today; other responses use the request's `date`, or the server's UTC date. */
+        /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
         AccountBalances: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             cleared: string;
@@ -1831,17 +1843,21 @@ export interface components {
             escrowAmount?: string | null;
             /** @description Null unpairs */
             pairedCategoryId?: string | null;
+            /** @description Star or unstar the account. Only open cash and credit accounts can be starred; a new star goes to the end of the Starred group. */
+            starred?: boolean;
             /** @description The balance the account should have; negative for money owed */
             workingBalance?: string;
             /**
              * Format: date
-             * @description The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to the server's UTC date.
+             * @description The user's today: the adjustment's date, the day the working balance is read at, and the month new loan terms start in. Defaults to `today`, then the server's UTC date.
              */
             date?: string;
         };
         MoveAccount: {
             /** @description Place it right before this account; null moves it to the end */
             beforeAccountId: string | null;
+            /** @description Reorder within the Starred group instead (both accounts must be starred) */
+            starred?: boolean;
         };
         ReconcilePreview: {
             /** @description Signed like the account; zero when it matches */
@@ -2130,7 +2146,7 @@ export interface components {
         /** @description Select all: every transaction this filter matches */
         RegisterFilter: {
             accountId?: string;
-            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
+            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
             q?: string;
             /**
              * Format: date
@@ -2143,6 +2159,11 @@ export interface components {
              */
             to?: string;
             hideReconciled?: boolean;
+            /**
+             * Format: date
+             * @description The user's today, as sent with the register list: a year-less `Income:` term means its year
+             */
+            today?: string;
         };
         BulkUpdateResult: {
             updated: number;
@@ -2150,6 +2171,8 @@ export interface components {
             before: components["schemas"]["Transaction"][];
             /** @description `duplicate`: the new transactions' ids (empty for other actions) */
             created: string[];
+            /** @description `duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions) */
+            copies: string[];
         };
         BulkAction: {
             /** @enum {string} */
@@ -2201,10 +2224,10 @@ export interface components {
             memo: string;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
             /**
-             * @default uncleared
+             * @description Left out: cleared in a cash account, otherwise uncleared (each side of a transfer by its own account)
              * @enum {string}
              */
-            cleared: "uncleared" | "cleared" | "reconciled";
+            cleared?: "uncleared" | "cleared" | "reconciled";
             /**
              * @description One of YNAB's six flag colors; null clears it
              * @default null
@@ -2716,6 +2739,8 @@ export interface components {
             underfunded: string;
             /** @description The part of underfunded that is this month's credit overspending on the card */
             overspentCategories: string;
+            /** @description This month's credit overspending on the card, whatever is set aside (the card register's "Overspending (Oct)"); positive */
+            creditOverspending: string;
             /** @description Money moved in this month for funded card spending, less returns (YNAB's Funded Spending) */
             fundedSpending: string;
             /** @description This month's payments to the card, negative */
@@ -3436,7 +3461,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Budgets sorted by name, and the last-used one */
+            /** @description Budgets, most recently used first (then by name), and the last-used one */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3727,15 +3752,6 @@ export interface operations {
             };
             /** @description No such budget, or the caller isn't a member */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description ALREADY_ARCHIVED: this budget was already replaced by a fresh start */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5332,7 +5348,10 @@ export interface operations {
     };
     updateAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5395,7 +5414,10 @@ export interface operations {
     };
     moveAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5638,7 +5660,10 @@ export interface operations {
     };
     reopenAccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -5876,7 +5901,10 @@ export interface operations {
     };
     recordLoanPayment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -6005,7 +6033,7 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
-                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day). Split lines are matched one by one. */
+                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
                 q?: string;
                 /** @description On or after this date */
                 from?: string;
@@ -6013,8 +6041,8 @@ export interface operations {
                 to?: string;
                 /** @description The View menu's "Show Reconciled Transactions" turned off */
                 hideReconciled?: string;
-                sort?: "date" | "account" | "payee" | "category" | "memo" | "amount" | "cleared";
-                dir?: "asc" | "desc";
+                /** @description YNAB's stacked sort: comma-separated `column:asc|desc` fields, first field first (e.g. `payee:desc,date:asc`). Columns: date, account, payee, category, memo, outflow, inflow, flag, cleared. Outflow and inflow each count the other side's rows as zero; flag ascending is none, red, orange, yellow, green, blue, purple; cleared ascending is reconciled, cleared, uncleared. Ties end by date, newest first, a day's largest outflow on top. */
+                sort?: string;
                 limit?: number;
                 cursor?: string;
                 /** @description The user's today: scheduled transactions due by then are entered first */
@@ -6077,7 +6105,10 @@ export interface operations {
     };
     createTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -6099,7 +6130,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"] & unknown;
                 };
             };
-            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6325,7 +6356,10 @@ export interface operations {
     };
     updateTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -6348,7 +6382,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"];
                 };
             };
-            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
             400: {
                 headers: {
                     [name: string]: unknown;

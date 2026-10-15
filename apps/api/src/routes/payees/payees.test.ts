@@ -79,6 +79,7 @@ describe("payees", () => {
     await send("POST", `${base}/scheduled-transactions`, owner.cookie, {
       accountId: account.id,
       date: "2026-12-01",
+      today: TODAY,
       frequency: "monthly",
       amount: "-100",
       payeeName: "Gym",
@@ -104,6 +105,7 @@ describe("payees", () => {
     await send("POST", `${base}/scheduled-transactions`, owner.cookie, {
       accountId: account.id,
       date: "2026-12-01",
+      today: TODAY,
       frequency: "monthly",
       amount: "-100",
       payeeName: "Gym",
@@ -242,6 +244,7 @@ describe("payees", () => {
       await send("POST", `${base}/scheduled-transactions`, owner.cookie, {
         accountId: account.id,
         date: "2026-12-01",
+        today: TODAY,
         frequency: "monthly",
         amount: "-100",
         payeeName: "Gamma",
@@ -277,7 +280,7 @@ describe("payees", () => {
     });
     expect((await txns()).find((t) => t.id === g.id)?.payeeId).toBeNull();
     const list = await json<{ scheduledTransactions: { id: string; payeeId: string | null }[] }>(
-      await send("GET", `${base}/scheduled-transactions`, owner.cookie),
+      await send("GET", `${base}/scheduled-transactions?today=${TODAY}`, owner.cookie),
     );
     expect(list.scheduledTransactions.find((s) => s.id === scheduled.id)?.payeeId).toBeNull();
     expect((await payees()).map((p) => p.name)).toEqual(["Delta", "Unused"]);
