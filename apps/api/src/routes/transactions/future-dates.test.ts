@@ -123,4 +123,15 @@ describe("future dates (EVERYCENT-137)", () => {
     const restored = await create("2026-10-10", "2026-10-15", { restore: true, approved: false });
     expect(restored.status).toBe(201);
   });
+
+  it("restores a deleted row that was dated ahead of the user's today (undo)", async () => {
+    const { create, base, cookie } = await setup();
+    // Allowed without a today (the server's date plus a day), then deleted and undone by a user
+    // still on the 15th.
+    const t = (await (await create("2026-10-16")).json()) as Txn;
+    expect((await send("DELETE", `${base}/transactions/${t.id}`, cookie)).status).toBe(204);
+    expect((await create("2026-10-16", "2026-10-15")).status).toBe(400);
+    const restored = await create("2026-10-16", "2026-10-15", { restore: true, approved: false });
+    expect(restored.status).toBe(201);
+  });
 });

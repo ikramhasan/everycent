@@ -77,9 +77,9 @@ export const createBudgetHandler: RouteHandler<typeof createBudget, Env> = async
 
 export const getBudgetHandler: RouteHandler<typeof getBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
-  await loadBudgetAccess(c, budgetId);
-  await rememberLastBudget(c.var.deps.db, c.var.user.id, budgetId);
-  return c.json(toBudgetJson(await loadBudgetAccess(c, budgetId)), 200);
+  const access = await loadBudgetAccess(c, budgetId);
+  const lastUsedAt = await rememberLastBudget(c.var.deps.db, c.var.user.id, budgetId);
+  return c.json(toBudgetJson({ ...access, lastUsedAt }), 200);
 };
 
 export const updateBudgetHandler: RouteHandler<typeof updateBudget, Env> = async (c) => {

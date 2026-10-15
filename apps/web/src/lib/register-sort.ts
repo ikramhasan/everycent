@@ -51,8 +51,3 @@ export function readSort(value: unknown): SortField[] {
   }
   return stack.length > 0 ? stack : [...DEFAULT_SORT];
 }
-
-/** Whether rows come in the default order (the running balance reads top to bottom then). */
-export function isDefaultSort(stack: readonly SortField[]) {
-  return stack[0]?.column === "date" && stack[0].dir === "desc";
-}

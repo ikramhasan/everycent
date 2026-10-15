@@ -6,6 +6,8 @@ import { useCallback, useState } from "react";
  * every plan and register (`.collapsedSplits`, checked 2026-10-15).
  */
 const STORAGE_KEY = "everycent:collapsed-splits";
+/** Folds kept; the oldest go first, so deleted transactions' ids don't pile up for good. */
+const MAX_FOLDED = 500;
 
 function read(): Record<string, true> {
   try {
@@ -21,7 +23,12 @@ export function useCollapsedSplits() {
   const toggle = useCallback((id: string) => {
     setCollapsed((current) => {
       const { [id]: was, ...rest } = current;
-      const next: Record<string, true> = was ? rest : { ...current, [id]: true };
+      // Insertion order is fold order, so the oldest folds come first.
+      const next: Record<string, true> = was
+        ? rest
+        : Object.fromEntries(
+            [...Object.keys(current), id].slice(-MAX_FOLDED).map((key) => [key, true] as const),
+          );
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {

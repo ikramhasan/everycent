@@ -41,12 +41,17 @@ export async function loadBudgetAccess(
   return row;
 }
 
-/** Remembers the budget the user last opened, across devices. */
-export async function rememberLastBudget(db: Database, userId: string, budgetId: string) {
-  await db
+/** Remembers the budget the user last opened, across devices; returns the time it stored. */
+export async function rememberLastBudget(
+  db: Database,
+  userId: string,
+  budgetId: string,
+): Promise<Date | null> {
+  const [member] = await db
     .update(budgetMember)
     .set({ lastUsedAt: sql`now()` })
-    .where(and(eq(budgetMember.budgetId, budgetId), eq(budgetMember.userId, userId)));
+    .where(and(eq(budgetMember.budgetId, budgetId), eq(budgetMember.userId, userId)))
+    .returning({ lastUsedAt: budgetMember.lastUsedAt });
   await db
     .insert(userPreference)
     .values({ userId, lastBudgetId: budgetId })
@@ -54,4 +59,5 @@ export async function rememberLastBudget(db: Database, userId: string, budgetId:
       target: userPreference.userId,
       set: { lastBudgetId: budgetId, updatedAt: sql`now()` },
     });
+  return member?.lastUsedAt ?? null;
 }

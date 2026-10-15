@@ -246,6 +246,29 @@ describe("register search, filters, sort and paging", () => {
     expect((await json<Page>(res)).transactions.map((t) => t.id)).toEqual([thisYear.id]);
   });
 
+  it("takes Income:'s missing year from the user's today", async () => {
+    const { base, cookie, add, readyToAssignCategoryId } = await setup();
+    const early = await add({
+      date: "2025-01-05",
+      amount: "100",
+      payeeName: "Old X",
+      categoryId: readyToAssignCategoryId,
+    });
+    await add({
+      date: "2026-01-05",
+      amount: "100",
+      payeeName: "New X",
+      categoryId: readyToAssignCategoryId,
+    });
+    // A user still on 31 December 2025 while the server's year may be later.
+    const res = await send(
+      "GET",
+      `${base}/transactions?${new URLSearchParams({ q: "Income: January, Payee: x", today: "2025-12-31" })}`,
+      cookie,
+    );
+    expect((await json<Page>(res)).transactions.map((t) => t.id)).toEqual([early.id]);
+  });
+
   it("shows only the split lines a search matches", async () => {
     const { add, list, groceries, household } = await setup();
     const split = await add({

@@ -62,7 +62,7 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
   const page = await queryRegister(
     db,
     budgetId,
-    filter,
+    { ...filter, today },
     { sort: parseSort(sort), limit, cursor },
     budget,
   );
@@ -75,9 +75,10 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
   const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
-  // Future-dated entries are scheduled transactions (EVERYCENT-137); undo restores are dated
-  // when they were made, so they pass.
-  assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
+  // Future-dated entries are scheduled transactions (EVERYCENT-137). An undo restore brings a row
+  // back as it was, so one dated ahead (older data, or the server's UTC + 1) isn't refused, as an
+  // edit that keeps its date isn't.
+  if (!body.restore) assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
   const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };

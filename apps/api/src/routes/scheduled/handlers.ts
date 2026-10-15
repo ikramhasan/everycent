@@ -64,6 +64,10 @@ export const listScheduledTransactionsHandler: RouteHandler<
   const { budget } = await loadBudgetAccess(c, budgetId);
   await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
   const terms = q ? parseSearch(q, budget) : [];
+  const rows = await scheduledRows(db, budgetId, accountId);
+  const inRange = rows.filter((r) => (!from || r.dateNext >= from) && (!to || r.dateNext <= to));
+  if (terms.length === 0) return c.json({ scheduledTransactions: inRange }, 200);
+  // Flag names and Ready to Assign are looked up only for a search.
   const names = await db
     .select({ color: flagName.color, name: flagName.name })
     .from(flagName)
@@ -73,13 +77,10 @@ export const listScheduledTransactionsHandler: RouteHandler<
     readyToAssignId: await internalCategoryId(db, budgetId, "ready_to_assign"),
     today,
   };
-  const rows = (await scheduledRows(db, budgetId, accountId)).filter(
-    (r) =>
-      (!from || r.dateNext >= from) &&
-      (!to || r.dateNext <= to) &&
-      (terms.length === 0 || scheduledRowMatches(r, terms, context)),
+  return c.json(
+    { scheduledTransactions: inRange.filter((r) => scheduledRowMatches(r, terms, context)) },
+    200,
   );
-  return c.json({ scheduledTransactions: rows }, 200);
 };
 
 export const createScheduledTransactionHandler: RouteHandler<

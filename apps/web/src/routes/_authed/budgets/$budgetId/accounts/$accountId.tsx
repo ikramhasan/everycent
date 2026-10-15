@@ -118,6 +118,12 @@ function AccountPage() {
   const reconcilable = account !== undefined && !isLoan;
   const isCard = account !== undefined && accountFamily(account.type) === "credit";
   const cardPayment = useCardPayment(isCard ? account : undefined);
+  // A Record Payment link to an account that can't take one (closed, or not a card) is dropped,
+  // so it can't open a payment row later (after a reopen) on its own.
+  const paymentImpossible = account !== undefined && (!isCard || account.closed);
+  useEffect(() => {
+    if (openPayment && paymentImpossible) onRecordPaymentOpened();
+  }, [openPayment, paymentImpossible, onRecordPaymentOpened]);
 
   // A reconciliation in progress belongs to the account it started on.
   useEffect(() => setReconcilingTo(null), [accountId]);

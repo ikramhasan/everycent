@@ -668,11 +668,13 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
 async function setStarred(tx: Db, account: AccountRow, starred: boolean) {
   let order: number | null = null;
   if (starred) {
-    const [last] = await tx
-      .select({ value: max(budgetAccount.starredSortOrder) })
+    // Locks the budget's accounts (as a move does) so two stars at once can't share a place.
+    const rows = await tx
+      .select({ order: budgetAccount.starredSortOrder })
       .from(budgetAccount)
-      .where(eq(budgetAccount.budgetId, account.budgetId));
-    order = (last?.value ?? -1) + 1;
+      .where(eq(budgetAccount.budgetId, account.budgetId))
+      .for("update");
+    order = Math.max(-1, ...rows.map((r) => r.order ?? -1)) + 1;
   }
   await tx
     .update(budgetAccount)

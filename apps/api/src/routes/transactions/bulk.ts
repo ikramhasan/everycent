@@ -367,6 +367,7 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
 async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
   const created: string[] = [];
   const copies: string[] = [];
+  const made: [Awaited<ReturnType<typeof queryRegisterRows>>[number], string][] = [];
   const selected = new Set(ids);
   const done = new Set<string>();
   for (const id of ids) {
@@ -423,7 +424,14 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
         : {}),
     });
     created.push(copyId);
-    const [copy] = await queryRegisterRows(tx, budgetId, [copyId]);
+    made.push([source, copyId]);
+  }
+  // Every copy read in one query, after the loop.
+  const copyRows = new Map(
+    (await queryRegisterRows(tx, budgetId, created)).map((r) => [r.id, r] as const),
+  );
+  for (const [source, copyId] of made) {
+    const copy = copyRows.get(copyId);
     if (!copy) continue;
     // Each row of the original against the same row of its copy: the transaction, its transfer's
     // other side and its lines' other sides (lines keep their order).

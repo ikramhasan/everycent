@@ -71,6 +71,8 @@ export interface RegisterFilter {
   to?: string;
   /** The View menu's "Show Reconciled Transactions" turned off. */
   hideReconciled?: boolean;
+  /** The user's today: `Income:` without a year means its year (default: the server's date). */
+  today?: string;
 }
 
 export interface RegisterPage {
@@ -215,7 +217,7 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
       return sql`${r.date} ${op} ${term.date}`;
     }
     case "income": {
-      // A month without a year is this year's (YNAB, 2026-10-15).
+      // `searchTerms` has filled in a missing year.
       const year = term.year ?? Number(serverToday().slice(0, 4));
       const from = `${String(year).padStart(4, "0")}-${String(term.month).padStart(2, "0")}-01`;
       return sql`(${unit.income} and ${r.date} >= ${from}::date
@@ -266,8 +268,16 @@ function lineMatches(r: Register, condition: SQL) {
   )`;
 }
 
-function searchTerms(filter: RegisterFilter, settings: SearchSettings) {
-  return filter.q ? parseSearch(filter.q, settings) : [];
+/**
+ * The search's terms. A month without a year is the user's current year (YNAB, 2026-10-15), so
+ * the register matches the scheduled section around New Year.
+ */
+function searchTerms(filter: RegisterFilter, settings: SearchSettings): SearchTerm[] {
+  if (!filter.q) return [];
+  const year = Number((filter.today ?? serverToday()).slice(0, 4));
+  return parseSearch(filter.q, settings).map((t) =>
+    t.kind === "income" && t.year === null ? { ...t, year } : t,
+  );
 }
 
 /**
