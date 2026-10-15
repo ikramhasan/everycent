@@ -4,10 +4,12 @@ import {
   formatAmount,
   IS_LABELS,
   IS_STATES,
+  incomeTerm,
   money,
   parseAmount,
   parseDate,
 } from "@everycent/engine";
+import { todayIso } from "./dates";
 import { type Flag, flagLabel } from "./flags";
 
 /**
@@ -20,6 +22,8 @@ export interface Suggestion {
   term: string;
   /** For icons: a flag's color, or the cleared state. */
   flag?: Flag["color"] | "none";
+  /** `Income:` shows a calendar. */
+  calendar?: true;
 }
 
 export interface SuggestionSources {
@@ -27,6 +31,21 @@ export interface SuggestionSources {
   accounts: readonly { name: string }[];
   flags: readonly Flag[];
   settings: BudgetFormatSettings & { currency: CurrencyCode };
+  /** The user's today (YYYY-MM-DD), whose month `Income:` writes; today when left out. */
+  today?: string;
+}
+
+/**
+ * YNAB offers `Income:` for a start of "income" with nothing after it ("i", "inco", "Income: ")
+ * or anything starting with a digit ("5", "2026", "10/02/2026"); not for "oct" or "income: o"
+ * (2026-10-15).
+ */
+function offersIncome(typed: string) {
+  if (/^\d/.test(typed)) return true;
+  const match = /^([a-z]+)\s*(:?)\s*$/i.exec(typed);
+  const word = match?.[1]?.toLowerCase();
+  if (!word) return false;
+  return match?.[2] ? word === "income" : "income".startsWith(word);
 }
 
 /** The part of the box being typed: everything after the last comma. */
@@ -49,9 +68,9 @@ function startsWithLabel(fragment: string, word: string) {
 }
 
 /**
- * YNAB's suggestions for what's being typed: matching `Is:` states, flags, categories and
- * accounts, amounts and dates when it reads as one, then "Find … in any field / the Payee / the
- * Category / the Memo". Typing a label ("is", "flag", "outflow") lists all of its options.
+ * YNAB's suggestions for what's being typed: dates and amounts when it reads as one (with
+ * `Income:` between them), matching `Is:` states, flags, categories and accounts, then "Find …
+ * in any field / the Payee / the Category / the Memo". Typing a label ("is", "flag", "outflow") lists all of its options.
  */
 export function searchSuggestions(fragment: string, sources: SuggestionSources): Suggestion[] {
   const typed = fragment.trim();
@@ -113,6 +132,13 @@ export function searchSuggestions(fragment: string, sources: SuggestionSources):
   } else {
     const amount = amountOf(typed);
     const date = parseDate(typed, settings.dateFormat);
+    const [year = 0, month = 1] = (sources.today ?? todayIso()).split("-").map(Number);
+    const income: Suggestion = {
+      label: "Income:",
+      text: `Enter month like '${incomeTerm(month, year)}'`,
+      term: incomeTerm(month, year),
+      calendar: true,
+    };
     specific = [
       ...(date
         ? [
@@ -121,6 +147,7 @@ export function searchSuggestions(fragment: string, sources: SuggestionSources):
             { label: "After:", text: `On or after ${typed}`, term: `After: ${typed}` },
           ]
         : []),
+      ...(offersIncome(typed) ? [income] : []),
       ...(amount !== null && !date
         ? [...amountOptions("Outflow", typed, amount), ...amountOptions("Inflow", typed, amount)]
         : []),

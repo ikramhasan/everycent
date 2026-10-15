@@ -153,6 +153,8 @@ export {
   IS_LABELS,
   IS_STATES,
   type IsState,
+  incomeTerm,
+  MONTH_NAMES,
   parseDate,
   parseSearch,
   type SearchSettings,

@@ -15,7 +15,10 @@ const SearchText = z
       "(`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or " +
       "None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), " +
       "`Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the " +
-      "budget's format; before and after include the day). Split lines are matched one by one.",
+      "budget's format; before and after include the day), `Income:` (a month name, full or " +
+      "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
+      "Assign that month, including Starting Balances of budget accounts; no year means this " +
+      "year). Split lines are matched one by one.",
   );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);

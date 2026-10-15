@@ -9,13 +9,21 @@ import {
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
-import { parseSearch, type SearchSettings, type SearchTerm } from "@everycent/engine";
+import {
+  ACCOUNT_TYPES,
+  isOnBudget,
+  parseSearch,
+  type SearchSettings,
+  type SearchTerm,
+} from "@everycent/engine";
 import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
-import type { Db } from "../../lib/ledger";
+import { type Db, serverToday } from "../../lib/ledger";
 
 export type { SearchSettings };
+
+const ON_BUDGET_TYPES = ACCOUNT_TYPES.filter(isOnBudget);
 
 export const SORT_COLUMNS = [
   "date",
@@ -66,6 +74,12 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         payeeName: sql<string | null>`${payee.name}`.as("payee_name"),
         categoryId: transaction.categoryId,
         categoryName: sql<string | null>`${category.name}`.as("category_name"),
+        // YNAB's `Income:` search: Ready to Assign, which in YNAB also holds every budget
+        // account's Starting Balance (we leave card debt's uncategorized; Design notes).
+        income: sql<boolean>`coalesce(${category.internalKind} = 'ready_to_assign', false) or (
+          ${transaction.categoryId} is null and ${payee.internalKind} = 'starting_balance'
+          and ${inArray(budgetAccount.type, ON_BUDGET_TYPES)}
+        )`.as("income"),
         memo: transaction.memo,
         cleared: transaction.cleared,
         flag: transaction.flag,
@@ -123,6 +137,8 @@ interface Unit {
   memo: SQL;
   amount: SQL;
   isSplit: SQL;
+  /** In Ready to Assign (YNAB's `Income:`). */
+  income: SQL;
 }
 
 function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string): SQL {
@@ -172,6 +188,13 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
       const op = sql.raw(term.op === "on" ? "=" : term.op === "before" ? "<=" : ">=");
       return sql`${r.date} ${op} ${term.date}`;
     }
+    case "income": {
+      // A month without a year is this year's (YNAB, 2026-10-15).
+      const year = term.year ?? Number(serverToday().slice(0, 4));
+      const from = `${String(year).padStart(4, "0")}-${String(term.month).padStart(2, "0")}-01`;
+      return sql`(${unit.income} and ${r.date} >= ${from}::date
+        and ${r.date} < ${from}::date + interval '1 month')`;
+    }
   }
   throw new Error("unreachable");
 }
@@ -191,6 +214,7 @@ function parentUnit(r: Register): Unit {
     memo: sql`${r.memo}`,
     amount: sql`${r.amount}`,
     isSplit: sql`exists (select 1 from ${subTransaction} where ${subTransaction.transactionId} = ${r.id})`,
+    income: sql`${r.income}`,
   };
 }
 
@@ -202,6 +226,7 @@ function lineUnit(r: Register): Unit {
     memo: sql`st.memo`,
     amount: sql`st.amount`,
     isSplit: sql`false`,
+    income: sql`coalesce(sc.internal_kind = 'ready_to_assign', false)`,
   };
 }
 

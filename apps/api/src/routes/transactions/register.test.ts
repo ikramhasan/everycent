@@ -8,6 +8,7 @@ beforeEach(() => resetDatabase(db));
 afterAll(close);
 
 type Txn = {
+  accountId: string;
   id: string;
   date: string;
   amount: string;
@@ -41,9 +42,10 @@ async function setup() {
       date: "2026-01-01",
     }),
   );
-  const { groups } = await json<{ groups: { kind: string | null; categories: Category[] }[] }>(
-    await send("GET", `${base}/categories`, cookie),
-  );
+  const { groups, readyToAssignCategoryId } = await json<{
+    groups: { kind: string | null; categories: Category[] }[];
+    readyToAssignCategoryId: string;
+  }>(await send("GET", `${base}/categories`, cookie));
   const [groceries, household] = groups.filter((g) => !g.kind).flatMap((g) => g.categories);
   if (!groceries || !household) throw new Error("starter categories missing");
   const add = async (input: Record<string, unknown>) => {
@@ -61,7 +63,7 @@ async function setup() {
     expect(res.status, await res.clone().text()).toBe(200);
     return json<Page>(res);
   };
-  return { base, cookie, account, add, list, groceries, household };
+  return { base, cookie, account, add, list, groceries, household, readyToAssignCategoryId };
 }
 
 describe("register search, filters, sort and paging", () => {
@@ -164,6 +166,84 @@ describe("register search, filters, sort and paging", () => {
     // Every term must match the same transaction or the same split line.
     expect(await ids("Payee: Bob, Is: Cleared")).toEqual([]);
     expect(await ids("Payee: Ann, Outflow: 2")).toEqual([split.id]);
+  });
+
+  it("finds a month's Ready to Assign money with Income:", async () => {
+    const { base, cookie, account, add, groceries, readyToAssignCategoryId } = await setup();
+    const rta = readyToAssignCategoryId;
+    const newAccount = async (name: string, type: string, balance: string) =>
+      json<{ id: string }>(
+        await send("POST", `${base}/accounts`, cookie, { name, type, balance, date: "2026-10-03" }),
+      );
+    // YNAB 2026-10-15 (EVERYCENT-114): Ready to Assign in and out, budget accounts' Starting
+    // Balances (card debt too), an RTA split line; not transfers, other categories, tracking.
+    const card = await newAccount("Card", "credit_card", "-50000");
+    await newAccount("House", "asset", "900000");
+    await add({ date: "2026-10-05", amount: "200000", payeeName: "Job", categoryId: rta });
+    const out = await add({
+      date: "2026-10-06",
+      amount: "-500",
+      payeeName: "Shop",
+      categoryId: rta,
+    });
+    await add({ date: "2026-10-07", amount: "300", payeeName: "Refund", categoryId: groceries.id });
+    await add({ date: "2026-10-08", amount: "-1000", transferAccountId: card.id, payeeName: null });
+    await add({ date: "2026-09-30", amount: "700", payeeName: "Early", categoryId: rta });
+    await add({ date: "2026-11-01", amount: "800", payeeName: "Late", categoryId: rta });
+    const split = await add({
+      date: "2026-10-09",
+      amount: "0",
+      payeeName: "Mixed",
+      subtransactions: [
+        { amount: "100", categoryId: rta, memo: "rta line" },
+        { amount: "-100", categoryId: groceries.id },
+      ],
+    });
+    const search = async (q: string) => {
+      const res = await send("GET", `${base}/transactions?${new URLSearchParams({ q })}`, cookie);
+      return (await json<Page>(res)).transactions;
+    };
+    const names = async (q: string) => (await search(q)).map((t) => t.payeeName).sort();
+    expect(await names("Income: October 2026")).toEqual(
+      ["Job", "Mixed", "Shop", "Starting Balance"].sort(),
+    );
+    expect((await search("Income: oct 2026")).map((t) => t.accountId).sort()).toEqual(
+      [account.id, account.id, account.id, card.id].sort(),
+    );
+    expect(await names("Income: September 2026")).toEqual(["Early"]);
+    // Only the RTA line of the split shows.
+    const row = (await search("Income: October 2026")).find((t) => t.id === split.id);
+    expect(row?.matchingLineIds).toEqual([split.subtransactions[0]?.id]);
+    // It combines with other terms; a value it can't read is free text.
+    expect((await search("Income: October 2026, Outflow: 5")).map((t) => t.id)).toEqual([out.id]);
+    expect(await search("Income: 10/2026")).toEqual([]);
+  });
+
+  it("reads Income: without a year as this year's month", async () => {
+    const { base, cookie, add, readyToAssignCategoryId } = await setup();
+    const [year = "", month = ""] = new Date().toISOString().slice(0, 7).split("-");
+    const thisYear = await add({
+      date: `${year}-${month}-01`,
+      amount: "100",
+      payeeName: "Now X",
+      categoryId: readyToAssignCategoryId,
+    });
+    await add({
+      date: `${Number(year) - 1}-${month}-01`,
+      amount: "100",
+      payeeName: "Then X",
+      categoryId: readyToAssignCategoryId,
+    });
+    const monthName = new Date(Date.UTC(2000, Number(month) - 1, 1)).toLocaleString("en-US", {
+      month: "long",
+      timeZone: "UTC",
+    });
+    const res = await send(
+      "GET",
+      `${base}/transactions?${new URLSearchParams({ q: `Income: ${monthName}, Payee: x` })}`,
+      cookie,
+    );
+    expect((await json<Page>(res)).transactions.map((t) => t.id)).toEqual([thisYear.id]);
   });
 
   it("shows only the split lines a search matches", async () => {
