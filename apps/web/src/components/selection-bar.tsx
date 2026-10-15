@@ -35,8 +35,10 @@ import {
   ArrowRightLeft,
   Bookmark,
   CalendarClock,
+  Check,
   Circle,
   CircleCheck,
+  CircleX,
   Copy,
   MoreHorizontal,
   NotebookPen,
@@ -57,6 +59,8 @@ export type BulkAction =
   | { type: "move"; accountId: string }
   | { type: "delete" }
   | { type: "duplicate" }
+  | { type: "approve" }
+  | { type: "reject" }
   /** Scheduled rows only. */
   | { type: "enterNow" };
 
@@ -68,7 +72,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
  * Shown while transactions are selected, like YNAB's action bar: how many and their total, then
- * Categorize, Flag, Clear and More, each offered only when it applies to the selection.
+ * Categorize, Flag, Clear and More, each offered only when it applies to the selection. With
+ * unapproved rows selected it's Approve, Reject, Categorize and More, Flag and the cleared
+ * states moving into More (YNAB, 2026-10-16).
  * Scheduled rows count too: Enter Now shows when only scheduled rows are selected, and Make
  * Repeating when one plain transaction is (both as YNAB offers them).
  */
@@ -126,8 +132,11 @@ export function SelectionBar({
   // YNAB's Clear shows when every selected row is uncleared (checked 2026-10-11); otherwise the
   // states that apply ("Mark as Cleared", "Mark as Uncleared") are in More. Scheduled rows have
   // no cleared state.
+  const reviewing = (s?.unapproved ?? 0) > 0;
   const toggle =
-    s && s.count > 0 && scheduledCount === 0 && s.uncleared === s.count ? "cleared" : null;
+    s && s.count > 0 && scheduledCount === 0 && s.uncleared === s.count && !reviewing
+      ? "cleared"
+      : null;
   const markCleared = !toggle && s ? s.uncleared > 0 : false;
   const markUncleared = !toggle && s ? s.cleared > 0 : false;
   // Splits without a transfer line get un-split; YNAB asks first. Its warning counts every
@@ -182,6 +191,28 @@ export function SelectionBar({
             <CalendarClock /> Enter Now
           </Button>
         )}
+        {reviewing && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() => onAction({ type: "approve" })}
+            >
+              <Check /> Approve
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() => onAction({ type: "reject" })}
+            >
+              <CircleX /> Reject
+            </Button>
+          </>
+        )}
         {s && (s.categorizable > 0 || scheduledCount > 0) && (
           // YNAB's Categorize is a menu of category groups, each opening its categories (checked
           // 2026-10-15, EVERYCENT-134): Inflow → Ready to Assign first, then the visible groups
@@ -208,44 +239,46 @@ export function SelectionBar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <Popover open={flagOpen} onOpenChange={setFlagOpen}>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="ghost" size="sm" disabled={pending || !s}>
-              <Bookmark /> Flag
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-60 p-1.5">
-            <div role="menu" aria-label="Flag selected" className="grid">
-              {flags.map((f) => (
+        {!reviewing && (
+          <Popover open={flagOpen} onOpenChange={setFlagOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" disabled={pending || !s}>
+                <Bookmark /> Flag
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-60 p-1.5">
+              <div role="menu" aria-label="Flag selected" className="grid">
+                {flags.map((f) => (
+                  <button
+                    key={f.color}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFlagOpen(false);
+                      onAction({ type: "flag", flag: f.color });
+                    }}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  >
+                    <Bookmark className={cn("size-4 fill-current", FLAG_CLASS[f.color])} />
+                    {flagLabel(f)}
+                  </button>
+                ))}
+                <div className="my-1 border-t" />
                 <button
-                  key={f.color}
                   type="button"
                   role="menuitem"
                   onClick={() => {
                     setFlagOpen(false);
-                    onAction({ type: "flag", flag: f.color });
+                    onAction({ type: "flag", flag: null });
                   }}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className="rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                 >
-                  <Bookmark className={cn("size-4 fill-current", FLAG_CLASS[f.color])} />
-                  {flagLabel(f)}
+                  Clear flag
                 </button>
-              ))}
-              <div className="my-1 border-t" />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setFlagOpen(false);
-                  onAction({ type: "flag", flag: null });
-                }}
-                className="rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
-              >
-                Clear flag
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
         {toggle && (
           <Button
             type="button"
@@ -278,6 +311,28 @@ export function SelectionBar({
               </DropdownMenuItem>
             )}
             {(markCleared || markUncleared) && <DropdownMenuSeparator />}
+            {reviewing && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Bookmark /> Flag
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {flags.map((f) => (
+                    <DropdownMenuItem
+                      key={f.color}
+                      onSelect={() => onAction({ type: "flag", flag: f.color })}
+                    >
+                      <Bookmark className={cn("size-4 fill-current", FLAG_CLASS[f.color])} />
+                      {flagLabel(f)}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => onAction({ type: "flag", flag: null })}>
+                    Clear flag
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
             <DropdownMenuItem onSelect={() => onAction({ type: "duplicate" })}>
               <Copy /> Duplicate
             </DropdownMenuItem>

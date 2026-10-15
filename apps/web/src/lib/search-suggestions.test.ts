@@ -47,13 +47,19 @@ describe("search suggestions", () => {
   });
 
   it("lists every option of a label typed", () => {
-    expect(terms("is:").slice(0, 5)).toEqual([
+    // YNAB's order (2026-10-16); its "Is: Matched" comes before Approved (not built).
+    expect(terms("is:").slice(0, 9)).toEqual([
       "Is: Uncleared",
       "Is: Cleared",
       "Is: Reconciled",
       "Is: Unreconciled",
       "Is: Cleared or Reconciled",
+      "Is: Approved",
+      "Is: Unapproved",
+      "Is: Needs Category",
+      "Is: Unapproved or Needs Category",
     ]);
+    expect(terms("is: appr")[0]).toBe("Is: Uncleared");
     expect(terms("flag").slice(0, 3)).toEqual(["Flag: None", "Flag: Red", "Flag: Reimburse"]);
   });
 

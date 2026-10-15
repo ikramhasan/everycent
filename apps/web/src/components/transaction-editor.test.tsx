@@ -33,6 +33,7 @@ const account = (id: string, type: Account["type"]): Account => ({
   lastPaymentFromAccountId: null,
   migratedToAccountId: null,
   migratedFromAccountId: null,
+  toReview: 0,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 

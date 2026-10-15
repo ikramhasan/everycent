@@ -34,6 +34,7 @@ import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
+import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
 import { StarButton } from "@/components/star-button";
 import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
@@ -511,6 +512,7 @@ function AccountPage() {
 
   return (
     <div className="grid gap-6">
+      <ReviewBanner count={account.toReview} onView={() => onSearchChange({ q: REVIEW_SEARCH })} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">

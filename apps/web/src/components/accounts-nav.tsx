@@ -215,6 +215,16 @@ function AccountItem({
           params={{ budgetId, accountId: account.id }}
           activeProps={{ "data-active": true }}
         >
+          {/* YNAB's dot before an account with transactions to approve or categorize. */}
+          <span className="flex w-1.5 shrink-0 justify-center">
+            {account.toReview > 0 && (
+              <span
+                role="img"
+                aria-label={`${account.toReview} to approve or categorize`}
+                className="size-1.5 rounded-full bg-current"
+              />
+            )}
+          </span>
           <span className="truncate">{account.name}</span>
         </Link>
       </SidebarMenuButton>

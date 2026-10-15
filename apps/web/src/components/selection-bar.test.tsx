@@ -14,6 +14,7 @@ const summary = (patch: Partial<Summary>): Summary => ({
   reconciled: 0,
   reconciledTransfers: 0,
   categorizable: 2,
+  unapproved: 0,
   splits: 0,
   splitsWithTransfers: 0,
   deletable: 2,
@@ -61,6 +62,25 @@ async function categorizeAs(group: string, category: string) {
 }
 
 describe("SelectionBar", () => {
+  it("offers Approve and Reject with unapproved rows, Flag and Clear moving into More", async () => {
+    const { onAction } = bar(summary({ unapproved: 1, uncleared: 2 }));
+    expect(screen.queryByRole("button", { name: /Flag/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Clear$/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction).toHaveBeenLastCalledWith({ type: "approve" });
+    await userEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(onAction).toHaveBeenLastCalledWith({ type: "reject" });
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByRole("menuitem", { name: "Mark as Cleared" })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Flag" })).toBeVisible();
+  });
+
+  it("offers neither when every row is approved", () => {
+    bar(summary({}));
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+  });
+
   it("offers Clear only when every selected row is uncleared, as YNAB does", () => {
     const { unmount } = bar(summary({ uncleared: 2 }));
     expect(screen.getByRole("button", { name: /Clear$/ })).toBeVisible();

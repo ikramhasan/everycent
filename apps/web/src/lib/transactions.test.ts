@@ -102,6 +102,7 @@ const txn: Transaction = {
   transferTransactionId: null,
   flag: null,
   approved: true,
+  needsCategory: false,
   transferFromSplit: false,
   transferReconciled: false,
   transferSide: null,

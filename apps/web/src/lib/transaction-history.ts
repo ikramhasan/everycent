@@ -61,6 +61,8 @@ export function updateBodyFromTransaction(transaction: Transaction): UpdateTrans
     // A reconciled transaction stays reconciled; its cleared state can't be set.
     ...(transaction.cleared === "reconciled" ? {} : { cleared: transaction.cleared }),
     flag: transaction.flag,
+    // Edits approve an unapproved transaction (as in YNAB), so an undo puts its approval back.
+    approved: transaction.approved,
     ...(transaction.subtransactions.length > 0
       ? {
           subtransactions: transaction.subtransactions.map((line) => ({

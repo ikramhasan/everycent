@@ -39,6 +39,7 @@ const account = (id: string, type: Account["type"], starredOrder: number | null)
   lastPaymentFromAccountId: null,
   migratedToAccountId: null,
   migratedFromAccountId: null,
+  toReview: 0,
 });
 
 function UndoButton() {
