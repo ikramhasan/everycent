@@ -1,15 +1,16 @@
-import { sql } from "@everycent/db";
+import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
   category,
   payee,
+  payeeRule,
   scheduledSubTransaction,
   scheduledTransaction,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
@@ -17,12 +18,16 @@ import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
   combinePayees,
+  createPayeeRule,
+  deletePayeeRule,
   deletePayees,
+  listPayeeRules,
   listPayees,
   listPayeeTransactions,
   restorePayees,
   setPayeesHidden,
   updatePayee,
+  updatePayeeRule,
 } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
@@ -40,9 +45,41 @@ interface PayeeUses {
   scheduledSubTransactionIds: string[];
 }
 
+interface RuleSnapshot {
+  id: string;
+  payeeId: string;
+  operator: "contains" | "is";
+  text: string;
+  position: number;
+  createdAt: string;
+}
+
 interface PayeeSnapshot {
   payees: { id: string; name: string; hidden: boolean }[];
   uses: PayeeUses[];
+  rules: RuleSnapshot[];
+}
+
+/** These payees' renaming rules, each payee's in order, so a change can be undone. */
+async function rulesOf(db: Db, payeeIds: readonly string[]): Promise<RuleSnapshot[]> {
+  if (payeeIds.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(payeeRule)
+    .where(inArray(payeeRule.payeeId, payeeIds))
+    .orderBy(asc(payeeRule.position), asc(payeeRule.createdAt), asc(payeeRule.id));
+  return payeeIds.flatMap((id) =>
+    rows
+      .filter((r) => r.payeeId === id)
+      .map((r) => ({
+        id: r.id,
+        payeeId: r.payeeId,
+        operator: r.operator,
+        text: r.text,
+        position: r.position,
+        createdAt: r.createdAt.toISOString(),
+      })),
+  );
 }
 
 function payeeColumns() {
@@ -240,7 +277,22 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
         budgetId,
         others.map((p) => p.id),
       ),
+      rules: await rulesOf(
+        tx,
+        affected.map((p) => p.id),
+      ),
     };
+    // The others' renaming rules move to the target, after its own (YNAB: "Combining these
+    // payees will also combine all their renaming rules"; x-c12-62-Tea, 2026-10-16).
+    const targetRules = snapshot.rules.filter((r) => r.payeeId === target.id);
+    let position = Math.max(-1, ...targetRules.map((r) => r.position));
+    for (const rule of snapshot.rules.filter((r) => r.payeeId !== target.id)) {
+      position += 1;
+      await tx
+        .update(payeeRule)
+        .set({ payeeId: target.id, position, updatedAt: sql`now()` })
+        .where(eq(payeeRule.id, rule.id));
+    }
     await repoint(
       tx,
       budgetId,
@@ -282,9 +334,11 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
         );
       }
     }
+    // Their renaming rules go with them (YNAB: "Deleting them will also delete their rules").
     const snapshot: PayeeSnapshot = {
       payees: doomed.map((p) => ({ id: p.id, name: p.name, hidden: p.hidden })),
       uses: await usesOf(tx, budgetId, ids),
+      rules: await rulesOf(tx, ids),
     };
     await repoint(tx, budgetId, ids, replacementPayeeId);
     await tx.delete(payee).where(inArray(payee.id, ids));
@@ -334,6 +388,30 @@ export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = asy
           target: payee.id,
           set: { name: p.name, hidden: p.hidden, updatedAt: sql`now()` },
         });
+    }
+    if (snapshot.rules.some((r) => !ids.includes(r.payeeId))) {
+      throw new AppError(400, "BAD_REQUEST", "Rules must belong to the snapshot's payees");
+    }
+    const ruleIds = snapshot.rules.map((r) => r.id);
+    if (ruleIds.length > 0) {
+      const foreign = await tx
+        .select({ id: payeeRule.id })
+        .from(payeeRule)
+        .where(and(inArray(payeeRule.id, ruleIds), ne(payeeRule.budgetId, budgetId)));
+      if (foreign.length > 0) throw new AppError(404, "NOT_FOUND", "Rule not found");
+    }
+    for (const rule of snapshot.rules) {
+      const values = {
+        payeeId: rule.payeeId,
+        operator: rule.operator,
+        text: rule.text,
+        position: rule.position,
+        createdAt: new Date(rule.createdAt),
+      };
+      await tx
+        .insert(payeeRule)
+        .values({ id: rule.id, budgetId, ...values })
+        .onConflictDoUpdate({ target: payeeRule.id, set: { ...values, updatedAt: sql`now()` } });
     }
     for (const use of snapshot.uses) {
       if (!ids.includes(use.payeeId)) {
@@ -491,4 +569,110 @@ export const listPayeeTransactionsHandler: RouteHandler<typeof listPayeeTransact
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
     .map((r) => ({ ...r, amount: r.amount.toString() }));
   return c.json({ transactions: rows }, 200);
+};
+
+/** Columns a rule is returned with. */
+const ruleColumns = {
+  id: payeeRule.id,
+  payeeId: payeeRule.payeeId,
+  operator: payeeRule.operator,
+  text: payeeRule.text,
+};
+
+/** The budget's rule with this id, or 404. */
+async function findRule(db: Db, budgetId: string, ruleId: string) {
+  const [row] = await db
+    .select(ruleColumns)
+    .from(payeeRule)
+    .where(and(eq(payeeRule.id, ruleId), eq(payeeRule.budgetId, budgetId)));
+  if (!row) throw new AppError(404, "NOT_FOUND", "Rule not found");
+  return row;
+}
+
+export const listPayeeRulesHandler: RouteHandler<typeof listPayeeRules, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const [rules, transferPayees] = await Promise.all([
+    db
+      .select(ruleColumns)
+      .from(payeeRule)
+      .where(eq(payeeRule.budgetId, budgetId))
+      .orderBy(asc(payeeRule.payeeId), asc(payeeRule.position), asc(payeeRule.createdAt)),
+    db
+      .select({ payeeId: payee.id, accountId: payee.transferAccountId })
+      .from(payee)
+      .where(and(eq(payee.budgetId, budgetId), isNotNull(payee.transferAccountId))),
+  ]);
+  return c.json(
+    {
+      rules,
+      transferPayees: transferPayees.map((p) => ({
+        payeeId: p.payeeId,
+        accountId: p.accountId as string,
+      })),
+    },
+    200,
+  );
+};
+
+export const createPayeeRuleHandler: RouteHandler<typeof createPayeeRule, Env> = async (c) => {
+  const { budgetId, payeeId } = c.req.valid("param");
+  const { operator, text, position } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  const row = await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(payee)
+      .where(and(eq(payee.id, payeeId), eq(payee.budgetId, budgetId)))
+      .for("update");
+    if (!target) throw new AppError(404, "NOT_FOUND", "Payee not found");
+    // Transfer payees take rules (YNAB); built-in ones like Starting Balance aren't listed.
+    if (target.internalKind) {
+      throw new AppError(409, "PAYEE_LOCKED", "Built-in payees can't have renaming rules");
+    }
+    let at = position;
+    if (at === undefined) {
+      const [last] = await tx
+        .select({ position: sql<number>`coalesce(max(${payeeRule.position}), -1)::int` })
+        .from(payeeRule)
+        .where(eq(payeeRule.payeeId, payeeId));
+      at = (last?.position ?? -1) + 1;
+    } else {
+      // Make room: the rules from there on move down one.
+      await tx
+        .update(payeeRule)
+        .set({ position: sql`${payeeRule.position} + 1` })
+        .where(and(eq(payeeRule.payeeId, payeeId), gte(payeeRule.position, at)));
+    }
+    const id = newId();
+    await tx.insert(payeeRule).values({ id, budgetId, payeeId, operator, text, position: at });
+    return findRule(tx, budgetId, id);
+  });
+  return c.json(row, 201);
+};
+
+export const updatePayeeRuleHandler: RouteHandler<typeof updatePayeeRule, Env> = async (c) => {
+  const { budgetId, ruleId } = c.req.valid("param");
+  const { operator, text } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  await findRule(db, budgetId, ruleId);
+  if (operator !== undefined || text !== undefined) {
+    await db
+      .update(payeeRule)
+      .set({ operator, text, updatedAt: sql`now()` })
+      .where(eq(payeeRule.id, ruleId));
+  }
+  return c.json(await findRule(db, budgetId, ruleId), 200);
+};
+
+export const deletePayeeRuleHandler: RouteHandler<typeof deletePayeeRule, Env> = async (c) => {
+  const { budgetId, ruleId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  await findRule(db, budgetId, ruleId);
+  await db.delete(payeeRule).where(eq(payeeRule.id, ruleId));
+  return c.body(null, 204);
 };

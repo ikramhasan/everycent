@@ -4100,6 +4100,85 @@
           "currency"
         ]
       },
+      "PayeeRuleList": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeRule"
+            }
+          },
+          "transferPayees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "payeeId": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "payeeId",
+                "accountId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "rules",
+          "transferPayees"
+        ]
+      },
+      "PayeeRule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "payeeId": {
+            "type": "string",
+            "description": "The payee an imported payee meeting the rule is renamed to"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "contains",
+              "is"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "payeeId",
+          "operator",
+          "text"
+        ]
+      },
+      "UpdatePayeeRule": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": "string",
+            "enum": [
+              "contains",
+              "is"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Kept as typed, surrounding spaces included (YNAB does the same)"
+          }
+        }
+      },
       "SetPayeesHidden": {
         "type": "object",
         "properties": {
@@ -4174,6 +4253,15 @@
             },
             "maxItems": 1000,
             "description": "The rows that pointed at each payee"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeRuleSnapshot"
+            },
+            "maxItems": 5000,
+            "default": [],
+            "description": "The payees' renaming rules as they were"
           }
         },
         "required": [
@@ -4219,6 +4307,35 @@
           "subTransactionIds",
           "scheduledTransactionIds",
           "scheduledSubTransactionIds"
+        ]
+      },
+      "PayeeRuleSnapshot": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PayeeRule"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Kept as typed, surrounding spaces included (YNAB does the same)"
+              },
+              "position": {
+                "type": "integer"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "position",
+              "createdAt"
+            ]
+          }
         ]
       },
       "PayeeChange": {
@@ -4275,6 +4392,33 @@
         },
         "required": [
           "payeeIds"
+        ]
+      },
+      "CreatePayeeRule": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": "string",
+            "enum": [
+              "contains",
+              "is"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Kept as typed, surrounding spaces included (YNAB does the same)"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Where among the payee's rules (undoing a removal); default after the last"
+          }
+        },
+        "required": [
+          "operator",
+          "text"
         ]
       },
       "UpdatePayee": {
@@ -11656,6 +11800,232 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/payees/rules": {
+      "get": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "listPayeeRules",
+        "summary": "The budget's renaming rules, each payee's in order",
+        "description": "Rules of transfer payees are included; `transferPayees` gives each account's transfer payee so they can be shown and added to.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeRuleList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/rules/{ruleId}": {
+      "patch": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "updatePayeeRule",
+        "summary": "Change a renaming rule's condition or text",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ruleId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePayeeRule"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or rule, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "deletePayeeRule",
+        "summary": "Remove a renaming rule",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ruleId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or rule, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/payees/hide": {
       "post": {
         "tags": [
@@ -12018,6 +12388,111 @@
           },
           "409": {
             "description": "Name taken (`PAYEE_NAME_TAKEN`) or a transfer/built-in payee (`PAYEE_LOCKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/payees/{payeeId}/rules": {
+      "post": {
+        "tags": [
+          "Payees"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "operationId": "createPayeeRule",
+        "summary": "Add a renaming rule to a payee (a transfer payee too)",
+        "description": "Added after the payee's other rules. The same rule twice is allowed, as in YNAB. Built-in payees like Starting Balance take no rules (`PAYEE_LOCKED`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "payeeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePayeeRule"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or payee, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A built-in payee (`PAYEE_LOCKED`)",
             "content": {
               "application/json": {
                 "schema": {
