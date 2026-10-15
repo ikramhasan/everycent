@@ -9,7 +9,7 @@ import { useBudget } from "@/lib/budget-context";
 import { isCaution } from "@/lib/budget-view";
 import { type MoneySettings, toMoneyInput } from "@/lib/money-input";
 import { currentMonth, monthQueryOptions } from "@/lib/months";
-import { type Draft, emptyDraft, transferLabel } from "@/lib/transactions";
+import { type Draft, directionOf, emptyDraft, transferChoiceLabel } from "@/lib/transactions";
 import { AvailablePill } from "./move-money";
 
 /**
@@ -47,7 +47,13 @@ export function cardPaymentDraft({
   const amount = cardPaymentAmount(available, BigInt(card.balances.cleared));
   return {
     ...emptyDraft(card.id, today),
-    ...(from ? { payeeName: transferLabel(from.name), transferAccountId: from.id } : {}),
+    ...(from
+      ? {
+          // YNAB words it by the amount: "Payment from F Cash", or "To/From F Cash" with none.
+          payeeName: transferChoiceLabel(card.type, from, directionOf(amount)),
+          transferAccountId: from.id,
+        }
+      : {}),
     inflow: amount > 0n ? toMoneyInput(amount, settings) : "",
   };
 }

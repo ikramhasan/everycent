@@ -8,6 +8,7 @@ import {
   type CategoryOption,
   type CellColumn,
   cellValue,
+  directionOf,
   type Payee,
   type Transaction,
 } from "@/lib/transactions";
@@ -57,6 +58,7 @@ export function CellEditor({
   onCommit: (value: string | null, exit: CellExit, transferAccountId: string | null) => void;
   onCancel: () => void;
 }) {
+  const own = accounts.find((a) => a.id === transaction.accountId);
   const [value, setValue] = useState(() => cellValue(transaction, column, settings));
   const [transferAccountId, setTransferAccountId] = useState(transaction.transferAccountId);
   // Enter/Tab commit and unmount the cell; the blur that may follow must not commit again.
@@ -144,6 +146,7 @@ export function CellEditor({
             onPick={(choice) => finish("stay", choice.name, choice.transferAccountId)}
             payees={payees}
             transfers={transfers}
+            own={own && { type: own.type, direction: directionOf(BigInt(transaction.amount)) }}
             autoFocus
           />
         );

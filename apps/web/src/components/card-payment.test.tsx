@@ -75,7 +75,7 @@ describe("a card's Record Payment (YNAB, 2026-10-14)", () => {
     expect(draft).toMatchObject({
       accountId: "x-130 Card",
       date: "2026-10-14",
-      payeeName: "Transfer : F Cash",
+      payeeName: "Payment from F Cash",
       transferAccountId: "F Cash",
       inflow: "1.00",
       outflow: "",
@@ -105,7 +105,11 @@ describe("a card's Record Payment (YNAB, 2026-10-14)", () => {
       settings: usd,
       today: "2026-10-15",
     });
-    expect(draft.transferAccountId).toBe(other.id);
+    expect(draft).toMatchObject({
+      transferAccountId: other.id,
+      // Nothing set aside, so no amount: YNAB reads "To/From" then.
+      payeeName: "To/From x-c11-163 Card B",
+    });
   });
 
   it("doesn't prefill a closed account", () => {

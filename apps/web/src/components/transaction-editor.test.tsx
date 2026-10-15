@@ -49,6 +49,7 @@ function renderEditor(accountId = "checking") {
             account("checking", "checking"),
             account("savings", "savings"),
             account("brokerage", "asset"),
+            account("visa", "credit_card"),
           ]}
           payees={[
             { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: "groceries" },
@@ -67,6 +68,11 @@ function renderEditor(accountId = "checking") {
           onRenameFlags={onRenameFlags}
           pending={false}
           error={null}
+          transferCategory={(from, to) =>
+            [from, to].includes("visa") && [from, to].includes("checking")
+              ? "Credit Card Payments: visa"
+              : ""
+          }
           onSave={onSave}
           onCancel={onCancel}
         />
@@ -138,7 +144,8 @@ describe("TransactionEditor", () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Payee"), "savings");
     await user.keyboard("{Enter}");
-    expect(screen.getByLabelText("Payee")).toHaveValue("Transfer : savings");
+    // No amount yet, so YNAB's "To/From" wording (2026-10-15).
+    expect(screen.getByLabelText("Payee")).toHaveValue("To/From savings");
     expect(screen.getByText("Category not needed")).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("Payee"));
@@ -149,7 +156,7 @@ describe("TransactionEditor", () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         transferAccountId: "brokerage",
-        payeeName: "Transfer : brokerage",
+        payeeName: "To/From brokerage",
       }),
     );
   });
@@ -157,8 +164,38 @@ describe("TransactionEditor", () => {
   it("doesn't offer the account itself as a transfer", async () => {
     renderEditor();
     await userEvent.setup().click(screen.getByLabelText("Payee"));
-    expect(screen.queryByRole("option", { name: "checking" })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "savings" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "To/From checking" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "To/From savings" })).toBeInTheDocument();
+  });
+
+  it("shows a card payment's category and offers the card's Payment to (YNAB, 2026-10-15)", async () => {
+    renderEditor("visa");
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Inflow"), "5");
+    await user.click(screen.getByLabelText("Payee"));
+    expect(screen.getByRole("option", { name: "Payment from checking" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Payment from brokerage" })).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Payment from checking" }));
+    expect(screen.getByText("Credit Card Payments: visa")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Payee"));
+    await user.type(screen.getByLabelText("Payee"), "Market{Enter}");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Payment to visa" }));
+    expect(screen.getByLabelText("Payee")).toHaveValue("");
+    expect(screen.getByLabelText("Payee")).toHaveFocus();
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+  });
+
+  it("words transfers by the amount's direction (YNAB, 2026-10-15)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "5");
+    await user.click(screen.getByLabelText("Payee"));
+    expect(screen.getByText("Payments and Transfers")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Transfer to savings" })).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Transfer to savings" }));
+    expect(screen.getByLabelText("Payee")).toHaveValue("Transfer to savings");
   });
 
   it("splits across categories, with a remaining counter", async () => {

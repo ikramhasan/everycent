@@ -1,4 +1,5 @@
 import {
+  type AccountType,
   type DateFormat,
   formatDate,
   SCHEDULE_FREQUENCIES,
@@ -40,7 +41,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/component
 import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
-import { type CategoryOption, categoryLabel, type Payee, transferLabel } from "@/lib/transactions";
+import {
+  type CategoryOption,
+  categoryLabel,
+  type Payee,
+  type TransferDirection,
+  transferChoiceLabel,
+  transferLabel,
+} from "@/lib/transactions";
 import { useManagePayees } from "./manage-payees";
 
 /**
@@ -183,7 +191,20 @@ type PayeeItem = {
   kind: "payee" | "transfer" | "create";
   /** Transfers: the other account. */
   accountName?: string;
+  /** Transfers: what the list shows (YNAB's wording, or just the account's name). */
+  text?: string;
 };
+
+/** Typed text names this item; a transfer also answers to its stored "Transfer : X". */
+function matches(item: PayeeItem, text: string) {
+  const lower = text.toLowerCase();
+  return (
+    item.label.toLowerCase() === lower ||
+    (item.kind === "transfer" &&
+      item.accountName !== undefined &&
+      transferLabel(item.accountName).toLowerCase() === lower)
+  );
+}
 
 interface PayeeGroup {
   value: string;
@@ -194,6 +215,8 @@ interface PayeeGroup {
 export interface TransferTarget {
   id: string;
   name: string;
+  /** With the editing account's `own`, names the transfer as YNAB does ("Payment from X"). */
+  type?: AccountType;
 }
 
 /** What a payee field holds: a payee name, or a transfer to another account. */
@@ -205,9 +228,11 @@ export interface PayeeChoice {
 }
 
 /**
- * Payee name with suggestions, plus YNAB's transfers: "Transfer : <account>" for each account
- * money can move to. Typing a new name is fine (it's created on save); YNAB also lists "Create
- * payee" so it's clear that's what will happen.
+ * Payee name with suggestions, plus YNAB's "Payments and Transfers" for each account money can
+ * move to, worded by `own` and the amount's direction (`transferChoiceLabel`: "Payment from F
+ * Cash", "Transfer to Savings", "To/From X"); "Transfer : <account>" without `own`. Typing a new
+ * name is fine (it's created on save); YNAB also lists "Create payee" so it's clear that's what
+ * will happen.
  */
 export function PayeeField({
   label = "Payee",
@@ -216,6 +241,7 @@ export function PayeeField({
   onPick,
   payees,
   transfers,
+  own,
   autoFocus,
 }: {
   /** Accessible name (split lines say which line). */
@@ -226,6 +252,8 @@ export function PayeeField({
   onPick?: (choice: PayeeChoice) => void;
   payees: readonly Payee[];
   transfers: readonly TransferTarget[];
+  /** The account being edited and which way its amount goes. */
+  own?: { type: AccountType; direction: TransferDirection };
   autoFocus?: boolean;
 }) {
   const trimmed = value.trim();
@@ -238,32 +266,38 @@ export function PayeeField({
     const known: PayeeItem[] = payees
       .filter((p) => !p.hidden)
       .map((p) => ({ id: p.id, label: p.name, kind: "payee" }));
-    const toAccounts: PayeeItem[] = transfers.map((a) => ({
-      id: `transfer:${a.id}`,
-      label: transferLabel(a.name),
-      kind: "transfer",
-      accountName: a.name,
-    }));
-    const exact = [...known, ...toAccounts].some(
-      (p) => p.label.toLowerCase() === trimmed.toLowerCase(),
-    );
+    const toAccounts: PayeeItem[] = transfers.map((a) => {
+      const worded =
+        own && a.type
+          ? transferChoiceLabel(own.type, { name: a.name, type: a.type }, own.direction)
+          : null;
+      return {
+        id: `transfer:${a.id}`,
+        label: worded ?? transferLabel(a.name),
+        kind: "transfer",
+        accountName: a.name,
+        text: worded ?? a.name,
+      };
+    });
+    const exact = [...known, ...toAccounts].some((p) => matches(p, trimmed));
     // Payees first and "Create payee" last, so autocomplete picks an existing payee first.
     return [
       { value: "Payees", items: known },
-      { value: "Transfers", items: toAccounts },
+      { value: "Payments and Transfers", items: toAccounts },
       ...(trimmed && !exact && !hiddenMatch
         ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
         : []),
     ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, trimmed, hiddenMatch]);
+  }, [payees, transfers, own, trimmed, hiddenMatch]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
   const highlighted = useRef<PayeeItem | undefined>(undefined);
   function choose(text: string, picked?: PayeeItem): PayeeChoice {
-    const match = (p: { label: string }) => p.label.toLowerCase() === text.trim().toLowerCase();
     const item =
-      picked && picked.label === text ? picked : groups.flatMap((g) => g.items).find(match);
+      picked && picked.label === text
+        ? picked
+        : groups.flatMap((g) => g.items).find((p) => matches(p, text.trim()));
     if (item?.kind === "transfer") {
       return { name: item.label, transferAccountId: item.id.slice("transfer:".length) };
     }
@@ -324,7 +358,7 @@ export function PayeeField({
                     ) : item.kind === "transfer" ? (
                       <>
                         <ArrowLeftRight className="size-4 text-muted-foreground" />
-                        {item.accountName}
+                        {item.text}
                       </>
                     ) : (
                       item.label
