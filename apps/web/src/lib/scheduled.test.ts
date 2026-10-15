@@ -5,6 +5,7 @@ import {
   isScheduled,
   type ScheduledTransaction,
   scheduleCreateBody,
+  scheduledSplits,
   scheduleRestoreBody,
   scheduleUpdateBody,
 } from "./scheduled";
@@ -168,5 +169,29 @@ describe("scheduleRestoreBody", () => {
       transferAccountId: "savings",
       payeeName: null,
     });
+  });
+});
+
+describe("scheduledSplits", () => {
+  const line = (transferAccountId: string | null) => ({
+    id: `l-${transferAccountId}`,
+    amount: "-100",
+    payeeId: null,
+    payeeName: null,
+    categoryId: null,
+    categoryName: null,
+    memo: "",
+    transferAccountId,
+  });
+
+  it("counts selected scheduled splits and those with a transfer line, not their other sides", () => {
+    const plain = { ...row, subtransactions: [line(null), line(null)] };
+    const withTransfer = { ...row, id: "s3", subtransactions: [line(null), line("savings")] };
+    const otherSide = { ...withTransfer, id: "s3~savings", kind: "splitTransfer" as const };
+    expect(scheduledSplits([row, mirror, plain, withTransfer, otherSide])).toEqual({
+      splits: 2,
+      splitsWithTransfers: 1,
+    });
+    expect(scheduledSplits([])).toEqual({ splits: 0, splitsWithTransfers: 0 });
   });
 });

@@ -97,6 +97,7 @@ import {
   type ScheduledTransaction,
   scheduleCreateBody,
   scheduledQueryPrefix,
+  scheduledSplits,
   scheduleRestoreBody,
 } from "@/lib/scheduled";
 import {
@@ -1315,6 +1316,9 @@ export function Register({
           pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
           scheduledCount={scheduledSelection.size}
+          scheduledSplits={scheduledSplits(
+            scheduledRows.filter((row) => scheduledSelection.has(row.id)),
+          )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}
