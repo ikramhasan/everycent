@@ -217,7 +217,8 @@ describe("fresh start", () => {
     const list = async (b: string) =>
       (
         await json<{ scheduledTransactions: Row[] }>(
-          await send("GET", `${b}/scheduled-transactions`, owner.cookie),
+          // The test's today, so the real date doesn't enter the 2026-10-15 one-off.
+          await send("GET", `${b}/scheduled-transactions?today=${TODAY}`, owner.cookie),
         )
       ).scheduledTransactions.filter((r) => r.kind === "schedule");
     const accounts = (

@@ -7,6 +7,7 @@ import {
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
+import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
@@ -64,8 +65,12 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
 export const createTransactionHandler: RouteHandler<typeof createTransaction, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
+  // Future-dated entries are scheduled transactions (EVERYCENT-137); undo restores are dated
+  // when they were made, so they pass.
+  assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
   const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };
@@ -154,10 +159,14 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
 export const updateTransactionHandler: RouteHandler<typeof updateTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const { today } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   assertOnePayee(body);
-  const accountId = await db.transaction((tx) => applyUpdate(tx, budgetId, transactionId, body));
+  const latest = latestTransactionDate(c.var.deps, today);
+  const accountId = await db.transaction((tx) =>
+    applyUpdate(tx, budgetId, transactionId, body, latest),
+  );
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
 
@@ -181,9 +190,15 @@ export async function applyUpdate(
   budgetId: string,
   transactionId: string,
   body: UpdateBody,
+  /** The latest date it may be moved to (see `latestTransactionDate`); null for no limit. */
+  latestDate: string | null = null,
 ) {
   const existing = await lockTransaction(tx, budgetId, transactionId);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
+  // Only a new date is checked, so a row already dated ahead (from before EVERYCENT-137) can
+  // still be edited.
+  if (body.date !== undefined && body.date !== existing.date)
+    assertNotFuture(body.date, latestDate);
   if (existing.cleared === "reconciled" && body.cleared !== undefined) reconciledStays();
   if (existing.transferSubTransactionId) {
     return updateSplitTransferSide(tx, budgetId, existing, body);

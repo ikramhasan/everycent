@@ -678,7 +678,7 @@ export function Register({
           for (const transaction of before) {
             restored.push(
               await create.mutateAsync({
-                params: { path: { budgetId: budget.id } },
+                params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
                 body: createBodyFromTransaction(transaction),
               }),
             );
@@ -687,7 +687,10 @@ export function Register({
         } else {
           for (const transaction of before) {
             await update.mutateAsync({
-              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+              params: {
+                path: { budgetId: budget.id, transactionId: transaction.id },
+                query: { today: todayIso() },
+              },
               body: updateBodyFromTransaction(transaction),
             });
           }
@@ -716,14 +719,20 @@ export function Register({
       label,
       undo: async () => {
         await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: before.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: before.id },
+            query: { today: todayIso() },
+          },
           body: updateBodyFromTransaction(before),
         });
         await refresh();
       },
       redo: async () => {
         await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: after.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: after.id },
+            query: { today: todayIso() },
+          },
           body: updateBodyFromTransaction(after),
         });
         await refresh();
@@ -777,7 +786,10 @@ export function Register({
     try {
       if (Object.keys(result.body).length > 0) {
         const after = await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: t.id },
+            query: { today: todayIso() },
+          },
           body: result.body,
         });
         recordUpdate("transaction edit", t, after);
@@ -833,7 +845,7 @@ export function Register({
     if (!result.ok) return setNewError(result.error);
     try {
       const created = await create.mutateAsync({
-        params: { path: { budgetId: budget.id } },
+        params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
         body: result.body,
       });
       let current = created;
@@ -847,7 +859,7 @@ export function Register({
         },
         redo: async () => {
           current = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(created),
           });
           await refresh();
@@ -931,7 +943,7 @@ export function Register({
         undo: async () => {
           // The transaction first: if it can't come back, the schedule stays.
           restored = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(t),
           });
           const id = written.scheduledTransaction?.id;
@@ -985,7 +997,10 @@ export function Register({
     const save = async () => {
       try {
         const after = await update.mutateAsync({
-          params: { path: { budgetId: budget.id, transactionId: t.id } },
+          params: {
+            path: { budgetId: budget.id, transactionId: t.id },
+            query: { today: todayIso() },
+          },
           body: result.body,
         });
         recordUpdate("transaction edit", t, after);
@@ -1012,7 +1027,10 @@ export function Register({
   async function setFlag(t: Transaction, flag: FlagColor | null) {
     try {
       const after = await update.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
+        params: {
+          path: { budgetId: budget.id, transactionId: t.id },
+          query: { today: todayIso() },
+        },
         body: { flag },
       });
       recordUpdate("transaction flag", t, after);
@@ -1042,7 +1060,10 @@ export function Register({
   async function toggleCleared(t: Transaction) {
     try {
       const after = await update.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
+        params: {
+          path: { budgetId: budget.id, transactionId: t.id },
+          query: { today: todayIso() },
+        },
         body: { cleared: t.cleared === "uncleared" ? "cleared" : "uncleared" },
       });
       recordUpdate("transaction cleared state", t, after);
@@ -1068,7 +1089,7 @@ export function Register({
         label: "deleted transaction",
         undo: async () => {
           current = await create.mutateAsync({
-            params: { path: { budgetId: budget.id } },
+            params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
             body: createBodyFromTransaction(t),
           });
           await refresh();

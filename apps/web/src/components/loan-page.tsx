@@ -559,11 +559,14 @@ export function LoanPage({
               () =>
                 line
                   ? updateTransaction.mutateAsync({
-                      params: { path: { budgetId: budget.id, transactionId: line.id } },
+                      params: {
+                        path: { budgetId: budget.id, transactionId: line.id },
+                        query: { today: todayIso() },
+                      },
                       body,
                     })
                   : createTransaction.mutateAsync({
-                      params: { path: { budgetId: budget.id } },
+                      params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
                       body: {
                         ...body,
                         accountId: account.id,

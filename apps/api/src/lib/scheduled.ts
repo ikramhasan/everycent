@@ -39,6 +39,7 @@ import {
   syncLines,
 } from "../routes/transactions/splits";
 import type { AppDeps } from "../types";
+import { shiftDay } from "./dates";
 import { AppError } from "./errors";
 import {
   type Db,
@@ -177,12 +178,6 @@ async function advance(tx: Db, schedule: ScheduleRow, current: string) {
   }
   return next;
 }
-
-const shiftDay = (date: string, days: number) => {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
 
 /**
  * The user's `today` as far as entering schedules goes: held within a day of the server's UTC date

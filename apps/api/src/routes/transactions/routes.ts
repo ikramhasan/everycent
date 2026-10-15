@@ -1,11 +1,17 @@
 import { CLEARED_STATES, FLAG_COLORS } from "@everycent/db/schema";
 import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
+import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
 import { SORT_COLUMNS } from "./register-query";
 
-const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
+const DateLimitQuery = z.object({
+  today: IsoDate.optional().describe(
+    "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are " +
+      "scheduled transactions). Without it, dates after the server's UTC date plus a day are refused.",
+  ),
+});
 const SearchText = z
   .string()
   .max(500)
@@ -262,6 +268,7 @@ export const createTransaction = createRoute({
   description: `${categoryRules} ${transferRules} ${splitRules}`,
   request: {
     params: BudgetParams,
+    query: DateLimitQuery,
     body: json(
       z
         .object({
@@ -294,8 +301,8 @@ export const createTransaction = createRoute({
   responses: {
     201: ok("Created", TransactionSchema.describe("The side in `accountId`")),
     400: jsonError(
-      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
-        "same account",
+      "Invalid input, a closed account, a category the account can't use, a transfer to the " +
+        "same account, or a date after today (DATE_IN_FUTURE)",
     ),
     401: jsonError("Not signed in"),
     403: forbidden,
@@ -323,6 +330,7 @@ export const updateTransaction = createRoute({
     "it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category.",
   request: {
     params: TransactionParams,
+    query: DateLimitQuery,
     body: json(
       z
         .strictObject({
@@ -343,8 +351,8 @@ export const updateTransaction = createRoute({
   responses: {
     200: ok("Updated", TransactionSchema),
     400: jsonError(
-      "Invalid input, a closed account, a category the account can't use, or a transfer to the " +
-        "same account",
+      "Invalid input, a closed account, a category the account can't use, a transfer to the " +
+        "same account, or a date after today (DATE_IN_FUTURE)",
     ),
     401: jsonError("Not signed in"),
     403: forbidden,

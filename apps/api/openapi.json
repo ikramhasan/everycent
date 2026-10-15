@@ -10966,6 +10966,17 @@
             "required": true,
             "name": "budgetId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused."
+            },
+            "required": false,
+            "description": "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -10997,7 +11008,7 @@
             }
           },
           "400": {
-            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
+            "description": "Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE)",
             "content": {
               "application/json": {
                 "schema": {
@@ -11261,6 +11272,17 @@
             "required": true,
             "name": "transactionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused."
+            },
+            "required": false,
+            "description": "The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused.",
+            "name": "today",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -11285,7 +11307,7 @@
             }
           },
           "400": {
-            "description": "Invalid input, a closed account, a category the account can't use, or a transfer to the same account",
+            "description": "Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE)",
             "content": {
               "application/json": {
                 "schema": {

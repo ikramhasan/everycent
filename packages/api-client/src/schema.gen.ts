@@ -6077,7 +6077,10 @@ export interface operations {
     };
     createTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -6099,7 +6102,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"] & unknown;
                 };
             };
-            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6325,7 +6328,10 @@ export interface operations {
     };
     updateTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The user's today: a later date is refused (`DATE_IN_FUTURE`; future transactions are scheduled transactions). Without it, dates after the server's UTC date plus a day are refused. */
+                today?: string;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -6348,7 +6354,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"];
                 };
             };
-            /** @description Invalid input, a closed account, a category the account can't use, or a transfer to the same account */
+            /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
             400: {
                 headers: {
                     [name: string]: unknown;
