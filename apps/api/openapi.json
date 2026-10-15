@@ -3365,12 +3365,20 @@
               "type": "string"
             },
             "description": "`duplicate`: the new transactions' ids (empty for other actions)"
+          },
+          "copies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions)"
           }
         },
         "required": [
           "updated",
           "before",
-          "created"
+          "created",
+          "copies"
         ]
       },
       "BulkAction": {
