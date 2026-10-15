@@ -1,4 +1,14 @@
-import { type DateFormat, usesCategory } from "@everycent/engine";
+import { type DateFormat, formatAmount, money, usesCategory } from "@everycent/engine";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@everycent/ui/components/alert-dialog";
 import { Button } from "@everycent/ui/components/button";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
@@ -17,8 +27,10 @@ import {
   type LineDraft,
   type Payee,
   remainingLabel,
+  splitMismatch,
   splitRemaining,
   startSplit,
+  withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
 import type { ColumnId } from "./register-columns";
@@ -91,14 +103,24 @@ export function TransactionEditor({
     setDraft((d) => ({ ...d, lines: d.lines?.filter((l) => l.key !== key) ?? null }));
   }
 
+  // YNAB's "Something Doesn't Add Up": saving a split whose lines miss its total asks first.
+  const [mismatch, setMismatch] = useState<ReturnType<typeof splitMismatch>>(null);
+  function save() {
+    const found = splitMismatch(draft, settings);
+    if (found) setMismatch(found);
+    else onSave(draft);
+  }
+  const show = (amount: bigint) => formatAmount(money(amount, settings.currency), settings);
+
   function handleKeyDown(event: KeyboardEvent) {
-    if (listOwnsKey(event)) return;
+    // The prompt's keys reach the row through the portal; they're the prompt's own.
+    if (listOwnsKey(event) || mismatch) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel();
     } else if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
       event.preventDefault();
-      onSave(draft);
+      save();
     }
   }
 
@@ -397,10 +419,43 @@ export function TransactionEditor({
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={() => onSave(draft)} disabled={pending}>
+            <Button type="button" size="sm" onClick={save} disabled={pending}>
               Save
             </Button>
           </div>
+          <AlertDialog open={mismatch !== null} onOpenChange={(open) => !open && setMismatch(null)}>
+            <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Something Doesn't Add Up</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {mismatch &&
+                    `The total is ${show(mismatch.total)}, but the splits add up to ${show(
+                      mismatch.lines,
+                    )}. How would you like to handle the unassigned ${show(mismatch.unassigned)}?`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {/* YNAB's order; each leaves the row open to check before saving. */}
+              <AlertDialogFooter>
+                {mismatch?.distributed && (
+                  <AlertDialogAction
+                    onClick={() => {
+                      const lines = mismatch.distributed;
+                      setDraft((d) => ({ ...d, lines }));
+                    }}
+                  >
+                    Auto-Distribute
+                  </AlertDialogAction>
+                )}
+                <AlertDialogAction
+                  variant="outline"
+                  onClick={() => setDraft((d) => withSplitTotal(d, settings))}
+                >
+                  Update Total
+                </AlertDialogAction>
+                <AlertDialogCancel>Adjust Manually</AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TableCell>
       </TableRow>
     </>

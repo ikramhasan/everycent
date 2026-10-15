@@ -49,6 +49,7 @@ import {
   ArrowLeftRight,
   ArrowUp,
   Bookmark,
+  ChevronRight,
   Circle,
   CircleCheck,
   CircleHelp,
@@ -68,6 +69,7 @@ import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
@@ -374,17 +376,23 @@ export function Register({
     getRowId: (t) => t.id,
   });
   const rows = table.getRowModel().rows;
-  // Split lines sit right under their transaction (read-only; the split is edited as a whole).
+  // Split lines sit right under their transaction (read-only; the split is edited as a whole),
+  // unless it's folded away.
+  const [collapsedSplits, toggleSplit] = useCollapsedSplits();
   const flat = useMemo(
     () =>
       rows.flatMap(({ original: t }): Item[] => [
         { kind: "transaction", key: t.id, t },
-        // Under a search, YNAB shows only the lines that match it.
+        // Under a search, YNAB shows only the lines that match it, folded or not.
         ...t.subtransactions
-          .filter((line) => t.matchingLineIds === null || t.matchingLineIds.includes(line.id))
+          .filter((line) =>
+            t.matchingLineIds === null
+              ? !collapsedSplits[t.id]
+              : t.matchingLineIds.includes(line.id),
+          )
           .map((line): Item => ({ kind: "line", key: `${t.id}:${line.id}`, t, line })),
       ]),
-    [rows],
+    [rows, collapsedSplits],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1158,8 +1166,23 @@ export function Register({
         if (t.subtransactions.length > 0) {
           const count = new Set(t.subtransactions.map((l) => l.categoryId ?? l.transferAccountId))
             .size;
+          const folded = Boolean(collapsedSplits[t.id]);
           return (
             <span className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="-ml-1 shrink-0"
+                aria-expanded={!folded}
+                aria-label={folded ? "Show split lines" : "Hide split lines"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSplit(t.id);
+                }}
+              >
+                <ChevronRight className={cn("transition-transform", !folded && "rotate-90")} />
+              </Button>
               <Split className="size-4 shrink-0" />
               <span className="truncate">
                 Split ({count} {count === 1 ? "category" : "categories"})

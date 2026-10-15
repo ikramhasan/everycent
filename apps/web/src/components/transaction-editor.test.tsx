@@ -187,6 +187,54 @@ describe("TransactionEditor", () => {
     );
   });
 
+  it("asks what to do with a split that doesn't add up, as YNAB does", async () => {
+    const { onSave, onCancel } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "10");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+    await user.type(screen.getByLabelText("Outflow, line 1"), "3");
+    await user.type(screen.getByLabelText("Outflow, line 2"), "4");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+    const prompt = await screen.findByRole("alertdialog");
+    expect(prompt).toHaveTextContent("Something Doesn't Add Up");
+    expect(prompt).toHaveTextContent(
+      "The total is -$10.00, but the splits add up to -$7.00. How would you like to handle " +
+        "the unassigned -$3.00?",
+    );
+    // Esc closes the prompt, not the row.
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(onCancel).not.toHaveBeenCalled();
+
+    // Auto-Distribute: 3 and 4 share the $3 (YNAB: 4.29 and 5.71); the row stays open.
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Auto-Distribute" }));
+    expect(screen.getByLabelText("Outflow, line 1")).toHaveValue("4.29");
+    expect(screen.getByLabelText("Outflow, line 2")).toHaveValue("5.71");
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates the split's total to its lines' sum, or leaves it to be fixed by hand", async () => {
+    const { onSave } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Outflow"), "10");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+    await user.type(screen.getByLabelText("Outflow, line 1"), "3");
+    await user.type(screen.getByLabelText("Outflow, line 2"), "4");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Adjust Manually" }));
+    expect(screen.getByLabelText("Outflow")).toHaveValue("10");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Update Total" }));
+    expect(screen.getByLabelText("Outflow")).toHaveValue("7.00");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("doesn't offer a split on a transfer", async () => {
     renderEditor();
     const user = userEvent.setup();

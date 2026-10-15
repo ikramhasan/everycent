@@ -28,6 +28,7 @@ export {
   currencyExponent,
   isCurrencyCode,
 } from "./currency";
+export { distributeSplit } from "./distribute-split";
 export {
   CurrencyMismatchError,
   MoneyError,
