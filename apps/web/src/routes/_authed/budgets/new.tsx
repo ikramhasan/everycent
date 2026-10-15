@@ -9,16 +9,21 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { $api } from "@/lib/api";
 import { apiErrorMessage, budgetsQueryOptions, invalidateBudgets } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/new")({
+  // A category template to start the budget from: YNAB opens the new plan with the template's
+  // import dialog (2026-10-16).
+  validateSearch: z.object({ template: z.string().optional().catch(undefined) }),
   component: NewBudgetPage,
 });
 
 function NewBudgetPage() {
   const navigate = useNavigate();
+  const { template } = Route.useSearch();
   const queryClient = useQueryClient();
   const budgets = useQuery(budgetsQueryOptions());
   const create = $api.useMutation("post", "/v1/budgets");
@@ -32,7 +37,13 @@ function NewBudgetPage() {
     try {
       const created = await create.mutateAsync({ body: values });
       await invalidateBudgets(queryClient);
-      await navigate({ to: "/budgets/$budgetId/setup", params: { budgetId: created.id } });
+      await (template
+        ? navigate({
+            to: "/budgets/$budgetId",
+            params: { budgetId: created.id },
+            search: { template },
+          })
+        : navigate({ to: "/budgets/$budgetId/setup", params: { budgetId: created.id } }));
       return null;
     } catch (error) {
       return apiErrorMessage(error, "Couldn't create the budget. Try again.");

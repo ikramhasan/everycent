@@ -63,7 +63,7 @@ export const listScheduledTransactionsHandler: RouteHandler<
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
-  const terms = q ? parseSearch(q, budget) : [];
+  const terms = q ? parseSearch(q, budget, today) : [];
   const rows = await scheduledRows(db, budgetId, accountId);
   const inRange = rows.filter((r) => (!from || r.dateNext >= from) && (!to || r.dateNext <= to));
   if (terms.length === 0) return c.json({ scheduledTransactions: inRange }, 200);

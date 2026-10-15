@@ -47,13 +47,19 @@ describe("search suggestions", () => {
   });
 
   it("lists every option of a label typed", () => {
-    expect(terms("is:").slice(0, 5)).toEqual([
+    // YNAB's order (2026-10-16); its "Is: Matched" comes before Approved (not built).
+    expect(terms("is:").slice(0, 9)).toEqual([
       "Is: Uncleared",
       "Is: Cleared",
       "Is: Reconciled",
       "Is: Unreconciled",
       "Is: Cleared or Reconciled",
+      "Is: Approved",
+      "Is: Unapproved",
+      "Is: Needs Category",
+      "Is: Unapproved or Needs Category",
     ]);
+    expect(terms("is: appr")[0]).toBe("Is: Uncleared");
     expect(terms("flag").slice(0, 3)).toEqual(["Flag: None", "Flag: Red", "Flag: Reimburse"]);
   });
 
@@ -77,9 +83,10 @@ describe("search suggestions", () => {
       term: "Income: October 2026",
       calendar: true,
     };
-    for (const typed of ["i", "inco", "income", "Income:", "income: ", "5", "2026"]) {
+    for (const typed of ["i", "inco", "income", "Income:", "income: ", "2026"]) {
       expect(searchSuggestions(typed, sources)[0], typed).toEqual(income);
     }
+    expect(searchSuggestions("5", sources)[3]).toEqual(income);
     // After the date options, before the amounts.
     expect(terms("10/02/2026").slice(0, 4)).toEqual([
       "On: 10/02/2026",
@@ -91,6 +98,43 @@ describe("search suggestions", () => {
       expect(terms(typed), typed).not.toContain("Income: October 2026");
     }
     expect(terms("i", { ...sources, today: "2027-01-03" })[0]).toBe("Income: January 2027");
+  });
+
+  // YNAB's web app, 2026-10-15/16 (EVERYCENT-167).
+  it("completes partial dates and writes the full date", () => {
+    expect(searchSuggestions("5", sources).slice(0, 3)).toEqual([
+      { label: "On:", text: "On 05/01/2026", term: "On: 05/01/2026" },
+      { label: "Before:", text: "On or before 05/01/2026", term: "Before: 05/01/2026" },
+      { label: "After:", text: "On or after 05/01/2026", term: "After: 05/01/2026" },
+    ]);
+    expect(terms("10/2026").slice(0, 3)).toEqual([
+      "On: 10/20/2026",
+      "Before: 10/20/2026",
+      "After: 10/20/2026",
+    ]);
+    expect(terms("Card 5")[0]).toBe("On: 05/01/2026");
+    expect(terms("13")[0]).toBe("Income: October 2026");
+    const ddmm = {
+      ...sources,
+      settings: { ...sources.settings, dateFormat: "DD/MM/YYYY" as const },
+    };
+    expect(terms("5", ddmm)[0]).toBe("On: 05/10/2026");
+    expect(terms("12/25", ddmm)[0]).toBe("Income: October 2026");
+  });
+
+  it("keeps the amounts when a number also reads as a date", () => {
+    expect(terms("5").slice(3, 6)).toEqual(["Income: October 2026", "Outflow: 5", "Outflow: >=5"]);
+    expect(terms("10/02")).not.toContain("Outflow: 10/02");
+  });
+
+  it("offers Income: for the date's month unless an amount was typed", () => {
+    expect(terms("5/")).toContain("Income: May 2026");
+    expect(terms("10/02/25")).toContain("Income: October 2025");
+    expect(terms("x-c11-135")).toContain("Income: November 2026");
+    expect(terms("Card 5")).toContain("Income: May 2026");
+    for (const typed of ["5", "105", "10.02"]) {
+      expect(terms(typed), typed).toContain("Income: October 2026");
+    }
   });
 
   it("replaces what's being typed with the picked term", () => {

@@ -46,6 +46,7 @@ import {
   saveLoanTerms,
 } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
+import { transactionsToReview } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -75,6 +76,7 @@ function toAccountJson(
   /** A loan's terms this month, when it has `loan_terms` entries. */
   terms: LoanTerms | undefined,
   migratedFromAccountId: string | null,
+  toReview: number,
 ) {
   return {
     id: a.id,
@@ -100,6 +102,7 @@ function toAccountJson(
     lastPaymentFromAccountId,
     migratedToAccountId: a.migratedToAccountId,
     migratedFromAccountId,
+    toReview,
   };
 }
 
@@ -136,6 +139,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
   const migratedFrom = new Map(
     accounts.flatMap((a) => (a.migratedToAccountId ? [[a.migratedToAccountId, a.id]] : [])),
   );
+  const toReview = await transactionsToReview(db, budgetId);
   return accounts.map((a) =>
     toAccountJson(
       a,
@@ -146,6 +150,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       paidFrom.get(a.id) ?? null,
       terms.get(a.id),
       migratedFrom.get(a.id) ?? null,
+      toReview.get(a.id) ?? 0,
     ),
   );
 }

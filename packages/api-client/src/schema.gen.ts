@@ -545,6 +545,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/category-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** YNAB's category template gallery, with amounts in the budget's currency */
+        get: operations["listCategoryTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/category-templates/{templateId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a template's picked categories to the budget (YNAB's Import Category Template)
+         * @description Nothing already there changes: a group the budget has (by name) takes the categories it's missing at its top; the rest become new groups at the bottom. Categories the group already has (by name) are skipped. Each new category with an example amount gets a 'Have a balance of' target, due eventually, from `month` on.
+         */
+        post: operations["importCategoryTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts": {
         parameters: {
             query?: never;
@@ -755,7 +792,7 @@ export interface paths {
         put?: never;
         /**
          * Record a loan payment (YNAB's Record Payment)
-         * @description A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.
+         * @description A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out of the loan's paired category (Uncategorized when it has none); the loan's side is cleared. A date after the user's `today` makes a one-time scheduled transfer instead.
          */
         post: operations["recordLoanPayment"];
         delete?: never;
@@ -836,7 +873,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to every selected transaction it applies to
-         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'; on the selected side of a transfer only, as YNAB's Edit Memo does). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
+         * @description Follows YNAB's action bar: rows an action doesn't apply to are skipped, and `updated` counts the rest. `cleared` skips reconciled rows. `categorize` skips transfers within the budget and tracking-account rows; it un-splits splits, except splits with a transfer line, which stay split with every other line given the category. `memo` replaces the memo (a split's own, not its lines'; on the selected side of a transfer only, as YNAB's Edit Memo does). `move` moves rows to another account like a single edit (a transfer keeps its other side, which then points at the new account) and skips rows already there, transfers into their own other account and splits with a transfer line to it. `delete` deletes transfers' other sides too and skips the other sides of splits' transfer lines (they go with the split). `approve` approves the unapproved rows (and their transfers' other sides); `reject` deletes the unapproved rows (as `delete` does) and skips the rest; `cleared` and `categorize` approve the rows they change, as in YNAB. `duplicate` copies each row as YNAB does: same date and fields, cleared state kept (reconciled becomes cleared), approved, a transfer with a new other side; a split's transfer side copies its whole split, and a transfer selected from both sides is copied once. Rows in (or transferring to) closed accounts are skipped. All of it happens in one database transaction.
          */
         post: operations["bulkUpdateTransactions"];
         delete?: never;
@@ -904,6 +941,44 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/payees/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The budget's renaming rules, each payee's in order
+         * @description Rules of transfer payees are included; `transferPayees` gives each account's transfer payee so they can be shown and added to.
+         */
+        get: operations["listPayeeRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/payees/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a renaming rule */
+        delete: operations["deletePayeeRule"];
+        options?: never;
+        head?: never;
+        /** Change a renaming rule's condition or text */
+        patch: operations["updatePayeeRule"];
         trace?: never;
     };
     "/v1/budgets/{budgetId}/payees/hide": {
@@ -983,6 +1058,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/payees/{payeeId}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a renaming rule to a payee (a transfer payee too)
+         * @description Added after the payee's other rules. The same rule twice is allowed, as in YNAB. Built-in payees like Starting Balance take no rules (`PAYEE_LOCKED`).
+         */
+        post: operations["createPayeeRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/payees/{payeeId}": {
         parameters: {
             query?: never;
@@ -997,8 +1092,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename, hide or unhide a payee
-         * @description Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`).
+         * Rename, hide or unhide a payee, or change how it categorizes
+         * @description Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`). `categorization` "always" needs a `defaultCategoryId` (`CATEGORY_REQUIRED`): one of the budget's categories other than Uncategorized and credit card payment ones (`INVALID_CATEGORY`). Switching to "auto" or "never" forgets the chosen category, as YNAB does.
          */
         patch: operations["updatePayee"];
         trace?: never;
@@ -1740,6 +1835,36 @@ export interface components {
              */
             today?: string;
         };
+        CategoryTemplateList: {
+            templates: components["schemas"]["CategoryTemplate"][];
+        };
+        CategoryTemplate: {
+            id: string;
+            name: string;
+            description: string;
+            categoryCount: number;
+            /** @description In the template's order */
+            groups: {
+                name: string;
+                categories: {
+                    /** @description The category's id within the template */
+                    id: string;
+                    name: string;
+                    /** @description The example amount in the budget's currency, which becomes a 'Have a balance of' target; 0 for none */
+                    amount: string;
+                }[];
+            }[];
+        };
+        ImportCategoryTemplateResult: {
+            added: number;
+            categories: components["schemas"]["CategoryList"];
+        };
+        ImportCategoryTemplate: {
+            /** @description The template categories to add (ids from the template list) */
+            categoryIds: string[];
+            /** @description The user's current month, YYYY-MM: when the new targets start */
+            month: string;
+        };
         AccountList: {
             /** @description In sidebar order, closed ones included */
             accounts: components["schemas"]["Account"][];
@@ -1789,6 +1914,8 @@ export interface components {
             migratedToAccountId: string | null;
             /** @description A loan made by updating a tracking liability: the original (closed) account */
             migratedFromAccountId: string | null;
+            /** @description Transactions that are unapproved or need a category (YNAB's "N new transactions to approve or categorize" and the dot by the account in the sidebar) */
+            toReview: number;
         };
         /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
         AccountBalances: {
@@ -2067,8 +2194,10 @@ export interface components {
              * @enum {string|null}
              */
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
-            /** @description False for a scheduled transaction entered on its date, until it's approved */
+            /** @description False until it's approved (e.g. a scheduled transaction entered on its date); it counts in balances and the plan either way */
             approved: boolean;
+            /** @description Left Uncategorized (YNAB's "This needs a category"); transfers within the budget, tracking accounts and splits have no category and never need one */
+            needsCategory: boolean;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
             /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
@@ -2126,6 +2255,8 @@ export interface components {
             reconciledTransfers: number;
             /** @description Transactions that take a category (not transfers within the budget, nor tracking accounts) */
             categorizable: number;
+            /** @description Unapproved transactions (the action bar then offers Approve and Reject) */
+            unapproved: number;
             splits: number;
             /** @description Splits with a transfer line, which categorize keeps split */
             splitsWithTransfers: number;
@@ -2146,7 +2277,7 @@ export interface components {
         /** @description Select all: every transaction this filter matches */
         RegisterFilter: {
             accountId?: string;
-            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
+            /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format, or part of one completed from today: `5` is May 1st in MM/DD/YYYY; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
             q?: string;
             /**
              * Format: date
@@ -2205,6 +2336,12 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "duplicate";
+        } | {
+            /** @enum {string} */
+            type: "approve";
+        } | {
+            /** @enum {string} */
+            type: "reject";
         };
         CreateTransaction: {
             accountId: string;
@@ -2290,6 +2427,8 @@ export interface components {
              */
             flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
+            /** @description Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB */
+            approved?: boolean;
         };
         PayeeList: {
             payees: components["schemas"]["Payee"][];
@@ -2301,8 +2440,19 @@ export interface components {
             hidden: boolean;
             /** @description Transactions and scheduled transactions (split lines included) using the payee */
             useCount: number;
-            /** @description Category of the payee's latest categorized transaction, suggested for the next */
-            lastCategoryId: string | null;
+            /**
+             * @description Manage Payees' Categorization: "auto" (Auto-categorize based on payee history), "always" (Always use my choice) or "never" (Do not auto-categorize)
+             * @enum {string}
+             */
+            categorization: "auto" | "always" | "never";
+            /** @description The "Always use my choice" category; null unless `categorization` is "always" */
+            defaultCategoryId: string | null;
+            /** @description Current default category from the payee's history: the first categorization, changed only when two of the last three (by date; splits and Uncategorized left out) agree */
+            autoCategoryId: string | null;
+            /** @description The category a new transaction for this payee starts with, by `categorization` */
+            prefillCategoryId: string | null;
+            /** @description Categories used with the payee, most recent first, each once, split lines included (up to six: the category list suggests five besides the selected one) */
+            recentCategoryIds: string[];
         };
         PayeeTransactionList: {
             transactions: components["schemas"]["PayeeTransaction"][];
@@ -2312,6 +2462,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "transaction" | "scheduled";
+            /** @description A line of a split transaction or scheduled split */
+            splitLine: boolean;
             accountId: string;
             accountName: string;
             /** @description A scheduled transaction's next date */
@@ -2327,6 +2479,27 @@ export interface components {
              */
             currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
         };
+        PayeeRuleList: {
+            rules: components["schemas"]["PayeeRule"][];
+            transferPayees: {
+                payeeId: string;
+                accountId: string;
+            }[];
+        };
+        PayeeRule: {
+            id: string;
+            /** @description The payee an imported payee meeting the rule is renamed to */
+            payeeId: string;
+            /** @enum {string} */
+            operator: "contains" | "is";
+            text: string;
+        };
+        UpdatePayeeRule: {
+            /** @enum {string} */
+            operator?: "contains" | "is";
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text?: string;
+        };
         SetPayeesHidden: {
             payeeIds: string[];
             hidden: boolean;
@@ -2341,9 +2514,18 @@ export interface components {
                 id: string;
                 name: string;
                 hidden: boolean;
+                /** @enum {string} */
+                categorization?: "auto" | "always" | "never";
+                defaultCategoryId?: string | null;
+                carriedCategoryId?: string | null;
             }[];
             /** @description The rows that pointed at each payee */
             uses: components["schemas"]["PayeeUses"][];
+            /**
+             * @description The payees' renaming rules as they were
+             * @default []
+             */
+            rules: components["schemas"]["PayeeRuleSnapshot"][];
         };
         PayeeUses: {
             payeeId: string;
@@ -2351,6 +2533,13 @@ export interface components {
             subTransactionIds: string[];
             scheduledTransactionIds: string[];
             scheduledSubTransactionIds: string[];
+        };
+        PayeeRuleSnapshot: components["schemas"]["PayeeRule"] & {
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text?: string;
+            position: number;
+            /** Format: date-time */
+            createdAt: string;
         };
         PayeeChange: {
             snapshot: components["schemas"]["PayeeSnapshot"];
@@ -2364,9 +2553,22 @@ export interface components {
             /** @default null */
             replacementPayeeId: string | null;
         };
+        CreatePayeeRule: {
+            /** @enum {string} */
+            operator: "contains" | "is";
+            /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
+            text: string;
+            /** @description Where among the payee's rules (undoing a removal); default after the last */
+            position?: number;
+        };
         UpdatePayee: {
             name?: string;
             hidden?: boolean;
+            /** @enum {string} */
+            categorization?: "auto" | "always" | "never";
+            defaultCategoryId?: string | null;
+            /** @description Undo: allows an "always" category that has been hidden since it was chosen */
+            restore?: boolean;
         };
         ScheduledTransactionList: {
             scheduledTransactions: components["schemas"]["ScheduledTransaction"][];
@@ -5175,6 +5377,118 @@ export interface operations {
             };
         };
     };
+    listCategoryTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every template, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTemplateList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or template, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importCategoryTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCategoryTemplate"];
+            };
+        };
+        responses: {
+            /** @description How many categories were added, and the budget's categories now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCategoryTemplateResult"];
+                };
+            };
+            /** @description Invalid input, or a category id that isn't in the template */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't edit categories, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or template, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listAccounts: {
         parameters: {
             query?: {
@@ -6033,7 +6347,7 @@ export interface operations {
             query?: {
                 /** @description Leave out for all accounts */
                 accountId?: string;
-                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
+                /** @description YNAB's search: comma-separated terms that must all match, each free text (payee, category, memo or account name, or an exact amount) or one of `Payee:`, `Category:` (`Category: Split` for splits), `Memo:`, `Account:`, `Flag:` (a color, its name or None), `Is:` (Uncleared, Cleared, Reconciled, Unreconciled, Cleared or Reconciled, Approved, Unapproved, Needs Category, Unapproved or Needs Category), `Outflow:`/`Inflow:` (`25`, `>=25`, `<=25`), `On:`/`Before:`/`After:` (a date in the budget's format, or part of one completed from today: `5` is May 1st in MM/DD/YYYY; before and after include the day), `Income:` (a month name, full or three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to Assign that month, including Starting Balances of budget accounts; no year means this year). Split lines are matched one by one. */
                 q?: string;
                 /** @description On or after this date */
                 from?: string;
@@ -6539,6 +6853,166 @@ export interface operations {
             };
         };
     };
+    listPayeeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRuleList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or payee, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deletePayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or rule, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updatePayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePayeeRule"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRule"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or rule, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     setPayeesHidden: {
         parameters: {
             query?: never;
@@ -6819,6 +7293,78 @@ export interface operations {
             };
         };
     };
+    createPayeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                payeeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePayeeRule"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayeeRule"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or payee, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A built-in payee (`PAYEE_LOCKED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     updatePayee: {
         parameters: {
             query?: never;
@@ -6844,7 +7390,7 @@ export interface operations {
                     "application/json": components["schemas"]["Payee"];
                 };
             };
-            /** @description Invalid input */
+            /** @description Invalid input, a missing (`CATEGORY_REQUIRED`) or unusable (`INVALID_CATEGORY`) category */
             400: {
                 headers: {
                     [name: string]: unknown;

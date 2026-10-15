@@ -71,7 +71,7 @@ export interface RegisterFilter {
   to?: string;
   /** The View menu's "Show Reconciled Transactions" turned off. */
   hideReconciled?: boolean;
-  /** The user's today: `Income:` without a year means its year (default: the server's date). */
+  /** The user's today: a year-less `Income:` means its year, and partial dates complete from it. */
   today?: string;
 }
 
@@ -112,6 +112,10 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         cleared: transaction.cleared,
         flag: transaction.flag,
         approved: transaction.approved,
+        // YNAB's "This needs a category": left Uncategorized (see `needsCategorySql`).
+        needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`.as(
+          "needs_category",
+        ),
         transferAccountId: sql<string | null>`${payee.transferAccountId}`.as("transfer_account_id"),
         // A split line's transfer points at the split itself.
         transferTransactionId: sql<string | null>`coalesce(${transaction.transferTransactionId}, (
@@ -205,6 +209,14 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
           return sql`${r.cleared} <> 'reconciled'`;
         case "cleared_or_reconciled":
           return sql`${r.cleared} in ('cleared', 'reconciled')`;
+        case "approved":
+          return sql`${r.approved}`;
+        case "unapproved":
+          return sql`not ${r.approved}`;
+        case "needs_category":
+          return sql`${r.needsCategory}`;
+        case "unapproved_or_needs_category":
+          return sql`(not ${r.approved} or ${r.needsCategory})`;
       }
       break;
     case "amount": {
@@ -270,12 +282,14 @@ function lineMatches(r: Register, condition: SQL) {
 
 /**
  * The search's terms. A month without a year is the user's current year (YNAB, 2026-10-15), so
- * the register matches the scheduled section around New Year.
+ * the register matches the scheduled section around New Year; partial dates are completed from
+ * the user's today too.
  */
 function searchTerms(filter: RegisterFilter, settings: SearchSettings): SearchTerm[] {
   if (!filter.q) return [];
-  const year = Number((filter.today ?? serverToday()).slice(0, 4));
-  return parseSearch(filter.q, settings).map((t) =>
+  const today = filter.today ?? serverToday();
+  const year = Number(today.slice(0, 4));
+  return parseSearch(filter.q, settings, today).map((t) =>
     t.kind === "income" && t.year === null ? { ...t, year } : t,
   );
 }
@@ -516,6 +530,7 @@ function columns(r: Register) {
     cleared: r.cleared,
     flag: r.flag,
     approved: r.approved,
+    needsCategory: r.needsCategory,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,

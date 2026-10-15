@@ -143,13 +143,23 @@ describe("fresh start", () => {
     expect(visaTxns).toEqual([
       expect.objectContaining({ amount: "0", payeeName: "Starting Balance", date: TODAY }),
     ]);
-    // Payees come along, hidden ones still hidden ("C9 Payees FS", 2026-10-13); with no
-    // transactions yet there's no category to suggest.
+    // Payees come along, hidden ones still hidden ("C9 Payees FS", 2026-10-13), with their
+    // auto-categorization default (payees/categorization.test.ts) but no recent categories.
     const payees = await json<{ payees: unknown[] }>(
       await send("GET", `${freshBase}/payees`, owner.cookie),
     );
     expect(payees.payees).toEqual([
-      { id: expect.any(String), name: "Costco", hidden: true, useCount: 0, lastCategoryId: null },
+      {
+        id: expect.any(String),
+        name: "Costco",
+        hidden: true,
+        useCount: 0,
+        categorization: "auto",
+        defaultCategoryId: null,
+        autoCategoryId: expect.any(String),
+        prefillCategoryId: expect.any(String),
+        recentCategoryIds: [],
+      },
     ]);
 
     const freshGroups = (

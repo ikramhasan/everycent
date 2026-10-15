@@ -37,6 +37,13 @@ import {
   transferLabel,
 } from "@/lib/transactions";
 import type { UndoCommand } from "@/lib/undo";
+import { type CategorizationChange, PayeeCategorizationSection } from "./payee-categorization";
+import {
+  PayeeRenamingRules,
+  type PayeeRule,
+  payeeRulesQueryOptions,
+  RenamingRulesGear,
+} from "./payee-renaming-rules";
 
 type Snapshot = components["schemas"]["PayeeSnapshot"];
 
@@ -76,6 +83,20 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
   const payeesQuery = useQuery(payeesQueryOptions(budget.id));
   const accountsQuery = useQuery(accountsQueryOptions(budget.id));
   const payees = payeesQuery.data?.payees ?? [];
+  const rulesQuery = useQuery(payeeRulesQueryOptions(budget.id));
+  const { rulesByPayee, transferPayeeIds } = useMemo(() => {
+    const byPayee = new Map<string, PayeeRule[]>();
+    for (const rule of rulesQuery.data?.rules ?? []) {
+      byPayee.set(rule.payeeId, [...(byPayee.get(rule.payeeId) ?? []), rule]);
+    }
+    const transfers = new Map(
+      (rulesQuery.data?.transferPayees ?? []).map((t) => [`transfer:${t.accountId}`, t.payeeId]),
+    );
+    return { rulesByPayee: byPayee, transferPayeeIds: transfers };
+  }, [rulesQuery.data]);
+  /** A list item's payee id (transfer items are keyed by account). */
+  const payeeIdOf = (itemId: string) => transferPayeeIds.get(itemId) ?? itemId;
+  const hasRules = (itemId: string) => rulesByPayee.has(payeeIdOf(itemId));
 
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/payees/{payeeId}");
   const hide = $api.useMutation("post", "/v1/budgets/{budgetId}/payees/hide");
@@ -132,6 +153,7 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
+      queryClient.invalidateQueries({ queryKey: payeeRulesQueryOptions(budget.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
       queryClient.invalidateQueries({
@@ -198,6 +220,24 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
         await update.mutateAsync({ params: { path: { ...path, payeeId: p.id } }, body: { name } });
       },
     });
+
+  const categorize = (p: Payee, change: CategorizationChange) => {
+    // `restore`: undo and redo bring back a choice even if its category was hidden since.
+    const apply = (body: CategorizationChange, restore: boolean) => async () => {
+      await update.mutateAsync({
+        params: { path: { ...path, payeeId: p.id } },
+        body: { ...body, restore },
+      });
+    };
+    return run({
+      label: "Change categorization",
+      undo: apply(
+        { categorization: p.categorization, defaultCategoryId: p.defaultCategoryId },
+        true,
+      ),
+      redo: apply(change, false),
+    });
+  };
 
   const setHidden = (ids: string[], hidden: boolean) => {
     const apply = (value: boolean) => () =>
@@ -333,10 +373,15 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
                             <div
                               key={item.id}
                               className={cn(
-                                "flex items-center gap-2 py-1 pr-2 pl-8",
+                                "relative flex items-center gap-2 py-1 pr-2 pl-8",
                                 on && "bg-muted",
                               )}
                             >
+                              {hasRules(item.id) && (
+                                <span className="absolute left-3.5 flex">
+                                  <RenamingRulesGear />
+                                </span>
+                              )}
                               <Checkbox
                                 aria-label={`Select ${item.name}`}
                                 checked={on}
@@ -377,6 +422,17 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
             {pickedTransfer ? (
               <div className="grid gap-3">
                 <p className="font-semibold text-sm">{pickedTransfer.name}</p>
+                {transferPayeeIds.has(pickedTransfer.id) && (
+                  <PayeeRenamingRules
+                    // Fresh drafts for each payee.
+                    key={pickedTransfer.id}
+                    budgetId={budget.id}
+                    payeeId={payeeIdOf(pickedTransfer.id)}
+                    rules={rulesByPayee.get(payeeIdOf(pickedTransfer.id)) ?? []}
+                    run={run}
+                    disabled={busy}
+                  />
+                )}
                 <p className="rounded-md bg-primary/10 p-3 text-sm">
                   Transfer payees are used to move money between accounts, including credit card
                   payments. everycent creates these for you, so they can't be edited or deleted.
@@ -395,8 +451,21 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
                 payees={payees}
                 busy={busy}
                 error={error}
+                anyRules={picked.some((p) => rulesByPayee.has(p.id))}
+                renaming={
+                  picked.length === 1 && (
+                    <PayeeRenamingRules
+                      budgetId={budget.id}
+                      payeeId={(picked[0] as Payee).id}
+                      rules={rulesByPayee.get((picked[0] as Payee).id) ?? []}
+                      run={run}
+                      disabled={busy}
+                    />
+                  )
+                }
                 onError={setError}
                 onRename={(p, name) => rename(p, name).catch(() => {})}
+                onCategorize={(p, change) => categorize(p, change).catch(() => {})}
                 onCombine={(name) => combineInto(name).catch(() => {})}
                 onHide={(hidden) =>
                   setHidden(
@@ -442,8 +511,11 @@ function PayeeEditor({
   payees,
   busy,
   error,
+  anyRules,
+  renaming,
   onError,
   onRename,
+  onCategorize,
   onCombine,
   onHide,
   onDelete,
@@ -452,8 +524,13 @@ function PayeeEditor({
   payees: readonly Payee[];
   busy: boolean;
   error: string | null;
+  /** Whether any picked payee has renaming rules. */
+  anyRules: boolean;
+  /** The single picked payee's "Renaming" card. */
+  renaming: ReactNode;
   onError: (message: string | null) => void;
   onRename: (payee: Payee, name: string) => Promise<void>;
+  onCategorize: (payee: Payee, change: CategorizationChange) => Promise<void>;
   onCombine: (name: string) => Promise<void>;
   onHide: (hidden: boolean) => Promise<void>;
   onDelete: (replacementPayeeId: string | null) => Promise<void>;
@@ -537,7 +614,8 @@ function PayeeEditor({
           <section className="dimmed grid gap-2 rounded-lg border bg-background p-4">
             <p className="font-semibold text-sm">Combine and Rename</p>
             <p className="text-muted-foreground text-sm">
-              Combining these payees moves all their transactions to one payee with this name.
+              Combining these payees will also combine all their renaming rules and categorization
+              rules.
             </p>
             <form
               className="flex gap-2"
@@ -568,6 +646,15 @@ function PayeeEditor({
           </section>
         </>
       )}
+
+      {single && (
+        <PayeeCategorizationSection
+          payee={first}
+          busy={busy}
+          onChange={(change) => onCategorize(first, change)}
+        />
+      )}
+      {renaming}
 
       {deleting ? (
         <section className="grid gap-2">
@@ -627,6 +714,12 @@ function PayeeEditor({
               {single ? "Delete" : "Delete All"}
             </Button>
           </div>
+          {!single && anyRules && (
+            <p className="text-muted-foreground text-xs">
+              One or more of these payees have renaming rules. Deleting them will also delete their
+              rules.
+            </p>
+          )}
           <p className="text-muted-foreground text-xs">{HIDDEN_HELP}</p>
         </div>
       )}

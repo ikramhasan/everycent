@@ -7,26 +7,36 @@ import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import { z } from "zod";
 import { currencyName } from "@/components/currency-picker";
 import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/")({
+  // A category template on its way to a budget (the import dialog's "Choose Another Budget"):
+  // the budget opened, or created, next shows its import dialog (YNAB, 2026-10-16).
+  validateSearch: z.object({ template: z.string().optional().catch(undefined) }),
   component: AllBudgetsPage,
 });
 
 function AllBudgetsPage() {
   const budgets = useQuery(budgetsQueryOptions());
+  const { template } = Route.useSearch();
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-semibold text-2xl tracking-tight">All budgets</h1>
         <Button asChild>
-          <Link to="/budgets/new">
+          <Link to="/budgets/new" search={{ template }}>
             <Plus /> New budget
           </Link>
         </Button>
       </div>
+      {template && (
+        <p className="text-muted-foreground text-sm">
+          Open a budget, or create a new one, to import the category template into it.
+        </p>
+      )}
       {budgets.isPending ? (
         <Skeleton className="h-24" />
       ) : budgets.isError ? (
@@ -47,11 +57,17 @@ function AllBudgetsPage() {
            * first (the API's order). Archived budgets are among them, their names stamped
            * "(Archived on …)" (YNAB, 2026-10-15).
            */}
-          <BudgetGrid budgets={budgets.data.budgets.filter((b) => b.role === "owner")} />
+          <BudgetGrid
+            budgets={budgets.data.budgets.filter((b) => b.role === "owner")}
+            template={template}
+          />
           <section className="grid gap-3">
             <h2 className="font-medium text-muted-foreground text-sm">Budgets shared with you</h2>
             {budgets.data.budgets.some((b) => b.role !== "owner") ? (
-              <BudgetGrid budgets={budgets.data.budgets.filter((b) => b.role !== "owner")} />
+              <BudgetGrid
+                budgets={budgets.data.budgets.filter((b) => b.role !== "owner")}
+                template={template}
+              />
             ) : (
               <p className="text-muted-foreground text-sm">
                 No budgets have been shared with you yet.
@@ -64,7 +80,7 @@ function AllBudgetsPage() {
   );
 }
 
-function BudgetGrid({ budgets }: { budgets: Budget[] }) {
+function BudgetGrid({ budgets, template }: { budgets: Budget[]; template?: string }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {budgets.map((b) => (
@@ -72,6 +88,7 @@ function BudgetGrid({ budgets }: { budgets: Budget[] }) {
           key={b.id}
           to="/budgets/$budgetId"
           params={{ budgetId: b.id }}
+          search={{ template }}
           preload={false}
           className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

@@ -75,6 +75,13 @@ export const AccountSchema = z
       .string()
       .nullable()
       .describe("A loan made by updating a tracking liability: the original (closed) account"),
+    toReview: z
+      .number()
+      .int()
+      .describe(
+        "Transactions that are unapproved or need a category (YNAB's \"N new transactions to " +
+          'approve or categorize" and the dot by the account in the sidebar)',
+      ),
   })
   .openapi("Account");
 
@@ -624,7 +631,8 @@ export const recordLoanPayment = createRoute({
   summary: "Record a loan payment (YNAB's Record Payment)",
   description:
     "A transfer from `fromAccountId` into the loan: the paying side is uncleared and comes out " +
-    "of the loan's paired category (Uncategorized when it has none); the loan's side is cleared.",
+    "of the loan's paired category (Uncategorized when it has none); the loan's side is cleared. " +
+    "A date after the user's `today` makes a one-time scheduled transfer instead.",
   request: {
     params: AccountParams,
     query: TodayQuery,

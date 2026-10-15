@@ -1,13 +1,14 @@
 import {
   type BudgetFormatSettings,
   type CurrencyCode,
+  completeDate,
   formatAmount,
+  formatDate,
   IS_LABELS,
   IS_STATES,
   incomeTerm,
   money,
   parseAmount,
-  parseDate,
 } from "@everycent/engine";
 import { todayIso } from "./dates";
 import { type Flag, flagLabel } from "./flags";
@@ -37,8 +38,8 @@ export interface SuggestionSources {
 
 /**
  * YNAB offers `Income:` for a start of "income" with nothing after it ("i", "inco", "Income: ")
- * or anything starting with a digit ("5", "2026", "10/02/2026"); not for "oct" or "income: o"
- * (2026-10-15).
+ * or anything starting with a digit ("5", "2026", "10/02/2026"), and anything read as a date
+ * ("Card 5"; see `searchSuggestions`); not for "oct" or "income: o" (2026-10-15/16).
  */
 function offersIncome(typed: string) {
   if (/^\d/.test(typed)) return true;
@@ -131,8 +132,12 @@ export function searchSuggestions(fragment: string, sources: SuggestionSources):
     specific = amountOptions(direction, rest || "0", (rest && amountOf(rest)) || 0n);
   } else {
     const amount = amountOf(typed);
-    const date = parseDate(typed, settings.dateFormat);
-    const [year = 0, month = 1] = (sources.today ?? todayIso()).split("-").map(Number);
+    const today = sources.today ?? todayIso();
+    // YNAB completes partial dates ("5" is On 05/01/2026) and writes the full date it read.
+    const date = completeDate(typed, settings.dateFormat, today);
+    const shown = date && formatDate(date, settings.dateFormat);
+    // `Income:` is the date's month, unless what's typed is an amount ("5/" May, "5" this month).
+    const [year = 0, month = 1] = (date && amount === null ? date : today).split("-").map(Number);
     const income: Suggestion = {
       label: "Income:",
       text: `Enter month like '${incomeTerm(month, year)}'`,
@@ -140,15 +145,15 @@ export function searchSuggestions(fragment: string, sources: SuggestionSources):
       calendar: true,
     };
     specific = [
-      ...(date
+      ...(shown
         ? [
-            { label: "On:", text: `On ${typed}`, term: `On: ${typed}` },
-            { label: "Before:", text: `On or before ${typed}`, term: `Before: ${typed}` },
-            { label: "After:", text: `On or after ${typed}`, term: `After: ${typed}` },
+            { label: "On:", text: `On ${shown}`, term: `On: ${shown}` },
+            { label: "Before:", text: `On or before ${shown}`, term: `Before: ${shown}` },
+            { label: "After:", text: `On or after ${shown}`, term: `After: ${shown}` },
           ]
         : []),
-      ...(offersIncome(typed) ? [income] : []),
-      ...(amount !== null && !date
+      ...(date || offersIncome(typed) ? [income] : []),
+      ...(amount !== null
         ? [...amountOptions("Outflow", typed, amount), ...amountOptions("Inflow", typed, amount)]
         : []),
       ...flagOptions((name) => contains(name, typed)),

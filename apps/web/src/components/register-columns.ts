@@ -1,5 +1,6 @@
 export type ColumnId =
   | "select"
+  | "review"
   | "flag"
   | "account"
   | "date"
@@ -29,6 +30,7 @@ interface ColumnSpec {
 
 export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
   select: { header: "Select", width: "2.25rem", align: "center", srOnly: true },
+  review: { header: "Approval", width: "2.25rem", align: "center", srOnly: true },
   flag: { header: "Flag", width: "2.5rem", align: "center", srOnly: true },
   account: { header: "Account", width: "9rem" },
   date: { header: "Date", width: "9.25rem" },
@@ -49,6 +51,8 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
 export function registerColumns(allAccounts: boolean): ColumnId[] {
   return [
     "select",
+    // YNAB's info column; the register shows it only while a row needs approval or a category.
+    "review",
     "flag",
     ...(allAccounts ? (["account"] as const) : []),
     "date",

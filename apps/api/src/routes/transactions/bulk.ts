@@ -7,6 +7,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
+import { setApproval } from "../../lib/review";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { applyUpdate, deleteWithTransfers, insertNewTransaction } from "./handlers";
@@ -63,6 +64,8 @@ function selectedRows(db: Db, where: SQL) {
       id: transaction.id,
       amount: transaction.amount,
       cleared: transaction.cleared,
+      approved: transaction.approved,
+      transferTransactionId: transaction.transferTransactionId,
       accountType: budgetAccount.type,
       transferAccountType: transferAccount.type,
       fromSplit: sql<boolean>`${transaction.transferSubTransactionId} is not null`,
@@ -129,6 +132,7 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
       reconciled: count((r) => r.cleared === "reconciled"),
       reconciledTransfers: count((r) => r.reconciledTransfer && !r.fromSplit),
       categorizable: count(categorizable),
+      unapproved: count((r) => !r.approved),
       splits: count((r) => r.isSplit),
       splitsWithTransfers: count((r) => r.isSplit && r.hasTransferLine),
       deletable: count((r) => !r.fromSplit),
@@ -147,7 +151,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
   const { budget } = await loadBudgetAccess(
     c,
     budgetId,
-    action.type === "delete"
+    action.type === "delete" || action.type === "reject"
       ? { transaction: ["delete"] }
       : action.type === "duplicate"
         ? { transaction: ["create"] }
@@ -177,9 +181,27 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         if (ids.length > 0) {
           await tx.update(transaction).set({ cleared: action.cleared }).where(selectedIds(ids));
         }
+        // Marking rows cleared (or uncleared) approves them in YNAB (2026-10-16).
+        await approve(tx, rows, ids);
         updatedIds = ids;
         break;
       }
+      case "approve":
+        updatedIds = await approve(
+          tx,
+          rows,
+          rows.map((r) => r.id),
+        );
+        break;
+      case "reject":
+        // YNAB's Reject deletes an unapproved transaction it didn't import (2026-10-16); on a
+        // mixed selection the approved rows stay.
+        updatedIds = await remove(
+          tx,
+          budgetId,
+          rows.filter((r) => !r.approved).map((r) => r.id),
+        );
+        break;
       case "flag":
         await tx.update(transaction).set({ flag: action.flag }).where(selectedIds(lockedIds));
         updatedIds = lockedIds;
@@ -190,6 +212,8 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         break;
       case "categorize":
         updatedIds = await categorize(tx, budgetId, rows, action.categoryId);
+        // Bulk Categorize approves the rows it categorizes in YNAB (2026-10-16).
+        await approve(tx, rows, updatedIds);
         break;
       case "move":
         updatedIds = await move(tx, budgetId, lockedIds, action.accountId);
@@ -260,6 +284,20 @@ async function categorize(tx: Db, budgetId: string, rows: SelectedRow[], categor
     await tx.update(transaction).set({ categoryId }).where(selectedIds(categorized));
   }
   return [...keepSplit, ...categorized];
+}
+
+/**
+ * Approves the unapproved rows among `ids`, with their transfers' other sides, split transfer
+ * lines' included (approving one side approves both in YNAB, 2026-10-16). Returns the rows it
+ * approved.
+ */
+async function approve(tx: Db, rows: readonly SelectedRow[], ids: readonly string[]) {
+  const wanted = new Set(ids);
+  const unapproved = rows.filter((r) => wanted.has(r.id) && !r.approved);
+  if (unapproved.length === 0) return [];
+  const approved = unapproved.map((r) => r.id);
+  await setApproval(tx, approved, true);
+  return approved;
 }
 
 /**

@@ -146,9 +146,29 @@ export {
   parseMoney,
   toDecimalString,
 } from "./parse-format";
+export {
+  PAYEE_CATEGORIZATIONS,
+  PAYEE_SUGGESTION_LIMIT,
+  type PayeeCategorization,
+  payeeAutoCategory,
+  payeePrefillCategory,
+  payeeRecentCategories,
+  payeeSuggestions,
+  zPayeeCategorization,
+} from "./payee-category";
+export {
+  matchPayeeRule,
+  PAYEE_RULE_OPERATOR_LABELS,
+  PAYEE_RULE_OPERATORS,
+  type PayeeRuleCondition,
+  type PayeeRuleOperator,
+  payeeRuleMatches,
+  zPayeeRuleOperator,
+} from "./payee-rules";
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,
+  completeDate,
   DATE_LABELS,
   type DateOp,
   IS_LABELS,
@@ -156,7 +176,6 @@ export {
   type IsState,
   incomeTerm,
   MONTH_NAMES,
-  parseDate,
   parseSearch,
   type SearchSettings,
   type SearchTerm,

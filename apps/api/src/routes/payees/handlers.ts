@@ -1,28 +1,40 @@
-import { sql } from "@everycent/db";
+import { newId, sql } from "@everycent/db";
 import {
   budgetAccount,
   category,
+  categoryGroup,
   payee,
+  payeeRule,
   scheduledSubTransaction,
   scheduledTransaction,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
+import type { PayeeCategorization } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
+import {
+  type PayeeCategories,
+  type PayeeCategorySettings,
+  payeeCategories,
+} from "../../lib/payee-categories";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
   combinePayees,
+  createPayeeRule,
+  deletePayeeRule,
   deletePayees,
+  listPayeeRules,
   listPayees,
   listPayeeTransactions,
   restorePayees,
   setPayeesHidden,
   updatePayee,
+  updatePayeeRule,
 } from "./routes";
 
 type Env = AppEnv & AuthedEnv;
@@ -40,27 +52,92 @@ interface PayeeUses {
   scheduledSubTransactionIds: string[];
 }
 
+interface RuleSnapshot {
+  id: string;
+  payeeId: string;
+  operator: "contains" | "is";
+  text: string;
+  position: number;
+  createdAt: string;
+}
+
+interface SnapshotPayee {
+  id: string;
+  name: string;
+  hidden: boolean;
+  categorization?: PayeeCategorization;
+  defaultCategoryId?: string | null;
+  carriedCategoryId?: string | null;
+}
+
 interface PayeeSnapshot {
-  payees: { id: string; name: string; hidden: boolean }[];
+  payees: SnapshotPayee[];
   uses: PayeeUses[];
+  rules: RuleSnapshot[];
+}
+
+/** These payees' renaming rules, each payee's in order, so a change can be undone. */
+async function rulesOf(db: Db, payeeIds: readonly string[]): Promise<RuleSnapshot[]> {
+  if (payeeIds.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(payeeRule)
+    .where(inArray(payeeRule.payeeId, payeeIds))
+    .orderBy(asc(payeeRule.position), asc(payeeRule.createdAt), asc(payeeRule.id));
+  return payeeIds.flatMap((id) =>
+    rows
+      .filter((r) => r.payeeId === id)
+      .map((r) => ({
+        id: r.id,
+        payeeId: r.payeeId,
+        operator: r.operator,
+        text: r.text,
+        position: r.position,
+        createdAt: r.createdAt.toISOString(),
+      })),
+  );
+}
+
+function snapshotOf(p: typeof payee.$inferSelect): SnapshotPayee {
+  return {
+    id: p.id,
+    name: p.name,
+    hidden: p.hidden,
+    categorization: p.categorization,
+    defaultCategoryId: p.defaultCategoryId,
+    carriedCategoryId: p.carriedCategoryId,
+  };
 }
 
 function payeeColumns() {
-  // YNAB suggests the category last used with a payee; Uncategorized isn't worth remembering.
-  const lastCategoryId = sql<string | null>`(
-    select t.category_id from ${transaction} t
-    join ${category} c on c.id = t.category_id
-    where t.payee_id = ${payee}.id and c.internal_kind is distinct from 'uncategorized'
-    order by t.date desc, t.created_at desc, t.id desc
-    limit 1
-  )`;
   const useCount = sql<number>`(
     (select count(*) from ${transaction} t where t.payee_id = ${payee}.id)
     + (select count(*) from ${subTransaction} s where s.payee_id = ${payee}.id)
     + (select count(*) from ${scheduledTransaction} st where st.payee_id = ${payee}.id)
     + (select count(*) from ${scheduledSubTransaction} ss where ss.payee_id = ${payee}.id)
   )::int`;
-  return { id: payee.id, name: payee.name, hidden: payee.hidden, useCount, lastCategoryId };
+  return {
+    id: payee.id,
+    name: payee.name,
+    hidden: payee.hidden,
+    useCount,
+    categorization: payee.categorization,
+    defaultCategoryId: payee.defaultCategoryId,
+    carriedCategoryId: payee.carriedCategoryId,
+  };
+}
+
+/** Rows from `payeeColumns` with what their transactions say about their categories. */
+async function withCategories<T extends PayeeCategorySettings>(
+  db: Db,
+  budgetId: string,
+  rows: T[],
+) {
+  const categories = await payeeCategories(db, budgetId, rows);
+  return rows.map(({ carriedCategoryId: _, ...row }) => ({
+    ...row,
+    ...(categories.get(row.id) as PayeeCategories),
+  }));
 }
 
 /** People's payees: not a transfer payee or a built-in one like "Starting Balance". */
@@ -166,8 +243,9 @@ async function repoint(db: Db, budgetId: string, from: readonly string[], to: st
     .where(inArray(scheduledSubTransaction.payeeId, from));
 }
 
-async function readPayee(db: Db, id: string) {
-  const [row] = await db.select(payeeColumns()).from(payee).where(eq(payee.id, id));
+async function readPayee(db: Db, budgetId: string, id: string) {
+  const rows = await db.select(payeeColumns()).from(payee).where(eq(payee.id, id));
+  const [row] = await withCategories(db, budgetId, rows);
   if (!row) throw new Error(`Payee ${id} missing`);
   return row;
 }
@@ -176,13 +254,63 @@ export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c)
   const { budgetId } = c.req.valid("param");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
-  const payees = await db
+  const rows = await db
     .select(payeeColumns())
     .from(payee)
     .where(peoplesPayee(budgetId))
     .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
-  return c.json({ payees }, 200);
+  return c.json({ payees: await withCategories(db, budgetId, rows) }, 200);
 };
+
+/**
+ * The categorization columns to set for an update, if it changes them. "Always use my choice"
+ * needs a category the category list offers; the other two settings forget it, as YNAB does.
+ */
+async function categorizationChange(
+  db: Db,
+  budgetId: string,
+  current: { categorization: PayeeCategorization; defaultCategoryId: string | null } | undefined,
+  input: {
+    categorization?: PayeeCategorization;
+    defaultCategoryId?: string | null;
+    restore?: boolean;
+  },
+) {
+  if (input.categorization === undefined && input.defaultCategoryId === undefined) return {};
+  const categorization = input.categorization ?? current?.categorization ?? "auto";
+  if (categorization !== "always") return { categorization, defaultCategoryId: null };
+  const defaultCategoryId =
+    input.defaultCategoryId === undefined
+      ? (current?.defaultCategoryId ?? null)
+      : input.defaultCategoryId;
+  if (defaultCategoryId === null) {
+    throw new AppError(400, "CATEGORY_REQUIRED", "Choose the category to always use");
+  }
+  // A new choice must be one the category list offers: hidden categories aren't listed. Undo
+  // (`restore`) may bring back a category that has been hidden since it was chosen.
+  const choosing =
+    input.defaultCategoryId !== undefined &&
+    !input.restore &&
+    input.defaultCategoryId !== current?.defaultCategoryId;
+  const [row] = await db
+    .select({ id: category.id })
+    .from(category)
+    .innerJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
+    .where(
+      and(
+        eq(category.id, defaultCategoryId),
+        eq(category.budgetId, budgetId),
+        sql`${category.internalKind} is distinct from 'uncategorized'`,
+        isNull(category.linkedAccountId),
+        choosing ? eq(category.hidden, false) : undefined,
+        choosing ? eq(categoryGroup.hidden, false) : undefined,
+      ),
+    );
+  if (!row) {
+    throw new AppError(400, "INVALID_CATEGORY", "That category can't be a payee's default");
+  }
+  return { categorization, defaultCategoryId };
+}
 
 export const updatePayeeHandler: RouteHandler<typeof updatePayee, Env> = async (c) => {
   const { budgetId, payeeId } = c.req.valid("param");
@@ -190,15 +318,20 @@ export const updatePayeeHandler: RouteHandler<typeof updatePayee, Env> = async (
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, EDIT);
   const row = await db.transaction(async (tx) => {
-    await lockPayees(tx, budgetId, [payeeId]);
+    const [current] = await lockPayees(tx, budgetId, [payeeId]);
     if (input.name !== undefined && (await payeeNamed(tx, budgetId, input.name, payeeId))) {
       throw NAME_TAKEN();
     }
     await tx
       .update(payee)
-      .set({ name: input.name, hidden: input.hidden, updatedAt: sql`now()` })
+      .set({
+        name: input.name,
+        hidden: input.hidden,
+        ...(await categorizationChange(tx, budgetId, current, input)),
+        updatedAt: sql`now()`,
+      })
       .where(eq(payee.id, payeeId));
-    return readPayee(tx, payeeId);
+    return readPayee(tx, budgetId, payeeId);
   });
   return c.json(row, 200);
 };
@@ -234,13 +367,28 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
     const others = selected.filter((p) => p.id !== target.id);
     const affected = [target, ...others];
     const snapshot: PayeeSnapshot = {
-      payees: affected.map((p) => ({ id: p.id, name: p.name, hidden: p.hidden })),
+      payees: affected.map(snapshotOf),
       uses: await usesOf(
         tx,
         budgetId,
         others.map((p) => p.id),
       ),
+      rules: await rulesOf(
+        tx,
+        affected.map((p) => p.id),
+      ),
     };
+    // The others' renaming rules move to the target, after its own (YNAB: "Combining these
+    // payees will also combine all their renaming rules"; x-c12-62-Tea, 2026-10-16).
+    const targetRules = snapshot.rules.filter((r) => r.payeeId === target.id);
+    let position = Math.max(-1, ...targetRules.map((r) => r.position));
+    for (const rule of snapshot.rules.filter((r) => r.payeeId !== target.id)) {
+      position += 1;
+      await tx
+        .update(payeeRule)
+        .set({ payeeId: target.id, position, updatedAt: sql`now()` })
+        .where(eq(payeeRule.id, rule.id));
+    }
     await repoint(
       tx,
       budgetId,
@@ -256,7 +404,7 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
       );
     }
     await tx.update(payee).set({ name, updatedAt: sql`now()` }).where(eq(payee.id, target.id));
-    return { payee: await readPayee(tx, target.id), snapshot };
+    return { payee: await readPayee(tx, budgetId, target.id), snapshot };
   });
   return c.json(result, 200);
 };
@@ -282,9 +430,11 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
         );
       }
     }
+    // Their renaming rules go with them (YNAB: "Deleting them will also delete their rules").
     const snapshot: PayeeSnapshot = {
-      payees: doomed.map((p) => ({ id: p.id, name: p.name, hidden: p.hidden })),
+      payees: doomed.map(snapshotOf),
       uses: await usesOf(tx, budgetId, ids),
+      rules: await rulesOf(tx, ids),
     };
     await repoint(tx, budgetId, ids, replacementPayeeId);
     await tx.delete(payee).where(inArray(payee.id, ids));
@@ -292,6 +442,30 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
   });
   return c.json({ snapshot }, 200);
 };
+
+/**
+ * A snapshot's categorization settings, for putting a payee back. Categories that are gone or
+ * belong to another budget are dropped (a snapshot comes from the client).
+ */
+async function restorableCategories(db: Db, budgetId: string, p: SnapshotPayee) {
+  if (p.categorization === undefined) return {};
+  const ids = [p.defaultCategoryId, p.carriedCategoryId].filter(
+    (id): id is string => typeof id === "string",
+  );
+  const known =
+    ids.length === 0
+      ? []
+      : await db
+          .select({ id: category.id })
+          .from(category)
+          .where(and(eq(category.budgetId, budgetId), inArray(category.id, ids)));
+  const keep = (id: string | null | undefined) =>
+    id && known.some((k) => k.id === id) ? id : null;
+  const defaultCategoryId = keep(p.defaultCategoryId);
+  const categorization: PayeeCategorization =
+    p.categorization === "always" && !defaultCategoryId ? "auto" : p.categorization;
+  return { categorization, defaultCategoryId, carriedCategoryId: keep(p.carriedCategoryId) };
+}
 
 export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
@@ -327,13 +501,38 @@ export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = asy
         );
     }
     for (const p of snapshot.payees) {
+      const settings = await restorableCategories(tx, budgetId, p);
       await tx
         .insert(payee)
-        .values({ id: p.id, budgetId, name: p.name, hidden: p.hidden })
+        .values({ id: p.id, budgetId, name: p.name, hidden: p.hidden, ...settings })
         .onConflictDoUpdate({
           target: payee.id,
-          set: { name: p.name, hidden: p.hidden, updatedAt: sql`now()` },
+          set: { name: p.name, hidden: p.hidden, ...settings, updatedAt: sql`now()` },
         });
+    }
+    if (snapshot.rules.some((r) => !ids.includes(r.payeeId))) {
+      throw new AppError(400, "BAD_REQUEST", "Rules must belong to the snapshot's payees");
+    }
+    const ruleIds = snapshot.rules.map((r) => r.id);
+    if (ruleIds.length > 0) {
+      const foreign = await tx
+        .select({ id: payeeRule.id })
+        .from(payeeRule)
+        .where(and(inArray(payeeRule.id, ruleIds), ne(payeeRule.budgetId, budgetId)));
+      if (foreign.length > 0) throw new AppError(404, "NOT_FOUND", "Rule not found");
+    }
+    for (const rule of snapshot.rules) {
+      const values = {
+        payeeId: rule.payeeId,
+        operator: rule.operator,
+        text: rule.text,
+        position: rule.position,
+        createdAt: new Date(rule.createdAt),
+      };
+      await tx
+        .insert(payeeRule)
+        .values({ id: rule.id, budgetId, ...values })
+        .onConflictDoUpdate({ target: payeeRule.id, set: { ...values, updatedAt: sql`now()` } });
     }
     for (const use of snapshot.uses) {
       if (!ids.includes(use.payeeId)) {
@@ -485,10 +684,117 @@ export const listPayeeTransactionsHandler: RouteHandler<typeof listPayeeTransact
       ),
   ]);
   const rows = [
-    ...[...txns, ...lines].map((r) => ({ ...r, kind: "transaction" as const })),
-    ...[...scheduled, ...scheduledLines].map((r) => ({ ...r, kind: "scheduled" as const })),
+    ...txns.map((r) => ({ ...r, kind: "transaction" as const, splitLine: false })),
+    ...lines.map((r) => ({ ...r, kind: "transaction" as const, splitLine: true })),
+    ...scheduled.map((r) => ({ ...r, kind: "scheduled" as const, splitLine: false })),
+    ...scheduledLines.map((r) => ({ ...r, kind: "scheduled" as const, splitLine: true })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
     .map((r) => ({ ...r, amount: r.amount.toString() }));
   return c.json({ transactions: rows }, 200);
+};
+
+/** Columns a rule is returned with. */
+const ruleColumns = {
+  id: payeeRule.id,
+  payeeId: payeeRule.payeeId,
+  operator: payeeRule.operator,
+  text: payeeRule.text,
+};
+
+/** The budget's rule with this id, or 404. */
+async function findRule(db: Db, budgetId: string, ruleId: string) {
+  const [row] = await db
+    .select(ruleColumns)
+    .from(payeeRule)
+    .where(and(eq(payeeRule.id, ruleId), eq(payeeRule.budgetId, budgetId)));
+  if (!row) throw new AppError(404, "NOT_FOUND", "Rule not found");
+  return row;
+}
+
+export const listPayeeRulesHandler: RouteHandler<typeof listPayeeRules, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const [rules, transferPayees] = await Promise.all([
+    db
+      .select(ruleColumns)
+      .from(payeeRule)
+      .where(eq(payeeRule.budgetId, budgetId))
+      .orderBy(asc(payeeRule.payeeId), asc(payeeRule.position), asc(payeeRule.createdAt)),
+    db
+      .select({ payeeId: payee.id, accountId: payee.transferAccountId })
+      .from(payee)
+      .where(and(eq(payee.budgetId, budgetId), isNotNull(payee.transferAccountId))),
+  ]);
+  return c.json(
+    {
+      rules,
+      transferPayees: transferPayees.map((p) => ({
+        payeeId: p.payeeId,
+        accountId: p.accountId as string,
+      })),
+    },
+    200,
+  );
+};
+
+export const createPayeeRuleHandler: RouteHandler<typeof createPayeeRule, Env> = async (c) => {
+  const { budgetId, payeeId } = c.req.valid("param");
+  const { operator, text, position } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  const row = await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(payee)
+      .where(and(eq(payee.id, payeeId), eq(payee.budgetId, budgetId)))
+      .for("update");
+    if (!target) throw new AppError(404, "NOT_FOUND", "Payee not found");
+    // Transfer payees take rules (YNAB); built-in ones like Starting Balance aren't listed.
+    if (target.internalKind) {
+      throw new AppError(409, "PAYEE_LOCKED", "Built-in payees can't have renaming rules");
+    }
+    // `position` is the index among the payee's rules as listed (undoing a removal puts the rule
+    // back there); stored positions can have gaps after deletes, so the list is renumbered.
+    const ordered = await tx
+      .select({ id: payeeRule.id })
+      .from(payeeRule)
+      .where(eq(payeeRule.payeeId, payeeId))
+      .orderBy(asc(payeeRule.position), asc(payeeRule.createdAt), asc(payeeRule.id));
+    const id = newId();
+    const at = Math.min(position ?? ordered.length, ordered.length);
+    await tx.insert(payeeRule).values({ id, budgetId, payeeId, operator, text, position: at });
+    const ids = ordered.map((r) => r.id);
+    ids.splice(at, 0, id);
+    for (const [index, ruleId] of ids.entries()) {
+      await tx.update(payeeRule).set({ position: index }).where(eq(payeeRule.id, ruleId));
+    }
+    return findRule(tx, budgetId, id);
+  });
+  return c.json(row, 201);
+};
+
+export const updatePayeeRuleHandler: RouteHandler<typeof updatePayeeRule, Env> = async (c) => {
+  const { budgetId, ruleId } = c.req.valid("param");
+  const { operator, text } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  await findRule(db, budgetId, ruleId);
+  if (operator !== undefined || text !== undefined) {
+    await db
+      .update(payeeRule)
+      .set({ operator, text, updatedAt: sql`now()` })
+      .where(eq(payeeRule.id, ruleId));
+  }
+  return c.json(await findRule(db, budgetId, ruleId), 200);
+};
+
+export const deletePayeeRuleHandler: RouteHandler<typeof deletePayeeRule, Env> = async (c) => {
+  const { budgetId, ruleId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, EDIT);
+  await findRule(db, budgetId, ruleId);
+  await db.delete(payeeRule).where(eq(payeeRule.id, ruleId));
+  return c.body(null, 204);
 };

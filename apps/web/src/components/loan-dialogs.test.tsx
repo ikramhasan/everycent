@@ -1,7 +1,14 @@
 import { render, screen } from "@testing-library/react";
+import { addDays, format, parseISO } from "date-fns";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "@/lib/accounts";
-import { defaultPaymentSource, RecordPaymentDialog } from "./loan-dialogs";
+import { todayIso } from "@/lib/dates";
+import {
+  type ActivityKind,
+  defaultPaymentSource,
+  LoanActivityDialog,
+  RecordPaymentDialog,
+} from "./loan-dialogs";
 
 const usd = {
   currency: "USD",
@@ -29,6 +36,7 @@ const account = (id: string, type: Account["type"], closed = false): Account => 
   lastPaymentFromAccountId: null,
   migratedToAccountId: null,
   migratedFromAccountId: null,
+  toReview: 0,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 
@@ -76,5 +84,31 @@ describe("Record Payment's From Account (YNAB, 2026-10-14)", () => {
     expect(defaultPaymentSource(accounts, "House")).toBe("AA L7 Test");
     expect(defaultPaymentSource([account("F Card", "credit_card")], null)).toBe("F Card");
     expect(defaultPaymentSource([], null)).toBe("");
+  });
+});
+
+describe("Loan credit and charge dates (YNAB, 2026-10-16)", () => {
+  const today = todayIso();
+  const tomorrow = format(addDays(parseISO(today), 1), "yyyy-MM-dd");
+  const renderActivity = (kind: ActivityKind, date: string) =>
+    render(
+      <LoanActivityDialog
+        open
+        onOpenChange={vi.fn()}
+        kind={kind}
+        initial={{ amount: 500n, date, memo: "" }}
+        settings={usd}
+        onSave={vi.fn(async () => null)}
+      />,
+    );
+
+  it("greys Save out for a credit or charge dated after today", () => {
+    renderActivity("credit", tomorrow);
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("keeps Save for today", () => {
+    renderActivity("charge", today);
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 });

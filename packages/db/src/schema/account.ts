@@ -3,6 +3,8 @@ import {
   type CurrencyCode,
   LOAN_CHARGE_KINDS,
   LOAN_CHARGE_STATUSES,
+  PAYEE_CATEGORIZATIONS,
+  PAYEE_RULE_OPERATORS,
   SCHEDULE_FREQUENCIES,
 } from "@everycent/engine";
 import { sql } from "drizzle-orm";
@@ -149,6 +151,15 @@ export const payee = pgTable(
     transferAccountId: text().references(() => budgetAccount.id, { onDelete: "cascade" }),
     /** Hidden payees aren't suggested in the payee field, but typing the exact name still uses them. */
     hidden: boolean().notNull().default(false),
+    /** Manage Payees' Categorization: how a new transaction for this payee gets its category. */
+    categorization: text({ enum: PAYEE_CATEGORIZATIONS }).notNull().default("auto"),
+    /** The "Always use my choice" category. */
+    defaultCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * An auto-categorization default from before the payee's own history, copied by a fresh start
+     * (which leaves the transactions behind). The history's two-of-three rule builds on it.
+     */
+    carriedCategoryId: text().references(() => category.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [
@@ -161,6 +172,33 @@ export const payee = pgTable(
     uniqueIndex("payee_internal_kind_per_budget_idx")
       .on(t.budgetId, t.internalKind)
       .where(sql`${t.internalKind} is not null`),
+  ],
+);
+
+/**
+ * A renaming rule: an imported payee whose name meets it is renamed to `payeeId` (YNAB's Manage
+ * Payees "Renaming" card). Transfer payees take rules too. `position` orders a payee's rules on
+ * screen (a combine appends the merged payees' rules after the target's); `createdAt` decides which
+ * rule wins when several payees' rules match (the newest).
+ */
+export const payeeRule = pgTable(
+  "payee_rule",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    payeeId: text()
+      .notNull()
+      .references(() => payee.id, { onDelete: "cascade" }),
+    operator: text({ enum: PAYEE_RULE_OPERATORS }).notNull(),
+    text: text().notNull(),
+    position: integer().notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("payee_rule_budget_id_idx").on(t.budgetId),
+    index("payee_rule_payee_id_idx").on(t.payeeId),
   ],
 );
 

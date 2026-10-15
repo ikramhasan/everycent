@@ -9,6 +9,7 @@ import {
   categoryTarget,
   flagName,
   payee,
+  payeeRule,
   scheduledSubTransaction,
   scheduledTransaction,
 } from "@everycent/db/schema";
@@ -16,8 +17,51 @@ import { accountFamily, monthOf } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { insertStartingBalance, internalCategoryId, type Tx, transferPayeeId } from "./ledger";
 import { saveLoanTerms } from "./loans";
+import { payeeCategories } from "./payee-categories";
 
 type BudgetRow = typeof budget.$inferSelect;
+
+/**
+ * Each payee's Categorization setting, and its auto-categorization default (the transactions it
+ * came from stay behind, so the copy carries it; YNAB 2026-10-16, "C4 Clean" → "x-c12-61 FS" kept
+ * "Needs: Groceries" with no transactions). YNAB's copy of an "Always use my choice" payee loses
+ * the chosen category; everycent keeps it, mapped to the new budget's category.
+ */
+async function copyPayeeCategories(
+  tx: Tx,
+  oldBudgetId: string,
+  ids: { categoryIds: ReadonlyMap<string, string>; payeeIds: ReadonlyMap<string, string> },
+) {
+  const rows = await tx
+    .select({
+      id: payee.id,
+      categorization: payee.categorization,
+      defaultCategoryId: payee.defaultCategoryId,
+      carriedCategoryId: payee.carriedCategoryId,
+    })
+    .from(payee)
+    .where(
+      and(
+        eq(payee.budgetId, oldBudgetId),
+        isNull(payee.internalKind),
+        isNull(payee.transferAccountId),
+      ),
+    );
+  const history = await payeeCategories(tx, oldBudgetId, rows);
+  const mapped = (id: string | null | undefined) => (id ? (ids.categoryIds.get(id) ?? null) : null);
+  for (const p of rows) {
+    const id = ids.payeeIds.get(p.id);
+    const carriedCategoryId = mapped(history.get(p.id)?.autoCategoryId);
+    const defaultCategoryId = p.categorization === "always" ? mapped(p.defaultCategoryId) : null;
+    const categorization =
+      p.categorization === "always" && !defaultCategoryId ? "auto" : p.categorization;
+    if (!id || (categorization === "auto" && !carriedCategoryId)) continue;
+    await tx
+      .update(payee)
+      .set({ categorization, defaultCategoryId, carriedCategoryId })
+      .where(eq(payee.id, id));
+  }
+}
 
 /**
  * What a fresh start adds to the old budget's name: "Household (Archived on 2026-10-15)", the
@@ -27,7 +71,7 @@ export const ARCHIVED_STAMP = "(Archived on ";
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes, targets), payees, flag names, and
+ * category groups and categories (order, hidden flags, notes, targets), payees and their renaming rules, flag names, and
  * accounts (with their transfer payees), each starting at $0 with a $0 Starting Balance on `date`
  * for the user to update (YNAB: "Unlinked accounts will start with a $0 balance for you to update
  * with today's balance"; "C4 Order FS", 2026-10-12; everycent has no linked accounts), and
@@ -121,6 +165,32 @@ export async function copyIntoFreshStart(
     });
     await tx.insert(payee).values(copies);
   }
+
+  // Renaming rules come along on both kinds of payee, in order (YNAB, "x-c11-151 FS3" →
+  // "x-c12-62 FS", 2026-10-16: a transfer payee's rule was there in the new plan).
+  const rules = await tx
+    .select()
+    .from(payeeRule)
+    .where(eq(payeeRule.budgetId, old.id))
+    .orderBy(asc(payeeRule.createdAt), asc(payeeRule.id));
+  const ruleCopies = rules.flatMap((r) => {
+    const payeeId = payeeIds.get(r.payeeId);
+    return payeeId
+      ? [
+          {
+            id: newId(),
+            budgetId: newBudgetId,
+            payeeId,
+            operator: r.operator,
+            text: r.text,
+            position: r.position,
+            // Keeps which rule is newest when several match.
+            createdAt: r.createdAt,
+          },
+        ]
+      : [];
+  });
+  if (ruleCopies.length > 0) await tx.insert(payeeRule).values(ruleCopies);
 
   const flags = await tx.select().from(flagName).where(eq(flagName.budgetId, old.id));
   if (flags.length > 0) {
@@ -221,6 +291,7 @@ export async function copyIntoFreshStart(
       await internalCategoryId(tx, newBudgetId, kind),
     );
   }
+  await copyPayeeCategories(tx, old.id, { categoryIds, payeeIds });
   await copySchedules(tx, old.id, newBudgetId, { accountIds, categoryIds, payeeIds });
   await copyViews(tx, old, newBudgetId, categoryIds);
 

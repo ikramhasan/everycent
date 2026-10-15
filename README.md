@@ -132,7 +132,7 @@ and fresh start (after phase 5 core).
 - [x] Server-side paging of the register (keyset cursors; balances over the whole account)
 - [x] Multi-select + bulk edit: selection, select all matching, total, cleared, flag, categorize,
       memo, move to account, delete, duplicate, enter now, make repeating
-- [ ] Approve / reject imported transactions (unapproved state)
+- [x] Approve / reject imported transactions (unapproved state)
 - [x] Future-dated transactions (excluded from balances until the date)
 - [ ] Tags on transactions **(extra)**
 - [ ] Photos on transactions
@@ -235,8 +235,8 @@ Done (8a–8f, and loan debt targets with 7g) — what's left is in Plane (cycle
 ### 12. Payees & rules
 
 - [x] Payee management: rename, combine/merge, delete, hide
-- [ ] Payee default category / auto-categorization
-- [ ] Renaming rules for imported payees (starts with / contains / is)
+- [x] Payee default category / auto-categorization
+- [ ] Renaming rules for imported payees (contains / is; rules and their screen are built, applying them on import is next)
 - [ ] Payee location (lat/long) for mobile suggestions
 - [ ] Advanced rules engine: match on payee/amount/account/memo → set category, flag, tags, memo **(extra)**
 

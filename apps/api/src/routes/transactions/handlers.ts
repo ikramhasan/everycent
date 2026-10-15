@@ -10,6 +10,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -174,10 +175,21 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   assertOnePayee(body);
   const latest = latestTransactionDate(c.var.deps, today);
   const accountId = await db.transaction((tx) =>
-    applyUpdate(tx, budgetId, transactionId, body, latest),
+    applyUpdate(tx, budgetId, transactionId, withApproval(body), latest),
   );
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
+
+/**
+ * In YNAB saving an unapproved transaction's editor (its button reads "Approve") or clicking its
+ * cleared state approves it; setting its flag doesn't (2026-10-16, EVERYCENT-65). So any change
+ * but a flag approves, unless `approved` is given (an undo restoring it unapproved).
+ */
+function withApproval(body: UpdateBody): UpdateBody {
+  if (body.approved !== undefined) return body;
+  const edits = Object.entries(body).some(([key, value]) => key !== "flag" && value !== undefined);
+  return edits ? { ...body, approved: true } : body;
+}
 
 /** What `updateTransaction` takes. */
 export interface UpdateBody {
@@ -191,6 +203,8 @@ export interface UpdateBody {
   cleared?: "uncleared" | "cleared";
   flag?: FlagColor | null;
   subtransactions?: LineInput[];
+  /** A transfer's other side follows a change (YNAB approves both sides together). */
+  approved?: boolean;
 }
 
 /** One transaction's edit (as `updateTransaction` describes it); returns its account. */
@@ -285,9 +299,14 @@ export async function applyUpdate(
       memo: body.memo,
       cleared: body.cleared,
       flag: body.flag,
+      approved: body.approved,
       transferTransactionId: transferTo ? undefined : null,
     })
     .where(eq(transaction.id, transactionId));
+  if (body.approved !== undefined && body.approved !== existing.approved) {
+    // The other sides follow, a split's transfer lines' counterparts included.
+    await setApproval(tx, [transactionId], body.approved);
+  }
 
   if (split || wasSplit) {
     await syncLines(
@@ -317,6 +336,11 @@ export async function applyUpdate(
             ? await resolveCategory(tx, budgetId, transferTo, account, keep)
             : undefined,
         memo: body.memo !== undefined && body.memo !== existing.memo ? body.memo : undefined,
+        // Approving one side approves the other (YNAB, 2026-10-16); an undo takes both back.
+        approved:
+          body.approved !== undefined && body.approved !== existing.approved
+            ? body.approved
+            : undefined,
       })
       .where(eq(transaction.id, other.id));
   } else if (transferTo) {
@@ -409,8 +433,13 @@ async function updateSplitTransferSide(
       memo: body.memo,
       cleared: body.cleared,
       flag: body.flag,
+      approved: body.approved,
     })
     .where(eq(transaction.id, existing.id));
+  if (body.approved !== undefined && body.approved !== existing.approved) {
+    // Approving a split's transfer side approves the split (and its other transfer lines).
+    await setApproval(tx, [existing.id], body.approved);
+  }
   if (body.memo !== undefined && body.memo !== existing.memo && existing.transferSubTransactionId) {
     await tx
       .update(subTransaction)

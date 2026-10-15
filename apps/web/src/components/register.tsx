@@ -49,10 +49,12 @@ import {
   ArrowLeftRight,
   ArrowUp,
   Bookmark,
+  Check,
   ChevronRight,
   Circle,
   CircleCheck,
   CircleHelp,
+  CircleX,
   CreditCard,
   Lock,
   MoreHorizontal,
@@ -62,13 +64,14 @@ import {
   Split,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
+import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
@@ -132,6 +135,7 @@ import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
+import { NeedsCategoryPill, ReviewCell } from "./review-cell";
 import { ScheduledSection } from "./scheduled-section";
 import { type BulkAction, SelectionBar } from "./selection-bar";
 import { TransactionEditor } from "./transaction-editor";
@@ -163,6 +167,7 @@ const NO_SUMMARY = {
   reconciled: 0,
   reconciledTransfers: 0,
   categorizable: 0,
+  unapproved: 0,
   splits: 0,
   splitsWithTransfers: 0,
   deletable: 0,
@@ -291,6 +296,8 @@ export function Register({
     [transactions.data],
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
+  // YNAB hides its info column when no row in view needs approval or a category.
+  const reviewing = useMemo(() => loaded.some((t) => !t.approved || t.needsCategory), [loaded]);
   // Rows read in the running balance's order only when the date comes first.
   const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
@@ -349,9 +356,12 @@ export function Register({
   const columnIds = useMemo(
     () =>
       registerColumns(allAccounts).filter(
-        (c) => (c !== "balance" || view.showRunningBalance) && (c !== "flag" || view.showFlags),
+        (c) =>
+          (c !== "balance" || view.showRunningBalance) &&
+          (c !== "flag" || view.showFlags) &&
+          (c !== "review" || reviewing),
       ),
-    [allAccounts, view.showRunningBalance, view.showFlags],
+    [allAccounts, view.showRunningBalance, view.showFlags, reviewing],
   );
   const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
 
@@ -533,7 +543,12 @@ export function Register({
           commands.push(bulkCommand(action, result.before));
         }
       }
-      if (scheduledSelection.size > 0 && action.type !== "cleared") {
+      if (
+        scheduledSelection.size > 0 &&
+        action.type !== "cleared" &&
+        action.type !== "approve" &&
+        action.type !== "reject"
+      ) {
         const ids = [...scheduledSelection];
         const result = await scheduledBulk.mutateAsync({
           params: { path: { budgetId: budget.id } },
@@ -569,13 +584,17 @@ export function Register({
       toast.success(
         action.type === "delete"
           ? `Deleted ${n}`
-          : action.type === "move"
-            ? `Moved ${n}`
-            : action.type === "duplicate"
-              ? `Duplicated ${n}`
-              : action.type === "enterNow"
-                ? `Entered ${n}`
-                : `Updated ${n}`,
+          : action.type === "approve"
+            ? `Approved ${n}`
+            : action.type === "reject"
+              ? `Rejected ${n}`
+              : action.type === "move"
+                ? `Moved ${n}`
+                : action.type === "duplicate"
+                  ? `Duplicated ${n}`
+                  : action.type === "enterNow"
+                    ? `Entered ${n}`
+                    : `Updated ${n}`,
       );
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't update the selected transactions."));
@@ -602,7 +621,7 @@ export function Register({
    * included) from `before`; copies and entered transactions are deleted.
    */
   function scheduledCommand(
-    action: Exclude<BulkAction, { type: "cleared" }>,
+    action: Exclude<BulkAction, { type: "cleared" | "approve" | "reject" }>,
     ids: string[],
     result: { before: ScheduledTransaction[]; entered: string[]; created: string[] },
   ) {
@@ -693,9 +712,11 @@ export function Register({
   /** Undo for a bulk action on transactions, from their state before it. */
   function bulkCommand(action: Exclude<BulkAction, { type: "enterNow" }>, before: Transaction[]) {
     let current = before;
+    // Reject deletes the unapproved rows, so it's undone like a delete.
+    const deletes = action.type === "delete" || action.type === "reject";
     return {
       undo: async () => {
-        if (action.type === "delete") {
+        if (deletes) {
           const restored: Transaction[] = [];
           for (const transaction of before) {
             restored.push(
@@ -720,7 +741,7 @@ export function Register({
         }
       },
       redo: async () => {
-        if (action.type === "delete") {
+        if (deletes) {
           for (const transaction of current) {
             await remove.mutateAsync({
               params: { path: { budgetId: budget.id, transactionId: transaction.id } },
@@ -795,6 +816,23 @@ export function Register({
     const type = accountById.get(t.accountId)?.type ?? "checking";
     const transferType = t.transferAccountId ? accountById.get(t.transferAccountId)?.type : null;
     return usesCategory(type, transferType);
+  }
+
+  /** A saved row's category cell; "Category not needed" in muted text as YNAB shows it. */
+  function rowCategory(t: Transaction): ReactNode {
+    const notNeeded = categoryNotNeeded({
+      accountType: accountById.get(t.accountId)?.type ?? "checking",
+      transferAccountType: t.transferAccountId
+        ? (accountById.get(t.transferAccountId)?.type ?? null)
+        : null,
+      payeeName: t.payeeName,
+    });
+    if (!notNeeded) return t.categoryName;
+    return (
+      transferCategory(t.accountId, t.transferAccountId) || (
+        <span className="text-muted-foreground">Category not needed</span>
+      )
+    );
   }
 
   /**
@@ -1132,20 +1170,38 @@ export function Register({
     }
   }
 
+  /** YNAB's Approve on one row; undone as an edit (a transfer's other side follows). */
+  async function approveRow(t: Transaction) {
+    try {
+      const after = await update.mutateAsync({
+        params: {
+          path: { budgetId: budget.id, transactionId: t.id },
+          query: { today: todayIso() },
+        },
+        body: { approved: true },
+      });
+      recordUpdate("approved transaction", t, after);
+      await refresh();
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't approve the transaction."));
+    }
+  }
+
   function handleDelete(t: Transaction) {
     const found = deleteWarning(rowDeleteScope(t));
     if (found) setWarning({ warning: found, proceed: () => void deleteRow(t) });
     else void deleteRow(t);
   }
 
-  async function deleteRow(t: Transaction) {
+  /** Delete, or YNAB's Reject (which deletes an unapproved transaction it didn't import). */
+  async function deleteRow(t: Transaction, reject = false) {
     try {
       await remove.mutateAsync({
         params: { path: { budgetId: budget.id, transactionId: t.id } },
       });
       let current: Transaction | null = null;
       history.record({
-        label: "deleted transaction",
+        label: reject ? "rejected transaction" : "deleted transaction",
         undo: async () => {
           current = await create.mutateAsync({
             params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
@@ -1163,7 +1219,13 @@ export function Register({
       });
       await refresh();
       const transfers = t.transferAccountId || t.subtransactions.some((l) => l.transferAccountId);
-      toast.success(transfers ? "Deleted, with its transfers" : "Transaction deleted");
+      toast.success(
+        reject
+          ? "Transaction rejected"
+          : transfers
+            ? "Deleted, with its transfers"
+            : "Transaction deleted",
+      );
     } catch (e) {
       toast.error(apiErrorMessage(e, "Couldn't delete the transaction."));
     }
@@ -1210,6 +1272,21 @@ export function Register({
               e.preventDefault();
               toggleRow(t.id, !isSelected(selection, t.id), e.shiftKey);
             }}
+          />
+        );
+      case "review":
+        return (
+          <ReviewCell
+            approved={t.approved}
+            needsCategory={t.needsCategory}
+            pending={update.isPending || remove.isPending}
+            onApprove={() => void approveRow(t)}
+            onReject={() => void deleteRow(t, true)}
+            onCategorize={
+              editableColumns(t).includes("category")
+                ? () => setEditing({ id: t.id, column: "category" })
+                : undefined
+            }
           />
         );
       case "flag":
@@ -1279,7 +1356,8 @@ export function Register({
             </span>
           );
         }
-        return hasCategory(t) ? t.categoryName : transferCategory(t.accountId, t.transferAccountId);
+        if (t.needsCategory) return <NeedsCategoryPill />;
+        return rowCategory(t);
       case "memo":
         return t.memo;
       case "outflow":
@@ -1317,6 +1395,16 @@ export function Register({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {!t.approved && (
+                <>
+                  <DropdownMenuItem onSelect={() => void approveRow(t)}>
+                    <Check /> Approve
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void deleteRow(t, true)}>
+                    <CircleX /> Reject
+                  </DropdownMenuItem>
+                </>
+              )}
               {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
                 <DropdownMenuItem onSelect={() => openSplit(t, true)}>
                   <Split /> Split
@@ -1669,6 +1757,8 @@ export function Register({
                 className={cn(
                   "transition-colors duration-700 data-highlighted:bg-primary/10",
                   future && "text-muted-foreground italic",
+                  // YNAB sets unapproved rows in bold.
+                  !t.approved && "font-semibold",
                 )}
                 title={future ? "Upcoming: not in the balance until its date" : undefined}
               >

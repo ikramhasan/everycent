@@ -22,7 +22,7 @@ type Txn = {
 };
 type Category = { id: string; name: string };
 type Group = { name: string; kind: string | null; categories: Category[] };
-type Payee = { id: string; name: string; lastCategoryId: string | null };
+type Payee = { id: string; name: string; prefillCategoryId: string | null };
 type ErrorBody = { error: { code: string } };
 
 const TODAY = "2026-10-01";
@@ -244,21 +244,27 @@ describe("transactions", () => {
     expect((await json<ErrorBody>(res)).error.code).toBe("ACCOUNT_CLOSED");
   });
 
-  it("suggests each payee's last category", async () => {
+  it("prefills each payee's category by two of its last three", async () => {
     const { base, cookie, addAccount, add, groceries, rent } = await setup();
     const checking = await addAccount("Checking", "checking", "0");
-    await add({ accountId: checking.id, amount: "-1", payeeName: "Market", categoryId: rent.id });
-    await add({
-      accountId: checking.id,
-      amount: "-1",
-      payeeName: "Market",
-      categoryId: groceries.id,
-    });
-    // Uncategorized isn't remembered.
-    await add({ accountId: checking.id, amount: "-1", payeeName: "Market" });
+    const market = (categoryId: string | null = null) =>
+      add({ accountId: checking.id, amount: "-1", payeeName: "Market", categoryId });
+    await market(rent.id);
+    await market(groceries.id);
+    // Uncategorized doesn't count.
+    await market();
     await add({ accountId: checking.id, amount: "-1", payeeName: "Bakery" });
-    const { payees } = await json<{ payees: Payee[] }>(await send("GET", `${base}/payees`, cookie));
-    expect(payees.map((p) => [p.name, p.lastCategoryId])).toEqual([
+    const prefills = async () =>
+      (await json<{ payees: Payee[] }>(await send("GET", `${base}/payees`, cookie))).payees.map(
+        (p) => [p.name, p.prefillCategoryId],
+      );
+    // Rent, Groceries: no two agree, so the first stays.
+    expect(await prefills()).toEqual([
+      ["Bakery", null],
+      ["Market", rent.id],
+    ]);
+    await market(groceries.id);
+    expect(await prefills()).toEqual([
       ["Bakery", null],
       ["Market", groceries.id],
     ]);

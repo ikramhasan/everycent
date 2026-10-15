@@ -29,6 +29,7 @@ const txn: Transaction = {
   transferTransactionId: null,
   flag: null,
   approved: true,
+  needsCategory: false,
   transferFromSplit: false,
   transferReconciled: false,
   transferSide: null,
@@ -106,13 +107,34 @@ describe("CellEditor", () => {
 
   it("opens the whole payee list, as YNAB does, and narrows it once you type", async () => {
     const payees = [
-      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
-      { id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null },
+      {
+        id: "p1",
+        name: "Market",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+      {
+        id: "p2",
+        name: "Bakery",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
     ];
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(options()).toEqual(["Market", "Bakery", "Savings"]);
+    // Transfers first while nothing is typed (YNAB, 2026-10-16).
+    expect(options()).toEqual(["Savings", "Market", "Bakery"]);
     // The current payee is selected, so typing replaces it.
     await user.keyboard("bak");
     expect(options()).toEqual(["Bakery", " Create payee “bak”"]);
@@ -122,13 +144,33 @@ describe("CellEditor", () => {
 
   it("leaves hidden payees out of the list, but typing one's name uses it", async () => {
     const payees = [
-      { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: null },
-      { id: "p2", name: "Trip Cafe", hidden: true, useCount: 1, lastCategoryId: null },
+      {
+        id: "p1",
+        name: "Market",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+      {
+        id: "p2",
+        name: "Trip Cafe",
+        hidden: true,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
     ];
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(options()).toEqual(["Market", "Savings"]);
+    expect(options()).toEqual(["Savings", "Market"]);
     await user.keyboard("trip cafe");
     // No "Create payee": the name is a hidden payee's.
     expect(screen.queryAllByRole("option")).toEqual([]);
@@ -138,7 +180,19 @@ describe("CellEditor", () => {
   });
 
   it("keeps the payee when Enter is pressed without picking", async () => {
-    const payees = [{ id: "p2", name: "Bakery", hidden: false, useCount: 1, lastCategoryId: null }];
+    const payees = [
+      {
+        id: "p2",
+        name: "Bakery",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto" as const,
+        defaultCategoryId: null,
+        autoCategoryId: null,
+        prefillCategoryId: null,
+        recentCategoryIds: [],
+      },
+    ];
     const { onCommit } = renderCell("payee", txn, payees);
     await userEvent.setup().keyboard("{Enter}");
     expect(onCommit).toHaveBeenCalledWith("Market", "stay", null);

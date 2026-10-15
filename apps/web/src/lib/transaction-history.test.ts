@@ -17,6 +17,7 @@ const transaction: Transaction = {
   cleared: "cleared",
   flag: "blue",
   approved: true,
+  needsCategory: false,
   transferAccountId: null,
   transferTransactionId: null,
   transferFromSplit: false,
@@ -114,5 +115,10 @@ describe("transaction history bodies", () => {
     expect(createBodyFromTransaction(reconciled).cleared).toBe("reconciled");
     expect(updateBodyFromTransaction(reconciled)).not.toHaveProperty("cleared");
     expect(updateBodyFromTransaction(transaction).cleared).toBe("cleared");
+  });
+
+  it("puts an edited transaction's approval back (edits approve it)", () => {
+    expect(updateBodyFromTransaction({ ...transaction, approved: false }).approved).toBe(false);
+    expect(updateBodyFromTransaction(transaction).approved).toBe(true);
   });
 });

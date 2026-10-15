@@ -2,6 +2,7 @@ import {
   type AccountType,
   type DateFormat,
   formatDate,
+  payeeSuggestions,
   SCHEDULE_FREQUENCIES,
   SCHEDULE_FREQUENCY_LABELS,
   type ScheduleFrequency,
@@ -262,6 +263,10 @@ export function PayeeField({
   const hiddenMatch = payees.some(
     (p) => p.hidden && p.name.toLowerCase() === trimmed.toLowerCase(),
   );
+  // YNAB shows the whole list as soon as the field is focused, with the current payee selected so
+  // typing replaces it; the list narrows once something is typed.
+  const [open, setOpen] = useState(Boolean(autoFocus));
+  const [typed, setTyped] = useState(false);
   const groups = useMemo<PayeeGroup[]>(() => {
     const known: PayeeItem[] = payees
       .filter((p) => !p.hidden)
@@ -280,15 +285,18 @@ export function PayeeField({
       };
     });
     const exact = [...known, ...toAccounts].some((p) => matches(p, trimmed));
-    // Payees first and "Create payee" last, so autocomplete picks an existing payee first.
+    // YNAB (2026-10-16): the whole list starts with "Payments and Transfers", then "Saved
+    // Payees"; once something is typed, saved payees come first. "Create payee" stays last here
+    // (YNAB puts it on top), so autocomplete still picks an existing payee first.
+    const saved = { value: "Saved Payees", items: known };
+    const moves = { value: "Payments and Transfers", items: toAccounts };
     return [
-      { value: "Payees", items: known },
-      { value: "Payments and Transfers", items: toAccounts },
+      ...(typed ? [saved, moves] : [moves, saved]),
       ...(trimmed && !exact && !hiddenMatch
         ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
         : []),
     ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, own, trimmed, hiddenMatch]);
+  }, [payees, transfers, own, trimmed, hiddenMatch, typed]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
@@ -304,10 +312,6 @@ export function PayeeField({
     return { name: text, transferAccountId: null, payee: payees.find((p) => p.name === text) };
   }
 
-  // YNAB shows the whole list as soon as the field is focused, with the current payee selected so
-  // typing replaces it; the list narrows once something is typed.
-  const [open, setOpen] = useState(Boolean(autoFocus));
-  const [typed, setTyped] = useState(false);
   return (
     <Autocomplete
       open={open}
@@ -398,40 +402,88 @@ interface CategoryGroupItems {
 
 /** The "Split" entry at the end of the category list. */
 const SPLIT: CategoryOption = { id: "__split", name: "Split", group: "" };
+/** YNAB's "Payment/Transfer" button at the end of the category list. */
+const PAYMENT_TRANSFER: CategoryOption = {
+  id: "__payment_transfer",
+  name: "Payment/Transfer",
+  group: "",
+};
+
+/** Copies of categories listed again under "Selected" or "Suggested", told apart by id. */
+const SHORTCUT = "__shortcut:";
+const shortcut = (option: CategoryOption) => ({ ...option, id: `${SHORTCUT}${option.id}` });
+
+/**
+ * YNAB's sections above the groups once a known payee is picked: "Selected" (the category in the
+ * field) and "Suggested" (the payee's other recent categories). They make way for the matches as
+ * soon as something is typed.
+ */
+function shortcutGroups(
+  categories: readonly CategoryOption[],
+  selected: CategoryOption | null,
+  suggestedIds: readonly string[],
+): CategoryGroupItems[] {
+  const listed = suggestedIds.filter((id) => categories.some((c) => c.id === id));
+  const suggested = payeeSuggestions(listed, selected?.id ?? null)
+    .map((id) => categories.find((c) => c.id === id))
+    .filter((c): c is CategoryOption => c !== undefined);
+  return [
+    ...(selected ? [{ value: "Selected", items: [shortcut(selected)] }] : []),
+    ...(suggested.length > 0 ? [{ value: "Suggested", items: suggested.map(shortcut) }] : []),
+  ];
+}
 
 /**
  * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
- * list ends with YNAB's "Split", to spread the transaction across several categories.
+ * list ends with YNAB's "Split", to spread the transaction across several categories; with
+ * `onPaymentTransfer`, with its "Payment/Transfer" (before Split, in cash and card registers alike;
+ * 2026-10-16), which goes to the payee list to pick an account. With `suggestedIds` (a payee's
+ * recent categories), it starts with YNAB's "Selected" and "Suggested".
  */
 export function CategoryField({
   label = "Category",
   value,
   onChange,
   onSplit,
+  onPaymentTransfer,
   categories,
   autoFocus,
   placeholder = "Uncategorized",
   describe,
+  suggestedIds,
 }: {
   label?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   onSplit?: () => void;
+  onPaymentTransfer?: () => void;
   categories: readonly CategoryOption[];
   autoFocus?: boolean;
   placeholder?: string;
   /** Extra text at the end of an option, e.g. what's available in it. */
   describe?: (option: CategoryOption) => ReactNode;
+  /** The payee's recent categories, most recent first (see `payeeSuggestions`). */
+  suggestedIds?: readonly string[];
 }) {
+  const selected = categories.find((c) => c.id === value) ?? null;
+  const [query, setQuery] = useState("");
+  const typing = query.trim() !== "" && (!selected || query !== categoryLabel(selected));
   const groups = useMemo(() => {
     const byGroup = new Map<string, CategoryOption[]>();
     for (const c of categories) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
     const list = [...byGroup].map(
       ([group, items]): CategoryGroupItems => ({ value: group, items }),
     );
-    return onSplit ? [...list, { value: "", items: [SPLIT] }] : list;
-  }, [categories, onSplit]);
-  const selected = categories.find((c) => c.id === value) ?? null;
+    const actions = [...(onPaymentTransfer ? [PAYMENT_TRANSFER] : []), ...(onSplit ? [SPLIT] : [])];
+    const shortcuts =
+      suggestedIds && !typing ? shortcutGroups(categories, selected, suggestedIds) : [];
+    return [...shortcuts, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
+  }, [categories, onSplit, onPaymentTransfer, suggestedIds, typing, selected]);
+  // With the shortcuts, the "Selected" entry is the one ticked, so the list opens at the top.
+  const shown = useMemo(
+    () => (selected && suggestedIds ? shortcut(selected) : selected),
+    [selected, suggestedIds],
+  );
   const [open, setOpen] = useState(Boolean(autoFocus));
 
   return (
@@ -439,10 +491,14 @@ export function CategoryField({
       open={open}
       onOpenChange={setOpen}
       items={groups}
-      value={selected}
+      value={shown}
+      onInputValueChange={setQuery}
       onValueChange={(option) => {
         if (option?.id === SPLIT.id) onSplit?.();
-        else onChange(option?.id ?? null);
+        else if (option?.id === PAYMENT_TRANSFER.id) {
+          setOpen(false);
+          onPaymentTransfer?.();
+        } else onChange(option?.id.replace(SHORTCUT, "") ?? null);
       }}
       itemToStringLabel={categoryLabel}
       isItemEqualToValue={(a, b) => a.id === b.id}
@@ -470,6 +526,23 @@ export function CategoryField({
                       <>
                         <Split className="size-4 text-muted-foreground" /> Split
                       </>
+                    ) : option.id === PAYMENT_TRANSFER.id ? (
+                      <>
+                        <ArrowLeftRight className="size-4 text-muted-foreground" /> Payment/Transfer
+                      </>
+                    ) : option.id.startsWith(SHORTCUT) ? (
+                      // YNAB: "O2 (Test)", the group in parentheses.
+                      <span className="flex w-full items-center justify-between gap-3">
+                        <span className="truncate">
+                          {option.name}{" "}
+                          <span className="text-muted-foreground">({option.group})</span>
+                        </span>
+                        {describe && (
+                          <span className="shrink-0 tabular-nums">
+                            {describe({ ...option, id: option.id.replace(SHORTCUT, "") })}
+                          </span>
+                        )}
+                      </span>
                     ) : describe ? (
                       <span className="flex w-full items-center justify-between gap-3">
                         <span className="truncate">{option.name}</span>
