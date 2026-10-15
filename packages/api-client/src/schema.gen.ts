@@ -2567,6 +2567,8 @@ export interface components {
             /** @enum {string} */
             categorization?: "auto" | "always" | "never";
             defaultCategoryId?: string | null;
+            /** @description Undo: allows an "always" category that has been hidden since it was chosen */
+            restore?: boolean;
         };
         ScheduledTransactionList: {
             scheduledTransactions: components["schemas"]["ScheduledTransaction"][];

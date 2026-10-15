@@ -4669,6 +4669,10 @@
               "string",
               "null"
             ]
+          },
+          "restore": {
+            "type": "boolean",
+            "description": "Undo: allows an \"always\" category that has been hidden since it was chosen"
           }
         }
       },

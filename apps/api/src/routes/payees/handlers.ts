@@ -270,7 +270,11 @@ async function categorizationChange(
   db: Db,
   budgetId: string,
   current: { categorization: PayeeCategorization; defaultCategoryId: string | null } | undefined,
-  input: { categorization?: PayeeCategorization; defaultCategoryId?: string | null },
+  input: {
+    categorization?: PayeeCategorization;
+    defaultCategoryId?: string | null;
+    restore?: boolean;
+  },
 ) {
   if (input.categorization === undefined && input.defaultCategoryId === undefined) return {};
   const categorization = input.categorization ?? current?.categorization ?? "auto";
@@ -282,8 +286,12 @@ async function categorizationChange(
   if (defaultCategoryId === null) {
     throw new AppError(400, "CATEGORY_REQUIRED", "Choose the category to always use");
   }
-  // A new choice must be one the category list offers: hidden categories aren't listed.
-  const choosing = input.defaultCategoryId !== undefined;
+  // A new choice must be one the category list offers: hidden categories aren't listed. Undo
+  // (`restore`) may bring back a category that has been hidden since it was chosen.
+  const choosing =
+    input.defaultCategoryId !== undefined &&
+    !input.restore &&
+    input.defaultCategoryId !== current?.defaultCategoryId;
   const [row] = await db
     .select({ id: category.id })
     .from(category)
@@ -747,22 +755,21 @@ export const createPayeeRuleHandler: RouteHandler<typeof createPayeeRule, Env> =
     if (target.internalKind) {
       throw new AppError(409, "PAYEE_LOCKED", "Built-in payees can't have renaming rules");
     }
-    let at = position;
-    if (at === undefined) {
-      const [last] = await tx
-        .select({ position: sql<number>`coalesce(max(${payeeRule.position}), -1)::int` })
-        .from(payeeRule)
-        .where(eq(payeeRule.payeeId, payeeId));
-      at = (last?.position ?? -1) + 1;
-    } else {
-      // Make room: the rules from there on move down one.
-      await tx
-        .update(payeeRule)
-        .set({ position: sql`${payeeRule.position} + 1` })
-        .where(and(eq(payeeRule.payeeId, payeeId), gte(payeeRule.position, at)));
-    }
+    // `position` is the index among the payee's rules as listed (undoing a removal puts the rule
+    // back there); stored positions can have gaps after deletes, so the list is renumbered.
+    const ordered = await tx
+      .select({ id: payeeRule.id })
+      .from(payeeRule)
+      .where(eq(payeeRule.payeeId, payeeId))
+      .orderBy(asc(payeeRule.position), asc(payeeRule.createdAt), asc(payeeRule.id));
     const id = newId();
+    const at = Math.min(position ?? ordered.length, ordered.length);
     await tx.insert(payeeRule).values({ id, budgetId, payeeId, operator, text, position: at });
+    const ids = ordered.map((r) => r.id);
+    ids.splice(at, 0, id);
+    for (const [index, ruleId] of ids.entries()) {
+      await tx.update(payeeRule).set({ position: index }).where(eq(payeeRule.id, ruleId));
+    }
     return findRule(tx, budgetId, id);
   });
   return c.json(row, 201);

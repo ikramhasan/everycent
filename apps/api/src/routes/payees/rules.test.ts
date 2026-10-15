@@ -103,6 +103,24 @@ describe("payee renaming rules", () => {
     expect(await rulesOf(coffee)).toEqual(["contains:A", "contains:B", "is:C"]);
   });
 
+  it("reads the position as the index in the list, after earlier removals left gaps", async () => {
+    const { owner, base, payeeId, addRule, rulesOf } = await setup();
+    const coffee = await payeeId("Coffee");
+    const a = await addRule(coffee, "contains", "A");
+    await addRule(coffee, "contains", "B");
+    const c = await addRule(coffee, "contains", "C");
+    await send("DELETE", `${base}/payees/rules/${a.id}`, owner.cookie);
+    await send("DELETE", `${base}/payees/rules/${c.id}`, owner.cookie);
+    // Undoing C's removal: it was second in the list (B, C) when removed.
+    const res = await send("POST", `${base}/payees/${coffee}/rules`, owner.cookie, {
+      operator: "contains",
+      text: "C",
+      position: 1,
+    });
+    expect(res.status).toBe(201);
+    expect(await rulesOf(coffee)).toEqual(["contains:B", "contains:C"]);
+  });
+
   it("refuses blank text and unknown conditions", async () => {
     const { owner, base, payeeId } = await setup();
     const coffee = await payeeId("Coffee");

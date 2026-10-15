@@ -222,13 +222,20 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
     });
 
   const categorize = (p: Payee, change: CategorizationChange) => {
-    const apply = (body: CategorizationChange) => async () => {
-      await update.mutateAsync({ params: { path: { ...path, payeeId: p.id } }, body });
+    // `restore`: undo and redo bring back a choice even if its category was hidden since.
+    const apply = (body: CategorizationChange, restore: boolean) => async () => {
+      await update.mutateAsync({
+        params: { path: { ...path, payeeId: p.id } },
+        body: { ...body, restore },
+      });
     };
     return run({
       label: "Change categorization",
-      undo: apply({ categorization: p.categorization, defaultCategoryId: p.defaultCategoryId }),
-      redo: apply(change),
+      undo: apply(
+        { categorization: p.categorization, defaultCategoryId: p.defaultCategoryId },
+        true,
+      ),
+      redo: apply(change, false),
     });
   };
 

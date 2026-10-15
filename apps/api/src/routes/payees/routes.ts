@@ -164,6 +164,10 @@ export const updatePayee = createRoute({
           hidden: z.boolean().optional(),
           categorization: zPayeeCategorization.optional(),
           defaultCategoryId: z.string().nullable().optional(),
+          restore: z
+            .boolean()
+            .optional()
+            .describe('Undo: allows an "always" category that has been hidden since it was chosen'),
         })
         .openapi("UpdatePayee"),
     ),
