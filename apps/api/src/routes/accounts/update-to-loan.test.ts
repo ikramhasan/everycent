@@ -117,7 +117,7 @@ async function setup() {
   const scheduled = async () =>
     (
       await json<{ scheduledTransactions: Array<{ memo: string }> }>(
-        await send("GET", `${base}/scheduled-transactions`, cookie),
+        await send("GET", `${base}/scheduled-transactions?today=${TODAY}`, cookie),
       )
     ).scheduledTransactions.map((s) => s.memo);
   const readyToAssign = async () =>

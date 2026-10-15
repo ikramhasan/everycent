@@ -375,7 +375,7 @@ describe("bulk edit", () => {
   });
 
   it("only touches the caller's budget, and needs edit rights", async () => {
-    const { add, bulk, all } = await setup();
+    const { add, bulk, all, cookie } = await setup();
     const mine = await add({ payeeName: "Mine" });
     const other = await setup();
     const theirs = await other.add({ payeeName: "Theirs" });
@@ -385,8 +385,9 @@ describe("bulk edit", () => {
     expect((await other.all()).find((t) => t.id === theirs.id)?.flag).toBeNull();
     expect((await all()).find((t) => t.id === mine.id)?.flag).toBe("blue");
 
-    const stranger = await signUp(app);
-    const outsider = await send("POST", `${other.base}/transactions/bulk`, stranger.cookie, {
+    // I'm not a member of the other budget, so addressing it directly is a 404. This reuses my
+    // user instead of signing up a third: each sign-up hashes the password twice, which is slow.
+    const outsider = await send("POST", `${other.base}/transactions/bulk`, cookie, {
       selection: { ids: [theirs.id] },
       action: { type: "flag", flag: "red" },
     });
