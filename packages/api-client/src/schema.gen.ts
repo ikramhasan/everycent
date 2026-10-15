@@ -2460,6 +2460,8 @@ export interface components {
             operator: "contains" | "is";
             /** @description Kept as typed, surrounding spaces included (YNAB does the same) */
             text: string;
+            /** @description Where among the payee's rules (undoing a removal); default after the last */
+            position?: number;
         };
         UpdatePayee: {
             name?: string;

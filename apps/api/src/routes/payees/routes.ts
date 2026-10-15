@@ -333,7 +333,18 @@ export const createPayeeRule = createRoute({
   request: {
     params: PayeeParams,
     body: body(
-      z.object({ operator: zPayeeRuleOperator, text: RuleText }).openapi("CreatePayeeRule"),
+      z
+        .object({
+          operator: zPayeeRuleOperator,
+          text: RuleText,
+          position: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Where among the payee's rules (undoing a removal); default after the last"),
+        })
+        .openapi("CreatePayeeRule"),
     ),
   },
   responses: {

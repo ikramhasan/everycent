@@ -87,6 +87,22 @@ describe("payee renaming rules", () => {
     expect(await rulesOf(coffee)).toEqual(["is:starbucks", "is:starbucks"]);
   });
 
+  it("puts a rule back in its place when given a position (undoing a removal)", async () => {
+    const { owner, base, payeeId, addRule, rulesOf } = await setup();
+    const coffee = await payeeId("Coffee");
+    const first = await addRule(coffee, "contains", "A");
+    await addRule(coffee, "contains", "B");
+    await send("DELETE", `${base}/payees/rules/${first.id}`, owner.cookie);
+    const res = await send("POST", `${base}/payees/${coffee}/rules`, owner.cookie, {
+      operator: "contains",
+      text: "A",
+      position: 0,
+    });
+    expect(res.status).toBe(201);
+    await addRule(coffee, "is", "C");
+    expect(await rulesOf(coffee)).toEqual(["contains:A", "contains:B", "is:C"]);
+  });
+
   it("refuses blank text and unknown conditions", async () => {
     const { owner, base, payeeId } = await setup();
     const coffee = await payeeId("Coffee");

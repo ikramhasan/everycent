@@ -10,7 +10,7 @@ import {
   transaction,
 } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
@@ -618,7 +618,7 @@ export const listPayeeRulesHandler: RouteHandler<typeof listPayeeRules, Env> = a
 
 export const createPayeeRuleHandler: RouteHandler<typeof createPayeeRule, Env> = async (c) => {
   const { budgetId, payeeId } = c.req.valid("param");
-  const { operator, text } = c.req.valid("json");
+  const { operator, text, position } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, EDIT);
   const row = await db.transaction(async (tx) => {
@@ -632,19 +632,22 @@ export const createPayeeRuleHandler: RouteHandler<typeof createPayeeRule, Env> =
     if (target.internalKind) {
       throw new AppError(409, "PAYEE_LOCKED", "Built-in payees can't have renaming rules");
     }
-    const [last] = await tx
-      .select({ position: sql<number>`coalesce(max(${payeeRule.position}), -1)::int` })
-      .from(payeeRule)
-      .where(eq(payeeRule.payeeId, payeeId));
+    let at = position;
+    if (at === undefined) {
+      const [last] = await tx
+        .select({ position: sql<number>`coalesce(max(${payeeRule.position}), -1)::int` })
+        .from(payeeRule)
+        .where(eq(payeeRule.payeeId, payeeId));
+      at = (last?.position ?? -1) + 1;
+    } else {
+      // Make room: the rules from there on move down one.
+      await tx
+        .update(payeeRule)
+        .set({ position: sql`${payeeRule.position} + 1` })
+        .where(and(eq(payeeRule.payeeId, payeeId), gte(payeeRule.position, at)));
+    }
     const id = newId();
-    await tx.insert(payeeRule).values({
-      id,
-      budgetId,
-      payeeId,
-      operator,
-      text,
-      position: (last?.position ?? -1) + 1,
-    });
+    await tx.insert(payeeRule).values({ id, budgetId, payeeId, operator, text, position: at });
     return findRule(tx, budgetId, id);
   });
   return c.json(row, 201);

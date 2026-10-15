@@ -4409,6 +4409,11 @@
             "minLength": 1,
             "maxLength": 200,
             "description": "Kept as typed, surrounding spaces included (YNAB does the same)"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Where among the payee's rules (undoing a removal); default after the last"
           }
         },
         "required": [
