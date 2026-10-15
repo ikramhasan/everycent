@@ -259,6 +259,8 @@ export function TransactionEditor({
               setPayeeFocus((n) => n + 1);
             }}
             onSplit={canSplit ? () => setDraft(startSplit) : undefined}
+            // YNAB (2026-10-16): opens the payee list, keeping the payee and category.
+            onPaymentTransfer={() => setPayeeFocus((n) => n + 1)}
             categories={pickable}
           />
         ) : (

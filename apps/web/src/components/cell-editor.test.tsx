@@ -112,7 +112,8 @@ describe("CellEditor", () => {
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(options()).toEqual(["Market", "Bakery", "Savings"]);
+    // Transfers first while nothing is typed (YNAB, 2026-10-16).
+    expect(options()).toEqual(["Savings", "Market", "Bakery"]);
     // The current payee is selected, so typing replaces it.
     await user.keyboard("bak");
     expect(options()).toEqual(["Bakery", " Create payee “bak”"]);
@@ -128,7 +129,7 @@ describe("CellEditor", () => {
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(options()).toEqual(["Market", "Savings"]);
+    expect(options()).toEqual(["Savings", "Market"]);
     await user.keyboard("trip cafe");
     // No "Create payee": the name is a hidden payee's.
     expect(screen.queryAllByRole("option")).toEqual([]);
