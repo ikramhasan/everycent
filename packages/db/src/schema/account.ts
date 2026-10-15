@@ -3,6 +3,7 @@ import {
   type CurrencyCode,
   LOAN_CHARGE_KINDS,
   LOAN_CHARGE_STATUSES,
+  PAYEE_CATEGORIZATIONS,
   PAYEE_RULE_OPERATORS,
   SCHEDULE_FREQUENCIES,
 } from "@everycent/engine";
@@ -150,6 +151,15 @@ export const payee = pgTable(
     transferAccountId: text().references(() => budgetAccount.id, { onDelete: "cascade" }),
     /** Hidden payees aren't suggested in the payee field, but typing the exact name still uses them. */
     hidden: boolean().notNull().default(false),
+    /** Manage Payees' Categorization: how a new transaction for this payee gets its category. */
+    categorization: text({ enum: PAYEE_CATEGORIZATIONS }).notNull().default("auto"),
+    /** The "Always use my choice" category. */
+    defaultCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * An auto-categorization default from before the payee's own history, copied by a fresh start
+     * (which leaves the transactions behind). The history's two-of-three rule builds on it.
+     */
+    carriedCategoryId: text().references(() => category.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "@/lib/accounts";
@@ -55,7 +55,17 @@ function renderEditor(accountId = "checking", { another = false } = {}) {
             account("visa", "credit_card"),
           ]}
           payees={[
-            { id: "p1", name: "Market", hidden: false, useCount: 1, lastCategoryId: "groceries" },
+            {
+              id: "p1",
+              name: "Market",
+              hidden: false,
+              useCount: 3,
+              categorization: "auto",
+              defaultCategoryId: null,
+              autoCategoryId: "groceries",
+              prefillCategoryId: "groceries",
+              recentCategoryIds: ["rent", "groceries", "gone"],
+            },
           ]}
           categories={[
             { id: "rta", name: "Ready to Assign", group: "Inflow" },
@@ -105,6 +115,29 @@ describe("TransactionEditor", () => {
         inflow: "",
       }),
     );
+  });
+
+  it("lists the selected category and the payee's other recent ones first (YNAB)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Market");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByLabelText("Category"));
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Groceries \(Everyday\)$/);
+    // Rent only: Groceries is selected, and categories no longer listed are skipped.
+    expect(groups[1]).toHaveTextContent(/^Suggested\s*Rent \(Bills\)$/);
+    expect(groups[2]).toHaveTextContent(/^Inflow/);
+
+    // Picking a suggestion files it under the real category.
+    await user.click(screen.getByRole("option", { name: "Rent (Bills)" }));
+    expect(screen.getByLabelText("Category")).toHaveValue("Rent");
+
+    // Typing shows the matches only.
+    await user.clear(screen.getByLabelText("Category"));
+    await user.type(screen.getByLabelText("Category"), "Gro");
+    expect(screen.queryByText("Suggested")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Groceries"]);
   });
 
   it("offers Save and add another on a new row, and Enter does it (YNAB)", async () => {

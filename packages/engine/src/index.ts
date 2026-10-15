@@ -147,6 +147,16 @@ export {
   toDecimalString,
 } from "./parse-format";
 export {
+  PAYEE_CATEGORIZATIONS,
+  PAYEE_SUGGESTION_LIMIT,
+  type PayeeCategorization,
+  payeeAutoCategory,
+  payeePrefillCategory,
+  payeeRecentCategories,
+  payeeSuggestions,
+  zPayeeCategorization,
+} from "./payee-category";
+export {
   matchPayeeRule,
   PAYEE_RULE_OPERATOR_LABELS,
   PAYEE_RULE_OPERATORS,

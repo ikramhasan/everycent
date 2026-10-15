@@ -1092,8 +1092,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename, hide or unhide a payee
-         * @description Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`).
+         * Rename, hide or unhide a payee, or change how it categorizes
+         * @description Another payee can't have the same name (case aside: `PAYEE_NAME_TAKEN`). Transfer and built-in payees can't be changed (`PAYEE_LOCKED`). `categorization` "always" needs a `defaultCategoryId` (`CATEGORY_REQUIRED`): one of the budget's categories other than Uncategorized and credit card payment ones (`INVALID_CATEGORY`). Switching to "auto" or "never" forgets the chosen category, as YNAB does.
          */
         patch: operations["updatePayee"];
         trace?: never;
@@ -2440,8 +2440,19 @@ export interface components {
             hidden: boolean;
             /** @description Transactions and scheduled transactions (split lines included) using the payee */
             useCount: number;
-            /** @description Category of the payee's latest categorized transaction, suggested for the next */
-            lastCategoryId: string | null;
+            /**
+             * @description Manage Payees' Categorization: "auto" (Auto-categorize based on payee history), "always" (Always use my choice) or "never" (Do not auto-categorize)
+             * @enum {string}
+             */
+            categorization: "auto" | "always" | "never";
+            /** @description The "Always use my choice" category; null unless `categorization` is "always" */
+            defaultCategoryId: string | null;
+            /** @description Current default category from the payee's history: the first categorization, changed only when two of the last three (by date; splits and Uncategorized left out) agree */
+            autoCategoryId: string | null;
+            /** @description The category a new transaction for this payee starts with, by `categorization` */
+            prefillCategoryId: string | null;
+            /** @description Categories used with the payee, most recent first, each once, split lines included (up to six: the category list suggests five besides the selected one) */
+            recentCategoryIds: string[];
         };
         PayeeTransactionList: {
             transactions: components["schemas"]["PayeeTransaction"][];
@@ -2451,6 +2462,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "transaction" | "scheduled";
+            /** @description A line of a split transaction or scheduled split */
+            splitLine: boolean;
             accountId: string;
             accountName: string;
             /** @description A scheduled transaction's next date */
@@ -2501,6 +2514,10 @@ export interface components {
                 id: string;
                 name: string;
                 hidden: boolean;
+                /** @enum {string} */
+                categorization?: "auto" | "always" | "never";
+                defaultCategoryId?: string | null;
+                carriedCategoryId?: string | null;
             }[];
             /** @description The rows that pointed at each payee */
             uses: components["schemas"]["PayeeUses"][];
@@ -2547,6 +2564,9 @@ export interface components {
         UpdatePayee: {
             name?: string;
             hidden?: boolean;
+            /** @enum {string} */
+            categorization?: "auto" | "always" | "never";
+            defaultCategoryId?: string | null;
         };
         ScheduledTransactionList: {
             scheduledTransactions: components["schemas"]["ScheduledTransaction"][];
@@ -7368,7 +7388,7 @@ export interface operations {
                     "application/json": components["schemas"]["Payee"];
                 };
             };
-            /** @description Invalid input */
+            /** @description Invalid input, a missing (`CATEGORY_REQUIRED`) or unusable (`INVALID_CATEGORY`) category */
             400: {
                 headers: {
                     [name: string]: unknown;

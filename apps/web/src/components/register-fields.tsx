@@ -2,6 +2,7 @@ import {
   type AccountType,
   type DateFormat,
   formatDate,
+  payeeSuggestions,
   SCHEDULE_FREQUENCIES,
   SCHEDULE_FREQUENCY_LABELS,
   type ScheduleFrequency,
@@ -408,11 +409,36 @@ const PAYMENT_TRANSFER: CategoryOption = {
   group: "",
 };
 
+/** Copies of categories listed again under "Selected" or "Suggested", told apart by id. */
+const SHORTCUT = "__shortcut:";
+const shortcut = (option: CategoryOption) => ({ ...option, id: `${SHORTCUT}${option.id}` });
+
+/**
+ * YNAB's sections above the groups once a known payee is picked: "Selected" (the category in the
+ * field) and "Suggested" (the payee's other recent categories). They make way for the matches as
+ * soon as something is typed.
+ */
+function shortcutGroups(
+  categories: readonly CategoryOption[],
+  selected: CategoryOption | null,
+  suggestedIds: readonly string[],
+): CategoryGroupItems[] {
+  const listed = suggestedIds.filter((id) => categories.some((c) => c.id === id));
+  const suggested = payeeSuggestions(listed, selected?.id ?? null)
+    .map((id) => categories.find((c) => c.id === id))
+    .filter((c): c is CategoryOption => c !== undefined);
+  return [
+    ...(selected ? [{ value: "Selected", items: [shortcut(selected)] }] : []),
+    ...(suggested.length > 0 ? [{ value: "Suggested", items: suggested.map(shortcut) }] : []),
+  ];
+}
+
 /**
  * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
  * list ends with YNAB's "Split", to spread the transaction across several categories; with
  * `onPaymentTransfer`, with its "Payment/Transfer" (before Split, in cash and card registers alike;
- * 2026-10-16), which goes to the payee list to pick an account.
+ * 2026-10-16), which goes to the payee list to pick an account. With `suggestedIds` (a payee's
+ * recent categories), it starts with YNAB's "Selected" and "Suggested".
  */
 export function CategoryField({
   label = "Category",
@@ -424,6 +450,7 @@ export function CategoryField({
   autoFocus,
   placeholder = "Uncategorized",
   describe,
+  suggestedIds,
 }: {
   label?: string;
   value: string | null;
@@ -435,7 +462,12 @@ export function CategoryField({
   placeholder?: string;
   /** Extra text at the end of an option, e.g. what's available in it. */
   describe?: (option: CategoryOption) => ReactNode;
+  /** The payee's recent categories, most recent first (see `payeeSuggestions`). */
+  suggestedIds?: readonly string[];
 }) {
+  const selected = categories.find((c) => c.id === value) ?? null;
+  const [query, setQuery] = useState("");
+  const typing = query.trim() !== "" && (!selected || query !== categoryLabel(selected));
   const groups = useMemo(() => {
     const byGroup = new Map<string, CategoryOption[]>();
     for (const c of categories) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
@@ -443,9 +475,15 @@ export function CategoryField({
       ([group, items]): CategoryGroupItems => ({ value: group, items }),
     );
     const actions = [...(onPaymentTransfer ? [PAYMENT_TRANSFER] : []), ...(onSplit ? [SPLIT] : [])];
-    return actions.length > 0 ? [...list, { value: "", items: actions }] : list;
-  }, [categories, onSplit, onPaymentTransfer]);
-  const selected = categories.find((c) => c.id === value) ?? null;
+    const shortcuts =
+      suggestedIds && !typing ? shortcutGroups(categories, selected, suggestedIds) : [];
+    return [...shortcuts, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
+  }, [categories, onSplit, onPaymentTransfer, suggestedIds, typing, selected]);
+  // With the shortcuts, the "Selected" entry is the one ticked, so the list opens at the top.
+  const shown = useMemo(
+    () => (selected && suggestedIds ? shortcut(selected) : selected),
+    [selected, suggestedIds],
+  );
   const [open, setOpen] = useState(Boolean(autoFocus));
 
   return (
@@ -453,13 +491,14 @@ export function CategoryField({
       open={open}
       onOpenChange={setOpen}
       items={groups}
-      value={selected}
+      value={shown}
+      onInputValueChange={setQuery}
       onValueChange={(option) => {
         if (option?.id === SPLIT.id) onSplit?.();
         else if (option?.id === PAYMENT_TRANSFER.id) {
           setOpen(false);
           onPaymentTransfer?.();
-        } else onChange(option?.id ?? null);
+        } else onChange(option?.id.replace(SHORTCUT, "") ?? null);
       }}
       itemToStringLabel={categoryLabel}
       isItemEqualToValue={(a, b) => a.id === b.id}
@@ -491,6 +530,19 @@ export function CategoryField({
                       <>
                         <ArrowLeftRight className="size-4 text-muted-foreground" /> Payment/Transfer
                       </>
+                    ) : option.id.startsWith(SHORTCUT) ? (
+                      // YNAB: "O2 (Test)", the group in parentheses.
+                      <span className="flex w-full items-center justify-between gap-3">
+                        <span className="truncate">
+                          {option.name}{" "}
+                          <span className="text-muted-foreground">({option.group})</span>
+                        </span>
+                        {describe && (
+                          <span className="shrink-0 tabular-nums">
+                            {describe({ ...option, id: option.id.replace(SHORTCUT, "") })}
+                          </span>
+                        )}
+                      </span>
                     ) : describe ? (
                       <span className="flex w-full items-center justify-between gap-3">
                         <span className="truncate">{option.name}</span>
