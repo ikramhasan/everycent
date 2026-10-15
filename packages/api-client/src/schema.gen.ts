@@ -673,7 +673,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reopen a closed account (and show its payment category again) */
+        /**
+         * Reopen a closed account (and show its payment category again)
+         * @description Reopening a tracking account that was updated to a loan account erases the link: the loan no longer shows its history, and the account can be updated to a loan again (YNAB's "Erase & Re-open").
+         */
         post: operations["reopenAccount"];
         delete?: never;
         options?: never;

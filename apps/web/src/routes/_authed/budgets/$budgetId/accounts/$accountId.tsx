@@ -52,7 +52,7 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accou
   component: AccountPage,
 });
 
-type Confirm = "close" | "delete" | null;
+type Confirm = "close" | "delete" | "reopen" | null;
 
 function AccountPage() {
   const { accountId } = Route.useParams();
@@ -210,9 +210,50 @@ function AccountPage() {
     void closeNow();
   }
 
+  const reopenNow = () =>
+    run(
+      () => reopen.mutateAsync({ params: { path } }),
+      "Account reopened",
+      "Couldn't reopen the account.",
+    );
+
   function confirmDialog() {
     if (!account) return null;
     const closing = closeAccountNotice(account.type, working);
+    if (confirm === "reopen") {
+      const loanName =
+        accounts.data?.accounts.find((a) => a.id === account.migratedToAccountId)?.name ?? "";
+      // YNAB's Re-open Account for an updated tracking account (2026-10-15, EVERYCENT-165).
+      return (
+        <AlertDialog open onOpenChange={(o) => !o && setConfirm(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Re-open Account</AlertDialogTitle>
+              <AlertDialogDescription>
+                The history in this closed account was migrated to your {loanName} loan account.
+                Re-opening this account will erase the information that was migrated.
+              </AlertDialogDescription>
+              <AlertDialogDescription className="font-medium">
+                This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={async () => {
+                  setConfirm(null);
+                  setEditing(false);
+                  await reopenNow();
+                }}
+              >
+                Erase &amp; Re-open
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      );
+    }
     return (
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
@@ -328,11 +369,7 @@ function AccountPage() {
               variant="outline"
               size="sm"
               onClick={() =>
-                run(
-                  () => reopen.mutateAsync({ params: { path } }),
-                  "Account reopened",
-                  "Couldn't reopen the account.",
-                )
+                account.migratedToAccountId ? setConfirm("reopen") : void reopenNow()
               }
             >
               Re-open

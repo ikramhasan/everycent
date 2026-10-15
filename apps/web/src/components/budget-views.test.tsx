@@ -234,7 +234,13 @@ describe("BudgetFilterBar overflow", () => {
     ]);
     await userEvent.click(screen.getByRole("button", { name: "Views Menu" }));
     const items = await screen.findAllByRole("menuitem");
-    expect(items.map((i) => i.textContent?.trim())).toEqual(["V3", "V4", "V5", "Manage Views", "New View"]);
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      "V3",
+      "V4",
+      "V5",
+      "Manage Views",
+      "New View",
+    ]);
     await userEvent.click(screen.getByRole("menuitem", { name: "V4" }));
     expect(onChange).toHaveBeenCalledWith("v4");
   });

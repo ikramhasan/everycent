@@ -768,7 +768,12 @@ export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = asy
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await findAccount(db, budgetId, accountId);
-  await db.update(budgetAccount).set({ closed: false }).where(eq(budgetAccount.id, accountId));
+  // YNAB's "Erase & Re-open" (2026-10-15, EVERYCENT-165): reopening an updated tracking account
+  // erases the information migrated to its loan, so it can be updated again.
+  await db
+    .update(budgetAccount)
+    .set({ closed: false, migratedToAccountId: null })
+    .where(eq(budgetAccount.id, accountId));
   return c.json(await accountJson(db, budgetId, accountId), 200);
 };
 
