@@ -134,7 +134,9 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
  * Every row shares one grid so the figures line up whatever a name's length. Like YNAB, a list
  * narrower than the columns scrolls sideways instead of squeezing them (mobile gets its own pass).
  */
-const ROW = "grid grid-cols-[minmax(10rem,1fr)_7rem_7rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
+// Assigned and Activity fit "-$10,000.00"; Available keeps room for its pill and icon.
+const ROW =
+  "grid grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
 /**
@@ -147,10 +149,17 @@ const FIGURE_PAD = "px-2";
 const NAME_BUTTON = "min-w-0 shrink justify-start";
 const SELECTED_ROW = "bg-primary/5";
 /**
- * Every row starts with the same three slots, each the width of an icon button, so the controls
- * and names line up: collapse (groups), checkbox, drag handle. Rows without one get a spacer.
+ * Every row starts with the same two slots, each the width of an icon button, so the controls and
+ * names line up: a group's collapse button (a category's drag handle), then the checkbox. Rows
+ * without one get a spacer. A group's drag handle follows its name.
  */
 const SLOT = "flex size-6 shrink-0 items-center justify-center";
+/**
+ * Drag handles show on the row's hover or keyboard focus (always on touch screens, which can't
+ * hover), so they don't cost a column of their own.
+ */
+const HOVER_REVEAL =
+  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
@@ -335,7 +344,6 @@ export function CategoryList({
                   />
                 </span>
               )}
-              <Spacer />
               <span className="truncate px-2">Category</span>
             </div>
             {figures && (
@@ -363,7 +371,6 @@ export function CategoryList({
                     selection={selection}
                   />
                 )}
-                <Spacer />
                 {selection ? (
                   <Button
                     variant="ghost"
@@ -664,7 +671,7 @@ function GroupSection({
       aria-label={group.name}
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
-      <div className={cn(ROW, "group/header bg-muted/60")}>
+      <div className={cn(ROW, "group/row bg-muted/60")}>
         <div className={NAME_CELL}>
           <Button
             variant="ghost"
@@ -689,13 +696,9 @@ function GroupSection({
               />
             </span>
           )}
-          {managed || !reorderable ? (
-            <Spacer />
-          ) : (
-            <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
-          )}
           {managed ? (
-            <span className="truncate px-1 font-semibold text-sm">{group.name}</span>
+            // px-2 like the name buttons, so every group name starts at the same x.
+            <span className="truncate px-2 font-semibold text-sm">{group.name}</span>
           ) : (
             <>
               <NamePopover
@@ -753,6 +756,13 @@ function GroupSection({
                       <Plus />
                     </Button>
                   }
+                />
+              )}
+              {reorderable && (
+                <DragHandle
+                  ref={handleRef}
+                  label={`Reorder ${group.name}`}
+                  className={HOVER_REVEAL}
                 />
               )}
             </>
@@ -865,7 +875,7 @@ function CategoryRow({
       className={cn(
         ROW,
         // The whole row selects on click, so it lights up on hover; selection wins over hover.
-        "border-t transition-colors duration-100 first:border-t-0",
+        "group/row border-t transition-colors duration-100 first:border-t-0",
         isDragSource && "opacity-60",
         selected ? SELECTED_ROW : "hover:bg-muted/40",
       )}
@@ -873,13 +883,17 @@ function CategoryRow({
     >
       <div className="grid min-w-0 gap-1">
         <div className={NAME_CELL}>
-          <Spacer />
-          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
+          {/* The handle takes the slot a group's chevron uses, shown when the row is hovered. */}
           {reorderable ? (
-            <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+            <DragHandle
+              ref={handleRef}
+              label={`Reorder ${category.name}`}
+              className={HOVER_REVEAL}
+            />
           ) : (
             <Spacer />
           )}
+          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
           <NamePopover
             title="Category name"
             withNote
@@ -960,8 +974,8 @@ function CategoryRow({
             ))}
         </div>
         {totals?.bar && figures?.progressBars !== false && (
-          // Lined up with the name, past the three slots and the name button's padding.
-          <ProgressBar bar={totals.bar} className="mr-1 ml-[5.75rem]" />
+          // Lined up with the name, past the two slots and the name button's padding.
+          <ProgressBar bar={totals.bar} className="mr-1 ml-16" />
         )}
       </div>
       {totals && format && (
@@ -1148,14 +1162,25 @@ function Spacer() {
   return <span className={SLOT} aria-hidden />;
 }
 
-function DragHandle({ ref, label }: { ref: (el: Element | null) => void; label: string }) {
+function DragHandle({
+  ref,
+  label,
+  className,
+}: {
+  ref: (el: Element | null) => void;
+  label: string;
+  className?: string;
+}) {
   return (
     <Button
       ref={ref}
       variant="ghost"
       size="icon-xs"
       aria-label={label}
-      className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+      className={cn(
+        "cursor-grab touch-none text-muted-foreground active:cursor-grabbing",
+        className,
+      )}
     >
       <GripVertical />
     </Button>
@@ -1201,7 +1226,6 @@ function HiddenRow({
       <div className={NAME_CELL}>
         <Spacer />
         {withCheckboxes && <Spacer />}
-        <Spacer />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-semibold text-sm")}>

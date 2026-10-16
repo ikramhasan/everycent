@@ -76,7 +76,8 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
     .toUpperCase();
 
   return (
-    <SidebarProvider>
+    // Narrower than the kit's 16rem, leaving the page more room (YNAB's is narrow too).
+    <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>
@@ -243,7 +244,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
           <Separator orientation="vertical" className="mr-2 h-4 data-vertical:self-center" />
           <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         </header>
-        <div className="flex-1 p-4 md:p-6">
+        <div className="flex-1 p-4 md:p-5">
           <PageHeaderSlotProvider value={headerSlot}>
             <Outlet />
           </PageHeaderSlotProvider>

@@ -583,7 +583,8 @@ function BudgetPage() {
     );
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
+    // No max width: the category list is dense, so it takes the room a wide screen gives it.
+    <div className="grid gap-4">
       <TemplateGallery
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
@@ -606,12 +607,7 @@ function BudgetPage() {
           if (await templates.importTemplate(importing.id, categoryIds)) setTemplate(undefined);
         }}
       />
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-4 lg:grid lg:gap-6",
-          COLUMNS,
-        )}
-      >
+      <div className={cn("flex flex-wrap items-center justify-between gap-4 lg:grid", COLUMNS)}>
         <div className="grid gap-1">
           <PageHeader title={budget.name} />
           <MonthNav
@@ -682,7 +678,7 @@ function BudgetPage() {
           <AddAccountDialog budget={budget} open={addingAccount} onOpenChange={setAddingAccount} />
         </div>
       )}
-      <div className={cn("grid items-start gap-6", COLUMNS)}>
+      <div className={cn("grid items-start gap-4", COLUMNS)}>
         {categories.isPending ? (
           <Skeleton className="h-64" />
         ) : categories.isError ? (
