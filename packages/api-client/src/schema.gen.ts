@@ -1550,6 +1550,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/reports/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spending or income summed by month, group, category, payee, account or flag
+         * @description Amounts are in the budget's currency (base amounts), from the range's first day up to the user's today. Each row carries only the keys asked for in `groupBy`; a null key is a line without one (no payee, no flag).
+         */
+        get: operations["getReportActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/reports/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The transactions behind a report's sums (drill-down and export)
+         * @description The lines the same filters sum, a split's lines one by one: newest first, or largest outflow first. `total` and `count` cover every match even when `limit` cuts the list.
+         */
+        get: operations["listReportTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/reports/net-worth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Month-end balances of every account and the net worth they add up to
+         * @description Each account's working balance at the end of each month (uncleared included, a loan's interest and escrow included, the current month as of `today`), on- and off-budget, closed accounts included. Assets and debts split by each account's sign. Foreign balances convert at the month-end's rate; with none known they're left out of the totals (`missing`).
+         */
+        get: operations["getNetWorthReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/reports/age-of-money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Age of Money now, 30 days ago, and at each month's end
+         * @description YNAB's Age of Money: the average age in days of the last ten outflows from cash accounts (credit card payments and transfers to loan or tracking accounts included), each outflow's money taken oldest first. Null when there have been fewer than ten outflows.
+         */
+        get: operations["getAgeOfMoney"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/events": {
         parameters: {
             query?: never;
@@ -1831,6 +1911,8 @@ export interface components {
             groups: components["schemas"]["CategoryGroup"][];
             /** @description The internal 'Inflow: Ready to Assign' category, for categorizing income */
             readyToAssignCategoryId: string;
+            /** @description The internal Uncategorized category (reports filter and group by it) */
+            uncategorizedCategoryId: string;
         };
         CategoryGroup: {
             id: string;
@@ -3651,6 +3733,179 @@ export interface components {
         };
         TransactionHistory: {
             events: components["schemas"]["ActivityEvent"][];
+        };
+        ReportActivity: {
+            /**
+             * @description The budget's currency
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description Month of the budget's oldest transaction (for All Dates), null when there's none */
+            firstMonth: string | null;
+            rows: components["schemas"]["ReportSum"][];
+            /** @description Names of the payees in `rows` (grouped by payee), transfer payees included */
+            payees: {
+                id: string;
+                name: string;
+            }[];
+        };
+        ReportSum: {
+            month?: string | null;
+            /** Format: date */
+            day?: string | null;
+            groupId?: string | null;
+            categoryId?: string | null;
+            payeeId?: string | null;
+            accountId?: string | null;
+            /** @enum {string|null} */
+            flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @description Sum of the outflows (≤ 0) */
+            outflow: string;
+            /** @description Sum of the inflows (≥ 0) */
+            inflow: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            net: string;
+            /** @description Lines summed (a split's lines one by one) */
+            count: number;
+        };
+        ReportTransactions: {
+            /** @description Sum of every matching line */
+            total: string;
+            count: number;
+            transactions: components["schemas"]["ReportTransaction"][];
+        };
+        ReportTransaction: {
+            /** @description The transaction's id, or the split line's */
+            id: string;
+            /** @description The transaction (the split, for a split line) */
+            transactionId: string;
+            accountId: string;
+            accountName: string;
+            /** Format: date */
+            date: string;
+            payeeId: string | null;
+            payeeName: string | null;
+            categoryId: string | null;
+            groupName: string | null;
+            categoryName: string | null;
+            memo: string;
+            /** @enum {string|null} */
+            flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
+            /** @enum {string} */
+            cleared: "uncleared" | "cleared" | "reconciled";
+            /** @description In the budget's currency; negative is an outflow */
+            amount: string;
+            /** @description In the account's currency, `currency` */
+            nativeAmount: string;
+            /**
+             * @description The account's currency
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+        };
+        NetWorthReport: {
+            /**
+             * @description The budget's currency, every total's
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description Month of the accounts' first transaction (for All Dates), null when there's none */
+            firstMonth: string | null;
+            /** @description The month before the range (each month's change is against the one before) */
+            opening: {
+                month: string;
+                /** @description Σ of the positive account balances */
+                assets: string;
+                /** @description Σ of the negative account balances (≤ 0) */
+                debts: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                netWorth: string;
+            };
+            months: components["schemas"]["NetWorthMonth"][];
+            accounts: components["schemas"]["NetWorthAccount"][];
+            /** @description The month-end rate of each foreign currency, for each month of the range */
+            rates: {
+                /**
+                 * @description ISO 4217 currency code
+                 * @enum {string}
+                 */
+                currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+                month: string;
+                /**
+                 * @description 1 `currency` = rate budget currency
+                 * @example 1.0842
+                 */
+                rate: string | null;
+                /** Format: date */
+                rateDate: string | null;
+            }[];
+        };
+        NetWorthMonth: {
+            month: string;
+            /** @description Σ of the positive account balances */
+            assets: string;
+            /** @description Σ of the negative account balances (≤ 0) */
+            debts: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            netWorth: string;
+            /** @description Net worth above every earlier month-end since the first month */
+            allTimeHigh: boolean;
+            /** @description Accounts left out of the totals: no rate to the budget's currency */
+            missing: string[];
+            /** @description What changed since the previous month-end; adds up to the change exactly */
+            parts: {
+                /** @description Budget accounts' cash flow (income less spending, transfers to loans and tracking accounts counting as spent), starting balances left out */
+                netSaved: string;
+                /** @description Transfers into loan accounts */
+                debtPaidDown: string;
+                /** @description Tracking accounts' transactions, starting balances left out */
+                tracking: string;
+                /** @description The rest: starting balances, loan interest, escrow and adjustments, exchange rates */
+                other: string;
+            };
+        };
+        NetWorthAccount: {
+            id: string;
+            name: string;
+            /**
+             * @description YNAB account type
+             * @enum {string}
+             */
+            type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            onBudget: boolean;
+            closed: boolean;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            firstMonth: string | null;
+            opening: components["schemas"]["NetWorthBalance"];
+            /** @description At the end of each month of the range */
+            balances: components["schemas"]["NetWorthBalance"][];
+        };
+        NetWorthBalance: {
+            /** @description In the account's currency */
+            native: string;
+            /** @description In the budget's currency at the month-end rate; null when no rate is known */
+            base: string | null;
+        };
+        AgeOfMoney: {
+            /**
+             * Format: date
+             * @description The day `current` is for (the user's today)
+             */
+            asOf: string;
+            /** @description Age of Money today, in days */
+            current: number | null;
+            /** @description Age of Money as of 30 days before `asOf` */
+            thirtyDaysAgo: number | null;
+            /** @description Each month from the first one with a cash-account transaction to this month */
+            months: {
+                month: string;
+                /** @description As of the month's last day (today for this month) */
+                days: number | null;
+            }[];
         };
     };
     responses: never;
@@ -9779,6 +10034,291 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionHistory"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getReportActivity: {
+        parameters: {
+            query: {
+                /** @description First month, YYYY-MM */
+                from: string;
+                /** @description Last month, YYYY-MM (inclusive) */
+                to: string;
+                /** @description `spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out */
+                kind?: "spending" | "income";
+                /** @description Comma-separated account ids */
+                accountIds?: string;
+                /** @description Comma-separated category group ids */
+                groupIds?: string;
+                /** @description Comma-separated category ids */
+                categoryIds?: string;
+                /** @description Comma-separated payee ids; "none" matches lines with no payee */
+                payeeIds?: string;
+                /** @description Comma-separated flag colours; "none" matches unflagged transactions */
+                flags?: string;
+                /** @description Narrows the range to start on this day (e.g. one day of a calendar) */
+                fromDate?: string;
+                /** @description Narrows the range to end on this day (inclusive) */
+                toDate?: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+                /** @description Comma-separated keys to group by */
+                groupBy?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sums */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportActivity"];
+                };
+            };
+            /** @description Invalid filters, or `from` after `to` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listReportTransactions: {
+        parameters: {
+            query: {
+                /** @description First month, YYYY-MM */
+                from: string;
+                /** @description Last month, YYYY-MM (inclusive) */
+                to: string;
+                /** @description `spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out */
+                kind?: "spending" | "income";
+                /** @description Comma-separated account ids */
+                accountIds?: string;
+                /** @description Comma-separated category group ids */
+                groupIds?: string;
+                /** @description Comma-separated category ids */
+                categoryIds?: string;
+                /** @description Comma-separated payee ids; "none" matches lines with no payee */
+                payeeIds?: string;
+                /** @description Comma-separated flag colours; "none" matches unflagged transactions */
+                flags?: string;
+                /** @description Narrows the range to start on this day (e.g. one day of a calendar) */
+                fromDate?: string;
+                /** @description Narrows the range to end on this day (inclusive) */
+                toDate?: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+                order?: "newest" | "largest_outflow";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportTransactions"];
+                };
+            };
+            /** @description Invalid filters, or `from` after `to` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getNetWorthReport: {
+        parameters: {
+            query: {
+                /** @description First month, YYYY-MM */
+                from: string;
+                /** @description Last month, YYYY-MM (inclusive) */
+                to: string;
+                /** @description Comma-separated account ids; all accounts when left out */
+                accountIds?: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetWorthReport"];
+                };
+            };
+            /** @description Invalid query, or `from` after `to` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAgeOfMoney: {
+        parameters: {
+            query?: {
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Age of Money */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgeOfMoney"];
                 };
             };
             /** @description Not signed in */

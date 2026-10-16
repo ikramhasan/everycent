@@ -1,6 +1,15 @@
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { BudgetProvider } from "@/lib/budget-context";
+import type { Breakdown } from "@/lib/budget-view";
+import type { Budget } from "@/lib/budgets";
 import { CategoryInspector, MonthSummary, PaymentInspector } from "./category-inspector";
 
 const format = (a: string) => `A${a}`;
@@ -284,5 +293,60 @@ describe("MonthSummary", () => {
     expect(screen.getByText("Power, Food")).toBeInTheDocument();
     expect(screen.getByText("Assigned in October").nextSibling).toHaveTextContent("A0");
     expect(screen.getByText("Activity").nextSibling).toHaveTextContent("A-3000");
+  });
+});
+
+describe("MonthSummary's report link", () => {
+  const budget = {
+    id: "b",
+    name: "Household",
+    currency: "USD",
+    numberFormat: "comma_dot",
+    currencySymbolPosition: "before",
+    dateFormat: "MM/DD/YYYY",
+    role: "owner",
+    archivedAt: null,
+    lastUsedAt: null,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+  } as Budget;
+  const totals = {
+    carried: 0n,
+    assigned: 1000n,
+    activity: -500n,
+    available: 500n,
+  } as Breakdown;
+
+  async function renderSummary(reportCategories?: string[]) {
+    const rootRoute = createRootRoute({
+      component: () => (
+        <BudgetProvider budget={budget}>
+          <MonthSummary
+            month="2026-10"
+            totals={totals}
+            format={(m) => m}
+            reportCategories={reportCategories}
+          />
+        </BudgetProvider>
+      ),
+    });
+    const router = createRouter({
+      routeTree: rootRoute,
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    render(<RouterProvider router={router} />);
+    return screen.findByRole("link", { name: "Spending Breakdown for October" });
+  }
+
+  it("opens Spending Breakdown for the month over the whole plan", async () => {
+    const link = await renderSummary();
+    expect(link.getAttribute("href")).toBe(
+      "/budgets/b/reports/spending-breakdown?from=2026-10&to=2026-10",
+    );
+  });
+
+  it("keeps the summary's categories", async () => {
+    const link = await renderSummary(["c1", "c2"]);
+    expect(decodeURIComponent(link.getAttribute("href") ?? "")).toContain("categories=c1,c2");
   });
 });

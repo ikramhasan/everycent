@@ -851,6 +851,14 @@ function Inspector({
   const pairedLoan = usePairedLoan(only);
   const loanPlan = useLoanPlan(pairedLoan);
   const accounts = useQuery(accountsQueryOptions(budget.id));
+  const categoryList = useQuery(categoriesQueryOptions(budget.id));
+  /** The summary's categories as report filters (Uncategorized by its category id). */
+  const reportCategories = (ids: Iterable<string>) => {
+    const uncategorized = categoryList.data?.uncategorizedCategoryId;
+    return [...ids].flatMap((id) =>
+      id !== UNCATEGORIZED ? [id] : uncategorized ? [uncategorized] : [],
+    );
+  };
   const paidCard = accounts.data?.accounts.find(
     (a) => only !== undefined && a.paymentCategoryId === only && !a.closed,
   );
@@ -1055,6 +1063,7 @@ function Inspector({
         totals={summarize(month, selection)}
         format={format}
         selectedNames={names}
+        reportCategories={reportCategories(selection)}
       />
     );
   }
@@ -1068,6 +1077,8 @@ function Inspector({
       month={month.month}
       totals={summarize(month, ids)}
       format={format}
+      // Under All the link covers the whole plan; a view's link, its categories.
+      reportCategories={shown ? reportCategories(shown) : undefined}
       // The whole plan's targets, whatever the view; YNAB shows them in the current month only.
       targets={
         month.month === figures.currentMonth

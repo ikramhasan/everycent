@@ -19,6 +19,7 @@ const cat = (id: string, groupId: string, name: string) => ({
 
 const data: CategoryList = {
   readyToAssignCategoryId: "rta",
+  uncategorizedCategoryId: "uncat",
   groups: [
     {
       id: "bills",

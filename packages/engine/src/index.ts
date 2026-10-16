@@ -11,6 +11,17 @@ export {
   usesCategory,
   zAccountType,
 } from "./accounts";
+export {
+  AGE_OF_MONEY_OUTFLOWS,
+  type AgeOfMoneyPart,
+  addDays,
+  ageOfMoneyAt,
+  ageOfMoneyByMonth,
+  countedAmount,
+  type MoneyFlow,
+  type OutflowAge,
+  outflowAges,
+} from "./age-of-money";
 export { allocate } from "./allocate";
 export { evaluateAmount } from "./amount-expression";
 export {
@@ -154,6 +165,27 @@ export {
   zBudgetMonth,
 } from "./months";
 export {
+  allTimeHighs,
+  type NetWorthFlows,
+  type NetWorthGroup,
+  type NetWorthParts,
+  type NetWorthTotals,
+  netWorthGroup,
+  netWorthParts,
+  netWorthTotals,
+} from "./net-worth";
+export {
+  ABOVE_AVERAGE_PERCENT,
+  type CategorySpending,
+  MAX_OBSERVATIONS,
+  MAX_PER_RULE,
+  monthsOfRunway,
+  type Observation,
+  type ObservationInput,
+  observations,
+  TOP_PAYEES,
+} from "./observations";
+export {
   type FormatMoneyOptions,
   formatMoney,
   parseMoney,
@@ -193,6 +225,30 @@ export {
   type SearchSettings,
   type SearchTerm,
 } from "./register-search";
+export {
+  averageOf,
+  type ComparisonRange,
+  changeOf,
+  comparisonRange,
+  type DelimitedCell,
+  exportDelimiter,
+  type MonthRange,
+  monthsIn,
+  percentOf,
+  plainAmount,
+  presetOf,
+  presetRange,
+  REPORT_COMPARISONS,
+  REPORT_PRESETS,
+  type ReportComparison,
+  type ReportPreset,
+  type SpendingRow,
+  type SpendingSplit,
+  shareLabel,
+  shiftRange,
+  splitSpending,
+  toDelimited,
+} from "./reports";
 export { divideRounded, type RoundingMode } from "./rounding";
 export {
   firstOccurrenceAfter,
@@ -203,6 +259,16 @@ export {
   type ScheduleFrequency,
   zScheduleFrequency,
 } from "./schedule";
+export {
+  averageMonthlySpending,
+  comparedToAverage,
+  percentTenths,
+  rollingAverage,
+  type TrendCell,
+  type TrendMonth,
+  topSpenders,
+  trendMonths,
+} from "./spending-trends";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,

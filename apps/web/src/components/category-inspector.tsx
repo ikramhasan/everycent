@@ -1,4 +1,4 @@
-import { addMonths } from "@everycent/engine";
+import { addMonths, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
   Collapsible,
@@ -8,7 +8,8 @@ import {
 import { Input } from "@everycent/ui/components/input";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
-import { ChevronDown, ChevronRight, SquarePen } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ChartColumn, ChevronDown, ChevronRight, SquarePen } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
 import type { Breakdown } from "@/lib/budget-view";
@@ -16,23 +17,52 @@ import { monthName } from "@/lib/months";
 
 type Format = (minorUnits: string) => string;
 
-/** A line of the breakdown; `value` null shows YNAB's dash (Uncategorized can't hold money). */
+/**
+ * A line of the breakdown; `value` null shows YNAB's dash (Uncategorized can't hold money).
+ * `report` adds a link to the report behind the figure (an everycent extra, EVERYCENT-82).
+ */
 function Line({
   label,
   value,
   format,
   hint,
+  report,
 }: {
   label: string;
   value: bigint | null;
   format: Format;
   hint?: string;
+  report?: ReactNode;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-sm" title={hint}>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="tabular-nums">{value === null ? "–" : format(value.toString())}</dd>
+      <dd className="flex items-baseline gap-1 tabular-nums">
+        {value === null ? "–" : format(value.toString())}
+        {report}
+      </dd>
     </div>
+  );
+}
+
+/**
+ * Opens Spending Breakdown for the month, over the summary's categories (all of them when
+ * `categories` is undefined).
+ */
+function SpendingLink({ month, categories }: { month: string; categories?: string[] }) {
+  const budget = useOptionalBudget();
+  if (!budget || !isBudgetMonth(month)) return null;
+  return (
+    <Link
+      to="/budgets/$budgetId/reports/spending-breakdown"
+      params={{ budgetId: budget.budget.id }}
+      search={{ from: month, to: month, categories: categories?.join(",") }}
+      aria-label={`Spending Breakdown for ${monthName(month)}`}
+      title="Open in Spending Breakdown"
+      className="self-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ChartColumn className="size-3.5" />
+    </Link>
   );
 }
 
@@ -57,10 +87,16 @@ export function MonthSummary({
   format,
   selectedNames,
   targets,
+  reportCategories,
 }: {
   month: string;
   totals: Breakdown;
   format: Format;
+  /**
+   * The categories the summary adds up, for its link to Spending Breakdown; undefined when it
+   * covers the whole plan.
+   */
+  reportCategories?: string[];
   /** Names of the selected categories, when two or more are. */
   selectedNames?: string[];
   /**
@@ -106,6 +142,7 @@ export function MonthSummary({
           value={totals.activity}
           format={format}
           hint={`The total amount of activity (e.g. spending) in ${name}.`}
+          report={<SpendingLink month={month} categories={reportCategories} />}
         />
         <Line
           label="Available"

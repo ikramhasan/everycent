@@ -18,6 +18,7 @@ import { meRouter } from "./routes/me";
 import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
 import { payeesRouter } from "./routes/payees";
+import { reportsRouter } from "./routes/reports";
 import { scheduledRouter } from "./routes/scheduled";
 import { transactionsRouter } from "./routes/transactions";
 import { viewsRouter } from "./routes/views";
@@ -76,6 +77,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", monthsRouter);
   app.route("/v1", fxRatesRouter);
   app.route("/v1", activityRouter);
+  app.route("/v1", reportsRouter);
   app.route("/v1", eventsRouter);
 
   registerDocs(app);

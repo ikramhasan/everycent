@@ -219,6 +219,9 @@ export const CategoryListSchema = z
     readyToAssignCategoryId: z
       .string()
       .describe("The internal 'Inflow: Ready to Assign' category, for categorizing income"),
+    uncategorizedCategoryId: z
+      .string()
+      .describe("The internal Uncategorized category (reports filter and group by it)"),
   })
   .openapi("CategoryList");
 

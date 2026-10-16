@@ -1381,11 +1381,16 @@
           "readyToAssignCategoryId": {
             "type": "string",
             "description": "The internal 'Inflow: Ready to Assign' category, for categorizing income"
+          },
+          "uncategorizedCategoryId": {
+            "type": "string",
+            "description": "The internal Uncategorized category (reports filter and group by it)"
           }
         },
         "required": [
           "groups",
-          "readyToAssignCategoryId"
+          "readyToAssignCategoryId",
+          "uncategorizedCategoryId"
         ]
       },
       "CategoryGroup": {
@@ -10082,6 +10087,1394 @@
         },
         "required": [
           "events"
+        ]
+      },
+      "ReportActivity": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "The budget's currency"
+          },
+          "firstMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "Month of the budget's oldest transaction (for All Dates), null when there's none"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportSum"
+            }
+          },
+          "payees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            },
+            "description": "Names of the payees in `rows` (grouped by payee), transfer payees included"
+          }
+        },
+        "required": [
+          "currency",
+          "firstMonth",
+          "rows",
+          "payees"
+        ]
+      },
+      "ReportSum": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+          },
+          "day": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "groupId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accountId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ]
+          },
+          "outflow": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Sum of the outflows (≤ 0)"
+          },
+          "inflow": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Sum of the inflows (≥ 0)"
+          },
+          "net": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Lines summed (a split's lines one by one)"
+          }
+        },
+        "required": [
+          "outflow",
+          "inflow",
+          "net",
+          "count"
+        ]
+      },
+      "ReportTransactions": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Sum of every matching line"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportTransaction"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "count",
+          "transactions"
+        ]
+      },
+      "ReportTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The transaction's id, or the split line's"
+          },
+          "transactionId": {
+            "type": "string",
+            "description": "The transaction (the split, for a split line)"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groupName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo": {
+            "type": "string"
+          },
+          "flag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              null
+            ]
+          },
+          "cleared": {
+            "type": "string",
+            "enum": [
+              "uncleared",
+              "cleared",
+              "reconciled"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "In the budget's currency; negative is an outflow"
+          },
+          "nativeAmount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "In the account's currency, `currency`"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "The account's currency"
+          }
+        },
+        "required": [
+          "id",
+          "transactionId",
+          "accountId",
+          "accountName",
+          "date",
+          "payeeId",
+          "payeeName",
+          "categoryId",
+          "groupName",
+          "categoryName",
+          "memo",
+          "flag",
+          "cleared",
+          "amount",
+          "nativeAmount",
+          "currency"
+        ]
+      },
+      "NetWorthReport": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "The budget's currency, every total's"
+          },
+          "firstMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+            "description": "Month of the accounts' first transaction (for All Dates), null when there's none"
+          },
+          "opening": {
+            "type": "object",
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+              },
+              "assets": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Σ of the positive account balances"
+              },
+              "debts": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Σ of the negative account balances (≤ 0)"
+              },
+              "netWorth": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              }
+            },
+            "required": [
+              "month",
+              "assets",
+              "debts",
+              "netWorth"
+            ],
+            "description": "The month before the range (each month's change is against the one before)"
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetWorthMonth"
+            }
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetWorthAccount"
+            }
+          },
+          "rates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+                },
+                "rate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d+(\\.\\d{1,12})?$",
+                  "example": "1.0842",
+                  "description": "1 `currency` = rate budget currency"
+                },
+                "rateDate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                }
+              },
+              "required": [
+                "currency",
+                "month",
+                "rate",
+                "rateDate"
+              ]
+            },
+            "description": "The month-end rate of each foreign currency, for each month of the range"
+          }
+        },
+        "required": [
+          "currency",
+          "firstMonth",
+          "opening",
+          "months",
+          "accounts",
+          "rates"
+        ]
+      },
+      "NetWorthMonth": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+          },
+          "assets": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Σ of the positive account balances"
+          },
+          "debts": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Σ of the negative account balances (≤ 0)"
+          },
+          "netWorth": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "allTimeHigh": {
+            "type": "boolean",
+            "description": "Net worth above every earlier month-end since the first month"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Accounts left out of the totals: no rate to the budget's currency"
+          },
+          "parts": {
+            "type": "object",
+            "properties": {
+              "netSaved": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Budget accounts' cash flow (income less spending, transfers to loans and tracking accounts counting as spent), starting balances left out"
+              },
+              "debtPaidDown": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Transfers into loan accounts"
+              },
+              "tracking": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Tracking accounts' transactions, starting balances left out"
+              },
+              "other": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The rest: starting balances, loan interest, escrow and adjustments, exchange rates"
+              }
+            },
+            "required": [
+              "netSaved",
+              "debtPaidDown",
+              "tracking",
+              "other"
+            ],
+            "description": "What changed since the previous month-end; adds up to the change exactly"
+          }
+        },
+        "required": [
+          "month",
+          "assets",
+          "debts",
+          "netWorth",
+          "allTimeHigh",
+          "missing",
+          "parts"
+        ]
+      },
+      "NetWorthAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "cash",
+              "credit_card",
+              "line_of_credit",
+              "mortgage",
+              "auto_loan",
+              "student_loan",
+              "personal_loan",
+              "medical_debt",
+              "other_debt",
+              "asset",
+              "liability"
+            ],
+            "description": "YNAB account type"
+          },
+          "onBudget": {
+            "type": "boolean"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "ISO 4217 currency code"
+          },
+          "firstMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+          },
+          "opening": {
+            "$ref": "#/components/schemas/NetWorthBalance"
+          },
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetWorthBalance"
+            },
+            "description": "At the end of each month of the range"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "onBudget",
+          "closed",
+          "currency",
+          "firstMonth",
+          "opening",
+          "balances"
+        ]
+      },
+      "NetWorthBalance": {
+        "type": "object",
+        "properties": {
+          "native": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "In the account's currency"
+          },
+          "base": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "In the budget's currency at the month-end rate; null when no rate is known"
+          }
+        },
+        "required": [
+          "native",
+          "base"
+        ]
+      },
+      "AgeOfMoney": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date",
+            "description": "The day `current` is for (the user's today)"
+          },
+          "current": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Age of Money today, in days"
+          },
+          "thirtyDaysAgo": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Age of Money as of 30 days before `asOf`"
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+                },
+                "days": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "As of the month's last day (today for this month)"
+                }
+              },
+              "required": [
+                "month",
+                "days"
+              ]
+            },
+            "description": "Each month from the first one with a cash-account transaction to this month"
+          }
+        },
+        "required": [
+          "asOf",
+          "current",
+          "thirtyDaysAgo",
+          "months"
         ]
       }
     },
@@ -19366,6 +20759,631 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TransactionHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/reports/activity": {
+      "get": {
+        "operationId": "getReportActivity",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Spending or income summed by month, group, category, payee, account or flag",
+        "description": "Amounts are in the budget's currency (base amounts), from the range's first day up to the user's today. Each row carries only the keys asked for in `groupBy`; a null key is a line without one (no payee, no flag).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "First month, YYYY-MM"
+            },
+            "required": true,
+            "description": "First month, YYYY-MM",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "Last month, YYYY-MM (inclusive)"
+            },
+            "required": true,
+            "description": "Last month, YYYY-MM (inclusive)",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "spending",
+                "income"
+              ],
+              "default": "spending",
+              "description": "`spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out"
+            },
+            "required": false,
+            "description": "`spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out",
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated account ids"
+            },
+            "required": false,
+            "description": "Comma-separated account ids",
+            "name": "accountIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated category group ids"
+            },
+            "required": false,
+            "description": "Comma-separated category group ids",
+            "name": "groupIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated category ids"
+            },
+            "required": false,
+            "description": "Comma-separated category ids",
+            "name": "categoryIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated payee ids; \"none\" matches lines with no payee"
+            },
+            "required": false,
+            "description": "Comma-separated payee ids; \"none\" matches lines with no payee",
+            "name": "payeeIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated flag colours; \"none\" matches unflagged transactions"
+            },
+            "required": false,
+            "description": "Comma-separated flag colours; \"none\" matches unflagged transactions",
+            "name": "flags",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to start on this day (e.g. one day of a calendar)"
+            },
+            "required": false,
+            "description": "Narrows the range to start on this day (e.g. one day of a calendar)",
+            "name": "fromDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to end on this day (inclusive)"
+            },
+            "required": false,
+            "description": "Narrows the range to end on this day (inclusive)",
+            "name": "toDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated keys to group by"
+            },
+            "required": false,
+            "description": "Comma-separated keys to group by",
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The sums",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, or `from` after `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/reports/transactions": {
+      "get": {
+        "operationId": "listReportTransactions",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The transactions behind a report's sums (drill-down and export)",
+        "description": "The lines the same filters sum, a split's lines one by one: newest first, or largest outflow first. `total` and `count` cover every match even when `limit` cuts the list.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "First month, YYYY-MM"
+            },
+            "required": true,
+            "description": "First month, YYYY-MM",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "Last month, YYYY-MM (inclusive)"
+            },
+            "required": true,
+            "description": "Last month, YYYY-MM (inclusive)",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "spending",
+                "income"
+              ],
+              "default": "spending",
+              "description": "`spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out"
+            },
+            "required": false,
+            "description": "`spending`: lines on budget accounts with a category other than Ready to Assign (the plan's Activity; transfers between budget accounts drop out). `income`: lines on budget accounts categorized to Ready to Assign, starting balances left out",
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated account ids"
+            },
+            "required": false,
+            "description": "Comma-separated account ids",
+            "name": "accountIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated category group ids"
+            },
+            "required": false,
+            "description": "Comma-separated category group ids",
+            "name": "groupIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated category ids"
+            },
+            "required": false,
+            "description": "Comma-separated category ids",
+            "name": "categoryIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated payee ids; \"none\" matches lines with no payee"
+            },
+            "required": false,
+            "description": "Comma-separated payee ids; \"none\" matches lines with no payee",
+            "name": "payeeIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated flag colours; \"none\" matches unflagged transactions"
+            },
+            "required": false,
+            "description": "Comma-separated flag colours; \"none\" matches unflagged transactions",
+            "name": "flags",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to start on this day (e.g. one day of a calendar)"
+            },
+            "required": false,
+            "description": "Narrows the range to start on this day (e.g. one day of a calendar)",
+            "name": "fromDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to end on this day (inclusive)"
+            },
+            "required": false,
+            "description": "Narrows the range to end on this day (inclusive)",
+            "name": "toDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "largest_outflow"
+              ],
+              "default": "newest"
+            },
+            "required": false,
+            "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportTransactions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, or `from` after `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/reports/net-worth": {
+      "get": {
+        "operationId": "getNetWorthReport",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Month-end balances of every account and the net worth they add up to",
+        "description": "Each account's working balance at the end of each month (uncleared included, a loan's interest and escrow included, the current month as of `today`), on- and off-budget, closed accounts included. Assets and debts split by each account's sign. Foreign balances convert at the month-end's rate; with none known they're left out of the totals (`missing`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "First month, YYYY-MM"
+            },
+            "required": true,
+            "description": "First month, YYYY-MM",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
+              "description": "Last month, YYYY-MM (inclusive)"
+            },
+            "required": true,
+            "description": "Last month, YYYY-MM (inclusive)",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated account ids; all accounts when left out"
+            },
+            "required": false,
+            "description": "Comma-separated account ids; all accounts when left out",
+            "name": "accountIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetWorthReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query, or `from` after `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/reports/age-of-money": {
+      "get": {
+        "operationId": "getAgeOfMoney",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Age of Money now, 30 days ago, and at each month's end",
+        "description": "YNAB's Age of Money: the average age in days of the last ten outflows from cash accounts (credit card payments and transfers to loan or tracking accounts included), each outflow's money taken oldest first. Null when there have been fewer than ten outflows.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Age of Money",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgeOfMoney"
                 }
               }
             }
