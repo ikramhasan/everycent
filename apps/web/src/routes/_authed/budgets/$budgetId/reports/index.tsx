@@ -7,6 +7,7 @@ import {
   percentOf,
 } from "@everycent/engine";
 import { Skeleton } from "@everycent/ui/components/skeleton";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import {
@@ -16,6 +17,7 @@ import {
   type ReportTarget,
 } from "@/components/reports/home-parts";
 import { ReportPage } from "@/components/reports/report-page";
+import { ageOfMoneyOptions, changeLabel, daysLabel } from "@/lib/age-of-money";
 import { useBudget } from "@/lib/budget-context";
 import { chartNumber, monthLabel, reportColor } from "@/lib/reports";
 import { savingsRate, useReportsHomeData } from "@/lib/reports-home";
@@ -32,6 +34,7 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/reports/")({
 function ReportsHome() {
   const { budget, formatAmount } = useBudget();
   const home = useReportsHomeData(budget.id);
+  const age = useQuery(ageOfMoneyOptions(budget.id));
   const format = (minorUnits: bigint) => formatAmount(money(minorUnits, budget.currency));
   const { month } = home;
   const last = addMonths(month, -1);
@@ -72,7 +75,10 @@ function ReportsHome() {
         <Skeleton className="h-32 w-full" />
       ) : (
         <>
-          <section aria-label="Key numbers" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section
+            aria-label="Key numbers"
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          >
             <KeyTile
               budgetId={budget.id}
               label={`Spent in ${monthLabel(month, "long")}`}
@@ -137,6 +143,29 @@ function ReportsHome() {
                   to: "/budgets/$budgetId/reports/income-expense",
                   search: { range: "last_12_months" },
                 }}
+              />
+            )}
+            {age.data?.current != null && (
+              <KeyTile
+                budgetId={budget.id}
+                label="Age of Money"
+                value={daysLabel(age.data.current)}
+                change={
+                  age.data.thirtyDaysAgo == null
+                    ? null
+                    : {
+                        text: changeLabel(age.data.current, age.data.thirtyDaysAgo) ?? "",
+                        up: age.data.current >= age.data.thirtyDaysAgo,
+                        good: age.data.current >= age.data.thirtyDaysAgo,
+                      }
+                }
+                spark={{
+                  values: age.data.months
+                    .slice(-12)
+                    .flatMap((m) => (m.days === null ? [] : [m.days])),
+                  label: "Age of Money over the last 12 months",
+                }}
+                target={{ to: "/budgets/$budgetId/reports/age-of-money" }}
               />
             )}
             {runway !== null && (
