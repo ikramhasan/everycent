@@ -94,7 +94,7 @@ and fresh start (after phase 5 core).
       (interest rate, minimum payment and escrow, kept per month; see phase 7f)
 - [x] Tracking (off-budget) accounts: asset, liability
 - [x] Starting balance transaction on creation
-- [x] Per-account currency — stored; only the budget currency is accepted until phase 11
+- [x] Per-account currency (any currency but loans since phase 11)
 - [x] Balances: cleared, uncleared, working
 - [x] Account notes / nickname
 - [x] Reorder accounts, sidebar grouped by type with group totals
@@ -222,14 +222,14 @@ Done (8a–8f, and loan debt targets with 7g) — what's left is in Plane (cycle
 
 ### 11. Multi-currency **(extra)**
 
-- [ ] Accounts in any currency; register shows native amounts
-- [ ] Budget in the base currency; foreign-account activity converted into category activity
-- [ ] FX rate source (daily rates provider) + manual rate overrides
-- [ ] Per-transaction rate lock (store original amount, currency and applied rate)
-- [ ] Cross-currency transfers (two amounts, implied rate, fee)
-- [ ] Unrealized FX gain/loss on foreign balances; revaluation adjustments
-- [ ] Net worth and account totals in base currency and/or any display currency
-- [ ] Categories/targets with a native currency (e.g. a holiday fund in EUR)
+- [x] Accounts in any currency; register shows native amounts
+- [x] Budget in the base currency; foreign-account activity converted into category activity
+- [x] FX rate source (daily rates provider) + manual rate overrides
+- [x] Per-transaction rate lock (store original amount, currency and applied rate)
+- [x] Cross-currency transfers (two amounts, implied rate, fee)
+- [x] Unrealized FX gain/loss on foreign balances; revaluation adjustments
+- [x] Net worth and account totals in base currency and/or any display currency
+- [x] Categories/targets with a native currency (e.g. a holiday fund in EUR)
 - [ ] Currency-aware reports and CSV export
 
 ### 12. Payees & rules
