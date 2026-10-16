@@ -40,6 +40,11 @@ const ReportQuery = z.object({
     z.enum([...FLAG_COLORS, "none"]),
     'Comma-separated flag colours; "none" matches unflagged transactions',
   ),
+  fromDate: z.iso
+    .date()
+    .optional()
+    .describe("Narrows the range to start on this day (e.g. one day of a calendar)"),
+  toDate: z.iso.date().optional().describe("Narrows the range to end on this day (inclusive)"),
   today: z.iso
     .date()
     .optional()
@@ -51,6 +56,7 @@ const ReportQuery = z.object({
 const ReportSumSchema = z
   .object({
     month: Month.nullable().optional(),
+    day: z.iso.date().nullable().optional(),
     groupId: z.string().nullable().optional(),
     categoryId: z.string().nullable().optional(),
     payeeId: z.string().nullable().optional(),

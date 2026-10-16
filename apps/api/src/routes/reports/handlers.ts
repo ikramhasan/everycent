@@ -22,6 +22,8 @@ interface ReportQuery {
   categoryIds?: string[];
   payeeIds?: string[];
   flags?: string[];
+  fromDate?: string;
+  toDate?: string;
   today?: string;
 }
 
@@ -39,12 +41,15 @@ async function reportFilter(
   if (query.today) {
     await enterDueScheduled(deps.db, deps, budgetId, entryDate(deps, query.today));
   }
-  const end = monthBounds(query.to as BudgetMonth).end;
+  const monthEnd = monthBounds(query.to as BudgetMonth).end;
+  const monthStart = monthBounds(query.from as BudgetMonth).start;
+  const start = query.fromDate && query.fromDate > monthStart ? query.fromDate : monthStart;
+  const end = query.toDate && query.toDate < monthEnd ? query.toDate : monthEnd;
   const none = <T extends string>(values?: T[]) =>
     values?.map((v) => (v === "none" ? null : v)) as Exclude<T, "none">[] | undefined;
   return {
     kind: query.kind,
-    start: monthBounds(query.from as BudgetMonth).start,
+    start,
     end: end < today ? end : today,
     accountIds: query.accountIds,
     groupIds: query.groupIds,
@@ -81,6 +86,7 @@ export const getReportActivityHandler: RouteHandler<typeof getReportActivity, En
       firstMonth: first?.month ?? null,
       rows: sums.map((s) => ({
         ...("month" in s.keys && { month: s.keys.month }),
+        ...("day" in s.keys && { day: s.keys.day }),
         ...("group" in s.keys && { groupId: s.keys.group }),
         ...("category" in s.keys && { categoryId: s.keys.category }),
         ...("payee" in s.keys && { payeeId: s.keys.payee }),

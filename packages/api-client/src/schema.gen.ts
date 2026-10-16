@@ -3751,6 +3751,8 @@ export interface components {
         };
         ReportSum: {
             month?: string | null;
+            /** Format: date */
+            day?: string | null;
             groupId?: string | null;
             categoryId?: string | null;
             payeeId?: string | null;
@@ -10082,6 +10084,10 @@ export interface operations {
                 payeeIds?: string;
                 /** @description Comma-separated flag colours; "none" matches unflagged transactions */
                 flags?: string;
+                /** @description Narrows the range to start on this day (e.g. one day of a calendar) */
+                fromDate?: string;
+                /** @description Narrows the range to end on this day (inclusive) */
+                toDate?: string;
                 /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
                 today?: string;
                 /** @description Comma-separated keys to group by */
@@ -10161,6 +10167,10 @@ export interface operations {
                 payeeIds?: string;
                 /** @description Comma-separated flag colours; "none" matches unflagged transactions */
                 flags?: string;
+                /** @description Narrows the range to start on this day (e.g. one day of a calendar) */
+                fromDate?: string;
+                /** @description Narrows the range to end on this day (inclusive) */
+                toDate?: string;
                 /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
                 today?: string;
                 order?: "newest" | "largest_outflow";

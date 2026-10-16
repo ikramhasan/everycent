@@ -22,7 +22,7 @@ import { todayIso } from "./dates";
 export type ReportSum = components["schemas"]["ReportSum"];
 export type ReportTransaction = components["schemas"]["ReportTransaction"];
 export type ReportKind = "spending" | "income";
-export type ReportGrouping = "month" | "group" | "category" | "payee" | "account" | "flag";
+export type ReportGrouping = "month" | "day" | "group" | "category" | "payee" | "account" | "flag";
 
 const month = z.string().refine(isBudgetMonth).optional().catch(undefined);
 /** A comma-separated id list kept in the URL ("" = nothing selected). */
@@ -86,6 +86,8 @@ export interface ReportRequest {
   kind?: ReportKind;
   groupBy?: readonly ReportGrouping[];
   filters?: ApiFilters & { groupIds?: string };
+  /** Narrows the months to these days (YYYY-MM-DD, inclusive), e.g. one day of a calendar. */
+  days?: { fromDate?: string; toDate?: string };
 }
 
 const activityQuery = (r: ReportRequest) => ({
@@ -95,6 +97,7 @@ const activityQuery = (r: ReportRequest) => ({
   ...(r.kind && { kind: r.kind }),
   ...(r.groupBy?.length && { groupBy: r.groupBy.join(",") }),
   ...r.filters,
+  ...r.days,
 });
 
 /** Spending or income sums for a report (`GET /reports/activity`). */
