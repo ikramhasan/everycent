@@ -1871,6 +1871,8 @@ export interface components {
             groups: components["schemas"]["CategoryGroup"][];
             /** @description The internal 'Inflow: Ready to Assign' category, for categorizing income */
             readyToAssignCategoryId: string;
+            /** @description The internal Uncategorized category (reports filter and group by it) */
+            uncategorizedCategoryId: string;
         };
         CategoryGroup: {
             id: string;
@@ -3701,6 +3703,11 @@ export interface components {
             /** @description Month of the budget's oldest transaction (for All Dates), null when there's none */
             firstMonth: string | null;
             rows: components["schemas"]["ReportSum"][];
+            /** @description Names of the payees in `rows` (grouped by payee), transfer payees included */
+            payees: {
+                id: string;
+                name: string;
+            }[];
         };
         ReportSum: {
             month?: string | null;

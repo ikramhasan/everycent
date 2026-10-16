@@ -25,6 +25,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Activity,
+  ChartColumn,
   ChevronsUpDown,
   Landmark,
   LayoutGrid,
@@ -95,6 +96,19 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       >
                         <Wallet />
                         <span>Budget</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      {/* Between Plan and All Accounts, where YNAB has Reflect. */}
+                      <Link
+                        to="/budgets/$budgetId/reports"
+                        params={{ budgetId }}
+                        activeProps={{ "data-active": true }}
+                      >
+                        <ChartColumn />
+                        <span>Reports</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

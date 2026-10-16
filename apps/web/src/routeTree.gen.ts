@@ -27,6 +27,12 @@ import { Route as AuthedBudgetsBudgetIdSettingsRouteImport } from './routes/_aut
 import { Route as AuthedBudgetsBudgetIdSetupRouteImport } from './routes/_authed/budgets/$budgetId/setup'
 import { Route as AuthedBudgetsBudgetIdAccountsIndexRouteImport } from './routes/_authed/budgets/$budgetId/accounts/index'
 import { Route as AuthedBudgetsBudgetIdAccountsAccountIdRouteImport } from './routes/_authed/budgets/$budgetId/accounts/$accountId'
+import { Route as AuthedBudgetsBudgetIdReportsIndexRouteImport } from './routes/_authed/budgets/$budgetId/reports/index'
+import { Route as AuthedBudgetsBudgetIdReportsAgeOfMoneyRouteImport } from './routes/_authed/budgets/$budgetId/reports/age-of-money'
+import { Route as AuthedBudgetsBudgetIdReportsIncomeExpenseRouteImport } from './routes/_authed/budgets/$budgetId/reports/income-expense'
+import { Route as AuthedBudgetsBudgetIdReportsNetWorthRouteImport } from './routes/_authed/budgets/$budgetId/reports/net-worth'
+import { Route as AuthedBudgetsBudgetIdReportsSpendingBreakdownRouteImport } from './routes/_authed/budgets/$budgetId/reports/spending-breakdown'
+import { Route as AuthedBudgetsBudgetIdReportsSpendingTrendsRouteImport } from './routes/_authed/budgets/$budgetId/reports/spending-trends'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -123,6 +129,42 @@ const AuthedBudgetsBudgetIdAccountsAccountIdRoute =
     path: '/accounts/$accountId',
     getParentRoute: () => AuthedBudgetsBudgetIdRoute,
   } as any)
+const AuthedBudgetsBudgetIdReportsIndexRoute =
+  AuthedBudgetsBudgetIdReportsIndexRouteImport.update({
+    id: '/reports/',
+    path: '/reports/',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
+const AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute =
+  AuthedBudgetsBudgetIdReportsAgeOfMoneyRouteImport.update({
+    id: '/reports/age-of-money',
+    path: '/reports/age-of-money',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
+const AuthedBudgetsBudgetIdReportsIncomeExpenseRoute =
+  AuthedBudgetsBudgetIdReportsIncomeExpenseRouteImport.update({
+    id: '/reports/income-expense',
+    path: '/reports/income-expense',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
+const AuthedBudgetsBudgetIdReportsNetWorthRoute =
+  AuthedBudgetsBudgetIdReportsNetWorthRouteImport.update({
+    id: '/reports/net-worth',
+    path: '/reports/net-worth',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
+const AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute =
+  AuthedBudgetsBudgetIdReportsSpendingBreakdownRouteImport.update({
+    id: '/reports/spending-breakdown',
+    path: '/reports/spending-breakdown',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
+const AuthedBudgetsBudgetIdReportsSpendingTrendsRoute =
+  AuthedBudgetsBudgetIdReportsSpendingTrendsRouteImport.update({
+    id: '/reports/spending-trends',
+    path: '/reports/spending-trends',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -141,7 +183,13 @@ export interface FileRoutesByFullPath {
   '/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
   '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
+  '/budgets/$budgetId/reports/age-of-money': typeof AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute
+  '/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
+  '/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
+  '/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/budgets/$budgetId/accounts/': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
+  '/budgets/$budgetId/reports/': typeof AuthedBudgetsBudgetIdReportsIndexRoute
 }
 export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
@@ -159,7 +207,13 @@ export interface FileRoutesByTo {
   '/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/budgets/$budgetId': typeof AuthedBudgetsBudgetIdIndexRoute
   '/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
+  '/budgets/$budgetId/reports/age-of-money': typeof AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute
+  '/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
+  '/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
+  '/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/budgets/$budgetId/accounts': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
+  '/budgets/$budgetId/reports': typeof AuthedBudgetsBudgetIdReportsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -180,7 +234,13 @@ export interface FileRoutesById {
   '/_authed/budgets/$budgetId/setup': typeof AuthedBudgetsBudgetIdSetupRoute
   '/_authed/budgets/$budgetId/': typeof AuthedBudgetsBudgetIdIndexRoute
   '/_authed/budgets/$budgetId/accounts/$accountId': typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
+  '/_authed/budgets/$budgetId/reports/age-of-money': typeof AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute
+  '/_authed/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
+  '/_authed/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
+  '/_authed/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/_authed/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/_authed/budgets/$budgetId/accounts/': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
+  '/_authed/budgets/$budgetId/reports/': typeof AuthedBudgetsBudgetIdReportsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -201,7 +261,13 @@ export interface FileRouteTypes {
     | '/budgets/$budgetId/setup'
     | '/budgets/$budgetId/'
     | '/budgets/$budgetId/accounts/$accountId'
+    | '/budgets/$budgetId/reports/age-of-money'
+    | '/budgets/$budgetId/reports/income-expense'
+    | '/budgets/$budgetId/reports/net-worth'
+    | '/budgets/$budgetId/reports/spending-breakdown'
+    | '/budgets/$budgetId/reports/spending-trends'
     | '/budgets/$budgetId/accounts/'
+    | '/budgets/$budgetId/reports/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot-password'
@@ -219,7 +285,13 @@ export interface FileRouteTypes {
     | '/budgets/$budgetId/setup'
     | '/budgets/$budgetId'
     | '/budgets/$budgetId/accounts/$accountId'
+    | '/budgets/$budgetId/reports/age-of-money'
+    | '/budgets/$budgetId/reports/income-expense'
+    | '/budgets/$budgetId/reports/net-worth'
+    | '/budgets/$budgetId/reports/spending-breakdown'
+    | '/budgets/$budgetId/reports/spending-trends'
     | '/budgets/$budgetId/accounts'
+    | '/budgets/$budgetId/reports'
   id:
     | '__root__'
     | '/_authed'
@@ -239,7 +311,13 @@ export interface FileRouteTypes {
     | '/_authed/budgets/$budgetId/setup'
     | '/_authed/budgets/$budgetId/'
     | '/_authed/budgets/$budgetId/accounts/$accountId'
+    | '/_authed/budgets/$budgetId/reports/age-of-money'
+    | '/_authed/budgets/$budgetId/reports/income-expense'
+    | '/_authed/budgets/$budgetId/reports/net-worth'
+    | '/_authed/budgets/$budgetId/reports/spending-breakdown'
+    | '/_authed/budgets/$budgetId/reports/spending-trends'
     | '/_authed/budgets/$budgetId/accounts/'
+    | '/_authed/budgets/$budgetId/reports/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -380,6 +458,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBudgetsBudgetIdAccountsAccountIdRouteImport
       parentRoute: typeof AuthedBudgetsBudgetIdRoute
     }
+    '/_authed/budgets/$budgetId/reports/': {
+      id: '/_authed/budgets/$budgetId/reports/'
+      path: '/reports'
+      fullPath: '/budgets/$budgetId/reports/'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsIndexRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
+    '/_authed/budgets/$budgetId/reports/age-of-money': {
+      id: '/_authed/budgets/$budgetId/reports/age-of-money'
+      path: '/reports/age-of-money'
+      fullPath: '/budgets/$budgetId/reports/age-of-money'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsAgeOfMoneyRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
+    '/_authed/budgets/$budgetId/reports/income-expense': {
+      id: '/_authed/budgets/$budgetId/reports/income-expense'
+      path: '/reports/income-expense'
+      fullPath: '/budgets/$budgetId/reports/income-expense'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
+    '/_authed/budgets/$budgetId/reports/net-worth': {
+      id: '/_authed/budgets/$budgetId/reports/net-worth'
+      path: '/reports/net-worth'
+      fullPath: '/budgets/$budgetId/reports/net-worth'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsNetWorthRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
+    '/_authed/budgets/$budgetId/reports/spending-breakdown': {
+      id: '/_authed/budgets/$budgetId/reports/spending-breakdown'
+      path: '/reports/spending-breakdown'
+      fullPath: '/budgets/$budgetId/reports/spending-breakdown'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
+    '/_authed/budgets/$budgetId/reports/spending-trends': {
+      id: '/_authed/budgets/$budgetId/reports/spending-trends'
+      path: '/reports/spending-trends'
+      fullPath: '/budgets/$budgetId/reports/spending-trends'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
   }
 }
 
@@ -389,7 +509,13 @@ interface AuthedBudgetsBudgetIdRouteChildren {
   AuthedBudgetsBudgetIdSetupRoute: typeof AuthedBudgetsBudgetIdSetupRoute
   AuthedBudgetsBudgetIdIndexRoute: typeof AuthedBudgetsBudgetIdIndexRoute
   AuthedBudgetsBudgetIdAccountsAccountIdRoute: typeof AuthedBudgetsBudgetIdAccountsAccountIdRoute
+  AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute: typeof AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute
+  AuthedBudgetsBudgetIdReportsIncomeExpenseRoute: typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
+  AuthedBudgetsBudgetIdReportsNetWorthRoute: typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
+  AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute: typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  AuthedBudgetsBudgetIdReportsSpendingTrendsRoute: typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   AuthedBudgetsBudgetIdAccountsIndexRoute: typeof AuthedBudgetsBudgetIdAccountsIndexRoute
+  AuthedBudgetsBudgetIdReportsIndexRoute: typeof AuthedBudgetsBudgetIdReportsIndexRoute
 }
 
 const AuthedBudgetsBudgetIdRouteChildren: AuthedBudgetsBudgetIdRouteChildren = {
@@ -399,8 +525,20 @@ const AuthedBudgetsBudgetIdRouteChildren: AuthedBudgetsBudgetIdRouteChildren = {
   AuthedBudgetsBudgetIdIndexRoute: AuthedBudgetsBudgetIdIndexRoute,
   AuthedBudgetsBudgetIdAccountsAccountIdRoute:
     AuthedBudgetsBudgetIdAccountsAccountIdRoute,
+  AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute:
+    AuthedBudgetsBudgetIdReportsAgeOfMoneyRoute,
+  AuthedBudgetsBudgetIdReportsIncomeExpenseRoute:
+    AuthedBudgetsBudgetIdReportsIncomeExpenseRoute,
+  AuthedBudgetsBudgetIdReportsNetWorthRoute:
+    AuthedBudgetsBudgetIdReportsNetWorthRoute,
+  AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute:
+    AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute,
+  AuthedBudgetsBudgetIdReportsSpendingTrendsRoute:
+    AuthedBudgetsBudgetIdReportsSpendingTrendsRoute,
   AuthedBudgetsBudgetIdAccountsIndexRoute:
     AuthedBudgetsBudgetIdAccountsIndexRoute,
+  AuthedBudgetsBudgetIdReportsIndexRoute:
+    AuthedBudgetsBudgetIdReportsIndexRoute,
 }
 
 const AuthedBudgetsBudgetIdRouteWithChildren =

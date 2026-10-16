@@ -116,7 +116,12 @@ async function setup() {
     return json<T>(res);
   };
   const sums = (query: Record<string, string>) =>
-    get<{ currency: string; firstMonth: string | null; rows: Sum[] }>("activity", query);
+    get<{
+      currency: string;
+      firstMonth: string | null;
+      rows: Sum[];
+      payees: { id: string; name: string }[];
+    }>("activity", query);
   const lines = (query: Record<string, string>) =>
     get<{ total: string; count: number; transactions: Line[] }>("transactions", query);
   return {
@@ -205,6 +210,7 @@ describe("report activity", () => {
     const market = byPayee.rows.filter((r) => r.categoryId === t.groceries.id && r.payeeId);
     expect(market).toHaveLength(1);
     expect(market[0]?.net).toBe("-1000");
+    expect(byPayee.payees.find((p) => p.id === market[0]?.payeeId)?.name).toBe("Market");
   });
 
   it("counts nothing after the user's today", async () => {

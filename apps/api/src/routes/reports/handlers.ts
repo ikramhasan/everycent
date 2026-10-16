@@ -1,7 +1,7 @@
-import { type FlagColor, transaction } from "@everycent/db/schema";
+import { type FlagColor, payee, transaction } from "@everycent/db/schema";
 import { type BudgetMonth, monthBounds } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { serverToday } from "../../lib/ledger";
@@ -67,9 +67,17 @@ export const getReportActivityHandler: RouteHandler<typeof getReportActivity, En
       .from(transaction)
       .where(eq(transaction.budgetId, budgetId)),
   ]);
+  const payeeIds = [...new Set(sums.flatMap((s) => (s.keys.payee ? [s.keys.payee] : [])))];
+  const payees = payeeIds.length
+    ? await db
+        .select({ id: payee.id, name: payee.name })
+        .from(payee)
+        .where(inArray(payee.id, payeeIds))
+    : [];
   return c.json(
     {
       currency: budget.currency,
+      payees,
       firstMonth: first?.month ?? null,
       rows: sums.map((s) => ({
         ...("month" in s.keys && { month: s.keys.month }),

@@ -1,0 +1,222 @@
+import type { components } from "@everycent/api-client";
+import {
+  type BudgetMonth,
+  type CurrencyCode,
+  comparisonRange,
+  currencyExponent,
+  isBudgetMonth,
+  type MonthRange,
+  monthOf,
+  presetOf,
+  presetRange,
+  REPORT_COMPARISONS,
+  REPORT_PRESETS,
+  type ReportComparison,
+  type ReportPreset,
+} from "@everycent/engine";
+import { strToU8, zipSync } from "fflate";
+import { z } from "zod";
+import { $api } from "./api";
+import { todayIso } from "./dates";
+
+export type ReportSum = components["schemas"]["ReportSum"];
+export type ReportTransaction = components["schemas"]["ReportTransaction"];
+export type ReportKind = "spending" | "income";
+export type ReportGrouping = "month" | "group" | "category" | "payee" | "account" | "flag";
+
+const month = z.string().refine(isBudgetMonth).optional().catch(undefined);
+/** A comma-separated id list kept in the URL ("" = nothing selected). */
+const ids = z.string().optional().catch(undefined);
+
+/**
+ * The filters every report keeps in its URL, so a report can be shared, reloaded or opened from
+ * elsewhere already filtered: the range (a preset, or `from`/`to`), account, category, payee and
+ * flag selections, the comparison and the chart/table view.
+ */
+export const reportSearchSchema = z.object({
+  range: z.enum(REPORT_PRESETS).optional().catch(undefined),
+  from: month,
+  to: month,
+  accounts: ids,
+  categories: ids,
+  payees: ids,
+  flags: ids,
+  compare: z.enum(REPORT_COMPARISONS).optional().catch(undefined),
+  view: z.enum(["chart", "table"]).optional().catch(undefined),
+});
+export type ReportSearch = z.infer<typeof reportSearchSchema>;
+
+/** The user's current month. */
+export const currentMonth = (): BudgetMonth => monthOf(todayIso());
+
+/** The months a report's search asks for: `from`/`to` when both are set, else a preset. */
+export function resolveRange(
+  search: ReportSearch,
+  defaultPreset: ReportPreset,
+  earliest: BudgetMonth | null,
+  current: BudgetMonth = currentMonth(),
+): { range: MonthRange; preset: ReportPreset | undefined } {
+  if (search.from && search.to && search.from <= search.to) {
+    const range = { from: search.from, to: search.to };
+    return { range, preset: presetOf(range, current, earliest) };
+  }
+  const preset = search.range ?? defaultPreset;
+  return { range: presetRange(preset, current, earliest), preset };
+}
+
+/** A URL id list as an array; undefined means "all". */
+export const splitIds = (value: string | undefined) =>
+  value === undefined ? undefined : value.split(",").filter(Boolean);
+
+/** The API filters a report's search asks for (the range's and `today` added by the caller). */
+export function reportFilters(search: ReportSearch) {
+  return {
+    ...(search.accounts !== undefined && { accountIds: search.accounts }),
+    ...(search.categories !== undefined && { categoryIds: search.categories }),
+    ...(search.payees !== undefined && { payeeIds: search.payees }),
+    ...(search.flags !== undefined && { flags: search.flags }),
+  };
+}
+
+type ApiFilters = ReturnType<typeof reportFilters>;
+
+export interface ReportRequest {
+  budgetId: string;
+  range: MonthRange;
+  kind?: ReportKind;
+  groupBy?: readonly ReportGrouping[];
+  filters?: ApiFilters & { groupIds?: string };
+}
+
+const activityQuery = (r: ReportRequest) => ({
+  from: r.range.from,
+  to: r.range.to,
+  today: todayIso(),
+  ...(r.kind && { kind: r.kind }),
+  ...(r.groupBy?.length && { groupBy: r.groupBy.join(",") }),
+  ...r.filters,
+});
+
+/** Spending or income sums for a report (`GET /reports/activity`). */
+export const reportActivityOptions = (r: ReportRequest) =>
+  $api.queryOptions("get", "/v1/budgets/{budgetId}/reports/activity", {
+    params: { path: { budgetId: r.budgetId }, query: activityQuery(r) },
+  });
+
+/** The transactions behind a report's sums (`GET /reports/transactions`). */
+export const reportTransactionsOptions = (
+  r: ReportRequest & { order?: "newest" | "largest_outflow"; limit?: number },
+) =>
+  $api.queryOptions("get", "/v1/budgets/{budgetId}/reports/transactions", {
+    params: {
+      path: { budgetId: r.budgetId },
+      query: {
+        ...activityQuery(r),
+        ...(r.order && { order: r.order }),
+        ...(r.limit && { limit: r.limit }),
+      },
+    },
+  });
+
+/** The months a comparison reads, or undefined when comparison is off. */
+export function comparisonFor(range: MonthRange, compare: ReportComparison | undefined) {
+  return compare ? comparisonRange(range, compare) : undefined;
+}
+
+export const PRESET_LABELS: Record<ReportPreset, string> = {
+  this_month: "This Month",
+  last_3_months: "Last 3 Months",
+  last_6_months: "Last 6 Months",
+  last_12_months: "Last 12 Months",
+  year_to_date: "Year To Date",
+  last_year: "Last Year",
+  all_dates: "All Dates",
+};
+
+export const COMPARISON_LABELS: Record<ReportComparison, string> = {
+  previous_period: "Previous period",
+  last_year: "Same period last year",
+  average_3: "Average of the previous 3 months",
+  average_6: "Average of the previous 6 months",
+  average_12: "Average of the previous 12 months",
+};
+
+/**
+ * An amount as a plain number, only to place chart marks (bar heights, slice angles, pixel
+ * positions). Never format or add these: labels, ticks and tooltips use the exact amount.
+ */
+export function chartNumber(minorUnits: string | bigint, currency: CurrencyCode): number {
+  return Number(minorUnits) / 10 ** currencyExponent(currency);
+}
+
+/**
+ * everycent's report palette: Okabe–Ito's colour-blind-safe hues (as CSS variables defined for
+ * both themes in packages/ui's globals.css), handed out by a category's or group's place in the
+ * plan so it keeps its colour in every report.
+ */
+export const REPORT_COLOR_COUNT = 8;
+export const reportColor = (index: number) =>
+  `var(--report-${(((index % REPORT_COLOR_COUNT) + REPORT_COLOR_COUNT) % REPORT_COLOR_COUNT) + 1})`;
+
+/** A file a report exports. */
+export interface ExportFile {
+  name: string;
+  text: string;
+}
+
+/**
+ * Saves a report's export: one file as itself, several in one zip (YNAB's spending exports are a
+ * zip of two CSVs, 2026-10-17).
+ */
+export function downloadExport(files: readonly ExportFile[], zipName: string) {
+  const [only] = files;
+  const blob =
+    files.length === 1 && only
+      ? new Blob([only.text], { type: "text/csv;charset=utf-8" })
+      : new Blob([zipSync(Object.fromEntries(files.map((f) => [f.name, strToU8(f.text)])))], {
+          type: "application/zip",
+        });
+  saveBlob(blob, files.length === 1 && only ? only.name : zipName);
+}
+
+/** Starts a download of `blob` as `name`. */
+export function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/**
+ * A month as YNAB's reports write it: "Oct 2026" (`short`, the range picker), "October 2026"
+ * (`long`, table rows) or "10/26" (`axis`, chart ticks).
+ */
+export function monthLabel(month: BudgetMonth, style: "short" | "long" | "axis" = "short") {
+  const [year = "", mm = "01"] = month.split("-");
+  const name = MONTH_NAMES[Number(mm) - 1] ?? "";
+  if (style === "axis") return `${mm}/${year.slice(2)}`;
+  return `${style === "long" ? name : name.slice(0, 3)} ${year}`;
+}
+
+/** "Aug 2026 – Oct 2026", or "Oct 2026" for one month (YNAB's range button). */
+export const rangeLabel = (range: MonthRange) =>
+  range.from === range.to
+    ? monthLabel(range.from)
+    : `${monthLabel(range.from)} – ${monthLabel(range.to)}`;

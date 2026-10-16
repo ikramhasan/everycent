@@ -100,6 +100,11 @@ export const getReportActivity = createRoute({
                 "Month of the budget's oldest transaction (for All Dates), null when there's none",
               ),
               rows: z.array(ReportSumSchema),
+              payees: z
+                .array(z.object({ id: z.string(), name: z.string() }))
+                .describe(
+                  "Names of the payees in `rows` (grouped by payee), transfer payees included",
+                ),
             })
             .openapi("ReportActivity"),
         },

@@ -291,6 +291,7 @@ describe("register drafts", () => {
   it("offers Ready to Assign and visible categories, never payment categories", () => {
     const list: CategoryList = {
       readyToAssignCategoryId: "rta",
+      uncategorizedCategoryId: "uncat",
       groups: [
         {
           id: "cc",

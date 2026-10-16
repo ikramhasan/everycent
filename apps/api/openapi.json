@@ -1381,11 +1381,16 @@
           "readyToAssignCategoryId": {
             "type": "string",
             "description": "The internal 'Inflow: Ready to Assign' category, for categorizing income"
+          },
+          "uncategorizedCategoryId": {
+            "type": "string",
+            "description": "The internal Uncategorized category (reports filter and group by it)"
           }
         },
         "required": [
           "groups",
-          "readyToAssignCategoryId"
+          "readyToAssignCategoryId",
+          "uncategorizedCategoryId"
         ]
       },
       "CategoryGroup": {
@@ -10263,12 +10268,32 @@
             "items": {
               "$ref": "#/components/schemas/ReportSum"
             }
+          },
+          "payees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            },
+            "description": "Names of the payees in `rows` (grouped by payee), transfer payees included"
           }
         },
         "required": [
           "currency",
           "firstMonth",
-          "rows"
+          "rows",
+          "payees"
         ]
       },
       "ReportSum": {

@@ -117,6 +117,7 @@ export async function listCategoryTree(db: Db, budgetId: string) {
   const targets = new Map(targetRows.map((t) => [t.categoryId, t]));
   return {
     readyToAssignCategoryId: await internalCategoryId(db, budgetId, "ready_to_assign"),
+    uncategorizedCategoryId: await internalCategoryId(db, budgetId, "uncategorized"),
     groups: groups.map((g) =>
       toGroupJson(
         g,
