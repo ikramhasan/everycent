@@ -1,11 +1,4 @@
-import {
-  addMonths,
-  averageOf,
-  type BudgetMonth,
-  money,
-  monthsOfRunway,
-  percentOf,
-} from "@everycent/engine";
+import { addMonths, type BudgetMonth, money, monthsOfRunway, percentOf } from "@everycent/engine";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -20,7 +13,7 @@ import { ReportPage } from "@/components/reports/report-page";
 import { ageOfMoneyOptions, changeLabel, daysLabel } from "@/lib/age-of-money";
 import { useBudget } from "@/lib/budget-context";
 import { chartNumber, monthLabel, UNCATEGORIZED_COLOR } from "@/lib/reports";
-import { savingsRate, useReportsHomeData } from "@/lib/reports-home";
+import { averageSpent, savingsRate, useReportsHomeData } from "@/lib/reports-home";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/reports/")({
   component: ReportsHome,
@@ -39,15 +32,9 @@ function ReportsHome() {
   const { month } = home;
   const last = addMonths(month, -1);
   const spentNow = home.spent.get(month) ?? 0n;
-  const previousSix = Array.from(
-    { length: 6 },
-    (_, i) => home.spent.get(addMonths(month, -6 + i)) ?? 0n,
-  );
-  const average = averageOf(
-    previousSix.reduce((s, v) => s + v, 0n),
-    previousSix.length,
-  );
-  const vsAverage = percentOf(spentNow - average, average);
+  // The last 6 complete months, from the first with spending (a newer budget averages fewer).
+  const { months: previousSix, average } = averageSpent(home.spent, month);
+  const vsAverage = previousSix.length ? percentOf(spentNow - average, average) : null;
   // Savings rate of the last complete month: this month's income may still be on its way.
   const rate = savingsRate(home.earned.get(last) ?? 0n, home.spent.get(last) ?? 0n);
   const rateBefore = savingsRate(
@@ -71,7 +58,9 @@ function ReportsHome() {
 
   return (
     <ReportPage title="Reports">
-      {home.loading ? (
+      {home.failed ? (
+        <p className="text-muted-foreground text-sm">Couldn't load the reports. Try again later.</p>
+      ) : home.loading ? (
         <Skeleton className="h-32 w-full" />
       ) : (
         <>

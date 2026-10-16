@@ -18,6 +18,7 @@ import { strToU8, zipSync } from "fflate";
 import { z } from "zod";
 import { $api } from "./api";
 import { todayIso } from "./dates";
+import { monthName, monthLabel as shortMonthLabel } from "./months";
 
 export type ReportSum = components["schemas"]["ReportSum"];
 export type ReportTransaction = components["schemas"]["ReportTransaction"];
@@ -215,30 +216,14 @@ export function saveBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
 /**
  * A month as YNAB's reports write it: "Oct 2026" (`short`, the range picker), "October 2026"
  * (`long`, table rows) or "10/26" (`axis`, chart ticks).
  */
 export function monthLabel(month: BudgetMonth, style: "short" | "long" | "axis" = "short") {
-  const [year = "", mm = "01"] = month.split("-");
-  const name = MONTH_NAMES[Number(mm) - 1] ?? "";
-  if (style === "axis") return `${mm}/${year.slice(2)}`;
-  return `${style === "long" ? name : name.slice(0, 3)} ${year}`;
+  if (style === "short") return shortMonthLabel(month);
+  if (style === "long") return `${monthName(month)} ${month.slice(0, 4)}`;
+  return `${month.slice(5, 7)}/${month.slice(2, 4)}`;
 }
 
 /** "Aug 2026 – Oct 2026", or "Oct 2026" for one month (YNAB's range button). */

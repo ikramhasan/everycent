@@ -1,6 +1,7 @@
 import {
   accountFamily,
   addMonths,
+  averageOf,
   type BudgetMonth,
   type CategorySpending,
   currencyExponent,
@@ -67,6 +68,27 @@ export function categorySpending(
   });
 }
 
+/**
+ * The average monthly spending over the `count` months before `month`, from the first of them with
+ * spending (a budget younger than that isn't averaged with empty months).
+ */
+export function averageSpent(
+  spent: ReadonlyMap<BudgetMonth, bigint>,
+  month: BudgetMonth,
+  count = 6,
+) {
+  const months = monthsIn({ from: addMonths(month, -count), to: addMonths(month, -1) });
+  const first = months.findIndex((m) => (spent.get(m) ?? 0n) !== 0n);
+  const used = first < 0 ? [] : months.slice(first).map((m) => spent.get(m) ?? 0n);
+  return {
+    months: used,
+    average: averageOf(
+      used.reduce((s, v) => s + v, 0n),
+      used.length,
+    ),
+  };
+}
+
 /** Months the home's sparklines cover: the last 12, this one included. */
 export const homeRange = (month: BudgetMonth) => ({ from: addMonths(month, -11), to: month });
 
@@ -108,6 +130,21 @@ export function useReportsHomeData(budgetId: string) {
     ),
   );
   if (categories.data) names.set(categories.data.uncategorizedCategoryId, "Uncategorized");
+  const paymentCategories = new Set(
+    (categories.data?.groups ?? []).flatMap((g) =>
+      g.categories.flatMap((c) => (c.linkedAccountId ? [c.id] : [])),
+    ),
+  );
+  const failed = [
+    worth,
+    spending,
+    income,
+    byCategory,
+    payees,
+    earlierPayees,
+    plan,
+    categories,
+  ].some((q) => q.isError);
   const payeeNames = new Map((payees.data?.payees ?? []).map((p) => [p.id, p.name]));
   const spent = spentByMonth(spending.data?.rows ?? []);
   const earned = incomeByMonth(income.data?.rows ?? []);
@@ -125,8 +162,9 @@ export function useReportsHomeData(budgetId: string) {
     ? observations({
         month,
         categories: categorySpending(byCategory.data.rows, month, names),
+        // Card payment categories aren't overspent in YNAB's sense (their Available is the card's).
         overspent: plan.data.categories.flatMap((c) =>
-          BigInt(c.available) < 0n
+          BigInt(c.available) < 0n && !paymentCategories.has(c.categoryId)
             ? [
                 {
                   categoryId: c.categoryId,
@@ -171,7 +209,8 @@ export function useReportsHomeData(budgetId: string) {
     .reduce((s, a) => s + BigInt(a.balances.at(-1)?.base ?? "0"), 0n);
   return {
     month,
-    loading: !ready,
+    loading: !ready && !failed,
+    failed,
     netWorth: worth.data,
     cash,
     months: monthsIn(range),

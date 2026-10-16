@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { describeObservation } from "@/components/reports/home-parts";
-import { categorySpending, incomeByMonth, savingsRate, spentByMonth } from "./reports-home";
+import {
+  averageSpent,
+  categorySpending,
+  incomeByMonth,
+  savingsRate,
+  spentByMonth,
+} from "./reports-home";
 
 const sum = (fields: Record<string, string>) => ({
   outflow: "0",
@@ -21,6 +27,16 @@ describe("Reports home figures", () => {
     expect(incomeByMonth([sum({ month: "2026-09", net: "320000" })])).toEqual(
       new Map([["2026-09", 320000n]]),
     );
+  });
+
+  it("averages spending from the first month with any", () => {
+    const spent = new Map([
+      ["2026-08", 30000n],
+      ["2026-09", 10000n],
+      ["2026-10", 99999n],
+    ] as const);
+    expect(averageSpent(spent, "2026-10")).toEqual({ months: [30000n, 10000n], average: 20000n });
+    expect(averageSpent(new Map(), "2026-10")).toEqual({ months: [], average: 0n });
   });
 
   it("works out the savings rate for display only", () => {

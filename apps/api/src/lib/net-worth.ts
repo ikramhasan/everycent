@@ -197,6 +197,22 @@ export async function netWorthReport(
     return rate;
   };
 
+  // Each month-end rate the walk needs (a foreign currency's months from its accounts' first
+  // transaction), resolved together up front: each can be a provider round-trip.
+  const foreignFirst = new Map<CurrencyCode, BudgetMonth>();
+  for (const a of accounts) {
+    const first = firstMonths.get(a.id);
+    const known = foreignFirst.get(a.currency);
+    if (a.currency !== budgetCurrency && first && (!known || first < known)) {
+      foreignFirst.set(a.currency, first);
+    }
+  }
+  await Promise.all(
+    months.flatMap((m) =>
+      [...foreignFirst].filter(([, first]) => m >= first).map(([c]) => rateFor(c, m)),
+    ),
+  );
+
   // Balances month by month (native running sums, converted at each month-end).
   const running = new Map<string, bigint>(ids.map((id) => [id, 0n]));
   const balances: Map<string, NetWorthBalance>[] = [];
