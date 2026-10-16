@@ -191,6 +191,45 @@ describe("the budget's change history (EVERYCENT-108)", () => {
   });
 });
 
+describe("who entered a transaction (EVERYCENT-89)", () => {
+  type Ref = { userId: string; name: string | null; avatarColor: number | null } | null;
+  type Txn = { id: string; enteredBy: Ref; changedBy: Ref; version: number };
+
+  it("names who entered it and, once changed, who changed it last", async () => {
+    const { owner, pat, base, account } = await setup();
+    const entered = await json<Txn>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-100",
+        payeeName: "Shop",
+        categoryId: null,
+      }),
+    );
+    expect(entered).toMatchObject({
+      enteredBy: { name: "Owner", avatarColor: 1 },
+      changedBy: null,
+      version: 1,
+    });
+    const changed = await json<Txn>(
+      await send("PATCH", `${base}/transactions/${entered.id}`, pat.cookie, { memo: "x" }),
+    );
+    expect(changed).toMatchObject({
+      enteredBy: { name: "Owner" },
+      changedBy: { userId: pat.userId, name: "Pat", avatarColor: 2 },
+    });
+    expect(changed.version).toBeGreaterThan(1);
+    // The register lists the same.
+    const { transactions } = await json<{ transactions: Txn[] }>(
+      await send("GET", `${base}/transactions?accountId=${account.id}`, owner.cookie),
+    );
+    expect(transactions.find((t) => t.id === entered.id)).toMatchObject({
+      enteredBy: { name: "Owner" },
+      changedBy: { name: "Pat" },
+    });
+  });
+});
+
 describe("request transactions", () => {
   it("keeps nothing a failed write request wrote, log included", async () => {
     // Its own app: routes can't be added once one has served a request.

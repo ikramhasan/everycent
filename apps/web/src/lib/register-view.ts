@@ -15,6 +15,8 @@ export interface RegisterView {
   /** Account registers only; All Accounts has no running balance. */
   showRunningBalance: boolean;
   showFlags: boolean;
+  /** Who entered each transaction (EVERYCENT-89; an everycent extra, off by default). */
+  showEnteredBy: boolean;
   /** The Scheduled Transactions section folded away (YNAB remembers it per register). */
   scheduledCollapsed: boolean;
   /** The stacked sort, first field first (YNAB keeps it per register: `…_sortFields`). */
@@ -46,6 +48,7 @@ export const DEFAULT_VIEW: RegisterView = {
   showReconciled: false,
   showRunningBalance: false,
   showFlags: true,
+  showEnteredBy: false,
   scheduledCollapsed: false,
   sort: [...DEFAULT_SORT],
 };

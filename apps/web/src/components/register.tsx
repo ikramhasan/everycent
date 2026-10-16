@@ -56,6 +56,7 @@ import {
   CircleHelp,
   CircleX,
   CreditCard,
+  History,
   Lock,
   MoreHorizontal,
   Plus,
@@ -111,6 +112,7 @@ import {
   selectionBody,
   setSelected,
 } from "@/lib/selection";
+import { sessionQueryOptions } from "@/lib/session";
 import { createBodyFromTransaction, updateBodyFromTransaction } from "@/lib/transaction-history";
 import {
   type CellColumn,
@@ -133,7 +135,9 @@ import {
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
+import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FlagMenu } from "./flag-menu";
+import { MemberAvatar } from "./member-avatar";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
@@ -321,6 +325,9 @@ export function Register({
   const [addingPicker, setAddingPicker] = useState(false);
   const [addingKey, setAddingKey] = useState(0);
   const [newError, setNewError] = useState<string | null>(null);
+  /** The transaction whose History dialog is open. */
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const session = useQuery(sessionQueryOptions);
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
@@ -362,9 +369,10 @@ export function Register({
         (c) =>
           (c !== "balance" || view.showRunningBalance) &&
           (c !== "flag" || view.showFlags) &&
+          (c !== "enteredBy" || view.showEnteredBy) &&
           (c !== "review" || reviewing),
       ),
-    [allAccounts, view.showRunningBalance, view.showFlags, reviewing],
+    [allAccounts, view.showRunningBalance, view.showFlags, view.showEnteredBy, reviewing],
   );
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
@@ -1436,6 +1444,19 @@ export function Register({
           </span>
         );
       }
+      case "enteredBy":
+        // Nothing for rows nobody entered (scheduled) or from before this was recorded.
+        return t.enteredBy ? (
+          <MemberAvatar
+            className="mx-auto"
+            userId={t.enteredBy.userId}
+            userName={t.enteredBy.name}
+            avatarColor={t.enteredBy.avatarColor}
+            currentUserId={session.data?.user.id}
+            tooltipPrefix="Entered by "
+            tooltipSuffix={t.changedBy?.name ? `, last changed by ${t.changedBy.name}` : ""}
+          />
+        ) : null;
       case "cleared":
         return t.cleared === "reconciled" ? (
           <Lock className="mx-auto size-4 text-muted-foreground" aria-label="Reconciled" />
@@ -1483,6 +1504,9 @@ export function Register({
                   <Repeat /> Make Repeating
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
+                <History /> History
+              </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
                 disabled={t.transferFromSplit}
@@ -1598,6 +1622,11 @@ export function Register({
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}
+
+      <ChangeHistoryDialog
+        transactionId={historyFor}
+        onOpenChange={(open) => !open && setHistoryFor(null)}
+      />
 
       <AlertDialog
         open={warning !== null}

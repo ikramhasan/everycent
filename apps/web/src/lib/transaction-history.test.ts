@@ -58,6 +58,9 @@ const transaction: Transaction = {
   ],
   runningBalance: "10000",
   matchingLineIds: null,
+  enteredBy: null,
+  changedBy: null,
+  version: 1,
 };
 
 describe("transaction history bodies", () => {

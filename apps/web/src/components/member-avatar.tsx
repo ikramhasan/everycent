@@ -38,6 +38,8 @@ export function MemberAvatar({
   userName,
   avatarColor,
   currentUserId,
+  tooltipPrefix = "",
+  tooltipSuffix = "",
   className,
 }: {
   userId: string | null;
@@ -45,9 +47,12 @@ export function MemberAvatar({
   /** 1–6 from the API; null once they've left the budget. */
   avatarColor: number | null;
   currentUserId: string | undefined;
+  /** Around the name in the tooltip: "Entered by " … ", last changed by Sam". */
+  tooltipPrefix?: string;
+  tooltipSuffix?: string;
   className?: string;
 }) {
-  const tooltip = memberTooltip(userId, userName, avatarColor, currentUserId);
+  const tooltip = `${tooltipPrefix}${memberTooltip(userId, userName, avatarColor, currentUserId)}${tooltipSuffix}`;
   const colors = (avatarColor && AVATAR_COLORS[avatarColor]) || "bg-[#DBD7CC] text-[#696763]";
   return (
     <Tooltip>

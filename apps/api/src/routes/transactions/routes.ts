@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
+import { zMemberRef } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
@@ -162,6 +163,21 @@ export const TransactionSchema = z
       .describe(
         "Under a search: the split lines that match it (the register shows only those). Null " +
           "without a search",
+      ),
+    enteredBy: zMemberRef
+      .nullable()
+      .describe(
+        "Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on " +
+          "its date) or for transactions from before this was recorded",
+      ),
+    changedBy: zMemberRef
+      .nullable()
+      .describe("Who changed it last; null if it hasn't changed since it was entered"),
+    version: z
+      .number()
+      .int()
+      .describe(
+        "Goes up with every change; send it back as `expectedVersion` to refuse a stale edit",
       ),
   })
   .openapi("Transaction");

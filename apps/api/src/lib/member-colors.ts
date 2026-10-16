@@ -1,6 +1,6 @@
-import { budgetMember } from "@everycent/db/schema";
+import { budgetMember, user } from "@everycent/db/schema";
 import { z } from "@hono/zod-openapi";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "./ledger";
 
 /**
@@ -17,6 +17,29 @@ export const zAvatarColor = z
   .describe(
     "YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined",
   );
+
+/** Someone who made a change: an audit event's actor, who entered or changed a transaction. */
+export const zMemberRef = z
+  .object({
+    userId: z.string(),
+    name: z.string().nullable().describe("Null once their user is deleted"),
+    avatarColor: zAvatarColor.nullable().describe("Null once they've left the budget"),
+  })
+  .openapi("MemberRef");
+
+/** Each user id's name and avatar colour on the budget, for `zMemberRef`s. */
+export async function memberRefs(db: Db, budgetId: string, userIds: Iterable<string | null>) {
+  const ids = [...new Set([...userIds].filter((id): id is string => Boolean(id)))];
+  const colors = await memberAvatarColors(db, budgetId);
+  const names = ids.length
+    ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, ids))
+    : [];
+  const byId = new Map(names.map((n) => [n.id, n.name]));
+  return (userId: string | null) =>
+    userId
+      ? { userId, name: byId.get(userId) ?? null, avatarColor: colors.get(userId) ?? null }
+      : null;
+}
 
 /** Each current member's avatar colour, by user id. */
 export async function memberAvatarColors(db: Db, budgetId: string): Promise<Map<string, number>> {

@@ -10,6 +10,7 @@ export type ColumnId =
   | "outflow"
   | "inflow"
   | "balance"
+  | "enteredBy"
   | "cleared"
   | "actions";
 
@@ -40,6 +41,7 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
   outflow: { header: "Outflow", width: "7.5rem", align: "right" },
   inflow: { header: "Inflow", width: "7.5rem", align: "right" },
   balance: { header: "Balance", width: "7.5rem", align: "right" },
+  enteredBy: { header: "Entered by", width: "2.75rem", align: "center", srOnly: true },
   cleared: { header: "Cleared", width: "2.75rem", align: "center", srOnly: true },
   actions: { header: "Actions", width: "2.75rem", srOnly: true },
 };
@@ -62,6 +64,8 @@ export function registerColumns(allAccounts: boolean): ColumnId[] {
     "outflow",
     "inflow",
     ...(allAccounts ? [] : (["balance"] as const)),
+    // An everycent extra (EVERYCENT-89), off unless the View menu turns it on.
+    "enteredBy",
     "cleared",
     "actions",
   ];

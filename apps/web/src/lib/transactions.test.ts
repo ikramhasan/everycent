@@ -114,6 +114,9 @@ const txn: Transaction = {
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
+  enteredBy: null,
+  changedBy: null,
+  version: 1,
 };
 
 describe("register drafts", () => {

@@ -4453,6 +4453,23 @@
               "type": "string"
             },
             "description": "Under a search: the split lines that match it (the register shows only those). Null without a search"
+          },
+          "enteredBy": {
+            "$ref": "#/components/schemas/MemberRef"
+          },
+          "changedBy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "description": "Who changed it last; null if it hasn't changed since it was entered"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "description": "Goes up with every change; send it back as `expectedVersion` to refuse a stale edit"
           }
         },
         "required": [
@@ -4481,7 +4498,10 @@
           "transferSide",
           "subtransactions",
           "runningBalance",
-          "matchingLineIds"
+          "matchingLineIds",
+          "enteredBy",
+          "changedBy",
+          "version"
         ]
       },
       "TransferSide": {
@@ -4792,6 +4812,39 @@
           "transferReconciled",
           "transferSide"
         ]
+      },
+      "MemberRef": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null once their user is deleted"
+          },
+          "avatarColor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Null once they've left the budget"
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "avatarColor"
+        ],
+        "description": "Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on its date) or for transactions from before this was recorded"
       },
       "SelectionSummary": {
         "type": "object",
@@ -9855,7 +9908,14 @@
             "format": "date-time"
           },
           "actor": {
-            "$ref": "#/components/schemas/ActivityActor"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "description": "Who made the change; null for one nobody made (see `source`)"
+              }
+            ]
           },
           "source": {
             "type": [
@@ -9917,39 +9977,6 @@
           "before",
           "after"
         ]
-      },
-      "ActivityActor": {
-        "type": [
-          "object",
-          "null"
-        ],
-        "properties": {
-          "userId": {
-            "type": "string"
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Null once their user is deleted"
-          },
-          "avatarColor": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1,
-            "maximum": 6,
-            "description": "Null once they've left the budget"
-          }
-        },
-        "required": [
-          "userId",
-          "name",
-          "avatarColor"
-        ],
-        "description": "Who made the change; null for one nobody made (see `source`)"
       },
       "TransactionHistory": {
         "type": "object",

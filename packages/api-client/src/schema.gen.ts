@@ -2440,6 +2440,10 @@ export interface components {
             runningBalance: string;
             /** @description Under a search: the split lines that match it (the register shows only those). Null without a search */
             matchingLineIds: string[] | null;
+            enteredBy: components["schemas"]["MemberRef"];
+            changedBy: components["schemas"]["MemberRef"] & unknown;
+            /** @description Goes up with every change; send it back as `expectedVersion` to refuse a stale edit */
+            version: number;
         };
         /** @description Transfers: the other side's own state (null when the other side is a split's line, or for other transactions) */
         TransferSide: {
@@ -2480,6 +2484,14 @@ export interface components {
             transferReconciled: boolean;
             transferSide: components["schemas"]["TransferSide"] & unknown;
         };
+        /** @description Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on its date) or for transactions from before this was recorded */
+        MemberRef: {
+            userId: string;
+            /** @description Null once their user is deleted */
+            name: string | null;
+            /** @description Null once they've left the budget */
+            avatarColor: number | null;
+        } | null;
         SelectionSummary: {
             count: number;
             /** @description Sum of the amounts, in `currency`'s minor units; 0 when `currency` is null */
@@ -3560,7 +3572,7 @@ export interface components {
             id: string;
             /** Format: date-time */
             at: string;
-            actor: components["schemas"]["ActivityActor"];
+            actor: components["schemas"]["MemberRef"] & unknown;
             /** @description Why a change without an actor happened: 'scheduled' for an entered occurrence */
             source: string | null;
             /** @description The table changed, e.g. 'transaction', 'category_assignment' */
@@ -3577,14 +3589,6 @@ export interface components {
                 [key: string]: string | null;
             } | null;
         };
-        /** @description Who made the change; null for one nobody made (see `source`) */
-        ActivityActor: {
-            userId: string;
-            /** @description Null once their user is deleted */
-            name: string | null;
-            /** @description Null once they've left the budget */
-            avatarColor: number | null;
-        } | null;
         TransactionHistory: {
             events: components["schemas"]["ActivityEvent"][];
         };

@@ -43,10 +43,11 @@ export function useActivityLookups(): ActivityLookups {
 /** Changes as lines: who, what, and each field before → after. */
 export function ActivityList({
   events,
-  showTime = true,
+  dateOf,
 }: {
   events: readonly ActivityEvent[];
-  showTime?: boolean;
+  /** Shows each change's date before its time (lists that aren't grouped by day). */
+  dateOf?: (at: string) => string;
 }) {
   const lookups = useActivityLookups();
   const session = useQuery(sessionQueryOptions);
@@ -90,14 +91,13 @@ export function ActivityList({
                 </dl>
               )}
             </div>
-            {showTime && (
-              <time
-                dateTime={event.at}
-                className="shrink-0 text-muted-foreground text-xs tabular-nums"
-              >
-                {new Date(event.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-              </time>
-            )}
+            <time
+              dateTime={event.at}
+              className="shrink-0 text-muted-foreground text-xs tabular-nums"
+            >
+              {dateOf && `${dateOf(event.at)} `}
+              {new Date(event.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </time>
           </li>
         );
       })}

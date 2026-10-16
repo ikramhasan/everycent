@@ -1,7 +1,7 @@
 import { AUDIT_OPS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { zAvatarColor } from "../../lib/member-colors";
+import { zMemberRef } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 
 const RowValues = z
@@ -10,21 +10,13 @@ const RowValues = z
     "The row's columns (snake_case) as text, money included (minor units), so nothing loses precision",
   );
 
-export const ActivityActorSchema = z
-  .object({
-    userId: z.string(),
-    name: z.string().nullable().describe("Null once their user is deleted"),
-    avatarColor: zAvatarColor.nullable().describe("Null once they've left the budget"),
-  })
-  .openapi("ActivityActor");
-
 const ActivityEventSchema = z
   .object({
     id: z.string(),
     at: z.iso.datetime(),
-    actor: ActivityActorSchema.nullable().describe(
-      "Who made the change; null for one nobody made (see `source`)",
-    ),
+    actor: zMemberRef
+      .nullable()
+      .describe("Who made the change; null for one nobody made (see `source`)"),
     source: z
       .string()
       .nullable()

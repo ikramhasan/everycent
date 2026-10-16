@@ -22,6 +22,7 @@ import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
+import { memberRefs } from "../../lib/member-colors";
 
 export type { SearchSettings };
 
@@ -135,6 +136,9 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
           where other_side.id = ${transaction.transferTransactionId}
             and other_side.cleared = 'reconciled'
         )`.as("transfer_reconciled"),
+        createdByUserId: transaction.createdByUserId,
+        updatedByUserId: transaction.updatedByUserId,
+        version: transaction.version,
         // As text, so the cursor keeps Postgres's microseconds.
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
         runningBalance: sql<string>`sum(${transaction.amount}) over (
@@ -607,6 +611,9 @@ function columns(r: Register) {
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,
     transferReconciled: r.transferReconciled,
+    createdByUserId: r.createdByUserId,
+    updatedByUserId: r.updatedByUserId,
+    version: r.version,
     createdAt: r.createdAt,
     runningBalance: r.runningBalance,
   };
@@ -624,6 +631,7 @@ function selectPage(db: Db, r: Register) {
  */
 async function toJson(
   db: Db,
+  budgetId: string,
   rows: readonly Row[],
   matching: ReadonlyMap<string, string[]> | null = null,
 ) {
@@ -632,8 +640,16 @@ async function toJson(
     rows.map((row) => row.id),
   );
   const sides = await queryTransferSides(db, rows);
-  return rows.map(({ createdAt: _, ...row }) => ({
+  const member = await memberRefs(
+    db,
+    budgetId,
+    rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
+  );
+  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, ...row }) => ({
     ...row,
+    enteredBy: member(createdByUserId),
+    // Only once someone changed it after entering it.
+    changedBy: row.version > 1 ? member(updatedByUserId) : null,
     amount: row.amount.toString(),
     baseAmount: row.baseAmount.toString(),
     fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
@@ -716,7 +732,7 @@ export async function queryRegister(
         )
       : null;
   return {
-    transactions: await toJson(db, pageRows, matching),
+    transactions: await toJson(db, budgetId, pageRows, matching),
     // Asked once, with the first page.
     someHidden: page.cursor ? null : await someHidden(db, budgetId, filter, settings),
     nextCursor:
@@ -781,13 +797,13 @@ async function someHidden(
 export async function queryRegisterRows(db: Db, budgetId: string, ids: readonly string[]) {
   if (ids.length === 0) return [];
   const r = registerCte(db, budgetId);
-  return toJson(db, await selectPage(db, r).where(inArray(r.id, [...ids])));
+  return toJson(db, budgetId, await selectPage(db, r).where(inArray(r.id, [...ids])));
 }
 
 /** One transaction as the register shows it (with its running balance). */
 export async function queryRegisterRow(db: Db, budgetId: string, accountId: string, id: string) {
   const r = registerCte(db, budgetId, accountId);
   const rows = await selectPage(db, r).where(eq(r.id, id));
-  const [row] = await toJson(db, rows);
+  const [row] = await toJson(db, budgetId, rows);
   return row;
 }
