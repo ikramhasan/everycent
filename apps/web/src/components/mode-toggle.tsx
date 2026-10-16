@@ -2,32 +2,46 @@ import { Button } from "@everycent/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
-import { useTheme } from "@everycent/ui/lib/theme";
+import { type Theme, useTheme } from "@everycent/ui/lib/theme";
 import { Monitor, Moon, Sun } from "lucide-react";
 
+/**
+ * Both icons stay mounted and cross-fade (opacity, scale from 0.25, a 4px blur), so the swap
+ * animates both ways without a motion library and never grows from nothing.
+ */
+const ICON =
+  "size-4 transition-[opacity,scale,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none";
+
 export function ModeToggle() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Toggle theme">
-          <Sun className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-          <Moon className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+          <Sun data-theme-icon className={`${ICON} dark:scale-25 dark:opacity-0 dark:blur-xs`} />
+          <Moon
+            data-theme-icon
+            className={`${ICON} absolute scale-25 opacity-0 blur-xs dark:scale-100 dark:opacity-100 dark:blur-none`}
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          <Sun /> Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          <Moon /> Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          <Monitor /> System
-        </DropdownMenuItem>
+        {/* The choice in effect is checked, "System" included. */}
+        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+          <DropdownMenuRadioItem value="light">
+            <Sun /> Light
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">
+            <Moon /> Dark
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">
+            <Monitor /> System
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -55,10 +55,13 @@ function applyResolvedTheme(resolved: ResolvedTheme) {
   root.style.colorScheme = resolved;
 }
 
-/** Briefly disables CSS transitions while the theme class flips, so nothing visibly animates. */
+/**
+ * Briefly disables CSS transitions while the theme class flips, so nothing visibly animates, except
+ * elements marked `data-theme-icon` (the toggle's sun and moon, which cross-fade on purpose).
+ */
 function withTransitionsDisabled(apply: () => void) {
   const style = document.createElement("style");
-  style.textContent = "*,*::before,*::after{transition:none!important}";
+  style.textContent = "*:not([data-theme-icon]),*::before,*::after{transition:none!important}";
   document.head.appendChild(style);
   apply();
   // Force a reflow so the disabling rule is in effect before it's removed.
