@@ -40,8 +40,11 @@ export function Change({
         className,
       )}
     >
-      {amount !== 0n && <Arrow aria-hidden className="size-3.5" />}
-      {showAmount ? format.exact(amount) : format.masked}
+      {/* The arrow stays with its amount; only the percentage may wrap. */}
+      <span className="inline-flex items-center gap-x-1 whitespace-nowrap">
+        {amount !== 0n && <Arrow aria-hidden className="size-3.5" />}
+        {showAmount ? format.exact(amount) : format.masked}
+      </span>
       {percent !== null && <span>({percent})</span>}
     </span>
   );
@@ -55,17 +58,19 @@ export function NetWorthHeadline({
   report,
   showAmounts = true,
   compact = false,
+  className,
 }: {
   report: Pick<NetWorthReport, "opening" | "months" | "currency">;
   showAmounts?: boolean;
   compact?: boolean;
+  className?: string;
 }) {
   const format = useAmountFormat(report.currency as CurrencyCode);
   const h = headline(report);
   if (!h) return null;
   const amount = (v: bigint) => (showAmounts ? format.exact(v) : format.masked);
   return (
-    <div className="grid gap-3">
+    <div className={cn("grid content-start gap-3", className)}>
       <div>
         <p className="text-muted-foreground text-xs">Net Worth</p>
         <p
@@ -77,7 +82,13 @@ export function NetWorthHeadline({
           {amount(h.netWorth)}
         </p>
       </div>
-      <dl className={cn("grid gap-x-6 gap-y-2", compact ? "grid-cols-3" : "grid-cols-2 sm:flex")}>
+      <dl
+        className={cn(
+          "gap-x-6 gap-y-2",
+          // Compact (the share picture): the figures side by side, wrapping on a narrow card.
+          compact ? "flex flex-wrap" : "grid grid-cols-2 sm:flex",
+        )}
+      >
         <div>
           <dt className="flex items-center gap-1.5 text-muted-foreground text-xs">
             <span aria-hidden className="size-2 rounded-xs bg-(--report-1)" />
