@@ -5218,12 +5218,19 @@
             },
             "description": "`duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions)"
           },
+          "previousVersions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Transaction id → `version` just before this write, transfer sides included"
+          },
           "versions": {
             "type": "object",
             "additionalProperties": {
               "type": "integer"
             },
-            "description": "The changed transactions' `version` now, for undo's `expectedVersion`"
+            "description": "The changed transactions' `version` now (their transfers' other sides too), for undo's `expectedVersion`"
           }
         },
         "required": [
@@ -5231,6 +5238,7 @@
           "before",
           "created",
           "copies",
+          "previousVersions",
           "versions"
         ]
       },
@@ -5678,6 +5686,28 @@
           "categoryId"
         ],
         "description": "Restoring a deleted transfer (an undo): its other side's own state, from the deleted transaction's `transferSide`. Left out, the other side starts uncleared, approved, unflagged and with this side's memo"
+      },
+      "UpdatedTransaction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Transaction"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "previousVersions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "description": "Transaction id → `version` just before this write, transfer sides included"
+              }
+            },
+            "required": [
+              "previousVersions"
+            ]
+          }
+        ]
       },
       "UpdateTransaction": {
         "type": "object",
@@ -15386,7 +15416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Transaction"
+                  "$ref": "#/components/schemas/UpdatedTransaction"
                 }
               }
             }

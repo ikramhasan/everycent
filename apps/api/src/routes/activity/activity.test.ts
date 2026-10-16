@@ -323,6 +323,29 @@ describe("undo conflicts between partners (EVERYCENT-36)", () => {
     expect(deleted.status).toBe(204);
   });
 
+  it("names the partner when the user's own edits sit on top of their change", async () => {
+    const { owner, pat, base, account } = await setup();
+    const row = await json<Txn>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-100",
+        payeeName: "Shop",
+        categoryId: null,
+      }),
+    );
+    await send("PATCH", `${base}/transactions/${row.id}`, pat.cookie, { amount: "-200" });
+    await send("PATCH", `${base}/transactions/${row.id}`, owner.cookie, { memo: "mine" });
+    const stale = await send("PATCH", `${base}/transactions/${row.id}`, owner.cookie, {
+      amount: "-100",
+      expectedVersion: row.version,
+    });
+    expect(stale.status).toBe(409);
+    expect((await errorCode(stale)).message).toBe(
+      "Pat changed this transaction since, so it wasn't changed back.",
+    );
+  });
+
   it("returns a transfer's other side's version, so undoing both sides isn't refused", async () => {
     const { owner, base, account } = await setup();
     const savings = await json<{ id: string }>(
@@ -354,6 +377,10 @@ describe("undo conflicts between partners (EVERYCENT-36)", () => {
       }),
     );
     expect(edited.transferSide.id).toBe(out.transferTransactionId);
+    // What both sides were at just before, so the client knows these steps were its own.
+    expect(
+      (edited as Side & { previousVersions: Record<string, number> }).previousVersions,
+    ).toEqual({ [out.id]: out.version, [out.transferTransactionId]: out.transferSide.version });
     expect(edited.transferSide.version).toBeGreaterThan(out.transferSide.version);
     const otherSide = await send(
       "PATCH",

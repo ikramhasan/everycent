@@ -204,6 +204,14 @@ interface EditingSplit {
  * load as you scroll, and rows are virtualized so long histories stay fast. `focusId` scrolls to
  * that transaction and highlights it (the other side of a transfer, when jumping to it).
  */
+/** A saved transaction's version, and its transfer's other side's, by id. */
+function versionsOf(row: Transaction): Record<string, number> {
+  return {
+    [row.id]: row.version,
+    ...(row.transferSide ? { [row.transferSide.id]: row.transferSide.version } : {}),
+  };
+}
+
 export function Register({
   accountId,
   focusId,
@@ -315,12 +323,10 @@ export function Register({
   const payees = useQuery(payeesQueryOptions(budget.id));
   const flagList = useQuery(flagsQueryOptions(budget.id));
   const renameFlagMutation = $api.useMutation("put", "/v1/budgets/{budgetId}/flags/{color}");
-  // Every transaction a save returns goes into the undo history's version record (EVERYCENT-36).
-  const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions", {
-    onSuccess: (row) => history.noteVersions([row]),
-  });
+  const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
+  // Every edit's own version steps go into the undo history (EVERYCENT-36).
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}", {
-    onSuccess: (row) => history.noteVersions([row]),
+    onSuccess: (row) => history.noteSave(row.previousVersions, versionsOf(row)),
   });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const [adding, setAdding] = useState(false);
@@ -346,7 +352,7 @@ export function Register({
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
   const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk", {
-    onSuccess: (result) => history.noteVersions(result.versions),
+    onSuccess: (result) => history.noteSave(result.previousVersions, result.versions),
   });
   const scheduledBulk = $api.useMutation(
     "post",
@@ -783,8 +789,8 @@ export function Register({
     after: Record<string, number>,
   ) {
     let current = before;
-    // The versions the action left, for the first undo; every later save notes its own.
-    history.noteVersions(after);
+    /** The version this command last left each row at; undo and redo follow the tab's steps. */
+    let left = after;
     // Reject deletes the unapproved rows, so it's undone like a delete.
     const deletes = action.type === "delete" || action.type === "reject";
     return {
@@ -801,19 +807,23 @@ export function Register({
           }
           current = restored;
         } else {
+          const undone: Record<string, number> = {};
           for (const transaction of before) {
-            // Read each time: putting one side of a transfer back can change the other's.
-            await update.mutateAsync({
+            // Followed each time: putting one side of a transfer back moves the other's too.
+            const from = left[transaction.id] ?? transaction.version;
+            const saved = await update.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
                 query: { today: todayIso() },
               },
               body: {
                 ...updateBodyFromTransaction(transaction),
-                expectedVersion: history.expectedVersion(transaction.id),
+                expectedVersion: history.expectedVersion(transaction.id, from),
               },
             });
+            Object.assign(undone, versionsOf(saved));
           }
+          left = undone;
           current = before;
         }
       },
@@ -823,27 +833,26 @@ export function Register({
             await remove.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
-                query: {
-                  expectedVersion: history.expectedVersion(transaction.id, transaction.version),
-                },
+                query: { expectedVersion: transaction.version },
               },
             });
           }
         } else if (action.type !== "duplicate") {
           const ids = current.map((transaction) => transaction.id);
-          await bulk.mutateAsync({
+          const result = await bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
             body: {
               selection: { ids },
               action,
               expectedVersions: Object.fromEntries(
                 ids.flatMap((id) => {
-                  const version = history.expectedVersion(id);
-                  return version === undefined ? [] : [[id, version]];
+                  const from = left[id];
+                  return from === undefined ? [] : [[id, history.expectedVersion(id, from)]];
                 }),
               ),
             },
           });
+          left = result.versions;
         }
       },
     };
@@ -854,17 +863,20 @@ export function Register({
    * (`expectedVersion`; the API refuses with STALE_VERSION, EVERYCENT-36).
    */
   function recordUpdate(label: string, before: Transaction, after: Transaction) {
+    // The version this command last left the row at; the tab's own steps lead on from it.
+    let left = after.version;
     const replay = async (row: Transaction) => {
-      await update.mutateAsync({
+      const saved = await update.mutateAsync({
         params: {
           path: { budgetId: budget.id, transactionId: row.id },
           query: { today: todayIso() },
         },
         body: {
           ...updateBodyFromTransaction(row),
-          expectedVersion: history.expectedVersion(row.id, after.version),
+          expectedVersion: history.expectedVersion(row.id, left),
         },
       });
+      left = saved.version;
       await refresh();
     };
     history.record({ label, undo: () => replay(before), redo: () => replay(after) });

@@ -187,6 +187,18 @@ export const TransactionSchema = z
   })
   .openapi("Transaction");
 
+/**
+ * The versions rows had just before a write (a transfer's other side too). With the versions
+ * after it, a client knows which version steps were its own (EVERYCENT-36).
+ */
+const PreviousVersions = z
+  .record(z.string(), z.number().int())
+  .describe("Transaction id → `version` just before this write, transfer sides included");
+
+const UpdatedTransactionSchema = TransactionSchema.extend({
+  previousVersions: PreviousVersions,
+}).openapi("UpdatedTransaction");
+
 const TransactionListSchema = z
   .object({
     transactions: z.array(TransactionSchema).describe("One page, in the requested order"),
@@ -518,7 +530,7 @@ export const updateTransaction = createRoute({
     ),
   },
   responses: {
-    200: ok("Updated", TransactionSchema),
+    200: ok("Updated", UpdatedTransactionSchema),
     400: jsonError(
       "Invalid input, a closed account, a category the account can't use, a transfer to the " +
         "same account, or a date after today (DATE_IN_FUTURE)",
@@ -729,9 +741,13 @@ export const bulkUpdateTransactions = createRoute({
                 "transfer selected from both sides has both sides of its copy here (empty for " +
                 "other actions)",
             ),
+          previousVersions: PreviousVersions,
           versions: z
             .record(z.string(), z.number().int())
-            .describe("The changed transactions' `version` now, for undo's `expectedVersion`"),
+            .describe(
+              "The changed transactions' `version` now (their transfers' other sides too), for " +
+                "undo's `expectedVersion`",
+            ),
         })
         .openapi("BulkUpdateResult"),
     ),

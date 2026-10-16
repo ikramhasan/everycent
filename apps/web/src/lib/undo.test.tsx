@@ -70,17 +70,26 @@ describe("UndoProvider", () => {
     expect(result.current.redoLabel).toBeNull();
   });
 
-  it("expects the version this tab's own last save left, transfer sides included", () => {
+  it("follows only this tab's own version steps (EVERYCENT-36)", () => {
     const { result } = renderHook(useUndo, { wrapper });
-    expect(result.current.expectedVersion("t1", 1)).toBe(1);
-    // An edit (v2), then another of the user's own (v3): an older entry's undo expects v3.
-    result.current.noteVersions([{ id: "t1", version: 2 }]);
-    result.current.noteVersions([{ id: "t1", version: 3, transferSide: { id: "t2", version: 5 } }]);
-    expect(result.current.expectedVersion("t1", 2)).toBe(3);
-    // Saving one side of a transfer can change the other's.
-    expect(result.current.expectedVersion("t2")).toBe(5);
-    result.current.noteVersions({ t2: 6 });
-    expect(result.current.expectedVersion("t2")).toBe(6);
+    // Own chain: edit memo (1 → 2), toggle cleared (2 → 3), undo the toggle (3 → 4). The memo
+    // edit's undo, which left the row at 2, now expects 4.
+    result.current.noteSave({ t1: 1 }, { t1: 2 });
+    result.current.noteSave({ t1: 2 }, { t1: 3 });
+    result.current.noteSave({ t1: 3 }, { t1: 4 });
+    expect(result.current.expectedVersion("t1", 2)).toBe(4);
+
+    // A partner's change in between (2 → 3 wasn't ours), then two own steps on top of it:
+    // the memo edit's undo still expects 2, which the API refuses as stale.
+    result.current.noteSave({ t2: 1 }, { t2: 2 });
+    result.current.noteSave({ t2: 3 }, { t2: 4 });
+    result.current.noteSave({ t2: 4 }, { t2: 5 });
+    expect(result.current.expectedVersion("t2", 2)).toBe(2);
+    expect(result.current.expectedVersion("t2", 4)).toBe(5);
+
+    // Saving one side of a transfer steps the other side too.
+    result.current.noteSave({ a: 1, b: 7 }, { a: 2, b: 8 });
+    expect(result.current.expectedVersion("b", 7)).toBe(8);
   });
 
   it("answers Cmd/Ctrl+Z only while keyboard shortcuts are on", async () => {

@@ -34,7 +34,6 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
         wake();
       };
       (async () => {
-        // Someone removed from the budget (or who left) hears nothing more.
         // Removed from the budget, left it, or the budget was deleted: nothing more to hear.
         const membership = change.table === "budget_member" || change.table === "budget";
         if (membership && !(await stillMember())) return end();

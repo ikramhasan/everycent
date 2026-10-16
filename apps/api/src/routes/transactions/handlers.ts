@@ -16,7 +16,7 @@ import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "
 import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
-import { assertTransactionVersions } from "../../lib/versions";
+import { assertTransactionVersions, transactionVersions } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { parseSort, queryRegister, queryRegisterRow } from "./register-query";
@@ -296,14 +296,17 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   assertOnePayee(body);
   const latest = latestTransactionDate(c.var.deps, today);
   const { expectedVersion, ...changes } = body;
+  let previousVersions: Record<string, number> = {};
   const accountId = await db.transaction(async (tx) => {
     if (expectedVersion !== undefined) {
       const expected = { [transactionId]: expectedVersion };
       await assertTransactionVersions(tx, budgetId, expected, c.var.user.id);
     }
+    previousVersions = await transactionVersions(tx, [transactionId]);
     return applyUpdate(tx, c.var.deps, budgetId, transactionId, withApproval(changes), latest);
   });
-  return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
+  const row = await transactionJson(db, budgetId, accountId, transactionId);
+  return c.json({ ...row, previousVersions }, 200);
 };
 
 /**

@@ -190,11 +190,19 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       .for("update");
     await assertTransactionVersions(tx, budgetId, expectedVersions, c.var.user.id);
     if (locked.length === 0) {
-      return { updated: 0, before: [], created: [], copies: [], versions: {} };
+      return {
+        updated: 0,
+        before: [],
+        created: [],
+        copies: [],
+        previousVersions: {},
+        versions: {},
+      };
     }
     const lockedIds = locked.map((r) => r.id);
     const beforeRows = await queryRegisterRows(tx, budgetId, lockedIds);
     const beforeById = new Map(beforeRows.map((row) => [row.id, row]));
+    const previousVersions = await transactionVersions(tx, lockedIds);
     const rows = await selectedRows(tx, selectedIds(lockedIds));
 
     let updatedIds: string[];
@@ -246,7 +254,14 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         break;
       case "duplicate": {
         const { created, copies } = await duplicate(tx, c.var.deps, budgetId, lockedIds);
-        return { updated: created.length, before: [], created, copies, versions: {} };
+        return {
+          updated: created.length,
+          before: [],
+          created,
+          copies,
+          previousVersions: {},
+          versions: {},
+        };
       }
     }
     return {
@@ -257,6 +272,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       }),
       created: [],
       copies: [],
+      previousVersions,
       versions: await transactionVersions(tx, updatedIds),
     };
   });

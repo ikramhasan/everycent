@@ -2599,7 +2599,11 @@ export interface components {
             created: string[];
             /** @description `duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions) */
             copies: string[];
-            /** @description The changed transactions' `version` now, for undo's `expectedVersion` */
+            /** @description Transaction id → `version` just before this write, transfer sides included */
+            previousVersions: {
+                [key: string]: number;
+            };
+            /** @description The changed transactions' `version` now (their transfers' other sides too), for undo's `expectedVersion` */
             versions: {
                 [key: string]: number;
             };
@@ -2729,6 +2733,12 @@ export interface components {
             categoryId: string | null;
             /** @description Its own amount (a transfer between currencies; `transferAmount` wins) */
             amount?: string;
+        };
+        UpdatedTransaction: components["schemas"]["Transaction"] & {
+            /** @description Transaction id → `version` just before this write, transfer sides included */
+            previousVersions: {
+                [key: string]: number;
+            };
         };
         UpdateTransaction: {
             accountId?: string;
@@ -7350,7 +7360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Transaction"];
+                    "application/json": components["schemas"]["UpdatedTransaction"];
                 };
             };
             /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */

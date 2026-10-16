@@ -16,23 +16,17 @@ export interface UndoCommand {
   redo: () => Promise<void>;
 }
 
-/** A transaction as a mutation returned it: its version, and its transfer's other side's. */
-export interface VersionedRow {
-  id: string;
-  version: number;
-  transferSide?: { id: string; version: number } | null;
-}
-
 interface UndoState {
   /**
-   * The version this tab's own last save left each transaction at (EVERYCENT-36). Undo and redo
-   * send it as `expectedVersion`, so a chain of the user's own edits replays, while a partner's
-   * change (which this tab never saw a response for) is refused as stale. Only mutation responses
-   * go in: a refetched list would hide the partner's change.
+   * Records this tab's own version steps (EVERYCENT-36): a save's response says each row's
+   * version just before it (`previousVersions`) and after it. Undo and redo follow these steps
+   * from the version their command left, so a chain of the user's own edits on a row replays,
+   * while a partner's change anywhere in between (a step this tab didn't make) leaves the
+   * command at an older version, which the API refuses as stale.
    */
-  noteVersions: (rows: Iterable<VersionedRow> | Record<string, number>) => void;
-  /** The version to expect for `id`: this tab's last, else `fallback`. */
-  expectedVersion: (id: string, fallback?: number) => number | undefined;
+  noteSave: (before: Record<string, number>, after: Record<string, number>) => void;
+  /** The version to expect for `id`, following this tab's own steps from `from`. */
+  expectedVersion: (id: string, from: number) => number;
   undoLabel: string | null;
   redoLabel: string | null;
   busy: boolean;
@@ -67,22 +61,28 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const [past, setPast] = useState<UndoCommand[]>([]);
   const [future, setFuture] = useState<UndoCommand[]>([]);
   const [busy, setBusy] = useState(false);
-  const versions = useRef(new Map<string, number>());
+  /** Per transaction: version → the version this tab's own save took it to. */
+  const steps = useRef(new Map<string, Map<number, number>>());
 
-  const noteVersions = useCallback((rows: Iterable<VersionedRow> | Record<string, number>) => {
-    if (Symbol.iterator in rows) {
-      for (const row of rows) {
-        versions.current.set(row.id, row.version);
-        if (row.transferSide) versions.current.set(row.transferSide.id, row.transferSide.version);
-      }
-    } else {
-      for (const [id, version] of Object.entries(rows)) versions.current.set(id, version);
+  const noteSave = useCallback((before: Record<string, number>, after: Record<string, number>) => {
+    for (const [id, to] of Object.entries(after)) {
+      const from = before[id];
+      if (from === undefined || from === to) continue;
+      const rowSteps = steps.current.get(id) ?? new Map<number, number>();
+      rowSteps.set(from, to);
+      steps.current.set(id, rowSteps);
     }
   }, []);
-  const expectedVersion = useCallback(
-    (id: string, fallback?: number) => versions.current.get(id) ?? fallback,
-    [],
-  );
+  const expectedVersion = useCallback((id: string, from: number) => {
+    const rowSteps = steps.current.get(id);
+    let version = from;
+    // Versions only go up, so this ends.
+    for (let next = rowSteps?.get(version); next !== undefined && next > version; ) {
+      version = next;
+      next = rowSteps?.get(version);
+    }
+    return version;
+  }, []);
 
   const record = useCallback((command: UndoCommand) => {
     setPast((commands) => [...commands, command]);
@@ -124,7 +124,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   return (
     <UndoContext.Provider
       value={{
-        noteVersions,
+        noteSave,
         expectedVersion,
         undoLabel: past.at(-1)?.label ?? null,
         redoLabel: future.at(-1)?.label ?? null,

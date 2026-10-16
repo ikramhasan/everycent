@@ -1,5 +1,5 @@
 import { auditEvent, transaction, user } from "@everycent/db/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { AppError } from "./errors";
 import type { Db } from "./ledger";
 
@@ -49,23 +49,58 @@ export async function assertTransactionVersions(
     .orderBy(transaction.id)
     .for("update");
   for (const row of rows) {
-    if (row.version !== expected[row.id]) {
-      throw await staleVersion(tx, row.updatedBy, actorId, "transaction");
-    }
+    const version = expected[row.id];
+    if (version === undefined || row.version === version) continue;
+    // Name whoever else changed it after that version (the user's own later edits may sit on
+    // top of the partner's), else its last changer.
+    const [other] = await tx
+      .select({ actor: auditEvent.actorUserId })
+      .from(auditEvent)
+      .where(
+        and(
+          eq(auditEvent.budgetId, budgetId),
+          eq(auditEvent.tableName, "transaction"),
+          eq(auditEvent.rowId, row.id),
+          sql`(${auditEvent.after}->>'version')::int > ${version}`,
+          sql`${auditEvent.actorUserId} is distinct from ${actorId}`,
+        ),
+      )
+      .orderBy(desc(auditEvent.createdAt))
+      .limit(1);
+    throw await staleVersion(tx, other ? other.actor : row.updatedBy, actorId, "transaction");
   }
 }
 
-/** Each transaction's version now, for the next undo or redo to send. */
+/**
+ * Each transaction's version now, and its transfer's other side's (a write to one side can
+ * change the other). Read before a write and after it, a client learns which version steps
+ * were its own (undo follows only those, so a partner's change in between makes it stale).
+ */
 export async function transactionVersions(
   db: Db,
   ids: readonly string[],
 ): Promise<Record<string, number>> {
   if (ids.length === 0) return {};
   const rows = await db
-    .select({ id: transaction.id, version: transaction.version })
+    .select({
+      id: transaction.id,
+      version: transaction.version,
+      otherSide: transaction.transferTransactionId,
+    })
     .from(transaction)
     .where(inArray(transaction.id, [...ids]));
-  return Object.fromEntries(rows.map((r) => [r.id, r.version]));
+  const versions: Record<string, number> = Object.fromEntries(rows.map((r) => [r.id, r.version]));
+  const sides = rows.flatMap((r) =>
+    r.otherSide && !(r.otherSide in versions) ? [r.otherSide] : [],
+  );
+  if (sides.length > 0) {
+    const others = await db
+      .select({ id: transaction.id, version: transaction.version })
+      .from(transaction)
+      .where(inArray(transaction.id, sides));
+    for (const o of others) versions[o.id] = o.version;
+  }
+  return versions;
 }
 
 /** Who last changed a category's assigned amount in a month, from the change log. */
