@@ -11,6 +11,17 @@ export {
   usesCategory,
   zAccountType,
 } from "./accounts";
+export {
+  AGE_OF_MONEY_OUTFLOWS,
+  type AgeOfMoneyPart,
+  addDays,
+  ageOfMoneyAt,
+  ageOfMoneyByMonth,
+  countedAmount,
+  type MoneyFlow,
+  type OutflowAge,
+  outflowAges,
+} from "./age-of-money";
 export { allocate } from "./allocate";
 export { evaluateAmount } from "./amount-expression";
 export {

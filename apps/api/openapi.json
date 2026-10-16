@@ -10665,6 +10665,60 @@
           "nativeAmount",
           "currency"
         ]
+      },
+      "AgeOfMoney": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date",
+            "description": "The day `current` is for (the user's today)"
+          },
+          "current": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Age of Money today, in days"
+          },
+          "thirtyDaysAgo": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Age of Money as of 30 days before `asOf`"
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
+                },
+                "days": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "As of the month's last day (today for this month)"
+                }
+              },
+              "required": [
+                "month",
+                "days"
+              ]
+            },
+            "description": "Each month from the first one with a cash-account transaction to this month"
+          }
+        },
+        "required": [
+          "asOf",
+          "current",
+          "thirtyDaysAgo",
+          "months"
+        ]
       }
     },
     "parameters": {}
@@ -20331,6 +20385,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/reports/age-of-money": {
+      "get": {
+        "operationId": "getAgeOfMoney",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Age of Money now, 30 days ago, and at each month's end",
+        "description": "YNAB's Age of Money: the average age in days of the last ten outflows from cash accounts (credit card payments and transfers to loan or tracking accounts included), each outflow's money taken oldest first. Null when there have been fewer than ten outflows.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Age of Money",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgeOfMoney"
                 }
               }
             }
