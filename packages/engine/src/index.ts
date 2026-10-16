@@ -154,6 +154,16 @@ export {
   zBudgetMonth,
 } from "./months";
 export {
+  allTimeHighs,
+  type NetWorthFlows,
+  type NetWorthGroup,
+  type NetWorthParts,
+  type NetWorthTotals,
+  netWorthGroup,
+  netWorthParts,
+  netWorthTotals,
+} from "./net-worth";
+export {
   type FormatMoneyOptions,
   formatMoney,
   parseMoney,
