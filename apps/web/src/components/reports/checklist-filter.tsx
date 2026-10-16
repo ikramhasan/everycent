@@ -45,7 +45,13 @@ export function ChecklistFilter({
   const [open, setOpen] = useState(false);
   const all = sections.flatMap((s) => s.items.map((i) => i.id));
   const count = selected?.filter((id) => all.includes(id)).length ?? all.length;
-  const label = count === all.length ? allLabel : `${count} ${count === 1 ? noun[0] : noun[1]}`;
+  // YNAB, 2026-10-17: "No Categories Selected" / "No Accounts Selected" for an empty selection.
+  const label =
+    count === all.length
+      ? allLabel
+      : count === 0
+        ? `No ${noun[1]} Selected`
+        : `${count} ${count === 1 ? noun[0] : noun[1]}`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

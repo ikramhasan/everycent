@@ -57,6 +57,11 @@ describe("ChecklistFilter", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
+  it("names an empty selection as YNAB does", () => {
+    setup([]);
+    expect(screen.getByRole("button", { name: /No Categories Selected/ })).toBeInTheDocument();
+  });
+
   it("searches items and group names", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: /All Categories/ }));
