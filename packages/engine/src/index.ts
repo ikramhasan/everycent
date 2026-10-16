@@ -157,6 +157,7 @@ export {
   ABOVE_AVERAGE_PERCENT,
   type CategorySpending,
   MAX_OBSERVATIONS,
+  MAX_PER_RULE,
   monthsOfRunway,
   type Observation,
   type ObservationInput,

@@ -109,13 +109,31 @@ describe("observations", () => {
     ]);
   });
 
-  it("keeps at most five", () => {
+  it("keeps at most two of a rule and five in all", () => {
     const overspent = Array.from({ length: 7 }, (_, i) => ({
       categoryId: `c${i}`,
       name: `C${i}`,
       overspent: BigInt(i + 1),
     }));
-    expect(observations({ ...base, overspent })).toHaveLength(5);
+    const categories = Array.from({ length: 4 }, (_, i) => ({
+      categoryId: `a${i}`,
+      name: `A${i}`,
+      spent: 90000n,
+      previous: [1000n],
+    }));
+    const topPayees = [{ payeeId: "p", name: "P", spent: 5n }];
+    const income = new Map([
+      ["2026-08", 2n],
+      ["2026-09", 1n],
+    ] as const);
+    const notes = observations({ ...base, overspent, categories, topPayees, income });
+    expect(notes.map((n) => n.rule)).toEqual([
+      "category_overspent",
+      "category_overspent",
+      "category_above_average",
+      "category_above_average",
+      "income_lower",
+    ]);
   });
 });
 

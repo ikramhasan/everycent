@@ -60,11 +60,14 @@ export interface ObservationInput {
 export const ABOVE_AVERAGE_PERCENT = 25n;
 /** At most this many notes, most telling first. */
 export const MAX_OBSERVATIONS = 5;
+/** At most this many notes of one rule, so one kind can't crowd out the others. */
+export const MAX_PER_RULE = 2;
 /** How many of the month's top payees are checked for new ones. */
 export const TOP_PAYEES = 10;
 
 /**
- * The month's observations, in this order and at most MAX_OBSERVATIONS: overspent categories,
+ * The month's observations, in this order, at most MAX_PER_RULE of a rule and MAX_OBSERVATIONS
+ * in all: overspent categories,
  * categories well above their average (largest gap first), a new net worth high, lower income
  * than the month before, new payees among the top ten.
  */
@@ -134,7 +137,14 @@ export function observations(input: ObservationInput): Observation[] {
     }
   });
 
-  return notes.slice(0, MAX_OBSERVATIONS);
+  const perRule = new Map<Observation["rule"], number>();
+  return notes
+    .filter((n) => {
+      const count = (perRule.get(n.rule) ?? 0) + 1;
+      perRule.set(n.rule, count);
+      return count <= MAX_PER_RULE;
+    })
+    .slice(0, MAX_OBSERVATIONS);
 }
 
 /**
