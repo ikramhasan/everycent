@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { NameCard, OptionsCard } from "@/components/account-options";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { PageHeader } from "@/components/page-header";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -42,7 +43,7 @@ function AccountPage() {
   const { session } = Route.useRouteContext();
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
-      <h1 className="font-semibold text-2xl tracking-tight">Account settings</h1>
+      <PageHeader title="Account settings" />
       <NameCard name={session.user.name} />
       <EmailCard email={session.user.email} />
       <PasswordCard />

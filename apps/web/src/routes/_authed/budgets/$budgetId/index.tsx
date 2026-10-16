@@ -30,6 +30,7 @@ import {
   AvailablePill,
   FixThisButton,
 } from "@/components/move-money";
+import { PageHeader } from "@/components/page-header";
 import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
@@ -612,7 +613,7 @@ function BudgetPage() {
         )}
       >
         <div className="grid gap-1">
-          <h1 className="truncate font-semibold text-muted-foreground text-sm">{budget.name}</h1>
+          <PageHeader title={budget.name} />
           <MonthNav
             month={month}
             current={today}

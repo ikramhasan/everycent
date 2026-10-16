@@ -21,6 +21,8 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@everycent/ui/components/sidebar";
+import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
+import { type Theme, useTheme } from "@everycent/ui/lib/theme";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -30,16 +32,20 @@ import {
   Landmark,
   LayoutGrid,
   LogOut,
+  Monitor,
+  Moon,
   Settings,
+  Sun,
   UserCog,
   Wallet,
 } from "lucide-react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
-import { ModeToggle } from "./mode-toggle";
+import { PageHeaderSlotProvider } from "./page-header";
 
 export function AppShell({ user }: { user: { name: string; email: string } }) {
   const queryClient = useQueryClient();
@@ -51,6 +57,10 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
     ...budgetQueryOptions(budgetId ?? ""),
     enabled: Boolean(budgetId),
   });
+
+  const { theme, setTheme } = useTheme();
+  // The top bar's header slot, where each page puts its title and actions.
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
   async function signOut() {
     await authClient.signOut();
@@ -192,6 +202,32 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       <UserCog /> Account settings
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {/* Theme as a button group; picking one keeps the menu open. */}
+                  <div className="grid gap-1.5 px-2 py-1.5">
+                    <span className="text-muted-foreground text-xs">Theme</span>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      size="sm"
+                      spacing={0}
+                      aria-label="Theme"
+                      className="w-full"
+                      value={theme}
+                      onValueChange={(value) => value && setTheme(value as Theme)}
+                    >
+                      <ToggleGroupItem value="light" className="flex-1">
+                        <Sun /> Light
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="dark" className="flex-1">
+                        <Moon /> Dark
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="system" className="flex-1">
+                        <Monitor /> System
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={signOut}>
                     <LogOut /> Sign out
                   </DropdownMenuItem>
@@ -205,12 +241,12 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
         <header className="flex h-14 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4 data-vertical:self-center" />
-          <div className="ml-auto">
-            <ModeToggle />
-          </div>
+          <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         </header>
         <div className="flex-1 p-4 md:p-6">
-          <Outlet />
+          <PageHeaderSlotProvider value={headerSlot}>
+            <Outlet />
+          </PageHeaderSlotProvider>
         </div>
       </SidebarInset>
     </SidebarProvider>

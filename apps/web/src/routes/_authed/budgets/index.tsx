@@ -9,6 +9,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { currencyName } from "@/components/currency-picker";
+import { PageHeader } from "@/components/page-header";
 import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/")({
@@ -24,14 +25,16 @@ function AllBudgetsPage() {
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-semibold text-2xl tracking-tight">All budgets</h1>
-        <Button asChild>
-          <Link to="/budgets/new" search={{ template }}>
-            <Plus /> New budget
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="All budgets"
+        actions={
+          <Button size="sm" asChild>
+            <Link to="/budgets/new" search={{ template }}>
+              <Plus /> New budget
+            </Link>
+          </Button>
+        }
+      />
       {template && (
         <p className="text-muted-foreground text-sm">
           Open a budget, or create a new one, to import the category template into it.
