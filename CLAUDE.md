@@ -106,8 +106,8 @@ behaviour you haven't confirmed.
   money math) or when no suitable library exists, and say why in a comment.
 - API tests use `createTestApp()` + `resetDatabase()` against the real test DB. No DB mocks.
   Test files run in parallel: the global setup migrates `TEST_DATABASE_URL` and copies it to one
-  database per worker (`<name>_w1`, `_w2`, …; count via `API_TEST_WORKERS`, default cores − 1, passed through
-  turbo).
+  database per worker (`<name>_w1`, `_w2`, …). `API_TEST_WORKERS` sets the count (default
+  cores − 1; turbo passes it through).
   CI (`.github/workflows/check.yml`) runs `pnpm check` on every PR.
 - shadcn components: `pnpm dlx shadcn@latest add <name> -c apps/web` (lands in `packages/ui`).
 - Web imports: app code via `@/…`, shared UI via `@everycent/ui/components/<name>`.
