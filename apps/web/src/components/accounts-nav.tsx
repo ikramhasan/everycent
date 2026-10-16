@@ -28,11 +28,13 @@ import {
   accountsQueryOptions,
   type SidebarSection,
   sidebarSections,
+  totalHint,
 } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { apiErrorMessage, type Budget } from "@/lib/budgets";
 import { nextId } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { inCurrency } from "@/lib/money-input";
 import { AddAccountDialog } from "./add-account-dialog";
 
 /**
@@ -46,8 +48,8 @@ export function AccountsNav({ budget }: { budget: Budget }) {
   const [adding, setAdding] = useState(false);
 
   const serverSections = useMemo(
-    () => sidebarSections(accounts.data?.accounts ?? []),
-    [accounts.data],
+    () => sidebarSections(accounts.data?.accounts ?? [], budget.currency, accounts.data?.totals),
+    [accounts.data, budget.currency],
   );
   // Local order per section so a drag shows immediately.
   const [order, setOrder] = useState<Record<string, string[]>>({});
@@ -59,7 +61,9 @@ export function AccountsNav({ budget }: { budget: Budget }) {
     () => new Map((accounts.data?.accounts ?? []).map((a) => [a.id, a])),
     [accounts.data],
   );
-  const format = (minorUnits: bigint) => formatAmount(money(minorUnits, budget.currency), budget);
+  /** An amount in `currency` (an account's own), the budget's by default. */
+  const format = (minorUnits: bigint, currency?: string) =>
+    formatAmount(money(minorUnits, inCurrency(budget, currency).currency), budget);
 
   async function handleMove(accountId: string, beforeAccountId: string | null, starred: boolean) {
     try {
@@ -146,8 +150,9 @@ function AccountSection({
   ids: string[];
   byId: Map<string, Account>;
   budgetId: string;
-  format: (minorUnits: bigint) => string;
+  format: (minorUnits: bigint, currency?: string) => string;
 }) {
+  const hint = totalHint(section);
   return (
     <Collapsible defaultOpen={section.id !== "closed"} className="group/collapsible" asChild>
       <SidebarGroup>
@@ -156,7 +161,13 @@ function AccountSection({
             <ChevronRight className="transition-transform group-data-[state=open]/collapsible:rotate-90" />
             <span className="uppercase tracking-wide">{section.title}</span>
             {section.id !== "closed" && (
-              <span className="ml-auto tabular-nums">{format(section.total)}</span>
+              <span className="ml-auto tabular-nums" title={hint ?? undefined}>
+                {section.converted && <span aria-hidden>≈</span>}
+                {format(section.total, section.currency)}
+                {/* The `*` marks accounts left out for want of a rate. */}
+                {section.excluded.length > 0 && <span aria-hidden>*</span>}
+                {hint && <span className="sr-only">, {hint}</span>}
+              </span>
             )}
           </CollapsibleTrigger>
         </SidebarGroupLabel>
@@ -195,7 +206,7 @@ function AccountItem({
   index: number;
   section: string;
   budgetId: string;
-  format: (minorUnits: bigint) => string;
+  format: (minorUnits: bigint, currency?: string) => string;
 }) {
   const { ref, isDragSource } = useSortable({
     // A starred account is in two sections, so its id here includes the section.
@@ -230,7 +241,7 @@ function AccountItem({
       </SidebarMenuButton>
       {/* `!` beats the sidebar's active-item colour so money owed always reads red, as in YNAB. */}
       <SidebarMenuBadge className={cn("tabular-nums", working < 0n && "text-destructive!")}>
-        {format(working)}
+        {format(working, account.currency)}
       </SidebarMenuBadge>
     </SidebarMenuItem>
   );

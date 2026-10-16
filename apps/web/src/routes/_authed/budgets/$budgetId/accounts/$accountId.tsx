@@ -36,6 +36,7 @@ import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components
 import { Register } from "@/components/register";
 import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
 import { StarButton } from "@/components/star-button";
+import { signedAmount, UnrealizedGain } from "@/components/unrealized-gain";
 import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -43,6 +44,7 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { inCurrency } from "@/lib/money-input";
 import { invalidateMonths } from "@/lib/months";
 import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
@@ -93,6 +95,7 @@ function AccountPage() {
   const close = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/close");
   const reopen = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/reopen");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/accounts/{accountId}");
+  const revalue = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/revalue");
   const reconcile = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile",
@@ -113,7 +116,13 @@ function AccountPage() {
 
   const account = accounts.data?.accounts.find((a) => a.id === accountId);
   const path = { budgetId: budget.id, accountId };
-  const show = (amount: string | bigint) => formatAmount(money(BigInt(amount), budget.currency));
+  /** The budget's number format with the account's own currency, for its amounts. */
+  const accountSettings = inCurrency(budget, account?.currency);
+  const show = (amount: string | bigint) =>
+    formatAmount(money(BigInt(amount), accountSettings.currency));
+  /** Plan amounts (a card's payment category), in the budget's currency. */
+  const showBudget = (amount: string | bigint) =>
+    formatAmount(money(BigInt(amount), budget.currency));
   const isLoan = account !== undefined && accountFamily(account.type) === "loan";
   // A loan's reconcile is its page's Update Balance (YNAB).
   const reconcilable = account !== undefined && !isLoan;
@@ -175,6 +184,21 @@ function AccountPage() {
       toast.success(done);
     } catch (error) {
       toast.error(apiErrorMessage(error, failure));
+    }
+  }
+
+  async function handleRevalue() {
+    try {
+      const today = todayIso();
+      const result = await revalue.mutateAsync({ params: { path }, body: { date: today, today } });
+      await refresh();
+      toast.success(
+        result.transaction
+          ? `Revalued: ${signedAmount(BigInt(result.transaction.baseAmount), (m) => showBudget(m))}`
+          : "Nothing to revalue: the account is booked at today's rate",
+      );
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Couldn't revalue the account."));
     }
   }
 
@@ -338,7 +362,7 @@ function AccountPage() {
         )}
         <EditAccountForm
           key={`${account.id}-${editing}`}
-          settings={budget}
+          settings={accountSettings}
           initial={account}
           workingBalance={account.closed ? null : BigInt(account.balances.working)}
           onSubmit={handleSave}
@@ -381,14 +405,18 @@ function AccountPage() {
             )}
           </section>
         )}
-        {account.type === "liability" && !account.closed && !account.migratedToAccountId && (
-          <UpdateToLoanSection
-            onLearnMore={() => {
-              setEditing(false);
-              setUpdatingToLoan(true);
-            }}
-          />
-        )}
+        {/* Loans stay in the budget's currency, so a liability in another one can't become one. */}
+        {account.type === "liability" &&
+          account.currency === budget.currency &&
+          !account.closed &&
+          !account.migratedToAccountId && (
+            <UpdateToLoanSection
+              onLearnMore={() => {
+                setEditing(false);
+                setUpdatingToLoan(true);
+              }}
+            />
+          )}
         {/* YNAB: an open account offers Close, or Delete while it has only its starting
             balance; a closed one offers Re-open and Delete, disabled while it has history. */}
         <div className="flex flex-wrap gap-2 border-t pt-4">
@@ -555,7 +583,7 @@ function AccountPage() {
           {reconcilable && (
             <ReconcilePopover
               account={account}
-              settings={budget}
+              settings={accountSettings}
               open={reconcileOpen}
               onOpenChange={setReconcileOpen}
               show={show}
@@ -581,18 +609,27 @@ function AccountPage() {
           negative={working < 0n}
           strong
         />
+        {account.currency !== budget.currency && (
+          <UnrealizedGain
+            account={account}
+            budgetCurrency={budget.currency}
+            format={(m) => showBudget(m)}
+            pending={revalue.isPending}
+            onRevalue={handleRevalue}
+          />
+        )}
         {cardPayment && (
           <div className="ml-auto flex items-end gap-4">
             <OverspendingFigure
               amount={cardPayment.creditOverspending}
               month={cardPayment.month}
-              format={(minorUnits) => show(minorUnits)}
+              format={showBudget}
             />
             <PaymentFigure
               categoryId={cardPayment.categoryId}
               available={cardPayment.available}
               caution={cardPayment.caution}
-              format={(minorUnits) => show(minorUnits)}
+              format={showBudget}
             />
           </div>
         )}

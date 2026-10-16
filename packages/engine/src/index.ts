@@ -62,7 +62,20 @@ export {
   type Upcoming,
   upcomingShort,
 } from "./funding";
-export { convert } from "./fx";
+export {
+  convert,
+  convertLines,
+  crossRate,
+  impliedRate,
+  invertRate,
+  normalizeRate,
+  parseJsonExact,
+  parseJsonRates,
+  RATE_SCALE,
+  rateToScaled,
+  roundRate,
+  scaledToRate,
+} from "./fx";
 export {
   effectivePayment,
   type LoanHistoryMonth,
@@ -204,6 +217,7 @@ export {
   type TargetCadence,
   type TargetNeed,
   type TargetRepeatUnit,
+  targetInBase,
   targetNeed,
   targetPercent,
   weekdaysIn,

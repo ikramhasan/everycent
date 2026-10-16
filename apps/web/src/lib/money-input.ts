@@ -3,12 +3,26 @@ import {
   type CurrencyCode,
   evaluateAmount,
   formatAmount,
+  isCurrencyCode,
   MoneyParseError,
   money,
 } from "@everycent/engine";
 
 export interface MoneySettings extends BudgetFormatSettings {
   currency: CurrencyCode;
+}
+
+/**
+ * The budget's number format and symbol position with an account's own currency (its symbol and
+ * decimal places): amounts in an account are in its currency's minor units. Falls back to the
+ * budget's currency while the account isn't known.
+ */
+export function inCurrency<S extends MoneySettings>(
+  settings: S,
+  currency: string | null | undefined,
+): S {
+  if (!currency || currency === settings.currency || !isCurrencyCode(currency)) return settings;
+  return { ...settings, currency };
 }
 
 /**

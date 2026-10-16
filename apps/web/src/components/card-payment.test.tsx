@@ -49,6 +49,9 @@ const account = (
   migratedToAccountId: null,
   migratedFromAccountId: null,
   toReview: 0,
+  unrealizedGain: null,
+  rate: null,
+  rateDate: null,
   balances: { cleared, uncleared: "0", working: cleared },
   ...extra,
 });

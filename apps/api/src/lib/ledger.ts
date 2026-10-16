@@ -11,6 +11,7 @@ import {
 } from "@everycent/db/schema";
 import { type AccountType, isOnBudget } from "@everycent/engine";
 import { and, eq, isNull, lte, max } from "drizzle-orm";
+import { type BaseFields, baseFields, budgetCurrencyOf, type FxDeps } from "./base-amount";
 import { loanChargeBalances } from "./loans";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -20,6 +21,7 @@ const INTERNAL_PAYEE_NAMES: Record<InternalPayeeKind, string> = {
   starting_balance: "Starting Balance",
   manual_balance_adjustment: "Manual Balance Adjustment",
   reconciliation_balance_adjustment: "Reconciliation Balance Adjustment",
+  fx_revaluation: "FX Revaluation",
 };
 
 /** The budget's built-in payee of this kind, created on first use. */
@@ -134,11 +136,41 @@ export interface NewTransaction {
   approved?: boolean;
   transferTransactionId?: string | null;
   transferSubTransactionId?: string | null;
+  /**
+   * The amount in the budget's currency, when already known (a revaluation's). Left out, it's
+   * `amount` in an account in the budget's currency, or converted with `fx` (at `rate`, or the
+   * date's rate) in a foreign one.
+   */
+  baseAmount?: bigint;
+  fxRate?: string | null;
+  fxRateManual?: boolean;
+  /** Needed to convert a foreign-currency amount (`baseFields`). */
+  fx?: FxDeps;
+  /** A rate typed by hand for a foreign-currency amount. */
+  rate?: string | null;
+  /** Split lines follow, so a zero amount still needs its rate (`syncBases` converts them). */
+  split?: boolean;
 }
 
 export async function insertTransaction(db: Db, values: NewTransaction) {
+  const { fx, rate, split, ...row } = values;
   const id = newId();
-  await db.insert(transaction).values({ id, ...values });
+  let base: BaseFields = {
+    baseAmount: row.baseAmount ?? row.amount,
+    fxRate: row.fxRate ?? null,
+    fxRateManual: row.fxRateManual ?? false,
+  };
+  if (row.baseAmount === undefined) {
+    const budgetCurrency = await budgetCurrencyOf(db, row.budgetId);
+    // Zero is zero in any currency, so there's no rate to look up (an empty Starting Balance),
+    // unless split lines follow: a split totalling zero still converts its lines at its rate.
+    if (budgetCurrency !== row.currency && (row.amount !== 0n || split)) {
+      if (!fx)
+        throw new Error(`A ${row.currency} transaction needs its amount in ${budgetCurrency}`);
+      base = await baseFields(db, fx, { ...row, budgetCurrency, rate });
+    }
+  }
+  await db.insert(transaction).values({ id, ...row, ...base });
   return id;
 }
 
@@ -175,15 +207,23 @@ export interface AccountBalances {
 }
 
 /**
- * Cleared (incl. reconciled), uncleared and working balances for each account of the budget, as
+ * Cleared (incl. reconciled), uncleared and working balances for each account of the budget, in
+ * its own currency (or the budget's: loans are always in the budget's, so their charges apply), as
  * of `today` (the user's calendar date): future-dated transactions don't count until their date.
  */
-export async function accountBalances(db: Db, budgetId: string, today: string) {
+export async function accountBalances(
+  db: Db,
+  budgetId: string,
+  today: string,
+  /** "base": in the budget's currency (Σ base amounts), for the budget's math. */
+  currency: "native" | "base" = "native",
+) {
+  const amount = currency === "base" ? transaction.baseAmount : transaction.amount;
   const rows = await db
     .select({
       accountId: transaction.accountId,
-      cleared: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.cleared} <> 'uncleared'), 0)`,
-      uncleared: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.cleared} = 'uncleared'), 0)`,
+      cleared: sql<string>`coalesce(sum(${amount}) filter (where ${transaction.cleared} <> 'uncleared'), 0)`,
+      uncleared: sql<string>`coalesce(sum(${amount}) filter (where ${transaction.cleared} = 'uncleared'), 0)`,
     })
     .from(transaction)
     .where(and(eq(transaction.budgetId, budgetId), lte(transaction.date, today)))
@@ -217,6 +257,9 @@ export async function insertStartingBalance(
     amount: bigint;
     currency: NewTransaction["currency"];
     date: string;
+    /** For an account in another currency: converts the balance (at `rate`, or the date's). */
+    fx?: FxDeps;
+    rate?: string | null;
   },
 ) {
   const toReadyToAssign = isOnBudget(input.type) && input.amount >= 0n;
@@ -226,6 +269,8 @@ export async function insertStartingBalance(
     date: input.date,
     amount: input.amount,
     currency: input.currency,
+    fx: input.fx,
+    rate: input.rate,
     payeeId: await internalPayeeId(db, input.budgetId, "starting_balance"),
     categoryId: toReadyToAssign
       ? await internalCategoryId(db, input.budgetId, "ready_to_assign")

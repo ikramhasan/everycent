@@ -163,18 +163,6 @@ describe("accounts", () => {
     expect(res.status).toBe(400);
   });
 
-  it("only accepts the budget's currency for now", async () => {
-    const { cookie, base } = await setup();
-    const res = await send("POST", `${base}/accounts`, cookie, {
-      name: "Euro account",
-      type: "checking",
-      currency: "EUR",
-      balance: "0",
-      date: TODAY,
-    });
-    expect(res.status).toBe(400);
-  });
-
   it("renames a credit account together with its payment category", async () => {
     const { cookie, base, addAccount, groups } = await setup();
     const visa = await addAccount({ name: "Visa", type: "credit_card", balance: "0" });
@@ -522,6 +510,7 @@ describe("payment categories and category history", () => {
       accountId: checking.id,
       date: TODAY,
       amount: -120000n,
+      baseAmount: -120000n,
       currency: "USD",
       categoryId: rent?.id,
     });
@@ -570,6 +559,7 @@ describe("payment categories and category history", () => {
       accountId: checking.id,
       date: TODAY,
       amount: -5000n,
+      baseAmount: -5000n,
       currency: "USD",
       categoryId: bills?.categories[2]?.id,
     });

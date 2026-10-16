@@ -189,6 +189,7 @@ describe("bulk edit", () => {
     ).toEqual({
       count: 5,
       total: "-340",
+      currency: "USD",
       uncleared: 4,
       cleared: 1,
       reconciled: 0,

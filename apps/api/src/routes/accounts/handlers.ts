@@ -11,13 +11,24 @@ import {
 } from "@everycent/db/schema";
 import {
   accountFamily,
+  type CurrencyCode,
   hasPaymentCategory,
+  impliedRate,
   isOnBudget,
   type LoanTerms,
+  money,
   rateThousandths,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import {
+  convertedTotals,
+  displayCurrencyOf,
+  TOTAL_IDS,
+  type Total,
+  type TotalId,
+} from "../../lib/account-totals";
+import { budgetCurrencyOf, type FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -46,6 +57,7 @@ import {
   saveLoanTerms,
 } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
+import { type Unrealized, unrealizedGains } from "../../lib/revaluation";
 import { transactionsToReview } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -77,6 +89,7 @@ function toAccountJson(
   terms: LoanTerms | undefined,
   migratedFromAccountId: string | null,
   toReview: number,
+  unrealized: Unrealized | undefined,
 ) {
   return {
     id: a.id,
@@ -103,6 +116,9 @@ function toAccountJson(
     migratedToAccountId: a.migratedToAccountId,
     migratedFromAccountId,
     toReview,
+    unrealizedGain: unrealized?.gain.toString() ?? null,
+    rate: unrealized?.rate ?? null,
+    rateDate: unrealized?.rateDate ?? null,
   };
 }
 
@@ -118,6 +134,18 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     .where(eq(category.budgetId, budgetId));
   const paymentByAccount = new Map(payments.map((p) => [p.accountId, p.id]));
   const balances = await accountBalances(db, budgetId, today);
+  const booked = await accountBalances(db, budgetId, today, "base");
+  const unrealized = await unrealizedGains(db, {
+    budgetId,
+    budgetCurrency: await budgetCurrencyOf(db, budgetId),
+    today,
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      currency: a.currency,
+      native: balances.get(a.id)?.working ?? 0n,
+      booked: booked.get(a.id)?.working ?? 0n,
+    })),
+  });
   const startingBalancePayee = await internalPayeeId(db, budgetId, "starting_balance");
   const withHistory = await db
     .selectDistinct({ accountId: transaction.accountId })
@@ -151,8 +179,61 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       terms.get(a.id),
       migratedFrom.get(a.id) ?? null,
       toReview.get(a.id) ?? 0,
+      unrealized.get(a.id),
     ),
   );
+}
+
+/**
+ * The account list with each account's balances and the sidebar's totals and net worth in
+ * `display` (the user's display currency, else the budget's; EVERYCENT-57).
+ */
+async function accountListJson(
+  db: Db,
+  budgetId: string,
+  today: string,
+  display: CurrencyCode | null,
+) {
+  const accounts = await listAccountJson(db, budgetId, today);
+  const budgetCurrency = await budgetCurrencyOf(db, budgetId);
+  const { converted, totals, missingRates } = await convertedTotals(db, {
+    budgetId,
+    budgetCurrency,
+    display: display ?? budgetCurrency,
+    today,
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      type: a.type,
+      currency: a.currency,
+      closed: a.closed,
+      starredSortOrder: a.starredOrder,
+      balances: {
+        cleared: BigInt(a.balances.cleared),
+        uncleared: BigInt(a.balances.uncleared),
+        working: BigInt(a.balances.working),
+      },
+    })),
+  });
+  return {
+    accounts: accounts.map((a) => {
+      const c = converted.get(a.id);
+      return {
+        ...a,
+        converted: c
+          ? {
+              currency: c.currency,
+              cleared: c.cleared.toString(),
+              uncleared: c.uncleared.toString(),
+              working: c.working.toString(),
+            }
+          : null,
+      };
+    }),
+    totals: Object.fromEntries(
+      TOTAL_IDS.map((id) => [id, { ...totals[id], amount: totals[id].amount.toString() }]),
+    ) as Record<TotalId, Omit<Total, "amount"> & { amount: string }>,
+    missingRates,
+  };
 }
 
 export async function accountJson(
@@ -241,6 +322,25 @@ async function pairCategory(tx: Db, account: AccountRow, categoryId: string | nu
     .where(eq(budgetAccount.id, account.id));
 }
 
+/**
+ * Which currencies an account of `type` may use. Loans stay in the budget's currency: their
+ * interest, escrow and paired category are budget amounts.
+ */
+function assertAccountCurrency(
+  type: AccountRow["type"],
+  currency: AccountRow["currency"],
+  budgetCurrency: AccountRow["currency"],
+) {
+  if (currency === budgetCurrency) return;
+  if (accountFamily(type) === "loan") {
+    throw new AppError(
+      422,
+      "LOAN_CURRENCY",
+      `Loan accounts use the budget's currency (${budgetCurrency})`,
+    );
+  }
+}
+
 const hasEscrow = (type: AccountRow["type"]) => type === "mortgage";
 
 const optionalBigInt = (v: string | null | undefined) =>
@@ -252,8 +352,14 @@ export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async
   const today = query.today ?? serverToday();
   await loadBudgetAccess(c, budgetId);
   if (query.today)
-    await enterDueScheduled(c.var.deps.db, budgetId, entryDate(c.var.deps, query.today));
-  return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
+    await enterDueScheduled(
+      c.var.deps.db,
+      c.var.deps,
+      budgetId,
+      entryDate(c.var.deps, query.today),
+    );
+  const display = query.displayCurrency ?? (await displayCurrencyOf(c.var.deps.db, c.var.user.id));
+  return c.json(await accountListJson(c.var.deps.db, budgetId, today, display), 200);
 };
 
 type NewAccount = {
@@ -270,6 +376,7 @@ type NewAccount = {
 /** Adds an account at the end of the sidebar with its Starting Balance; returns its id. */
 async function insertAccount(
   tx: Db,
+  fx: FxDeps,
   budgetId: string,
   currency: AccountRow["currency"],
   body: NewAccount,
@@ -309,6 +416,7 @@ async function insertAccount(
     amount: BigInt(body.balance),
     currency,
     date: body.date,
+    fx,
   });
   return accountId;
 }
@@ -318,21 +426,15 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { account: ["create"] });
-  // Multi-currency arrives in phase 11 (see Design notes).
-  if (body.currency && body.currency !== budget.currency) {
-    throw new AppError(
-      400,
-      "BAD_REQUEST",
-      `Accounts must use the budget's currency (${budget.currency}) for now`,
-    );
-  }
+  const currency = body.currency ?? budget.currency;
+  assertAccountCurrency(body.type, currency, budget.currency);
   assertLoanFields(body.type, body);
 
   if (body.pairedCategoryId !== undefined && accountFamily(body.type) !== "loan") {
     throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
   }
   const accountId = await db.transaction((tx) =>
-    insertAccount(tx, budgetId, budget.currency, body),
+    insertAccount(tx, c.var.deps, budgetId, currency, body),
   );
   return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
 };
@@ -375,6 +477,7 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
     if (original.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to update it");
     }
+    assertAccountCurrency(body.type, original.currency, budget.currency);
     // Rename first, so the loan can take the original's name and the payees stay distinct.
     const originalName = `${original.name} (Original)`.slice(0, 100);
     await tx
@@ -386,12 +489,13 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
       .set({ name: transferPayeeName(originalName) })
       .where(eq(payee.transferAccountId, original.id));
 
-    const loanId = await insertAccount(tx, budgetId, budget.currency, body);
+    // The loan keeps the original's currency (the budget's: loans can't be in another one).
+    const loanId = await insertAccount(tx, c.var.deps, budgetId, original.currency, body);
 
     const working =
       (await accountBalances(tx, budgetId, body.date)).get(original.id)?.working ?? 0n;
     if (working !== 0n) {
-      await insertAdjustment(tx, original, {
+      await insertAdjustment(tx, c.var.deps, original, {
         date: body.date,
         amount: -working,
         kind: "manual_balance_adjustment",
@@ -524,7 +628,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       if (difference !== 0n) {
         // YNAB's Edit Account (2026-10-11, "Onboarding Check"): a cleared Manual Balance
         // Adjustment with no memo, from Ready to Assign on budget accounts, cards included.
-        await insertAdjustment(tx, account, {
+        await insertAdjustment(tx, c.var.deps, account, {
           date,
           amount: difference,
           kind: "manual_balance_adjustment",
@@ -540,6 +644,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
 async function insertAdjustment(
   tx: Db,
+  fx: FxDeps,
   account: AccountRow,
   input: {
     date: string;
@@ -555,6 +660,7 @@ async function insertAdjustment(
     date: input.date,
     amount: input.amount,
     currency: account.currency,
+    fx,
     payeeId: await internalPayeeId(tx, account.budgetId, input.kind),
     memo: input.memo,
     categoryId: isOnBudget(account.type)
@@ -636,7 +742,7 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
     if (difference !== 0n) {
       // YNAB (2026-10-11, "Onboarding Check"): dated today, reconciled, Inflow: Ready to Assign
       // on budget accounts (a card's too), none on tracking accounts.
-      await insertAdjustment(tx, account, {
+      await insertAdjustment(tx, c.var.deps, account, {
         date,
         amount: difference,
         kind: "reconciliation_balance_adjustment",
@@ -733,7 +839,10 @@ export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (
       ),
     );
   });
-  return c.json({ accounts: await listAccountJson(db, budgetId, today) }, 200);
+  return c.json(
+    await accountListJson(db, budgetId, today, await displayCurrencyOf(db, c.var.user.id)),
+    200,
+  );
 };
 
 export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async (c) => {
@@ -745,13 +854,23 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
     const account = await findAccount(tx, budgetId, accountId);
     if (account.closed) return;
     const working = (await accountBalances(tx, budgetId, date)).get(accountId)?.working ?? 0n;
-    if (working !== 0n) {
+    // In the budget's currency the account then holds nothing either: a foreign account's
+    // adjustment takes out what its transactions were booked at, not today's value.
+    const baseWorking =
+      (await accountBalances(tx, budgetId, date, "base")).get(accountId)?.working ?? 0n;
+    if (working !== 0n || baseWorking !== 0n) {
+      const budgetCurrency = await budgetCurrencyOf(tx, budgetId);
       await insertTransaction(tx, {
         budgetId,
         accountId,
         date,
         amount: -working,
         currency: account.currency,
+        baseAmount: -baseWorking,
+        fxRate:
+          account.currency === budgetCurrency
+            ? null
+            : impliedRate(money(-working, account.currency), money(-baseWorking, budgetCurrency)),
         payeeId: await internalPayeeId(tx, budgetId, "manual_balance_adjustment"),
         memo: "Closed Account",
         categoryId: isOnBudget(account.type)

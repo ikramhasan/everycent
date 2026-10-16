@@ -3,7 +3,9 @@ import {
   ACCOUNT_TYPES,
   type AccountType,
   accountFamily,
+  type CurrencyCode,
   isDebtAccount,
+  isOnBudget,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
@@ -15,7 +17,8 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import { editBalanceLabel } from "@/lib/accounts";
 import type { CategoryList } from "@/lib/categories";
 import { hasEscrow } from "@/lib/loans";
-import { type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
+import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
+import { CurrencyPicker } from "./currency-picker";
 import { PairCategoryFields, type PairChoice, pairChoiceReady } from "./loan-dialogs";
 
 const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
@@ -180,13 +183,23 @@ function FormShell({
 export interface NewAccountValues {
   name: string;
   type: AccountType;
-  /** Minor units; negative when money is owed. */
+  /** Minor units of `currency`; negative when money is owed. */
   balance: string;
+  /** Left out for the budget's currency. */
+  currency?: CurrencyCode;
   interestRate?: string;
   minimumPayment?: string;
   escrowAmount?: string;
   /** Loans: YNAB's optional "Pair a Category" step. */
   pairing?: PairChoice;
+}
+
+/**
+ * Which account types can be in another currency than the budget's: all but loans, whose
+ * interest, escrow and paired category are budget amounts.
+ */
+export function allowsOtherCurrency(type: AccountType) {
+  return accountFamily(type) !== "loan";
 }
 
 export function AddAccountForm({
@@ -200,6 +213,10 @@ export function AddAccountForm({
   onSubmit: (values: NewAccountValues) => Promise<string | null>;
 }) {
   const [type, setType] = useState<AccountType>("checking");
+  const [picked, setPicked] = useState<CurrencyCode>(settings.currency);
+  // Other types use the budget's currency (and the picker hides).
+  const currency = allowsOtherCurrency(type) ? picked : settings.currency;
+  const money = inCurrency(settings, currency);
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
   const [loan, setLoan] = useState<LoanValues>({
@@ -217,7 +234,7 @@ export function AddAccountForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>, skipPairing = false) {
     event.preventDefault();
-    const parsed = parseMoneyInput(balance || "0", settings);
+    const parsed = parseMoneyInput(balance || "0", money);
     if (typeof parsed === "string") return setError(parsed);
     const loanValues = isLoan ? parseLoan(loan, settings, type) : null;
     if (loanValues && !loanValues.ok) return setError(loanValues.error);
@@ -235,6 +252,7 @@ export function AddAccountForm({
       type,
       // Debt forms ask for the amount owed; the balance is its negative.
       balance: (debt ? -parsed : parsed).toString(),
+      ...(currency !== settings.currency ? { currency } : {}),
       ...(loanValues?.ok
         ? {
             interestRate: loanValues.interestRate ?? undefined,
@@ -314,6 +332,17 @@ export function AddAccountForm({
           required
         />
       </Field>
+      {allowsOtherCurrency(type) && (
+        <Field>
+          <FieldLabel htmlFor="account-currency">Currency</FieldLabel>
+          <CurrencyPicker id="account-currency" value={picked} onChange={setPicked} />
+          <FieldDescription>
+            {isOnBudget(type)
+              ? `Amounts are in this currency; the plan counts them in ${settings.currency} at each transaction's rate.`
+              : "Amounts in this account are in its own currency."}
+          </FieldDescription>
+        </Field>
+      )}
       <Field>
         <FieldLabel htmlFor="account-balance">
           {debt ? "How much do you owe today?" : "What's the balance today?"}
@@ -323,7 +352,7 @@ export function AddAccountForm({
           inputMode="decimal"
           value={balance}
           onChange={(e) => setBalance(e.target.value)}
-          placeholder={toMoneyInput("0", settings)}
+          placeholder={toMoneyInput("0", money)}
         />
       </Field>
       {isLoan && <LoanFields values={loan} onChange={setLoan} type={type} adding />}

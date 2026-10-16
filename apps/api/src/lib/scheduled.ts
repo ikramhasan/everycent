@@ -10,6 +10,7 @@ import {
 import {
   accountFamily,
   type BudgetMonth,
+  type CurrencyCode,
   firstOccurrenceAfter,
   isOnBudget,
   monthBounds,
@@ -24,8 +25,9 @@ import {
 import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
 import {
   type AccountRow,
-  assertNotSelf,
   assertOpen,
+  assertSameCurrency,
+  assertTransferPair,
   clearedOnEntry,
   findAccount,
   insertOtherSide,
@@ -39,8 +41,10 @@ import {
   syncLines,
 } from "../routes/transactions/splits";
 import type { AppDeps } from "../types";
+import { budgetCurrencyOf, type FxDeps, linesToBase, toBase } from "./base-amount";
 import { shiftDay } from "./dates";
 import { AppError } from "./errors";
+import { knownRate, resolveRate } from "./fx";
 import {
   type Db,
   findOrCreatePayee,
@@ -93,6 +97,7 @@ async function transferAccountOf(db: Db, payeeId: string | null) {
  */
 export async function enterOccurrence(
   tx: Db,
+  fx: FxDeps,
   schedule: ScheduleRow,
   date: string,
   approved: boolean,
@@ -110,6 +115,8 @@ export async function enterOccurrence(
     date,
     amount: schedule.amount,
     currency: account.currency,
+    fx,
+    split: lines.length > 0,
     payeeId: schedule.payeeId,
     categoryId:
       lines.length > 0
@@ -130,6 +137,7 @@ export async function enterOccurrence(
         account,
         moved: false,
         counterpart: { cleared: clearedOnEntry, approved },
+        fx,
       },
       lines.map(
         (l): LineInput => ({
@@ -154,6 +162,7 @@ export async function enterOccurrence(
         categoryId: usesCategory(transferTo, account) ? schedule.categoryId : null,
         cleared: clearedOnEntry(transferTo),
         approved,
+        fx,
       },
     );
   }
@@ -194,7 +203,7 @@ export function entryDate(deps: Pick<AppDeps, "serverDate">, today: string) {
  * skipped (that request enters them). Schedules in closed accounts wait and catch up on every
  * missed date once the account is reopened, as YNAB does (EVERYCENT-115).
  */
-export async function enterDueScheduled(db: Database, budgetId: string, today: string) {
+export async function enterDueScheduled(db: Database, fx: FxDeps, budgetId: string, today: string) {
   const due = and(
     eq(scheduledTransaction.budgetId, budgetId),
     lte(scheduledTransaction.dateNext, today),
@@ -218,7 +227,19 @@ export async function enterDueScheduled(db: Database, budgetId: string, today: s
     for (const { schedule } of rows) {
       let date: string | null = schedule.dateNext;
       while (date !== null && date <= today) {
-        await enterOccurrence(tx, schedule, date, false);
+        const day = date;
+        // A foreign account's occurrence with no rate available waits (still due) until one is,
+        // so a missing rate never stops the reads that enter schedules (EVERYCENT-54).
+        const entered = await tx
+          .transaction(async (sp) => {
+            await enterOccurrence(sp, fx, schedule, day, false);
+            return true;
+          })
+          .catch((error: unknown) => {
+            if (error instanceof AppError && error.code === "FX_RATE_UNAVAILABLE") return false;
+            throw error;
+          });
+        if (!entered) break;
         date = await advance(tx, schedule, date);
       }
     }
@@ -226,8 +247,8 @@ export async function enterDueScheduled(db: Database, budgetId: string, today: s
 }
 
 /** YNAB's Enter Now: the next occurrence, dated `today` and approved; the schedule moves on. */
-export async function enterNow(tx: Db, schedule: ScheduleRow, today: string) {
-  const id = await enterOccurrence(tx, schedule, today, true);
+export async function enterNow(tx: Db, fx: FxDeps, schedule: ScheduleRow, today: string) {
+  const id = await enterOccurrence(tx, fx, schedule, today, true);
   await advance(tx, schedule, schedule.dateNext);
   return id;
 }
@@ -284,10 +305,14 @@ export async function writeSchedule(
   const restore = existing?.restore === true;
   const account = await findAccount(tx, budgetId, input.accountId);
   if (!restore && (!existing || existing.accountId !== account.id)) assertOpen(account);
+  if (existing && existing.accountId !== account.id) {
+    assertSameCurrency(await findAccount(tx, budgetId, existing.accountId), account, "move");
+  }
   let transferTo: AccountRow | null = null;
   if ("transferAccountId" in input.payee) {
     transferTo = await findAccount(tx, budgetId, input.payee.transferAccountId);
-    assertNotSelf(account, transferTo);
+    // A schedule has one amount; its other side between currencies isn't stored yet.
+    assertTransferPair(account, transferTo, true);
     if (!restore && existing?.transferAccountId !== transferTo.id) assertOpen(transferTo);
   }
   if (input.dateFirst > input.date) {
@@ -346,7 +371,7 @@ export async function writeSchedule(
     let lineTo: AccountRow | null = null;
     if (line.transferAccountId) {
       lineTo = await findAccount(tx, budgetId, line.transferAccountId);
-      assertNotSelf(account, lineTo);
+      assertTransferPair(account, lineTo, true);
       if (!restore) assertOpen(lineTo);
     }
     await tx.insert(scheduledSubTransaction).values({
@@ -373,14 +398,14 @@ export async function writeSchedule(
  * (monthly from 9/01 added on 10/11: 9/01 entered, next 11/01; checked 2026-10-11). Returns the
  * entered transaction's id, or null if the date is still ahead.
  */
-export async function enterIfPast(tx: Db, id: string, today: string) {
+export async function enterIfPast(tx: Db, fx: FxDeps, id: string, today: string) {
   const [schedule] = await tx
     .select()
     .from(scheduledTransaction)
     .where(eq(scheduledTransaction.id, id))
     .for("update");
   if (!schedule || schedule.dateNext > today) return null;
-  const entered = await enterOccurrence(tx, schedule, schedule.dateNext, false);
+  const entered = await enterOccurrence(tx, fx, schedule, schedule.dateNext, false);
   const next = firstOccurrenceAfter(schedule.frequency, schedule.dateFirst, today);
   if (next === null) {
     await tx.delete(scheduledTransaction).where(eq(scheduledTransaction.id, id));
@@ -654,6 +679,8 @@ export async function upcomingByCategory(
   month: BudgetMonth,
   today: string,
   paymentCategoryByAccount: ReadonlyMap<string, string>,
+  /** Looks up a rate no read has cached yet; without it such a schedule is left out. */
+  fx?: FxDeps,
 ): Promise<Map<string, CategoryUpcoming>> {
   const upcoming = new Map<string, CategoryUpcoming>();
   if (month < monthOf(today)) return upcoming;
@@ -677,6 +704,25 @@ export async function upcomingByCategory(
       ),
     );
   if (schedules.length === 0) return upcoming;
+  // A foreign account's schedule counts at the latest rate known for today (EVERYCENT-54), else
+  // one looked up now; with no rate at all it's left out (FX_RATE_UNAVAILABLE).
+  const budgetCurrency = await budgetCurrencyOf(db, budgetId);
+  const rates = new Map<CurrencyCode, string | null>();
+  for (const { schedule } of schedules) {
+    if (schedule.currency === budgetCurrency || rates.has(schedule.currency)) continue;
+    const known = await knownRate(db, {
+      budgetId,
+      budgetCurrency,
+      from: schedule.currency,
+      to: budgetCurrency,
+      date: today,
+    });
+    rates.set(
+      schedule.currency,
+      known ??
+        (fx ? await fetchedRate(db, fx, budgetId, schedule.currency, budgetCurrency, today) : null),
+    );
+  }
   const lines = await scheduleLines(
     db,
     schedules.map((r) => r.schedule.id),
@@ -721,22 +767,33 @@ export async function upcomingByCategory(
   for (const row of schedules) {
     const s = row.schedule;
     if (!isOnBudget(row.accountType)) continue;
+    const rate = s.currency === budgetCurrency ? null : (rates.get(s.currency) ?? undefined);
+    if (rate === undefined) continue;
     const own = lines.filter((l) => l.scheduledTransactionId === s.id);
+    const ownBase = linesToBase(
+      s.amount,
+      own.map((l) => l.amount),
+      s.currency,
+      rate,
+      budgetCurrency,
+    );
+    const amount = toBase(s.amount, s.currency, rate, budgetCurrency);
     const flows: { categoryId: string; amount: bigint }[] = [];
     if (own.length > 0) {
-      for (const line of own) {
+      for (const [i, line] of own.entries()) {
+        const lineAmount = ownBase[i] as bigint;
         const flow = line.transferAccountId
-          ? paymentFlow(s.accountId, line.transferAccountId, line.amount)
+          ? paymentFlow(s.accountId, line.transferAccountId, lineAmount)
           : line.categoryId
-            ? { categoryId: line.categoryId, amount: line.amount }
+            ? { categoryId: line.categoryId, amount: lineAmount }
             : null;
         if (flow) flows.push(flow);
       }
     } else if (row.transferAccountId && !s.categoryId) {
-      const flow = paymentFlow(s.accountId, row.transferAccountId, s.amount);
+      const flow = paymentFlow(s.accountId, row.transferAccountId, amount);
       if (flow) flows.push(flow);
     } else if (s.categoryId) {
-      flows.push({ categoryId: s.categoryId, amount: s.amount });
+      flows.push({ categoryId: s.categoryId, amount });
     }
     const relevant = flows.filter((f) => counted.has(f.categoryId));
     if (relevant.length === 0) continue;
@@ -767,4 +824,21 @@ export async function upcomingByCategory(
     entry.transactions.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
   }
   return upcoming;
+}
+
+/** Today's rate from the providers when none is cached; null when none is available. */
+async function fetchedRate(
+  db: Db,
+  fx: FxDeps,
+  budgetId: string,
+  from: CurrencyCode,
+  to: CurrencyCode,
+  today: string,
+) {
+  try {
+    return (await resolveRate(db, fx, { budgetId, from, to, date: today, today })).rate;
+  } catch (error) {
+    if (error instanceof AppError && error.code === "FX_RATE_UNAVAILABLE") return null;
+    throw error;
+  }
 }

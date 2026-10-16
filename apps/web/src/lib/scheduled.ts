@@ -76,7 +76,9 @@ export function scheduleCreateBody(
 ): Result<CreateBody> {
   const result = createBody(draft, settings);
   if (!result.ok) return result;
-  const { cleared: _, subtransactions, ...body } = result.body;
+  // Scheduled transfers stay in one currency, without a fee (EVERYCENT-55).
+  if (result.body.fee) return { ok: false, error: "A scheduled transfer can't have a fee." };
+  const { cleared: _, subtransactions, transferAmount: _t, fee: _f, ...body } = result.body;
   return {
     ok: true,
     body: {

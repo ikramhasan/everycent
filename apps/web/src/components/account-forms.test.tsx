@@ -26,6 +26,32 @@ describe("AddAccountForm", () => {
     });
   });
 
+  it("offers a currency for every account but loans, reading the balance in it", async () => {
+    // cmdk scrolls the picked currency into view, which jsdom doesn't implement.
+    Element.prototype.scrollIntoView = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    render(<AddAccountForm settings={usd} onSubmit={onSubmit} />);
+    // Budget accounts take one (EVERYCENT-54); loans use the budget's currency.
+    expect(screen.getByLabelText("Currency")).toHaveTextContent("USD");
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "mortgage");
+    expect(screen.queryByLabelText("Currency")).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText("Account type"), "asset");
+    expect(screen.getByLabelText("Currency")).toHaveTextContent("USD");
+    await userEvent.click(screen.getByLabelText("Currency"));
+    await userEvent.click(await screen.findByRole("option", { name: /JPY/ }));
+    expect(screen.getByLabelText("Currency")).toHaveTextContent("JPY");
+    await userEvent.type(screen.getByLabelText("Nickname"), "Tokyo");
+    await userEvent.type(screen.getByLabelText("What's the balance today?"), "150,000");
+    await userEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: "Tokyo",
+      type: "asset",
+      currency: "JPY",
+      balance: "150000",
+    });
+  });
+
   it("asks debt accounts for the amount owed and stores it as negative", async () => {
     const onSubmit = vi.fn().mockResolvedValue(null);
     render(<AddAccountForm settings={usd} onSubmit={onSubmit} />);

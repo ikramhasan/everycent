@@ -239,6 +239,27 @@
       "when": 1792092084208,
       "tag": "0033_nice_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792115835244,
+      "tag": "0034_uneven_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792117216540,
+      "tag": "0035_familiar_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792121286792,
+      "tag": "0036_display_currency",
+      "breakpoints": true
     }
   ]
 }

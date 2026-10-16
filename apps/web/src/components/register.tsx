@@ -75,6 +75,7 @@ import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
 import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
+import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
 import {
   deleteWarning,
@@ -119,6 +120,7 @@ import {
   type Draft,
   draftFrom,
   emptyDraft,
+  movableAccounts,
   payeesQueryOptions,
   paymentCategoryCard,
   REGISTER_PAGE_SIZE,
@@ -162,6 +164,7 @@ const NO_ROWS: ReadonlySet<string> = new Set();
 const NO_SUMMARY = {
   count: 0,
   total: "0",
+  currency: null,
   uncleared: 0,
   cleared: 0,
   reconciled: 0,
@@ -363,10 +366,50 @@ export function Register({
       ),
     [allAccounts, view.showRunningBalance, view.showFlags, reviewing],
   );
-  const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
-
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
+  /** An amount in `currency` (a row's, or its account's): the budget's by default. */
+  const show = (amount: bigint, currency?: string) =>
+    formatAmount(money(amount, inCurrency(budget, currency).currency));
+  /** The budget's number format with account `id`'s currency, for its amounts. */
+  const settingsOf = (id: string | undefined) =>
+    inCurrency(budget, id ? accountById.get(id)?.currency : undefined);
+  /** A transfer to an account in another currency: the money settings in that one's currency. */
+  const otherSettingsOf = (draft: Pick<Draft, "accountId" | "transferAccountId">) => {
+    const own = accountById.get(draft.accountId)?.currency;
+    const other = draft.transferAccountId
+      ? accountById.get(draft.transferAccountId)?.currency
+      : undefined;
+    return own && other && own !== other
+      ? settingsOf(draft.transferAccountId ?? undefined)
+      : undefined;
+  };
+  /**
+   * A foreign-currency amount with what the plan counts under it, in the budget's currency
+   * (EVERYCENT-54), and its rate on hover.
+   */
+  const withBase = (
+    native: string,
+    t: { currency: string; baseAmount: string; fxRate: string | null },
+  ) => {
+    if (t.currency === budget.currency) return native;
+    const base = BigInt(t.baseAmount);
+    return (
+      <span
+        className="inline-flex flex-col items-end leading-tight"
+        title={t.fxRate ? `1 ${t.currency} = ${t.fxRate} ${budget.currency}` : undefined}
+      >
+        <span>
+          {native}
+          {/* All accounts mixes currencies: name the row's, which a symbol may not (EVERYCENT-193). */}
+          {!accountId && <span className="ml-1 text-muted-foreground text-xs">{t.currency}</span>}
+        </span>
+        <span className="text-muted-foreground text-xs">{show(base < 0n ? -base : base)}</span>
+      </span>
+    );
+  };
+  /** The currency of the register's own account (the budget's for all accounts). */
+  const registerSettings = settingsOf(accountId);
   /** A new transaction in `id`, starting cleared in a cash account (YNAB). */
   const newDraft = (id: string, date: string) => emptyDraft(id, date, accountById.get(id)?.type);
   const openAccounts = accountList.filter((a) => !a.closed);
@@ -378,8 +421,8 @@ export function Register({
   const payeeList = payees.data?.payees ?? [];
   const flags = flagList.data?.flags ?? [];
   const searchSources = useMemo(
-    () => ({ categories: options, accounts: accountList, flags, settings: budget }),
-    [options, accountList, flags, budget],
+    () => ({ categories: options, accounts: accountList, flags, settings: registerSettings }),
+    [options, accountList, flags, registerSettings],
   );
 
   const tableColumns = useMemo(
@@ -475,9 +518,16 @@ export function Register({
   // The bar's figures: the selected transactions (none when only scheduled rows are ticked) plus
   // the selected scheduled rows.
   const selectionSummary = isEmpty(selection) ? NO_SUMMARY : summary.data;
-  const scheduledTotal = scheduledRows
-    .filter((row) => scheduledSelection.has(row.id))
-    .reduce((sum, row) => sum + BigInt(row.amount), 0n);
+  const selectedScheduled = scheduledRows.filter((row) => scheduledSelection.has(row.id));
+  const scheduledTotal = selectedScheduled.reduce((sum, row) => sum + BigInt(row.amount), 0n);
+  // Amounts in different currencies don't add up, so a mixed selection shows no total
+  // (converted totals: EVERYCENT-57).
+  const selectedCurrencies = new Set<string | null>(selectedScheduled.map((row) => row.currency));
+  if (selectionSummary && selectionSummary.count > 0) {
+    selectedCurrencies.add(selectionSummary.currency);
+  }
+  const mixedCurrencies = selectedCurrencies.size > 1 || selectedCurrencies.has(null);
+  const [selectionCurrency] = selectedCurrencies;
   // Make Repeating is offered for exactly one plain transaction.
   const single =
     selection.mode === "some" && selection.ids.size === 1 && scheduledSelection.size === 0
@@ -851,7 +901,7 @@ export function Register({
 
   /** Splits open as a whole, as do transactions being split from the category cell. */
   function openSplit(t: Transaction, split = false) {
-    const draft = draftFrom(t, budget);
+    const draft = draftFrom(t, inCurrency(budget, t.currency));
     setEditing(null);
     setAdding(false);
     setSplitError(null);
@@ -860,7 +910,7 @@ export function Register({
 
   async function saveSplit(t: Transaction, draft: Draft, confirmed = false) {
     if (!draft.date) return setSplitError("Enter a date.");
-    const result = updateBody(t, draft, budget);
+    const result = updateBody(t, draft, settingsOf(draft.accountId), otherSettingsOf(draft));
     if (!result.ok) return setSplitError(result.error);
     if (draft.date > today) {
       if (await reschedule(t, draft)) setEditingSplit(null);
@@ -923,7 +973,7 @@ export function Register({
    */
   function makeRepeating(t: Transaction) {
     clearSelection();
-    startAdding(makeRepeatingDraft(t, budget));
+    startAdding(makeRepeatingDraft(t, inCurrency(budget, t.currency)));
   }
 
   /**
@@ -938,8 +988,9 @@ export function Register({
   async function saveNew(draft: Draft, another = false) {
     if (!draft.date) return setNewError("Enter a date.");
     if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
-    const result = createBody(draft, budget);
+    const result = createBody(draft, settingsOf(draft.accountId), otherSettingsOf(draft));
     if (!result.ok) return setNewError(result.error);
+    const fee = result.body.fee;
     try {
       const created = await create.mutateAsync({
         params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
@@ -952,12 +1003,19 @@ export function Register({
           await remove.mutateAsync({
             params: { path: { budgetId: budget.id, transactionId: current.id } },
           });
+          // A transfer's fee is a transaction of its own; it goes with the transfer it came with.
+          const feeId = current.feeTransactionId;
+          if (feeId) {
+            await remove.mutateAsync({
+              params: { path: { budgetId: budget.id, transactionId: feeId } },
+            });
+          }
           await refresh();
         },
         redo: async () => {
           current = await create.mutateAsync({
             params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
-            body: createBodyFromTransaction(created),
+            body: { ...createBodyFromTransaction(created), ...(fee ? { fee } : {}) },
           });
           await refresh();
         },
@@ -974,7 +1032,7 @@ export function Register({
    * a repeat enters that one transaction and starts the schedule after today.
    */
   async function saveNewScheduled(draft: Draft, another = false) {
-    const result = scheduleCreateBody(draft, budget, today);
+    const result = scheduleCreateBody(draft, settingsOf(draft.accountId), today);
     if (!result.ok) return setNewError(result.error);
     try {
       const body = result.body;
@@ -1024,7 +1082,7 @@ export function Register({
    * transfer's other side included. Undo brings the transaction back.
    */
   async function reschedule(t: Transaction, draft: Draft) {
-    const result = rescheduleBody(t, draft, budget, today);
+    const result = rescheduleBody(t, draft, settingsOf(draft.accountId), today);
     if (!result.ok) {
       toast.error(result.error);
       return false;
@@ -1076,7 +1134,7 @@ export function Register({
     exit: CellExit,
     transferAccountId: string | null,
   ) {
-    const result = cellUpdate(t, cell, value, budget, transferAccountId);
+    const result = cellUpdate(t, cell, value, inCurrency(budget, t.currency), transferAccountId);
     if (!result.ok) {
       toast.error(result.error);
       setEditing({ id: t.id, column: cell });
@@ -1084,7 +1142,10 @@ export function Register({
     }
     if (result.body.date && result.body.date > today) {
       setEditing(null);
-      await reschedule(t, { ...draftFrom(t, budget), date: result.body.date });
+      await reschedule(t, {
+        ...draftFrom(t, inCurrency(budget, t.currency)),
+        date: result.body.date,
+      });
       return;
     }
     const order = editableColumns(t);
@@ -1361,12 +1422,19 @@ export function Register({
       case "memo":
         return t.memo;
       case "outflow":
-        return amount < 0n ? show(-amount) : "";
-      case "inflow":
-        return amount > 0n ? show(amount) : "";
+      case "inflow": {
+        // An FX revaluation has no native amount: its side is its base amount's (EVERYCENT-56).
+        const sign = amount === 0n ? BigInt(t.baseAmount) : amount;
+        if (id === "outflow" ? sign >= 0n : sign <= 0n) return "";
+        return withBase(show(amount < 0n ? -amount : amount, t.currency), t);
+      }
       case "balance": {
         const balance = BigInt(t.runningBalance);
-        return <span className={cn(balance < 0n && "text-destructive")}>{show(balance)}</span>;
+        return (
+          <span className={cn(balance < 0n && "text-destructive")}>
+            {show(balance, t.currency)}
+          </span>
+        );
       }
       case "cleared":
         return t.cleared === "reconciled" ? (
@@ -1453,9 +1521,9 @@ export function Register({
       case "memo":
         return line.memo;
       case "outflow":
-        return amount < 0n ? show(-amount) : "";
+        return amount < 0n ? show(-amount, t.currency) : "";
       case "inflow":
-        return amount > 0n ? show(amount) : "";
+        return amount > 0n ? show(amount, t.currency) : "";
       default:
         return null;
     }
@@ -1503,7 +1571,14 @@ export function Register({
       {(!isEmpty(selection) || scheduledSelection.size > 0) && (
         <SelectionBar
           summary={selectionSummary}
-          total={selectionSummary ? show(BigInt(selectionSummary.total) + scheduledTotal) : null}
+          total={
+            selectionSummary && !mixedCurrencies
+              ? show(
+                  BigInt(selectionSummary.total) + scheduledTotal,
+                  selectionCurrency ?? undefined,
+                )
+              : null
+          }
           allMatching={selection.mode === "all"}
           canSelectAll={
             !isEmpty(selection) &&
@@ -1566,7 +1641,8 @@ export function Register({
 
       <Table
         containerRef={scrollRef}
-        containerClassName="max-h-[70vh] overflow-auto rounded-lg border"
+        // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
+        containerClassName="@container max-h-[70vh] overflow-auto rounded-lg border"
         className="min-w-[74rem] table-fixed"
       >
         <colgroup>
@@ -1706,6 +1782,7 @@ export function Register({
                   label="Edit transaction"
                   columns={columnIds}
                   accounts={editorAccounts(accountList, t.accountId)}
+                  accountChoices={movableAccounts(accountList, t)}
                   payees={payeeList}
                   categories={options}
                   dateFormat={budget.dateFormat}
@@ -1770,9 +1847,9 @@ export function Register({
                         <CellEditor
                           transaction={t}
                           column={editing.column}
-                          settings={budget}
+                          settings={inCurrency(budget, t.currency)}
                           dateFormat={budget.dateFormat}
-                          accounts={editorAccounts(accountList, t.accountId)}
+                          accounts={movableAccounts(accountList, t)}
                           payees={payeeList}
                           transfers={transferTargets(t)}
                           categories={options}

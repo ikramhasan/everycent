@@ -1,15 +1,19 @@
 import {
+  budgetAccount,
   type ClearedState,
   type FlagColor,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
+import { normalizeRate } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
+import { type FxDeps, oppositeSides, rebase, syncBases } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -23,10 +27,13 @@ import type {
 } from "./routes";
 import {
   type AccountRow,
-  assertNotSelf,
   assertOnePayee,
   assertOpen,
+  assertSameCurrency,
+  assertTransferPair,
+  checkTransferAmount,
   clearedOnEntry,
+  defaultOtherAmount,
   findAccount,
   insertOtherSide,
   lockTransaction,
@@ -46,6 +53,25 @@ import {
 } from "./splits";
 
 type Env = AppEnv & AuthedEnv;
+/**
+ * How a register's search reads amounts: in its account's currency, or for all accounts each
+ * row's in its own account's (`currencies`: every currency the budget's accounts use;
+ * EVERYCENT-193).
+ */
+export async function searchSettings<S extends { currency: AccountRow["currency"] }>(
+  db: Db,
+  budgetId: string,
+  budget: S,
+  account: Pick<AccountRow, "currency"> | null,
+): Promise<S & { currencies?: AccountRow["currency"][] }> {
+  if (account) return { ...budget, currency: account.currency };
+  const rows = await db
+    .selectDistinct({ currency: budgetAccount.currency })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.budgetId, budgetId));
+  return { ...budget, currencies: rows.map((r) => r.currency) };
+}
+
 async function transactionJson(db: Db, budgetId: string, accountId: string, id: string) {
   const row = await queryRegisterRow(db, budgetId, accountId, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Transaction not found");
@@ -58,14 +84,15 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
-  if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
-  if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
+  if (today && !cursor)
+    await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, today));
+  const account = filter.accountId ? await findAccount(db, budgetId, filter.accountId) : null;
   const page = await queryRegister(
     db,
     budgetId,
     { ...filter, today },
     { sort: parseSort(sort), limit, cursor },
-    budget,
+    await searchSettings(db, budgetId, budget, account),
   );
   return c.json(page, 200);
 };
@@ -80,8 +107,9 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
   // back as it was, so one dated ahead (older data, or the server's UTC + 1) isn't refused, as an
   // edit that keeps its date isn't.
   if (!body.restore) assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
-  const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
-  return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
+  const { id, feeId } = await db.transaction((tx) => insertWithFee(tx, c.var.deps, budgetId, body));
+  const row = await transactionJson(db, budgetId, body.accountId, id);
+  return c.json({ ...row, feeTransactionId: feeId }, 201);
 };
 
 /** What `createTransaction` takes. */
@@ -105,22 +133,48 @@ export interface CreateBody {
    * Undo restores a transfer into an account closed from elsewhere (2026-10-14).
    */
   restore?: boolean;
+  /** In a foreign-currency account: the rate typed by hand (otherwise the date's). */
+  fxRate?: string | null;
+  /** An undo restoring a deleted FX Revaluation: its booked base amount (with its `fxRate`). */
+  baseAmount?: string;
+  /**
+   * A transfer between currencies: the other side's amount, in its account's currency
+   * (otherwise this side's base amount at the date's rate).
+   */
+  transferAmount?: string | null;
+  /** A transfer's fee: an outflow in the sending account, in its currency (positive). */
+  fee?: { amount: string; categoryId: string | null };
 }
 
 /** A new transaction (with its transfer's other side and its split's lines); returns its id. */
-export async function insertNewTransaction(tx: Db, budgetId: string, body: CreateBody) {
+export async function insertNewTransaction(tx: Db, fx: FxDeps, budgetId: string, body: CreateBody) {
+  const { id } = await insertWithFee(tx, fx, budgetId, body);
+  return id;
+}
+
+/** `insertNewTransaction`, plus a transfer's fee (`body.fee`); returns both ids. */
+export async function insertWithFee(tx: Db, fx: FxDeps, budgetId: string, body: CreateBody) {
   assertOnePayee(body);
   const account = await findAccount(tx, budgetId, body.accountId);
   if (!body.restore) assertOpen(account);
   let transferTo: AccountRow | null = null;
   if (body.transferAccountId !== undefined) {
     transferTo = await findAccount(tx, budgetId, body.transferAccountId);
-    assertNotSelf(account, transferTo);
+    assertTransferPair(account, transferTo);
     if (!body.restore) assertOpen(transferTo);
   } else if (body.transferSide) {
     throw new AppError(400, "BAD_REQUEST", "`transferSide` needs `transferAccountId`");
   }
   const amount = BigInt(body.amount);
+  const transferAmount = checkTransferAmount(
+    amount,
+    body.transferAmount ?? body.transferSide?.amount,
+    account,
+    transferTo,
+  );
+  if (body.fee && !transferTo) {
+    throw new AppError(400, "BAD_REQUEST", "A `fee` goes with a transfer");
+  }
   const split = body.subtransactions;
   if (split) {
     if (transferTo) notSplittable();
@@ -128,17 +182,35 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
     assertSplitAllowed(account);
     assertLinesAddUp(split, amount);
   }
+  const payeeId = transferTo
+    ? await transferPayeeId(tx, transferTo)
+    : body.payeeName
+      ? await findOrCreatePayee(tx, budgetId, body.payeeName)
+      : null;
+  // An undo bringing back an FX Revaluation: its amount is 0, so only its booked base amount
+  // says what it did (EVERYCENT-56).
+  if (body.baseAmount !== undefined) {
+    if (!body.restore || amount !== 0n || !(await isRevaluationPayee(tx, payeeId))) {
+      throw new AppError(
+        400,
+        "BAD_REQUEST",
+        "`baseAmount` only restores a deleted FX Revaluation (with `restore`)",
+      );
+    }
+  }
   const id = await insertTransaction(tx, {
     budgetId,
     accountId: account.id,
     date: body.date,
     amount,
     currency: account.currency,
-    payeeId: transferTo
-      ? await transferPayeeId(tx, transferTo)
-      : body.payeeName
-        ? await findOrCreatePayee(tx, budgetId, body.payeeName)
-        : null,
+    ...(body.baseAmount !== undefined
+      ? {
+          baseAmount: BigInt(body.baseAmount),
+          fxRate: body.fxRate ? normalizeRate(body.fxRate) : null,
+        }
+      : { fx, rate: body.fxRate, split: split !== undefined }),
+    payeeId,
     categoryId: split
       ? null
       : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),
@@ -150,21 +222,69 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
   if (split) {
     await syncLines(
       tx,
-      { budgetId, parentId: id, date: body.date, account, moved: false, restore: body.restore },
+      {
+        budgetId,
+        parentId: id,
+        date: body.date,
+        account,
+        moved: false,
+        restore: body.restore,
+        fx,
+      },
       split,
     );
   }
+  let feeId: string | null = null;
   if (transferTo) {
     await insertOtherSide(
       tx,
       { id, budgetId, date: body.date, amount, memo: body.memo },
       account,
       transferTo,
-      body.transferSide ?? {},
+      { ...body.transferSide, transferAmount, fx },
     );
+    if (body.fee) {
+      feeId = await insertFee(tx, fx, budgetId, body.date, body.fee, amount, account, transferTo);
+    }
   }
-  return id;
+  await syncBases(tx, id);
+  return { id, feeId };
 }
+
+/**
+ * A transfer's fee (EVERYCENT-55): its own outflow in the sending account (the one the money
+ * leaves; this one at zero), same date, in that account's currency and converted like any
+ * transaction, payee and memo "Transfer fee", in the given category. It isn't linked to the
+ * transfer.
+ */
+async function insertFee(
+  tx: Db,
+  fx: FxDeps,
+  budgetId: string,
+  date: string,
+  fee: NonNullable<CreateBody["fee"]>,
+  amount: bigint,
+  account: AccountRow,
+  transferTo: AccountRow,
+) {
+  const value = BigInt(fee.amount);
+  if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Enter the fee as an amount above zero");
+  const from = amount > 0n ? transferTo : account;
+  return insertTransaction(tx, {
+    budgetId,
+    accountId: from.id,
+    date,
+    amount: -value,
+    currency: from.currency,
+    fx,
+    payeeId: await findOrCreatePayee(tx, budgetId, FEE_TEXT),
+    categoryId: await resolveCategory(tx, budgetId, from, null, fee.categoryId),
+    memo: FEE_TEXT,
+    cleared: clearedOnEntry(from),
+  });
+}
+
+const FEE_TEXT = "Transfer fee";
 
 export const updateTransactionHandler: RouteHandler<typeof updateTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
@@ -175,7 +295,7 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   assertOnePayee(body);
   const latest = latestTransactionDate(c.var.deps, today);
   const accountId = await db.transaction((tx) =>
-    applyUpdate(tx, budgetId, transactionId, withApproval(body), latest),
+    applyUpdate(tx, c.var.deps, budgetId, transactionId, withApproval(body), latest),
   );
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
@@ -205,11 +325,22 @@ export interface UpdateBody {
   subtransactions?: LineInput[];
   /** A transfer's other side follows a change (YNAB approves both sides together). */
   approved?: boolean;
+  /**
+   * In a foreign-currency account: a rate typed by hand, or null to go back to the date's rate.
+   * Left out, the rate stays (see `rebase`).
+   */
+  fxRate?: string | null;
+  /**
+   * A transfer between currencies: the other side's amount in its account's currency, or null
+   * for this side's base amount at the date's rate. Left out, the other side keeps its amount.
+   */
+  transferAmount?: string | null;
 }
 
 /** One transaction's edit (as `updateTransaction` describes it); returns its account. */
 export async function applyUpdate(
   tx: Db,
+  fx: FxDeps,
   budgetId: string,
   transactionId: string,
   body: UpdateBody,
@@ -223,6 +354,8 @@ export async function applyUpdate(
   if (body.date !== undefined && body.date !== existing.date)
     assertNotFuture(body.date, latestDate);
   if (existing.cleared === "reconciled" && body.cleared !== undefined) reconciledStays();
+  // A revaluation keeps its base amount: converting its zero amount again would erase it.
+  const revaluation = await assertRevaluationEditable(tx, existing, body);
   if (existing.transferSubTransactionId) {
     return updateSplitTransferSide(tx, budgetId, existing, body);
   }
@@ -232,7 +365,10 @@ export async function applyUpdate(
 
   const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
   const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
-  if (moved) assertOpen(account);
+  if (moved) {
+    assertOpen(account);
+    assertSameCurrency(await findAccount(tx, budgetId, existing.accountId), account, "move");
+  }
 
   // The account the other side belongs in: unchanged unless the payee changes.
   const targetId =
@@ -241,7 +377,7 @@ export async function applyUpdate(
   let transferTo: AccountRow | null = null;
   if (targetId !== null) {
     transferTo = await findAccount(tx, budgetId, targetId);
-    assertNotSelf(account, transferTo);
+    assertTransferPair(account, transferTo);
     if (retargeted) {
       assertOpen(account);
       assertOpen(transferTo);
@@ -249,6 +385,10 @@ export async function applyUpdate(
   }
 
   const amount = body.amount === undefined ? existing.amount : BigInt(body.amount);
+  const transferAmount = checkTransferAmount(amount, body.transferAmount, account, transferTo);
+  if (body.transferAmount === null && !transferTo) {
+    throw new AppError(400, "BAD_REQUEST", "`transferAmount` is for transfers only");
+  }
   // A reconciled other side follows the edit and stays reconciled, as in YNAB (2026-10-11): the
   // warning before saving is the client's.
 
@@ -281,6 +421,22 @@ export async function applyUpdate(
     categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
   }
 
+  // Only what the base amount depends on converts it again; a memo, flag or cleared edit keeps
+  // the booked amount (an implied or looked-up rate would round it differently).
+  const rebased =
+    amount !== existing.amount ||
+    (body.date ?? existing.date) !== existing.date ||
+    account.id !== existing.accountId ||
+    body.fxRate !== undefined;
+  const base =
+    revaluation || !rebased
+      ? {}
+      : await rebase(tx, fx, existing, {
+          currency: account.currency,
+          date: body.date ?? existing.date,
+          amount,
+          rate: body.fxRate,
+        });
   await tx
     .update(transaction)
     .set({
@@ -288,6 +444,7 @@ export async function applyUpdate(
       currency: account.currency,
       date: body.date,
       amount,
+      ...base,
       payeeId: transferTo
         ? await transferPayeeId(tx, transferTo)
         : body.payeeName === undefined
@@ -311,7 +468,7 @@ export async function applyUpdate(
   if (split || wasSplit) {
     await syncLines(
       tx,
-      { budgetId, parentId: transactionId, date: body.date ?? existing.date, account, moved },
+      { budgetId, parentId: transactionId, date: body.date ?? existing.date, account, moved, fx },
       unsplit ? [] : lines,
     );
   }
@@ -319,6 +476,22 @@ export async function applyUpdate(
   if (other && !transferTo) {
     await tx.delete(transaction).where(eq(transaction.id, other.id));
   } else if (other && transferTo) {
+    // Between currencies the other side keeps its own amount (EVERYCENT-55) unless it's given,
+    // cleared (null: the date's rate), or no longer fits (another currency, or the same way).
+    let otherAmount = -amount;
+    if (account.currency !== transferTo.currency) {
+      const keep =
+        body.transferAmount !== null &&
+        other.currency === transferTo.currency &&
+        oppositeSides(amount, other.amount);
+      otherAmount =
+        transferAmount ??
+        (keep
+          ? other.amount
+          : amount === 0n
+            ? 0n
+            : await defaultOtherAmount(tx, fx, transactionId, transferTo.currency));
+    }
     // Date, amount and memo are shared; cleared, flag and category stay per side. YNAB copies a
     // memo edit on either side to the other (2026-10-15, EVERYCENT-158); only a changed memo is
     // copied, so saving a row leaves a memo set apart by the bulk Memo action alone.
@@ -329,7 +502,7 @@ export async function applyUpdate(
         accountId: transferTo.id,
         currency: transferTo.currency,
         date: body.date,
-        amount: -amount,
+        amount: otherAmount,
         payeeId: moved ? await transferPayeeId(tx, account) : undefined,
         categoryId:
           moved || retargeted
@@ -355,8 +528,10 @@ export async function applyUpdate(
       },
       account,
       transferTo,
+      { transferAmount, fx },
     );
   }
+  await syncBases(tx, transactionId);
   return account.id;
 }
 

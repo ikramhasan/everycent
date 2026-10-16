@@ -30,3 +30,8 @@ export function useBudget(): BudgetContextValue {
   if (!value) throw new Error("useBudget must be used inside a budget route");
   return value;
 }
+
+/** The current budget, or null outside a budget route (e.g. a component rendered on its own). */
+export function useOptionalBudget(): BudgetContextValue | null {
+  return useContext(BudgetContext);
+}

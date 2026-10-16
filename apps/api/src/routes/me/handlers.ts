@@ -163,10 +163,11 @@ async function preferencesOf(db: AppEnv["Variables"]["deps"]["db"], userId: stri
     .select({
       openLastBudget: userPreference.openLastBudget,
       keyboardShortcuts: userPreference.keyboardShortcuts,
+      displayCurrency: userPreference.displayCurrency,
     })
     .from(userPreference)
     .where(eq(userPreference.userId, userId));
-  return row ?? { openLastBudget: true, keyboardShortcuts: true };
+  return row ?? { openLastBudget: true, keyboardShortcuts: true, displayCurrency: null };
 }
 
 export const getPreferencesHandler: Handler<typeof getPreferences> = async (c) =>

@@ -19,6 +19,7 @@ const target = (extra: Partial<CategoryTarget> = {}): CategoryTarget => ({
   cadence: "monthly",
   behavior: "set_aside",
   amount: "10000",
+  currency: "USD",
   dueDay: null,
   dueDate: null,
   repeatEvery: null,

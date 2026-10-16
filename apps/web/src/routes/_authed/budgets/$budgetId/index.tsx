@@ -1,4 +1,4 @@
-import { addMonths, type BudgetMonth, isBudgetMonth } from "@everycent/engine";
+import { addMonths, type BudgetMonth, type CurrencyCode, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,7 +32,7 @@ import {
 import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
-import { TargetSection } from "@/components/target-inspector";
+import { type MoneyIO, TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { UpcomingTransactions } from "@/components/upcoming-transactions";
 import { accountsQueryOptions } from "@/lib/accounts";
@@ -58,7 +58,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { useCategoryTemplates } from "@/lib/category-templates";
 import { todayIso } from "@/lib/dates";
 import { useFixThisMonths } from "@/lib/fix-this";
-import { parseMoneyInput, toMoneyInput } from "@/lib/money-input";
+import { inCurrency, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
 import {
   type BudgetMonthData,
   currentMonth,
@@ -821,10 +821,19 @@ function Inspector({
   targetActions: ReturnType<typeof useTargetActions>;
   onShowOverspent: () => void;
 }) {
-  const { budget, formatDate } = useBudget();
+  const { budget, formatAmount, formatDate } = useBudget();
   const navigate = useNavigate();
   const history = useUndo();
   const { month, format, assign } = figures;
+  /** Amounts in a target's own currency (EVERYCENT-58), in the budget's number format. */
+  const moneyIn = (currency: CurrencyCode): MoneyIO => {
+    const settings = inCurrency({ ...budget, currency: month.currency }, currency);
+    return {
+      format: (amount) => formatAmount(toMoney(amount, settings.currency)),
+      parse: (text) => parseMoneyInput(text, settings),
+      toInput: (amount) => toMoneyInput(amount, settings),
+    };
+  };
   const only = selection.size === 1 ? [...selection][0] : undefined;
   const pairedLoan = usePairedLoan(only);
   const loanPlan = useLoanPlan(pairedLoan);
@@ -883,6 +892,12 @@ function Inspector({
         }
       />
     );
+    const targetCurrency = {
+      budgetCurrency: month.currency,
+      moneyIn,
+      conversion: totals.targetConversion,
+      rateMissing: totals.targetRateMissing,
+    };
     if (totals.payment) {
       const payment = paymentFigures(totals.payment);
       const alertProps = {
@@ -922,6 +937,7 @@ function Inspector({
                 parse={assign.parse}
                 toInput={assign.toInput}
                 dateFormat={budget.dateFormat}
+                currency={targetCurrency}
                 onSave={(input) => targetActions.save(only, month.month, input, category.target)}
                 onDelete={() => targetActions.remove(only, category.target)}
                 onAssign={
@@ -978,6 +994,7 @@ function Inspector({
               parse={assign.parse}
               toInput={assign.toInput}
               dateFormat={budget.dateFormat}
+              currency={targetCurrency}
               onSave={(input) => targetActions.save(only, month.month, input, category.target)}
               onDelete={() => targetActions.remove(only, category.target)}
               onAssign={

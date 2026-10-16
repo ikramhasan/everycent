@@ -1,3 +1,4 @@
+import type { CurrencyCode } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
   Card,
@@ -7,7 +8,7 @@ import {
   CardTitle,
 } from "@everycent/ui/components/card";
 import { Checkbox } from "@everycent/ui/components/checkbox";
-import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -18,6 +19,7 @@ import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { preferencesQueryOptions } from "@/lib/preferences";
 import { refreshSession } from "@/lib/session";
+import { CurrencyPicker } from "./currency-picker";
 
 /** YNAB's "First Name": "We use your first name to personalize your YNAB experience." */
 export function NameCard({ name }: { name: string }) {
@@ -81,10 +83,20 @@ export function OptionsCard() {
   const preferences = useQuery(preferencesQueryOptions());
   const update = $api.useMutation("patch", "/v1/me/preferences");
 
-  async function save(body: { openLastBudget?: boolean; keyboardShortcuts?: boolean }) {
+  async function save(body: {
+    openLastBudget?: boolean;
+    keyboardShortcuts?: boolean;
+    displayCurrency?: CurrencyCode | null;
+  }) {
     try {
       const saved = await update.mutateAsync({ body });
       queryClient.setQueryData(preferencesQueryOptions().queryKey, saved);
+      // Every budget's account totals are shown in it.
+      if (body.displayCurrency !== undefined) {
+        await queryClient.invalidateQueries({
+          queryKey: ["get", "/v1/budgets/{budgetId}/accounts"],
+        });
+      }
       toast.success("Options have been updated.");
     } catch {
       toast.error("Couldn't update the options. Try again.");
@@ -115,6 +127,19 @@ export function OptionsCard() {
             </FieldLabel>
           </Field>
         ))}
+        <Field>
+          <FieldLabel htmlFor="option-display-currency">Show account totals in</FieldLabel>
+          <CurrencyPicker
+            id="option-display-currency"
+            value={preferences.data?.displayCurrency ?? null}
+            noneLabel="Budget's currency"
+            onChange={(code) => save({ displayCurrency: code })}
+            onNone={() => save({ displayCurrency: null })}
+          />
+          <FieldDescription>
+            Sidebar totals and net worth, in every budget, converted at today's exchange rates.
+          </FieldDescription>
+        </Field>
       </CardContent>
     </Card>
   );

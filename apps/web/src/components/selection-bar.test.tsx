@@ -9,6 +9,7 @@ type Summary = components["schemas"]["SelectionSummary"];
 const summary = (patch: Partial<Summary>): Summary => ({
   count: 2,
   total: "-200",
+  currency: "USD",
   uncleared: 0,
   cleared: 0,
   reconciled: 0,

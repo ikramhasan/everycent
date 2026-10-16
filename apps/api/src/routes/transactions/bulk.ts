@@ -4,13 +4,15 @@ import { usesCategory } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq, exists, inArray, isNull, notInArray, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
+import { isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { applyUpdate, deleteWithTransfers, insertNewTransaction } from "./handlers";
+import { applyUpdate, deleteWithTransfers, insertNewTransaction, searchSettings } from "./handlers";
 import {
   matchingTransactions,
   queryRegisterRows,
@@ -22,6 +24,7 @@ import {
   type AccountRow,
   usesCategory as accountUsesCategory,
   assertOpen,
+  assertSameCurrency,
   findAccount,
   lockTransaction,
   resolveCategory,
@@ -49,10 +52,12 @@ function selectedWhere(
   ) as SQL;
 }
 
+/** The filtered register's account (checked to be the budget's), or null for all accounts. */
 async function checkFilterAccount(db: Db, budgetId: string, selection: Selection) {
   if ("filter" in selection && selection.filter.accountId) {
-    await findAccount(db, budgetId, selection.filter.accountId);
+    return findAccount(db, budgetId, selection.filter.accountId);
   }
+  return null;
 }
 
 /** What the action bar needs to know about each selected row. */
@@ -63,6 +68,7 @@ function selectedRows(db: Db, where: SQL) {
     .select({
       id: transaction.id,
       amount: transaction.amount,
+      currency: transaction.currency,
       cleared: transaction.cleared,
       approved: transaction.approved,
       transferTransactionId: transaction.transferTransactionId,
@@ -120,13 +126,21 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
   const { selection } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  await checkFilterAccount(db, budgetId, selection);
-  const rows = await selectedRows(db, selectedWhere(db, budgetId, selection, budget));
+  const settings = await searchSettings(
+    db,
+    budgetId,
+    budget,
+    await checkFilterAccount(db, budgetId, selection),
+  );
+  const rows = await selectedRows(db, selectedWhere(db, budgetId, selection, settings));
   const count = (test: (row: SelectedRow) => boolean) => rows.filter(test).length;
+  // Amounts in different currencies don't add up (converted totals: EVERYCENT-57).
+  const currency = new Set(rows.map((r) => r.currency)).size === 1 ? rows[0]?.currency : null;
   return c.json(
     {
       count: rows.length,
-      total: rows.reduce((sum, r) => sum + r.amount, 0n).toString(),
+      total: currency ? rows.reduce((sum, r) => sum + r.amount, 0n).toString() : "0",
+      currency: currency ?? null,
       uncleared: count((r) => r.cleared === "uncleared"),
       cleared: count((r) => r.cleared === "cleared"),
       reconciled: count((r) => r.cleared === "reconciled"),
@@ -157,11 +171,16 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         ? { transaction: ["create"] }
         : { transaction: ["update"] },
   );
-  await checkFilterAccount(db, budgetId, selection);
+  const settings = await searchSettings(
+    db,
+    budgetId,
+    budget,
+    await checkFilterAccount(db, budgetId, selection),
+  );
 
   const result = await db.transaction(async (tx) => {
     // Lock the selection before reading what the actions below check.
-    const where = selectedWhere(tx, budgetId, selection, budget);
+    const where = selectedWhere(tx, budgetId, selection, settings);
     const locked = await tx
       .select({ id: transaction.id })
       .from(transaction)
@@ -216,13 +235,13 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         await approve(tx, rows, updatedIds);
         break;
       case "move":
-        updatedIds = await move(tx, budgetId, lockedIds, action.accountId);
+        updatedIds = await move(tx, c.var.deps, budgetId, lockedIds, action.accountId);
         break;
       case "delete":
         updatedIds = await remove(tx, budgetId, lockedIds);
         break;
       case "duplicate": {
-        const { created, copies } = await duplicate(tx, budgetId, lockedIds);
+        const { created, copies } = await duplicate(tx, c.var.deps, budgetId, lockedIds);
         return { updated: created.length, before: [], created, copies };
       }
     }
@@ -304,7 +323,13 @@ async function approve(tx: Db, rows: readonly SelectedRow[], ids: readonly strin
  * Moves each row as a single edit would. Skipped, as YNAB does: rows already in the account,
  * transfers into their own other account, and splits with a transfer line to it.
  */
-async function move(tx: Db, budgetId: string, ids: readonly string[], accountId: string) {
+async function move(
+  tx: Db,
+  fx: FxDeps,
+  budgetId: string,
+  ids: readonly string[],
+  accountId: string,
+) {
   const target = await findAccount(tx, budgetId, accountId);
   assertOpen(target);
   const moved: string[] = [];
@@ -321,7 +346,7 @@ async function move(tx: Db, budgetId: string, ids: readonly string[], accountId:
       if (other?.accountId === target.id) continue;
     }
     if (await hasTransferLineTo(tx, row.id, target.id)) continue;
-    await applyUpdate(tx, budgetId, row.id, { accountId: target.id });
+    await applyUpdate(tx, fx, budgetId, row.id, { accountId: target.id });
     moved.push(id);
   }
   return moved;
@@ -358,6 +383,8 @@ async function moveSplitTransferSide(
     .where(eq(subTransaction.id, side.transferSubTransactionId ?? ""));
   if (!line || line.splitAccountId === target.id) return false;
   const splitAccount = await findAccount(tx, budgetId, line.splitAccountId);
+  // Its amount is in its own account's currency.
+  assertSameCurrency(await findAccount(tx, budgetId, side.accountId), target, "move");
   const keepLine = accountUsesCategory(splitAccount, target) ? line.categoryId : null;
   await tx
     .update(subTransaction)
@@ -402,7 +429,7 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
  * takes its other sides along) and, in `copies`, each copy row whose original row was selected:
  * YNAB selects both sides of a transfer's copy when both sides were selected (EVERYCENT-135).
  */
-async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
+async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly string[]) {
   const created: string[] = [];
   const copies: string[] = [];
   const made: [Awaited<ReturnType<typeof queryRegisterRows>>[number], string][] = [];
@@ -426,6 +453,8 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
     done.add(sourceId);
     const [source] = await queryRegisterRows(tx, budgetId, [sourceId]);
     if (!source) continue;
+    // A revaluation's copy would book nothing (amount 0): revalue the account instead.
+    if (await isRevaluationPayee(tx, source.payeeId)) continue;
     const accountIds = [
       source.accountId,
       source.transferAccountId,
@@ -437,12 +466,19 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
       .where(inArray(budgetAccount.id, accountIds));
     if (accounts.some((a) => a.closed)) continue;
     const split = source.subtransactions.length > 0;
-    const copyId = await insertNewTransaction(tx, budgetId, {
+    const copyId = await insertNewTransaction(tx, fx, budgetId, {
       accountId: source.accountId,
       date: source.date,
+      // A typed rate is copied; otherwise the copy takes the date's rate, as the original did.
+      fxRate: source.fxRateManual ? source.fxRate : undefined,
       amount: source.amount,
       ...(source.transferAccountId
-        ? { payeeName: null, transferAccountId: source.transferAccountId }
+        ? {
+            payeeName: null,
+            transferAccountId: source.transferAccountId,
+            // Between currencies the other side's own amount is copied too.
+            transferAmount: crossAmount(source.currency, source.transferSide),
+          }
         : { payeeName: source.payeeName }),
       categoryId: split ? null : source.categoryId,
       memo: source.memo,
@@ -453,7 +489,11 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
             subtransactions: source.subtransactions.map((l) => ({
               amount: l.amount,
               ...(l.transferAccountId
-                ? { payeeName: null, transferAccountId: l.transferAccountId }
+                ? {
+                    payeeName: null,
+                    transferAccountId: l.transferAccountId,
+                    transferAmount: crossAmount(source.currency, l.transferSide),
+                  }
                 : { payeeName: l.payeeName }),
               categoryId: l.categoryId,
               memo: l.memo,
@@ -486,6 +526,14 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
     }
   }
   return { created, copies };
+}
+
+/** A transfer's other side's amount when it's in another currency (otherwise it follows). */
+function crossAmount(
+  currency: string,
+  side: { amount: string; currency: string } | null,
+): string | undefined {
+  return side && side.currency !== currency ? side.amount : undefined;
 }
 
 /** One array parameter rather than one per id, so big selections stay one statement. */

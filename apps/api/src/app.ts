@@ -10,6 +10,7 @@ import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
 import { flagsRouter } from "./routes/flags";
+import { fxRatesRouter } from "./routes/fx-rates";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 import { membersRouter } from "./routes/members";
@@ -71,6 +72,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", flagsRouter);
   app.route("/v1", viewsRouter);
   app.route("/v1", monthsRouter);
+  app.route("/v1", fxRatesRouter);
 
   registerDocs(app);
   return app;

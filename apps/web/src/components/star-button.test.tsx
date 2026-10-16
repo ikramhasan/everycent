@@ -40,6 +40,9 @@ const account = (id: string, type: Account["type"], starredOrder: number | null)
   migratedToAccountId: null,
   migratedFromAccountId: null,
   toReview: 0,
+  unrealizedGain: null,
+  rate: null,
+  rateDate: null,
 });
 
 function UndoButton() {

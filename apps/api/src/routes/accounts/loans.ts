@@ -16,7 +16,7 @@ import { type LoanState, loanStates, setLoanCharge } from "../../lib/loans";
 import { writeSchedule } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { insertOtherSide } from "../transactions/rules";
+import { assertSameCurrency, insertOtherSide } from "../transactions/rules";
 import { accountJson } from "./handlers";
 import type {
   dismissLoanBanner,
@@ -196,6 +196,8 @@ export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, En
     if (loan.closed || from.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to record a payment");
     }
+    // The payment's amount is the loan's; paying from another currency isn't built yet.
+    assertSameCurrency(from, loan, "transfer");
     if (latest !== null && date > latest) {
       // YNAB (2026-10-16, EVERYCENT-169): a payment dated after today becomes a one-time
       // scheduled transfer on the loan, out of the same category as an entered one.

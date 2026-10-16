@@ -4,6 +4,8 @@ import { $api } from "./api";
 import { todayIso } from "./dates";
 
 export type Account = components["schemas"]["Account"];
+/** The account list's totals and net worth in the display currency (EVERYCENT-57). */
+export type AccountTotals = components["schemas"]["AccountList"]["totals"];
 
 /** Balances leave out transactions dated after the user's today. */
 export const accountsQueryOptions = (budgetId: string, today = todayIso()) =>
@@ -17,8 +19,14 @@ export interface SidebarSection {
   id: SidebarSectionId;
   title: string;
   accounts: Account[];
-  /** Sum of working balances in minor units (closed accounts: always zero). */
+  /** Sum of the working balances, in `currency`'s minor units (closed accounts: always zero). */
   total: bigint;
+  /** The currency `total` is in: the display currency, or the budget's. */
+  currency: string;
+  /** Some account in `total` was converted from another currency at today's rate. */
+  converted: boolean;
+  /** Accounts left out of `total`: no rate to convert them is known yet. */
+  excluded: Account[];
 }
 
 const SECTION_OF: Record<AccountFamily, SidebarSectionId> = {
@@ -48,9 +56,15 @@ export function isStarred(account: Account) {
 
 /**
  * YNAB's sidebar: Starred first (its own order; the accounts stay in their usual group too),
- * then open accounts by family, then closed ones. Empty sections are left out.
+ * then open accounts by family, then closed ones. Empty sections are left out. Totals are the
+ * API's, converted to the display currency at today's rates (EVERYCENT-57); without them (or
+ * for a group they don't cover) they add up the accounts in `budgetCurrency` only.
  */
-export function sidebarSections(accounts: readonly Account[]): SidebarSection[] {
+export function sidebarSections(
+  accounts: readonly Account[],
+  budgetCurrency: string,
+  totals?: AccountTotals,
+): SidebarSection[] {
   const order: SidebarSectionId[] = ["starred", "budget", "loans", "tracking", "closed"];
   const inSectionOf = (id: SidebarSectionId) => {
     if (id === "starred") {
@@ -65,8 +79,32 @@ export function sidebarSections(accounts: readonly Account[]): SidebarSection[] 
   return order
     .map((id) => {
       const inSection = inSectionOf(id);
-      const total = inSection.reduce((sum, a) => sum + BigInt(a.balances.working), 0n);
-      return { id, title: TITLES[id], accounts: inSection, total };
+      const given = totals?.[id];
+      if (given) {
+        const missing = new Set(given.missing);
+        return {
+          id,
+          title: TITLES[id],
+          accounts: inSection,
+          total: BigInt(given.amount),
+          currency: given.currency,
+          converted: given.converted,
+          excluded: inSection.filter((a) => missing.has(a.id)),
+        };
+      }
+      const total = inSection
+        .filter((a) => a.currency === budgetCurrency)
+        .reduce((sum, a) => sum + BigInt(a.balances.working), 0n);
+      const excluded = inSection.filter((a) => a.currency !== budgetCurrency);
+      return {
+        id,
+        title: TITLES[id],
+        accounts: inSection,
+        total,
+        currency: budgetCurrency,
+        converted: false,
+        excluded,
+      };
     })
     .filter((s) => s.accounts.length > 0);
 }
@@ -83,6 +121,33 @@ export function closeAccountNotice(
   working: bigint,
 ): { adjustment: bigint; removesMoneyFromPlan: boolean } {
   return { adjustment: -working, removesMoneyFromPlan: working > 0n && isOnBudget(type) };
+}
+
+/**
+ * The hint on a sidebar total that leaves accounts out: "Excludes 1 EUR account", "Excludes 2
+ * accounts in other currencies".
+ */
+export function excludedHint(excluded: readonly Pick<Account, "currency">[]): string | null {
+  if (excluded.length === 0) return null;
+  const currencies = new Set(excluded.map((a) => a.currency));
+  const noun = excluded.length === 1 ? "account" : "accounts";
+  return currencies.size === 1
+    ? `Excludes ${excluded.length} ${[...currencies][0]} ${noun}`
+    : `Excludes ${excluded.length} ${noun} in other currencies`;
+}
+
+/**
+ * The hint on a sidebar total: "Converted to USD at today's rates" when an account in it was
+ * converted, then which accounts are left out for want of a rate.
+ */
+export function totalHint(
+  section: Pick<SidebarSection, "converted" | "currency" | "excluded">,
+): string | null {
+  const parts = [
+    section.converted ? `Converted to ${section.currency} at today's rates` : null,
+    excludedHint(section.excluded),
+  ].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(". ") : null;
 }
 
 /** YNAB labels Edit Account's balance field "Today's Balance" for loans and tracking accounts. */

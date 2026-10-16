@@ -25,6 +25,7 @@ describe("GET /v1/health", () => {
       env,
       email,
       auth: createAuth(broken.db, env, email),
+      fxProviders: [],
     }).request("/v1/health");
     spy.mockRestore();
     await broken.close();

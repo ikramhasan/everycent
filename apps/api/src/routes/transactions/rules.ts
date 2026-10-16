@@ -7,6 +7,7 @@ import {
 } from "@everycent/db/schema";
 import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
 import { and, eq } from "drizzle-orm";
+import { budgetCurrencyOf, type FxDeps, otherSideAmount, syncBases } from "../../lib/base-amount";
 import { AppError } from "../../lib/errors";
 import { type Db, insertTransaction, internalCategoryId, transferPayeeId } from "../../lib/ledger";
 
@@ -77,10 +78,39 @@ export async function resolveCategory(
   return categoryId;
 }
 
-export function assertNotSelf(account: AccountRow, transferTo: AccountRow) {
+/**
+ * Whether `account` may transfer to `transferTo`: not itself. Transfers between currencies are
+ * fine (EVERYCENT-55), except where `sameCurrency` asks (scheduled transfers).
+ */
+export function assertTransferPair(
+  account: AccountRow,
+  transferTo: AccountRow,
+  sameCurrency = false,
+) {
   if (transferTo.id === account.id) {
     throw new AppError(400, "TRANSFER_SAME_ACCOUNT", "An account can't transfer to itself");
   }
+  if (sameCurrency) assertSameCurrency(account, transferTo, "transfer");
+}
+
+/**
+ * Moving a transaction into an account in another currency (its amount would change meaning)
+ * isn't supported; nor are scheduled transfers and loan payments between currencies.
+ */
+export function assertSameCurrency(
+  from: Pick<AccountRow, "name" | "currency">,
+  to: Pick<AccountRow, "name" | "currency">,
+  action: "transfer" | "move",
+) {
+  if (from.currency === to.currency) return;
+  throw new AppError(
+    422,
+    action === "transfer" ? "CROSS_CURRENCY_TRANSFER" : "CROSS_CURRENCY_MOVE",
+    `${from.name} (${from.currency}) and ${to.name} (${to.currency}) use different currencies; ` +
+      (action === "transfer"
+        ? "scheduled transfers and loan payments between currencies aren't supported yet"
+        : "transactions can't be moved between currencies yet"),
+  );
 }
 
 export function assertOnePayee(body: { payeeName?: string | null; transferAccountId?: string }) {
@@ -108,6 +138,12 @@ export interface OtherSideOptions {
   flag?: FlagColor | null;
   /** Its own memo (by default the new side's). */
   memo?: string;
+  /**
+   * Between currencies: its amount in its account's currency (see `checkTransferAmount`); left
+   * out, this side's base amount at the date's rate, which needs `fx`.
+   */
+  transferAmount?: bigint;
+  fx?: FxDeps;
 }
 
 /**
@@ -120,6 +156,44 @@ export interface TransferSideInput {
   flag: FlagColor | null;
   approved: boolean;
   categoryId: string | null;
+  /** Its own amount in its account's currency (a transfer between currencies). */
+  amount?: string;
+}
+
+/**
+ * The other side's amount given for a transfer (`transferAmount`), checked: only between
+ * currencies matters (in one currency it's always the opposite amount, so it must be that), and
+ * it never goes the same way as `amount`. Returns what to use, or undefined for the default.
+ */
+export function checkTransferAmount(
+  amount: bigint,
+  given: string | null | undefined,
+  account: Pick<AccountRow, "currency">,
+  transferTo: Pick<AccountRow, "currency"> | null,
+) {
+  if (given === undefined || given === null) return undefined;
+  const value = BigInt(given);
+  if (!transferTo) {
+    throw new AppError(400, "BAD_REQUEST", "`transferAmount` is for transfers only");
+  }
+  if (account.currency === transferTo.currency) {
+    if (value !== -amount) {
+      throw new AppError(
+        400,
+        "BAD_REQUEST",
+        "Between accounts in one currency the other side's amount is the opposite amount",
+      );
+    }
+    return undefined;
+  }
+  if ((amount < 0n && value < 0n) || (amount > 0n && value > 0n)) {
+    throw new AppError(
+      400,
+      "BAD_REQUEST",
+      "`transferAmount` goes the other way: what one account sends, the other receives",
+    );
+  }
+  return value;
 }
 
 /** Adds the other side of a new transfer, in `transferTo`, and links the two. */
@@ -134,8 +208,10 @@ export async function insertOtherSide(
     budgetId: side.budgetId,
     accountId: transferTo.id,
     date: side.date,
-    amount: -side.amount,
+    amount: await newOtherAmount(tx, side, account, transferTo, options),
     currency: transferTo.currency,
+    // Set from this side's by `syncBases` below.
+    baseAmount: 0n,
     payeeId: await transferPayeeId(tx, account),
     categoryId: await resolveCategory(
       tx,
@@ -154,6 +230,49 @@ export async function insertOtherSide(
     .update(transaction)
     .set({ transferTransactionId: otherId })
     .where(eq(transaction.id, side.id));
+  await syncBases(tx, side.id);
+}
+
+/** A new transfer's other side's amount (see `OtherSideOptions.transferAmount`). */
+async function newOtherAmount(
+  tx: Db,
+  side: { id: string; budgetId: string; date: string; amount: bigint },
+  account: AccountRow,
+  transferTo: AccountRow,
+  options: OtherSideOptions,
+) {
+  if (account.currency === transferTo.currency) return -side.amount;
+  if (options.transferAmount !== undefined) return options.transferAmount;
+  if (!options.fx) throw new Error("A transfer between currencies needs `fx` or its amount");
+  return defaultOtherAmount(tx, options.fx, side.id, transferTo.currency);
+}
+
+/**
+ * The other side's amount in `currency` when none is given: transaction `id`'s base amount,
+ * negated, at its date's rate (`otherSideAmount`).
+ */
+export async function defaultOtherAmount(
+  tx: Db,
+  fx: FxDeps,
+  id: string,
+  currency: AccountRow["currency"],
+) {
+  const [row] = await tx
+    .select({
+      budgetId: transaction.budgetId,
+      baseAmount: transaction.baseAmount,
+      date: transaction.date,
+    })
+    .from(transaction)
+    .where(eq(transaction.id, id));
+  if (!row) throw new Error(`Transaction ${id} missing`);
+  return otherSideAmount(tx, fx, {
+    budgetId: row.budgetId,
+    budgetCurrency: await budgetCurrencyOf(tx, row.budgetId),
+    base: row.baseAmount,
+    currency,
+    date: row.date,
+  });
 }
 
 export async function lockTransaction(tx: Db, budgetId: string, id: string) {
