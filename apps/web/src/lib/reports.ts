@@ -22,14 +22,7 @@ import { todayIso } from "./dates";
 export type ReportSum = components["schemas"]["ReportSum"];
 export type ReportTransaction = components["schemas"]["ReportTransaction"];
 export type ReportKind = "spending" | "income";
-export type ReportGrouping =
-  | "month"
-  | "day"
-  | "group"
-  | "category"
-  | "payee"
-  | "account"
-  | "flag";
+export type ReportGrouping = "month" | "day" | "group" | "category" | "payee" | "account" | "flag";
 
 const month = z.string().refine(isBudgetMonth).optional().catch(undefined);
 /** A comma-separated id list kept in the URL ("" = nothing selected). */

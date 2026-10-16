@@ -227,6 +227,16 @@ export {
   type ScheduleFrequency,
   zScheduleFrequency,
 } from "./schedule";
+export {
+  averageMonthlySpending,
+  comparedToAverage,
+  percentTenths,
+  rollingAverage,
+  type TrendCell,
+  type TrendMonth,
+  topSpenders,
+  trendMonths,
+} from "./spending-trends";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,
