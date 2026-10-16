@@ -187,6 +187,7 @@ export async function insertWithFee(tx: Db, fx: FxDeps, budgetId: string, body: 
     currency: account.currency,
     fx,
     rate: body.fxRate,
+    split: split !== undefined,
     payeeId: transferTo
       ? await transferPayeeId(tx, transferTo)
       : body.payeeName
@@ -402,14 +403,22 @@ export async function applyUpdate(
     categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
   }
 
-  const base = revaluation
-    ? {}
-    : await rebase(tx, fx, existing, {
-        currency: account.currency,
-        date: body.date ?? existing.date,
-        amount,
-        rate: body.fxRate,
-      });
+  // Only what the base amount depends on converts it again; a memo, flag or cleared edit keeps
+  // the booked amount (an implied or looked-up rate would round it differently).
+  const rebased =
+    amount !== existing.amount ||
+    (body.date ?? existing.date) !== existing.date ||
+    account.id !== existing.accountId ||
+    body.fxRate !== undefined;
+  const base =
+    revaluation || !rebased
+      ? {}
+      : await rebase(tx, fx, existing, {
+          currency: account.currency,
+          date: body.date ?? existing.date,
+          amount,
+          rate: body.fxRate,
+        });
   await tx
     .update(transaction)
     .set({

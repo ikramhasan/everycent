@@ -226,4 +226,52 @@ describe("foreign-currency activity in the plan", () => {
     });
     expect(typed.baseAmount).toBe("-1050");
   });
+
+  it("converts the lines of a foreign split that totals zero", async () => {
+    const { addAccount, create, month, groceries, rent } = await setup();
+    const yen = await addAccount({ name: "Yen", type: "cash", currency: "JPY" });
+    const split = await create({
+      accountId: yen.id,
+      amount: "0",
+      payeeName: "Swap",
+      subtransactions: [
+        { amount: "-10000", categoryId: groceries.id, memo: "" },
+        { amount: "10000", categoryId: rent.id, memo: "" },
+      ],
+    });
+    expect(split).toMatchObject({ baseAmount: "0", fxRate: "0.0067" });
+    expect(split.subtransactions.map((l) => l.baseAmount)).toEqual(["-6700", "6700"]);
+    expect((await month()).of(groceries.id)?.activity).toBe("-6700");
+  });
+
+  it("keeps the booked base amount when only the memo changes", async () => {
+    const { addAccount, create, update } = await setup();
+    const euros = await addAccount({ name: "Euros", type: "checking", currency: "EUR" });
+    const t = await create({ accountId: euros.id, amount: "-1000", payeeName: "Shop" });
+    // A rate that no longer matches the booked amount (as an implied or rounded one can).
+    await db.execute(`update transaction set fx_rate = 2 where id = '${t.id}'`);
+    expect((await update(t.id, { memo: "note", flag: "red" })).baseAmount).toBe("-1100");
+    expect((await update(t.id, { amount: "-1000" })).baseAmount).toBe("-1100");
+  });
+
+  it("counts a foreign schedule in Upcoming, looking up a rate no read cached yet", async () => {
+    const { cookie, base, addAccount, month, groceries } = await setup();
+    const euros = await addAccount({ name: "Euros", type: "checking", currency: "EUR" });
+    const res = await send("POST", `${base}/scheduled-transactions`, cookie, {
+      accountId: euros.id,
+      today: TODAY,
+      date: "2026-10-20",
+      amount: "-5000",
+      categoryId: groceries.id,
+      payeeName: null,
+      memo: "",
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    await db.execute("delete from fx_rate");
+    const upcoming = (await month()).of(groceries.id) as unknown as {
+      upcoming: { amount: string };
+    };
+    // Today's rate (the 10th's, 1.2): €-50.00 is $-60.00.
+    expect(upcoming.upcoming.amount).toBe("-6000");
+  });
 });

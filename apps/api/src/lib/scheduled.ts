@@ -44,7 +44,7 @@ import type { AppDeps } from "../types";
 import { budgetCurrencyOf, type FxDeps, linesToBase, toBase } from "./base-amount";
 import { shiftDay } from "./dates";
 import { AppError } from "./errors";
-import { knownRate } from "./fx";
+import { knownRate, resolveRate } from "./fx";
 import {
   type Db,
   findOrCreatePayee,
@@ -116,6 +116,7 @@ export async function enterOccurrence(
     amount: schedule.amount,
     currency: account.currency,
     fx,
+    split: lines.length > 0,
     payeeId: schedule.payeeId,
     categoryId:
       lines.length > 0
@@ -666,6 +667,8 @@ export async function upcomingByCategory(
   month: BudgetMonth,
   today: string,
   paymentCategoryByAccount: ReadonlyMap<string, string>,
+  /** Looks up a rate no read has cached yet; without it such a schedule is left out. */
+  fx?: FxDeps,
 ): Promise<Map<string, CategoryUpcoming>> {
   const upcoming = new Map<string, CategoryUpcoming>();
   if (month < monthOf(today)) return upcoming;
@@ -689,21 +692,23 @@ export async function upcomingByCategory(
       ),
     );
   if (schedules.length === 0) return upcoming;
-  // A foreign account's schedule counts at the latest rate known for today (EVERYCENT-54); with
-  // none known yet it's left out until one is (any transaction in that currency caches one).
+  // A foreign account's schedule counts at the latest rate known for today (EVERYCENT-54), else
+  // one looked up now; with no rate at all it's left out (FX_RATE_UNAVAILABLE).
   const budgetCurrency = await budgetCurrencyOf(db, budgetId);
   const rates = new Map<CurrencyCode, string | null>();
   for (const { schedule } of schedules) {
     if (schedule.currency === budgetCurrency || rates.has(schedule.currency)) continue;
+    const known = await knownRate(db, {
+      budgetId,
+      budgetCurrency,
+      from: schedule.currency,
+      to: budgetCurrency,
+      date: today,
+    });
     rates.set(
       schedule.currency,
-      await knownRate(db, {
-        budgetId,
-        budgetCurrency,
-        from: schedule.currency,
-        to: budgetCurrency,
-        date: today,
-      }),
+      known ??
+        (fx ? await fetchedRate(db, fx, budgetId, schedule.currency, budgetCurrency, today) : null),
     );
   }
   const lines = await scheduleLines(
@@ -807,4 +812,21 @@ export async function upcomingByCategory(
     entry.transactions.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
   }
   return upcoming;
+}
+
+/** Today's rate from the providers when none is cached; null when none is available. */
+async function fetchedRate(
+  db: Db,
+  fx: FxDeps,
+  budgetId: string,
+  from: CurrencyCode,
+  to: CurrencyCode,
+  today: string,
+) {
+  try {
+    return (await resolveRate(db, fx, { budgetId, from, to, date: today, today })).rate;
+  } catch (error) {
+    if (error instanceof AppError && error.code === "FX_RATE_UNAVAILABLE") return null;
+    throw error;
+  }
 }

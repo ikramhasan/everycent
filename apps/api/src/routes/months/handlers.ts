@@ -647,7 +647,7 @@ async function monthState(
     budgetId,
     cutoff,
   );
-  const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts);
+  const upcoming = await upcomingByCategory(db, budgetId, month, today, paymentAccounts, deps);
 
   const range = await monthRange(db, budgetId, today);
 

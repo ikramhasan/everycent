@@ -148,10 +148,12 @@ export interface NewTransaction {
   fx?: FxDeps;
   /** A rate typed by hand for a foreign-currency amount. */
   rate?: string | null;
+  /** Split lines follow, so a zero amount still needs its rate (`syncBases` converts them). */
+  split?: boolean;
 }
 
 export async function insertTransaction(db: Db, values: NewTransaction) {
-  const { fx, rate, ...row } = values;
+  const { fx, rate, split, ...row } = values;
   const id = newId();
   let base: BaseFields = {
     baseAmount: row.baseAmount ?? row.amount,
@@ -160,8 +162,9 @@ export async function insertTransaction(db: Db, values: NewTransaction) {
   };
   if (row.baseAmount === undefined) {
     const budgetCurrency = await budgetCurrencyOf(db, row.budgetId);
-    // Zero is zero in any currency: no rate to look up (a fresh start's Starting Balance).
-    if (budgetCurrency !== row.currency && row.amount !== 0n) {
+    // Zero is zero in any currency, so there's no rate to look up (an empty Starting Balance),
+    // unless split lines follow: a split totalling zero still converts its lines at its rate.
+    if (budgetCurrency !== row.currency && (row.amount !== 0n || split)) {
       if (!fx)
         throw new Error(`A ${row.currency} transaction needs its amount in ${budgetCurrency}`);
       base = await baseFields(db, fx, { ...row, budgetCurrency, rate });
