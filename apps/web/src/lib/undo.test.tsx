@@ -52,6 +52,24 @@ describe("UndoProvider", () => {
     expect(result.current.redoLabel).toBeNull();
   });
 
+  it("drops an undo a partner's later change made stale (EVERYCENT-36)", async () => {
+    const stale = {
+      error: { code: "STALE_VERSION", message: "Pat changed this transaction since" },
+    };
+    const older = { label: "older", undo: vi.fn(), redo: vi.fn() };
+    const command = { label: "edit", undo: vi.fn().mockRejectedValue(stale), redo: vi.fn() };
+    const { result } = renderHook(useUndo, { wrapper });
+    act(() => {
+      result.current.record(older);
+      result.current.record(command);
+    });
+    await expect(act(() => result.current.undo())).rejects.toBe(stale);
+    await act(async () => {});
+    // It can't apply again, so the next undo is the one before it, and there's nothing to redo.
+    expect(result.current.undoLabel).toBe("older");
+    expect(result.current.redoLabel).toBeNull();
+  });
+
   it("answers Cmd/Ctrl+Z only while keyboard shortcuts are on", async () => {
     for (const keyboardShortcuts of [true, false]) {
       const queryClient = new QueryClient();

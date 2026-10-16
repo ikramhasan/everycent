@@ -598,7 +598,7 @@ export function Register({
           // Every copy row whose original was ticked: both sides of a transfer ticked from both.
           nextSelection = { mode: "some", ids: new Set(result.copies) };
         } else if (result.updated > 0) {
-          commands.push(bulkCommand(action, result.before));
+          commands.push(bulkCommand(action, result.before, result.versions));
         }
       }
       if (
@@ -768,8 +768,14 @@ export function Register({
   }
 
   /** Undo for a bulk action on transactions, from their state before it. */
-  function bulkCommand(action: Exclude<BulkAction, { type: "enterNow" }>, before: Transaction[]) {
+  function bulkCommand(
+    action: Exclude<BulkAction, { type: "enterNow" }>,
+    before: Transaction[],
+    after: Record<string, number>,
+  ) {
     let current = before;
+    /** Each row's version as this command left it, so a partner's change since is refused. */
+    let versions = after;
     // Reject deletes the unapproved rows, so it's undone like a delete.
     const deletes = action.type === "delete" || action.type === "reject";
     return {
@@ -786,15 +792,21 @@ export function Register({
           }
           current = restored;
         } else {
+          const undone: Record<string, number> = {};
           for (const transaction of before) {
-            await update.mutateAsync({
+            const saved = await update.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
                 query: { today: todayIso() },
               },
-              body: updateBodyFromTransaction(transaction),
+              body: {
+                ...updateBodyFromTransaction(transaction),
+                expectedVersion: versions[transaction.id],
+              },
             });
+            undone[transaction.id] = saved.version;
           }
+          versions = undone;
           current = before;
         }
       },
@@ -802,43 +814,45 @@ export function Register({
         if (deletes) {
           for (const transaction of current) {
             await remove.mutateAsync({
-              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+              params: {
+                path: { budgetId: budget.id, transactionId: transaction.id },
+                query: { expectedVersion: transaction.version },
+              },
             });
           }
         } else if (action.type !== "duplicate") {
-          await bulk.mutateAsync({
+          const result = await bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
-            body: { selection: { ids: current.map((transaction) => transaction.id) }, action },
+            body: {
+              selection: { ids: current.map((transaction) => transaction.id) },
+              action,
+              expectedVersions: versions,
+            },
           });
+          versions = result.versions;
         }
       },
     };
   }
 
+  /**
+   * Undo for a single edit: puts the row back as it was, unless a partner changed it since
+   * (`expectedVersion`; the API refuses with STALE_VERSION, EVERYCENT-36).
+   */
   function recordUpdate(label: string, before: Transaction, after: Transaction) {
-    history.record({
-      label,
-      undo: async () => {
-        await update.mutateAsync({
-          params: {
-            path: { budgetId: budget.id, transactionId: before.id },
-            query: { today: todayIso() },
-          },
-          body: updateBodyFromTransaction(before),
-        });
-        await refresh();
-      },
-      redo: async () => {
-        await update.mutateAsync({
-          params: {
-            path: { budgetId: budget.id, transactionId: after.id },
-            query: { today: todayIso() },
-          },
-          body: updateBodyFromTransaction(after),
-        });
-        await refresh();
-      },
-    });
+    let version = after.version;
+    const replay = async (row: Transaction) => {
+      const saved = await update.mutateAsync({
+        params: {
+          path: { budgetId: budget.id, transactionId: row.id },
+          query: { today: todayIso() },
+        },
+        body: { ...updateBodyFromTransaction(row), expectedVersion: version },
+      });
+      version = saved.version;
+      await refresh();
+    };
+    history.record({ label, undo: () => replay(before), redo: () => replay(after) });
   }
 
   /** A transfer's payee as YNAB's register words it ("Payment: X" / "Transfer: X"). */
@@ -1009,7 +1023,10 @@ export function Register({
         label: "new transaction",
         undo: async () => {
           await remove.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: current.id } },
+            params: {
+              path: { budgetId: budget.id, transactionId: current.id },
+              query: { expectedVersion: current.version },
+            },
           });
           // A transfer's fee is a transaction of its own; it goes with the transfer it came with.
           const feeId = current.feeTransactionId;
@@ -1281,7 +1298,10 @@ export function Register({
         redo: async () => {
           if (!current) return;
           await remove.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: current.id } },
+            params: {
+              path: { budgetId: budget.id, transactionId: current.id },
+              query: { expectedVersion: current.version },
+            },
           });
           await refresh();
         },

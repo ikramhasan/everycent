@@ -20,6 +20,20 @@ interface UndoState {
 const UndoContext = createContext<UndoState | null>(null);
 
 /**
+ * The API refused an undo or redo because a partner changed the row since (EVERYCENT-36). The
+ * command can never apply again, so it leaves the history; the error still reaches the caller,
+ * whose toast shows the API's message ("Pat changed this transaction since…").
+ */
+export function isStaleVersion(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "error" in error &&
+    (error as { error?: { code?: unknown } }).error?.code === "STALE_VERSION"
+  );
+}
+
+/**
  * A budget's undo history deliberately lives only in this provider. It is neither persisted nor
  * sent to the server, so another partner and another browser have independent histories. The
  * commands themselves use normal API mutations, which makes their resulting state authoritative
@@ -43,6 +57,9 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       await command.undo();
       setPast((commands) => commands.slice(0, -1));
       setFuture((commands) => [...commands, command]);
+    } catch (error) {
+      if (isStaleVersion(error)) setPast((commands) => commands.slice(0, -1));
+      throw error;
     } finally {
       setBusy(false);
     }
@@ -56,6 +73,9 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       await command.redo();
       setFuture((commands) => commands.slice(0, -1));
       setPast((commands) => [...commands, command]);
+    } catch (error) {
+      if (isStaleVersion(error)) setFuture((commands) => commands.slice(0, -1));
+      throw error;
     } finally {
       setBusy(false);
     }

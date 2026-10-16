@@ -2557,6 +2557,10 @@ export interface components {
             created: string[];
             /** @description `duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions) */
             copies: string[];
+            /** @description The changed transactions' `version` now, for undo's `expectedVersion` */
+            versions: {
+                [key: string]: number;
+            };
         };
         BulkAction: {
             /** @enum {string} */
@@ -2713,6 +2717,8 @@ export interface components {
              */
             flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
+            /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten */
+            expectedVersion?: number;
             /** @description Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB */
             approved?: boolean;
         };
@@ -3374,6 +3380,8 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+            /** @description Refuse (409 STALE_VERSION) unless Assigned is still this: undo and redo send it so a partner's later change isn't overwritten */
+            expectedAssigned?: string;
         };
         MonthNote: {
             /** @description A month, YYYY-MM */
@@ -7079,6 +7087,10 @@ export interface operations {
                 "application/json": {
                     selection: components["schemas"]["TransactionSelection"];
                     action: components["schemas"]["BulkAction"];
+                    /** @description Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since (redo sends it) */
+                    expectedVersions?: {
+                        [key: string]: number;
+                    };
                 };
             };
         };
@@ -7141,7 +7153,10 @@ export interface operations {
     };
     deleteTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version` */
+                expectedVersion?: number | null;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -7185,7 +7200,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the transaction changed since `expectedVersion` (STALE_VERSION) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7260,7 +7275,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`) */
+            /** @description A reconciled or locked row, or the transaction changed since `expectedVersion` (STALE_VERSION) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8883,6 +8898,15 @@ export interface operations {
             };
             /** @description No such budget or category, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assigned changed since `expectedAssigned` (STALE_VERSION) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -10,8 +10,13 @@ interface Budget {
 }
 
 /** A category's Assigned amount in a month (zero without a row). */
-export async function assignedAmount(db: Db, categoryId: string, month: BudgetMonth) {
-  const [row] = await db
+export async function assignedAmount(
+  db: Db,
+  categoryId: string,
+  month: BudgetMonth,
+  { lock = false }: { lock?: boolean } = {},
+) {
+  const query = db
     .select({ amount: categoryAssignment.amount })
     .from(categoryAssignment)
     .where(
@@ -20,7 +25,22 @@ export async function assignedAmount(db: Db, categoryId: string, month: BudgetMo
         eq(categoryAssignment.month, `${month}-01`),
       ),
     );
+  const [row] = await (lock ? query.for("update") : query);
   return row?.amount ?? 0n;
+}
+
+/** The category's assignment row for the month, if one exists. */
+export async function assignmentRow(db: Db, categoryId: string, month: BudgetMonth) {
+  const [row] = await db
+    .select({ id: categoryAssignment.id })
+    .from(categoryAssignment)
+    .where(
+      and(
+        eq(categoryAssignment.categoryId, categoryId),
+        eq(categoryAssignment.month, `${month}-01`),
+      ),
+    );
+  return row ?? null;
 }
 
 /**

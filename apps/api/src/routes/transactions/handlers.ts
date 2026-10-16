@@ -16,6 +16,7 @@ import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "
 import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
+import { assertTransactionVersions } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { parseSort, queryRegister, queryRegisterRow } from "./register-query";
@@ -294,9 +295,14 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   assertOnePayee(body);
   const latest = latestTransactionDate(c.var.deps, today);
-  const accountId = await db.transaction((tx) =>
-    applyUpdate(tx, c.var.deps, budgetId, transactionId, withApproval(body), latest),
-  );
+  const { expectedVersion, ...changes } = body;
+  const accountId = await db.transaction(async (tx) => {
+    if (expectedVersion !== undefined) {
+      const expected = { [transactionId]: expectedVersion };
+      await assertTransactionVersions(tx, budgetId, expected, c.var.user.id);
+    }
+    return applyUpdate(tx, c.var.deps, budgetId, transactionId, withApproval(changes), latest);
+  });
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
 
@@ -537,9 +543,14 @@ export async function applyUpdate(
 
 export const deleteTransactionHandler: RouteHandler<typeof deleteTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
+  const { expectedVersion } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["delete"] });
   await db.transaction(async (tx) => {
+    if (expectedVersion !== undefined) {
+      const expected = { [transactionId]: expectedVersion };
+      await assertTransactionVersions(tx, budgetId, expected, c.var.user.id);
+    }
     const existing = await lockTransaction(tx, budgetId, transactionId);
     if (!existing) throw new AppError(404, "NOT_FOUND", "Transaction not found");
     if (existing.transferSubTransactionId) transferInSplit();

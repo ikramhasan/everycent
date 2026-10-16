@@ -5173,13 +5173,21 @@
               "type": "string"
             },
             "description": "`duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions)"
+          },
+          "versions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The changed transactions' `version` now, for undo's `expectedVersion`"
           }
         },
         "required": [
           "updated",
           "before",
           "created",
-          "copies"
+          "copies",
+          "versions"
         ]
       },
       "BulkAction": {
@@ -5711,6 +5719,10 @@
               "$ref": "#/components/schemas/SubTransactionInput"
             },
             "minItems": 2
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten"
           },
           "approved": {
             "type": "boolean",
@@ -8579,6 +8591,11 @@
             "type": "string",
             "format": "date",
             "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+          },
+          "expectedAssigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Refuse (409 STALE_VERSION) unless Assigned is still this: undo and redo send it so a partner's later change isn't overwritten"
           }
         },
         "required": [
@@ -15082,6 +15099,13 @@
                   },
                   "action": {
                     "$ref": "#/components/schemas/BulkAction"
+                  },
+                  "expectedVersions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "description": "Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since (redo sends it)"
                   }
                 },
                 "required": [
@@ -15260,7 +15284,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
+            "description": "A reconciled or locked row, or the transaction changed since `expectedVersion` (STALE_VERSION)",
             "content": {
               "application/json": {
                 "schema": {
@@ -15309,6 +15333,19 @@
             "required": true,
             "name": "transactionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"
+            },
+            "required": false,
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`",
+            "name": "expectedVersion",
+            "in": "query"
           }
         ],
         "responses": {
@@ -15346,7 +15383,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)",
+            "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the transaction changed since `expectedVersion` (STALE_VERSION)",
             "content": {
               "application/json": {
                 "schema": {
@@ -17666,6 +17703,16 @@
           },
           "404": {
             "description": "No such budget or category, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Assigned changed since `expectedAssigned` (STALE_VERSION)",
             "content": {
               "application/json": {
                 "schema": {

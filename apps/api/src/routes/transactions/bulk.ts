@@ -10,6 +10,7 @@ import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
 import { isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
+import { assertTransactionVersions, transactionVersions } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { applyUpdate, deleteWithTransfers, insertNewTransaction, searchSettings } from "./handlers";
@@ -160,7 +161,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
   Env
 > = async (c) => {
   const { budgetId } = c.req.valid("param");
-  const { selection, action } = c.req.valid("json");
+  const { selection, action, expectedVersions } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(
     c,
@@ -187,7 +188,10 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       .where(where)
       .orderBy(transaction.id)
       .for("update");
-    if (locked.length === 0) return { updated: 0, before: [], created: [], copies: [] };
+    await assertTransactionVersions(tx, budgetId, expectedVersions, c.var.user.id);
+    if (locked.length === 0) {
+      return { updated: 0, before: [], created: [], copies: [], versions: {} };
+    }
     const lockedIds = locked.map((r) => r.id);
     const beforeRows = await queryRegisterRows(tx, budgetId, lockedIds);
     const beforeById = new Map(beforeRows.map((row) => [row.id, row]));
@@ -242,7 +246,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         break;
       case "duplicate": {
         const { created, copies } = await duplicate(tx, c.var.deps, budgetId, lockedIds);
-        return { updated: created.length, before: [], created, copies };
+        return { updated: created.length, before: [], created, copies, versions: {} };
       }
     }
     return {
@@ -253,6 +257,7 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
       }),
       created: [],
       copies: [],
+      versions: await transactionVersions(tx, updatedIds),
     };
   });
   return c.json(result, 200);

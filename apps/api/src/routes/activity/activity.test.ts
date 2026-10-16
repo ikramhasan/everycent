@@ -230,6 +230,97 @@ describe("who entered a transaction (EVERYCENT-89)", () => {
   });
 });
 
+describe("undo conflicts between partners (EVERYCENT-36)", () => {
+  type Txn = { id: string; version: number; memo: string };
+  const errorCode = async (res: Response) =>
+    (await json<{ error: { code: string; message: string } }>(res)).error;
+
+  it("refuses a stale edit, delete or bulk change, naming who changed it", async () => {
+    const { owner, pat, base, account } = await setup();
+    const mine = await json<Txn>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-100",
+        payeeName: "Shop",
+        categoryId: null,
+      }),
+    );
+    // Pat edits it after the owner did.
+    const theirs = await json<Txn>(
+      await send("PATCH", `${base}/transactions/${mine.id}`, pat.cookie, { memo: "Pat's" }),
+    );
+    expect(theirs.version).toBeGreaterThan(mine.version);
+
+    const stale = await send("PATCH", `${base}/transactions/${mine.id}`, owner.cookie, {
+      memo: "",
+      expectedVersion: mine.version,
+    });
+    expect(stale.status).toBe(409);
+    expect(await errorCode(stale)).toEqual({
+      code: "STALE_VERSION",
+      message: "Pat changed this transaction since, so it wasn't changed back.",
+    });
+    const staleDelete = await send(
+      "DELETE",
+      `${base}/transactions/${mine.id}?expectedVersion=${mine.version}`,
+      owner.cookie,
+    );
+    expect(staleDelete.status).toBe(409);
+    const staleBulk = await send("POST", `${base}/transactions/bulk`, owner.cookie, {
+      selection: { ids: [mine.id] },
+      action: { type: "flag", flag: "red" },
+      expectedVersions: { [mine.id]: mine.version },
+    });
+    expect(staleBulk.status).toBe(409);
+
+    // Nothing was overwritten; the current version goes through.
+    const ok = await send("PATCH", `${base}/transactions/${mine.id}`, owner.cookie, {
+      memo: "",
+      expectedVersion: theirs.version,
+    });
+    expect(ok.status).toBe(200);
+    const bulk = await json<{ versions: Record<string, number> }>(
+      await send("POST", `${base}/transactions/bulk`, owner.cookie, {
+        selection: { ids: [mine.id] },
+        action: { type: "flag", flag: "red" },
+        expectedVersions: { [mine.id]: (await json<Txn>(ok)).version },
+      }),
+    );
+    expect(bulk.versions[mine.id]).toBeGreaterThan(theirs.version);
+    const deleted = await send(
+      "DELETE",
+      `${base}/transactions/${mine.id}?expectedVersion=${bulk.versions[mine.id]}`,
+      owner.cookie,
+    );
+    expect(deleted.status).toBe(204);
+  });
+
+  it("refuses to set back an assigned amount a partner changed since", async () => {
+    const { owner, pat, base } = await setup();
+    const { groups } = await json<{
+      groups: { kind: string | null; categories: { id: string }[] }[];
+    }>(await send("GET", `${base}/categories`, owner.cookie));
+    const categoryId = groups.find((g) => !g.kind)?.categories[0]?.id ?? "";
+    const assign = (cookie: string, body: Record<string, unknown>) =>
+      send("PUT", `${base}/months/2026-10/categories/${categoryId}`, cookie, {
+        today: TODAY,
+        ...body,
+      });
+    expect((await assign(owner.cookie, { assigned: "1000" })).status).toBe(200);
+    expect((await assign(pat.cookie, { assigned: "2500" })).status).toBe(200);
+    // The owner's undo of their own 0 → 1000 expects 1000.
+    const stale = await assign(owner.cookie, { assigned: "0", expectedAssigned: "1000" });
+    expect(stale.status).toBe(409);
+    expect((await errorCode(stale)).message).toBe(
+      "Pat changed this assigned amount since, so it wasn't changed back.",
+    );
+    expect((await assign(owner.cookie, { assigned: "0", expectedAssigned: "2500" })).status).toBe(
+      200,
+    );
+  });
+});
+
 describe("request transactions", () => {
   it("keeps nothing a failed write request wrote, log included", async () => {
     // Its own app: routes can't be added once one has served a request.

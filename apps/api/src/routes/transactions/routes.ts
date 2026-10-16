@@ -491,6 +491,14 @@ export const updateTransaction = createRoute({
           cleared: SettableCleared.optional(),
           flag: Flag.optional(),
           subtransactions: SubTransactions.optional(),
+          expectedVersion: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: " +
+                "undo and redo send it so a partner's later change isn't overwritten",
+            ),
           approved: z
             .boolean()
             .optional()
@@ -512,7 +520,10 @@ export const updateTransaction = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: locked,
+    409: jsonError(
+      "A reconciled or locked row, or the transaction changed since `expectedVersion` " +
+        "(STALE_VERSION)",
+    ),
     422: crossCurrency,
   },
 });
@@ -529,13 +540,25 @@ export const deleteTransaction = createRoute({
     "Deleting either side of a transfer deletes both, reconciled or not. Deleting a split " +
     "deletes its transfer lines' other sides; those can't be deleted on their own " +
     "(`TRANSFER_IN_SPLIT`).",
-  request: { params: TransactionParams },
+  request: {
+    params: TransactionParams,
+    query: z.object({
+      expectedVersion: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe("Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"),
+    }),
+  },
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: jsonError("A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)"),
+    409: jsonError(
+      "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the " +
+        "transaction changed since `expectedVersion` (STALE_VERSION)",
+    ),
   },
 });
 
@@ -670,7 +693,19 @@ export const bulkUpdateTransactions = createRoute({
     "accounts are skipped. All of it happens in one database transaction.",
   request: {
     params: BudgetParams,
-    body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
+    body: json(
+      z.object({
+        selection: SelectionSchema,
+        action: BulkActionSchema,
+        expectedVersions: z
+          .record(z.string(), z.number().int())
+          .optional()
+          .describe(
+            "Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since " +
+              "(redo sends it)",
+          ),
+      }),
+    ),
   },
   responses: {
     200: ok(
@@ -691,6 +726,9 @@ export const bulkUpdateTransactions = createRoute({
                 "transfer selected from both sides has both sides of its copy here (empty for " +
                 "other actions)",
             ),
+          versions: z
+            .record(z.string(), z.number().int())
+            .describe("The changed transactions' `version` now, for undo's `expectedVersion`"),
         })
         .openapi("BulkUpdateResult"),
     ),
