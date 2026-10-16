@@ -469,7 +469,13 @@ export function TransactionEditor({
       ))}
       <TableRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
         <TableCell colSpan={columns.length} className="px-1.5 pt-0">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/*
+           * EVERYCENT-194: the register's table can be wider than its scrolling container, so a
+           * footer as wide as the row ran past the visible edge. It takes the container's visible
+           * width (`100cqw`: the register's container is a query container), sticks to its left
+           * edge while scrolling sideways, and wraps within it.
+           */}
+          <div className="sticky left-1.5 flex w-[calc(100cqw-0.75rem)] max-w-full flex-wrap items-center justify-end gap-2 whitespace-normal">
             {lines && (
               <>
                 <Button

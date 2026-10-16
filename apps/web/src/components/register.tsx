@@ -1638,7 +1638,8 @@ export function Register({
 
       <Table
         containerRef={scrollRef}
-        containerClassName="max-h-[70vh] overflow-auto rounded-lg border"
+        // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
+        containerClassName="@container max-h-[70vh] overflow-auto rounded-lg border"
         className="min-w-[74rem] table-fixed"
       >
         <colgroup>
