@@ -10,7 +10,7 @@ import { type Db, transferPayeeId } from "../../lib/ledger";
 import { setApproval } from "../../lib/review";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { applyUpdate, deleteWithTransfers, insertNewTransaction } from "./handlers";
+import { applyUpdate, deleteWithTransfers, insertNewTransaction, searchSettings } from "./handlers";
 import {
   matchingTransactions,
   queryRegisterRows,
@@ -22,6 +22,7 @@ import {
   type AccountRow,
   usesCategory as accountUsesCategory,
   assertOpen,
+  assertSameCurrency,
   findAccount,
   lockTransaction,
   resolveCategory,
@@ -49,10 +50,12 @@ function selectedWhere(
   ) as SQL;
 }
 
+/** The filtered register's account (checked to be the budget's), or null for all accounts. */
 async function checkFilterAccount(db: Db, budgetId: string, selection: Selection) {
   if ("filter" in selection && selection.filter.accountId) {
-    await findAccount(db, budgetId, selection.filter.accountId);
+    return findAccount(db, budgetId, selection.filter.accountId);
   }
+  return null;
 }
 
 /** What the action bar needs to know about each selected row. */
@@ -63,6 +66,7 @@ function selectedRows(db: Db, where: SQL) {
     .select({
       id: transaction.id,
       amount: transaction.amount,
+      currency: transaction.currency,
       cleared: transaction.cleared,
       approved: transaction.approved,
       transferTransactionId: transaction.transferTransactionId,
@@ -120,13 +124,16 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
   const { selection } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  await checkFilterAccount(db, budgetId, selection);
-  const rows = await selectedRows(db, selectedWhere(db, budgetId, selection, budget));
+  const settings = searchSettings(budget, await checkFilterAccount(db, budgetId, selection));
+  const rows = await selectedRows(db, selectedWhere(db, budgetId, selection, settings));
   const count = (test: (row: SelectedRow) => boolean) => rows.filter(test).length;
+  // Amounts in different currencies don't add up (converted totals: EVERYCENT-57).
+  const currency = new Set(rows.map((r) => r.currency)).size === 1 ? rows[0]?.currency : null;
   return c.json(
     {
       count: rows.length,
-      total: rows.reduce((sum, r) => sum + r.amount, 0n).toString(),
+      total: currency ? rows.reduce((sum, r) => sum + r.amount, 0n).toString() : "0",
+      currency: currency ?? null,
       uncleared: count((r) => r.cleared === "uncleared"),
       cleared: count((r) => r.cleared === "cleared"),
       reconciled: count((r) => r.cleared === "reconciled"),
@@ -157,11 +164,11 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         ? { transaction: ["create"] }
         : { transaction: ["update"] },
   );
-  await checkFilterAccount(db, budgetId, selection);
+  const settings = searchSettings(budget, await checkFilterAccount(db, budgetId, selection));
 
   const result = await db.transaction(async (tx) => {
     // Lock the selection before reading what the actions below check.
-    const where = selectedWhere(tx, budgetId, selection, budget);
+    const where = selectedWhere(tx, budgetId, selection, settings);
     const locked = await tx
       .select({ id: transaction.id })
       .from(transaction)
@@ -358,6 +365,7 @@ async function moveSplitTransferSide(
     .where(eq(subTransaction.id, side.transferSubTransactionId ?? ""));
   if (!line || line.splitAccountId === target.id) return false;
   const splitAccount = await findAccount(tx, budgetId, line.splitAccountId);
+  assertSameCurrency(splitAccount, target, "transfer");
   const keepLine = accountUsesCategory(splitAccount, target) ? line.categoryId : null;
   await tx
     .update(subTransaction)

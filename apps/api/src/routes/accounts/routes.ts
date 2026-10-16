@@ -151,7 +151,11 @@ export const createAccount = createRoute({
           type: zAccountType,
           currency: zCurrencyCode
             .optional()
-            .describe("Defaults to the budget's currency, which is the only one allowed for now"),
+            .describe(
+              "Defaults to the budget's currency. Loans stay in the budget's currency, and until " +
+                "currency conversion arrives another currency is for tracking accounts (asset, " +
+                "liability) only. Amounts are in this currency's minor units.",
+            ),
           balance: zMinorUnits.describe("Today's balance; negative for money owed"),
           date: IsoDate.describe("Date of the starting balance (the user's today)"),
           interestRate: InterestRate.optional(),
@@ -170,6 +174,10 @@ export const createAccount = createRoute({
       "The caller's role can't manage accounts, or the account's email address isn't confirmed",
     ),
     404: notFound,
+    422: jsonError(
+      "LOAN_CURRENCY: a loan in another currency than the budget's; FOREIGN_ON_BUDGET: a " +
+        "budget (cash or credit) account in another currency, until currency conversion arrives",
+    ),
   },
 });
 
@@ -478,6 +486,7 @@ export const updateToLoanAccount = createRoute({
       "The caller's role can't manage accounts, or the account's email address isn't confirmed",
     ),
     404: notFound,
+    422: jsonError("LOAN_CURRENCY: the liability is in another currency than the budget's"),
   },
 });
 

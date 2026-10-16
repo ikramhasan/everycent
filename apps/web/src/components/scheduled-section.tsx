@@ -27,6 +27,7 @@ import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
 import type { Flag, FlagColor } from "@/lib/flags";
+import { inCurrency } from "@/lib/money-input";
 import {
   draftFromScheduled,
   type ScheduledTransaction,
@@ -99,7 +100,9 @@ export function ScheduledSection({
     "/v1/budgets/{budgetId}/transactions/{transactionId}",
   );
   const accountById = new Map(accounts.map((a) => [a.id, a]));
-  const show = (amount: bigint) => formatAmount(money(amount, budget.currency));
+  /** An amount in the schedule's own currency (its account's). */
+  const show = (amount: bigint, currency: string) =>
+    formatAmount(money(amount, inCurrency(budget, currency).currency));
   const path = (scheduledTransactionId: string) => ({
     params: { path: { budgetId: budget.id, scheduledTransactionId } },
   });
@@ -141,7 +144,8 @@ export function ScheduledSection({
 
   async function save(row: ScheduledTransaction, draft: Draft) {
     if (!draft.date) return setError("Enter a date.");
-    const result = scheduleUpdateBody(row, draft, budget, today, categorized(row));
+    const settings = inCurrency(budget, accountById.get(draft.accountId)?.currency);
+    const result = scheduleUpdateBody(row, draft, settings, today, categorized(row));
     if (!result.ok) return setError(result.error);
     try {
       const before = await ownRow(row);
@@ -262,7 +266,7 @@ export function ScheduledSection({
   function open(row: ScheduledTransaction) {
     if (row.kind === "splitTransfer") return;
     setError(null);
-    setEditing({ id: row.id, draft: draftFromScheduled(row, budget) });
+    setEditing({ id: row.id, draft: draftFromScheduled(row, inCurrency(budget, row.currency)) });
   }
 
   function display(row: ScheduledTransaction, id: ColumnId) {
@@ -335,9 +339,9 @@ export function ScheduledSection({
       case "memo":
         return row.memo;
       case "outflow":
-        return amount < 0n ? show(-amount) : "";
+        return amount < 0n ? show(-amount, row.currency) : "";
       case "inflow":
-        return amount > 0n ? show(amount) : "";
+        return amount > 0n ? show(amount, row.currency) : "";
       case "actions":
         return (
           <DropdownMenu>
@@ -461,8 +465,8 @@ export function ScheduledSection({
                 ),
                 category: usesCategory(type, to) ? line.categoryName : "",
                 memo: line.memo,
-                outflow: lineAmount < 0n ? show(-lineAmount) : "",
-                inflow: lineAmount > 0n ? show(lineAmount) : "",
+                outflow: lineAmount < 0n ? show(-lineAmount, row.currency) : "",
+                inflow: lineAmount > 0n ? show(lineAmount, row.currency) : "",
               };
               return (
                 <TableRow

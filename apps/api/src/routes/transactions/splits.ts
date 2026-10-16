@@ -5,8 +5,8 @@ import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import {
   type AccountRow,
-  assertNotSelf,
   assertOpen,
+  assertTransferPair,
   clearedOnEntry,
   findAccount,
   resolveCategory,
@@ -150,7 +150,7 @@ export async function syncLines(
     let transferTo: AccountRow | null = null;
     if (spec.transferAccountId) {
       transferTo = await findAccount(tx, budgetId, spec.transferAccountId);
-      assertNotSelf(account, transferTo);
+      assertTransferPair(account, transferTo);
     }
     const retargeted = (transferTo?.id ?? null) !== (other?.accountId ?? null);
     // Entering a scheduled split still reaches a closed account, as YNAB does.

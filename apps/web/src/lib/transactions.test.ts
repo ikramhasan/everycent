@@ -1,7 +1,7 @@
 import type { AccountType } from "@everycent/engine";
 import { describe, expect, it } from "vitest";
 import type { CategoryList } from "./categories";
-import type { MoneySettings } from "./money-input";
+import { inCurrency, type MoneySettings } from "./money-input";
 import {
   categoryOptions,
   cellUpdate,
@@ -230,6 +230,29 @@ describe("register drafts", () => {
       { id: "rta", name: "Ready to Assign", group: "Inflow" },
       { id: "rent", name: "Rent", group: "Bills" },
     ]);
+  });
+});
+
+describe("a transaction in an account's own currency (EVERYCENT-52)", () => {
+  const yenTxn: Transaction = { ...txn, amount: "-1200", currency: "JPY" };
+  const yen = inCurrency(usd, yenTxn.currency);
+
+  it("edits yen amounts without decimals, in the budget's number format", () => {
+    expect(draftFrom(yenTxn, yen)).toMatchObject({ outflow: "1,200", inflow: "" });
+    expect(cellUpdate(yenTxn, "outflow", "1,500", yen)).toEqual({
+      ok: true,
+      body: { amount: "-1500" },
+    });
+    expect(cellUpdate(yenTxn, "outflow", "12.50", yen)).toMatchObject({ ok: false });
+  });
+
+  it("reads a new transaction's amount in its account's currency", () => {
+    const draft: Draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "1.5" };
+    expect(createBody(draft, inCurrency(usd, "KWD"))).toMatchObject({
+      ok: true,
+      body: { amount: "-1500" },
+    });
+    expect(createBody(draft, usd)).toMatchObject({ ok: true, body: { amount: "-150" } });
   });
 });
 

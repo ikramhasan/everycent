@@ -43,6 +43,7 @@ import { useBudget } from "@/lib/budget-context";
 import { apiErrorCode, apiErrorMessage } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
+import { inCurrency } from "@/lib/money-input";
 import { invalidateMonths } from "@/lib/months";
 import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
@@ -113,7 +114,13 @@ function AccountPage() {
 
   const account = accounts.data?.accounts.find((a) => a.id === accountId);
   const path = { budgetId: budget.id, accountId };
-  const show = (amount: string | bigint) => formatAmount(money(BigInt(amount), budget.currency));
+  /** The budget's number format with the account's own currency, for its amounts. */
+  const accountSettings = inCurrency(budget, account?.currency);
+  const show = (amount: string | bigint) =>
+    formatAmount(money(BigInt(amount), accountSettings.currency));
+  /** Plan amounts (a card's payment category), in the budget's currency. */
+  const showBudget = (amount: string | bigint) =>
+    formatAmount(money(BigInt(amount), budget.currency));
   const isLoan = account !== undefined && accountFamily(account.type) === "loan";
   // A loan's reconcile is its page's Update Balance (YNAB).
   const reconcilable = account !== undefined && !isLoan;
@@ -338,7 +345,7 @@ function AccountPage() {
         )}
         <EditAccountForm
           key={`${account.id}-${editing}`}
-          settings={budget}
+          settings={accountSettings}
           initial={account}
           workingBalance={account.closed ? null : BigInt(account.balances.working)}
           onSubmit={handleSave}
@@ -381,14 +388,18 @@ function AccountPage() {
             )}
           </section>
         )}
-        {account.type === "liability" && !account.closed && !account.migratedToAccountId && (
-          <UpdateToLoanSection
-            onLearnMore={() => {
-              setEditing(false);
-              setUpdatingToLoan(true);
-            }}
-          />
-        )}
+        {/* Loans stay in the budget's currency, so a liability in another one can't become one. */}
+        {account.type === "liability" &&
+          account.currency === budget.currency &&
+          !account.closed &&
+          !account.migratedToAccountId && (
+            <UpdateToLoanSection
+              onLearnMore={() => {
+                setEditing(false);
+                setUpdatingToLoan(true);
+              }}
+            />
+          )}
         {/* YNAB: an open account offers Close, or Delete while it has only its starting
             balance; a closed one offers Re-open and Delete, disabled while it has history. */}
         <div className="flex flex-wrap gap-2 border-t pt-4">
@@ -555,7 +566,7 @@ function AccountPage() {
           {reconcilable && (
             <ReconcilePopover
               account={account}
-              settings={budget}
+              settings={accountSettings}
               open={reconcileOpen}
               onOpenChange={setReconcileOpen}
               show={show}
@@ -586,13 +597,13 @@ function AccountPage() {
             <OverspendingFigure
               amount={cardPayment.creditOverspending}
               month={cardPayment.month}
-              format={(minorUnits) => show(minorUnits)}
+              format={showBudget}
             />
             <PaymentFigure
               categoryId={cardPayment.categoryId}
               available={cardPayment.available}
               caution={cardPayment.caution}
-              format={(minorUnits) => show(minorUnits)}
+              format={showBudget}
             />
           </div>
         )}

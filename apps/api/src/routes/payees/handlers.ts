@@ -12,7 +12,7 @@ import {
 } from "@everycent/db/schema";
 import type { PayeeCategorization } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
