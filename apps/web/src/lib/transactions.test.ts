@@ -10,6 +10,7 @@ import {
   draftFrom,
   emptyDraft,
   emptyLine,
+  movableAccounts,
   paymentCategoryCard,
   splitMismatch,
   splitRemaining,
@@ -367,6 +368,26 @@ describe("a transaction in an account's own currency (EVERYCENT-52)", () => {
       body: { amount: "-1500" },
     });
     expect(createBody(draft, usd)).toMatchObject({ ok: true, body: { amount: "-150" } });
+  });
+});
+
+describe("movableAccounts (EVERYCENT-193)", () => {
+  it("offers open accounts in the transaction's currency, and the one it's in", () => {
+    const accounts = [
+      { id: "usd", closed: false, currency: "USD" },
+      { id: "usd2", closed: false, currency: "USD" },
+      { id: "eur", closed: false, currency: "EUR" },
+      { id: "old", closed: true, currency: "USD" },
+    ];
+    expect(
+      movableAccounts(accounts, { accountId: "usd", currency: "USD" }).map((a) => a.id),
+    ).toEqual(["usd", "usd2"]);
+    expect(
+      movableAccounts(accounts, { accountId: "eur", currency: "EUR" }).map((a) => a.id),
+    ).toEqual(["eur"]);
+    expect(
+      movableAccounts(accounts, { accountId: "old", currency: "USD" }).map((a) => a.id),
+    ).toEqual(["usd", "usd2", "old"]);
   });
 });
 

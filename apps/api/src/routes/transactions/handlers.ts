@@ -1,4 +1,5 @@
 import {
+  budgetAccount,
   type ClearedState,
   type FlagColor,
   subTransaction,
@@ -51,14 +52,22 @@ import {
 
 type Env = AppEnv & AuthedEnv;
 /**
- * How a register's search reads amounts: in its account's currency, or the budget's for all
- * accounts (where amounts in other currencies are read in the budget's; EVERYCENT-52 gap).
+ * How a register's search reads amounts: in its account's currency, or for all accounts each
+ * row's in its own account's (`currencies`: every currency the budget's accounts use;
+ * EVERYCENT-193).
  */
-export function searchSettings<S extends { currency: AccountRow["currency"] }>(
+export async function searchSettings<S extends { currency: AccountRow["currency"] }>(
+  db: Db,
+  budgetId: string,
   budget: S,
   account: Pick<AccountRow, "currency"> | null,
-): S {
-  return account ? { ...budget, currency: account.currency } : budget;
+): Promise<S & { currencies?: AccountRow["currency"][] }> {
+  if (account) return { ...budget, currency: account.currency };
+  const rows = await db
+    .selectDistinct({ currency: budgetAccount.currency })
+    .from(budgetAccount)
+    .where(eq(budgetAccount.budgetId, budgetId));
+  return { ...budget, currencies: rows.map((r) => r.currency) };
 }
 
 async function transactionJson(db: Db, budgetId: string, accountId: string, id: string) {
@@ -81,7 +90,7 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
     budgetId,
     { ...filter, today },
     { sort: parseSort(sort), limit, cursor },
-    searchSettings(budget, account),
+    await searchSettings(db, budgetId, budget, account),
   );
   return c.json(page, 200);
 };

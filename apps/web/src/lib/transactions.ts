@@ -580,6 +580,18 @@ function amountAndLinesOf(draft: Draft, settings: MoneySettings) {
   return result.ok ? result.body.lines : undefined;
 }
 
+/**
+ * The accounts an existing transaction (or schedule) can be moved to: open ones in its currency,
+ * since a move into another currency is refused (`CROSS_CURRENCY_MOVE`; EVERYCENT-193), plus the
+ * one it's in.
+ */
+export function movableAccounts<A extends { id: string; closed: boolean; currency: string }>(
+  accounts: readonly A[],
+  t: { accountId: string; currency: string },
+): A[] {
+  return accounts.filter((a) => a.id === t.accountId || (!a.closed && a.currency === t.currency));
+}
+
 /** The cells YNAB lets you edit in place on an existing transaction. */
 export type CellColumn = "account" | "date" | "payee" | "category" | "memo" | "outflow" | "inflow";
 

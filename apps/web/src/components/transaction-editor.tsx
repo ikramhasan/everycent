@@ -55,6 +55,7 @@ export function TransactionEditor({
   initial,
   columns,
   accounts,
+  accountChoices,
   payees,
   categories,
   dateFormat,
@@ -76,6 +77,8 @@ export function TransactionEditor({
   columns: readonly ColumnId[];
   /** Accounts a new transaction can go in (open ones). */
   accounts: readonly Account[];
+  /** The account list, when narrower than `accounts` (an existing one stays in its currency). */
+  accountChoices?: readonly Account[];
   payees: readonly Payee[];
   categories: readonly CategoryOption[];
   dateFormat: DateFormat;
@@ -212,7 +215,7 @@ export function TransactionEditor({
             }}
             className="h-8 w-full"
           >
-            {accounts.map((a) => (
+            {(accountChoices ?? accounts).map((a) => (
               <NativeSelectOption key={a.id} value={a.id}>
                 {a.name}
               </NativeSelectOption>

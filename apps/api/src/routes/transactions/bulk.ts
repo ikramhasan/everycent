@@ -125,7 +125,12 @@ export const summarizeSelectionHandler: RouteHandler<typeof summarizeSelection, 
   const { selection } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  const settings = searchSettings(budget, await checkFilterAccount(db, budgetId, selection));
+  const settings = await searchSettings(
+    db,
+    budgetId,
+    budget,
+    await checkFilterAccount(db, budgetId, selection),
+  );
   const rows = await selectedRows(db, selectedWhere(db, budgetId, selection, settings));
   const count = (test: (row: SelectedRow) => boolean) => rows.filter(test).length;
   // Amounts in different currencies don't add up (converted totals: EVERYCENT-57).
@@ -165,7 +170,12 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         ? { transaction: ["create"] }
         : { transaction: ["update"] },
   );
-  const settings = searchSettings(budget, await checkFilterAccount(db, budgetId, selection));
+  const settings = await searchSettings(
+    db,
+    budgetId,
+    budget,
+    await checkFilterAccount(db, budgetId, selection),
+  );
 
   const result = await db.transaction(async (tx) => {
     // Lock the selection before reading what the actions below check.

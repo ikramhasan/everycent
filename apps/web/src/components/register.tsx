@@ -120,6 +120,7 @@ import {
   type Draft,
   draftFrom,
   emptyDraft,
+  movableAccounts,
   payeesQueryOptions,
   paymentCategoryCard,
   REGISTER_PAGE_SIZE,
@@ -398,7 +399,11 @@ export function Register({
         className="inline-flex flex-col items-end leading-tight"
         title={t.fxRate ? `1 ${t.currency} = ${t.fxRate} ${budget.currency}` : undefined}
       >
-        <span>{native}</span>
+        <span>
+          {native}
+          {/* All accounts mixes currencies: name the row's, which a symbol may not (EVERYCENT-193). */}
+          {!accountId && <span className="ml-1 text-muted-foreground text-xs">{t.currency}</span>}
+        </span>
         <span className="text-muted-foreground text-xs">{show(base < 0n ? -base : base)}</span>
       </span>
     );
@@ -1773,6 +1778,7 @@ export function Register({
                   label="Edit transaction"
                   columns={columnIds}
                   accounts={editorAccounts(accountList, t.accountId)}
+                  accountChoices={movableAccounts(accountList, t)}
                   payees={payeeList}
                   categories={options}
                   dateFormat={budget.dateFormat}
@@ -1839,7 +1845,7 @@ export function Register({
                           column={editing.column}
                           settings={inCurrency(budget, t.currency)}
                           dateFormat={budget.dateFormat}
-                          accounts={editorAccounts(accountList, t.accountId)}
+                          accounts={movableAccounts(accountList, t)}
                           payees={payeeList}
                           transfers={transferTargets(t)}
                           categories={options}

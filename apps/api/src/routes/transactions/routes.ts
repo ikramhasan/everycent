@@ -26,7 +26,8 @@ const SearchText = z
       "before and after include the day), `Income:` (a month name, full or " +
       "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
       "Assign that month, including Starting Balances of budget accounts; no year means this " +
-      "year). Split lines are matched one by one.",
+      "year). Split lines are matched one by one. Amounts are read in each row's own account's " +
+      "currency (with all accounts, a row in euros matches `12` as €12.00 and one in yen as ¥12).",
   );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);

@@ -1,5 +1,5 @@
 import { flagName, payee, scheduledTransaction } from "@everycent/db/schema";
-import { parseSearch } from "@everycent/engine";
+import { type CurrencyCode, parseSearch, type SearchTerm } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -77,8 +77,21 @@ export const listScheduledTransactionsHandler: RouteHandler<
     readyToAssignId: await internalCategoryId(db, budgetId, "ready_to_assign"),
     today,
   };
+  // Each row's amounts are read in its own account's currency (EVERYCENT-193).
+  const byCurrency = new Map<string, SearchTerm[]>([[budget.currency, terms]]);
+  const termsIn = (currency: CurrencyCode) => {
+    const known = byCurrency.get(currency);
+    if (known) return known;
+    const parsed = parseSearch(q ?? "", { ...budget, currency }, today);
+    byCurrency.set(currency, parsed);
+    return parsed;
+  };
   return c.json(
-    { scheduledTransactions: inRange.filter((r) => scheduledRowMatches(r, terms, context)) },
+    {
+      scheduledTransactions: inRange.filter((r) =>
+        scheduledRowMatches(r, termsIn(r.currency), context),
+      ),
+    },
     200,
   );
 };
