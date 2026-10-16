@@ -3391,7 +3391,7 @@
               "ZMW",
               "ZWG"
             ],
-            "description": "Defaults to the budget's currency. Loans stay in the budget's currency, and until currency conversion arrives another currency is for tracking accounts (asset, liability) only. Amounts are in this currency's minor units."
+            "description": "Defaults to the budget's currency. Loans stay in the budget's currency; any other type can be in another one (its activity is converted into the budget's). Amounts are in this currency's minor units."
           },
           "balance": {
             "type": "string",
@@ -5423,6 +5423,11 @@
           "restore": {
             "type": "boolean",
             "description": "An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows"
+          },
+          "baseAmount": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "With `restore`, for a deleted FX Revaluation only (amount 0): its booked amount in the budget's currency, with its rate in `fxRate`"
           }
         },
         "required": [

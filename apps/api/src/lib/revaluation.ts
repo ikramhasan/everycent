@@ -5,6 +5,16 @@ import { AppError } from "./errors";
 import { knownRateOn } from "./fx";
 import type { Db } from "./ledger";
 
+/** Whether `payeeId` is the budget's built-in "FX Revaluation" payee. */
+export async function isRevaluationPayee(db: Db, payeeId: string | null) {
+  if (!payeeId) return false;
+  const [row] = await db
+    .select({ kind: payee.internalKind })
+    .from(payee)
+    .where(eq(payee.id, payeeId));
+  return row?.kind === "fx_revaluation";
+}
+
 /**
  * Unrealized FX gain or loss (EVERYCENT-56): what a foreign-currency account's balance is worth
  * in the budget's currency at `rate` (converted once, half-even) less what its transactions were
@@ -96,11 +106,11 @@ export async function assertRevaluationEditable(
     .where(eq(payee.id, existing.payeeId));
   if (row?.kind !== "fx_revaluation") return false;
   // An editor saving the whole row sends the fields it didn't change too.
+  // A revaluation's rate is never typed, so null ("the date's rate", as an undo sends it) keeps it.
   const sameRate =
     body.fxRate === undefined ||
-    (body.fxRate !== null &&
-      existing.fxRate !== null &&
-      normalizeRate(body.fxRate) === normalizeRate(existing.fxRate));
+    body.fxRate === null ||
+    (existing.fxRate !== null && normalizeRate(body.fxRate) === normalizeRate(existing.fxRate));
   const changes =
     (body.accountId !== undefined && body.accountId !== existing.accountId) ||
     (body.date !== undefined && body.date !== existing.date) ||

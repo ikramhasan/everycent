@@ -43,8 +43,13 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
           })),
         }
       : {}),
-    // A typed rate comes back typed; otherwise the date's rate is the one it had.
-    ...(transaction.fxRateManual && transaction.fxRate ? { fxRate: transaction.fxRate } : {}),
+    // A typed rate comes back typed; otherwise the date's rate is the one it had. An FX
+    // Revaluation (amount 0) comes back with its booked base amount and rate.
+    ...(transaction.amount === "0" && transaction.baseAmount !== "0"
+      ? { baseAmount: transaction.baseAmount, fxRate: transaction.fxRate }
+      : transaction.fxRateManual && transaction.fxRate
+        ? { fxRate: transaction.fxRate }
+        : {}),
     restore: true,
   };
 }

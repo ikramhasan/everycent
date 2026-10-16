@@ -228,9 +228,9 @@ export const createAccount = createRoute({
           currency: zCurrencyCode
             .optional()
             .describe(
-              "Defaults to the budget's currency. Loans stay in the budget's currency, and until " +
-                "currency conversion arrives another currency is for tracking accounts (asset, " +
-                "liability) only. Amounts are in this currency's minor units.",
+              "Defaults to the budget's currency. Loans stay in the budget's currency; any other " +
+                "type can be in another one (its activity is converted into the budget's). Amounts " +
+                "are in this currency's minor units.",
             ),
           balance: zMinorUnits.describe("Today's balance; negative for money owed"),
           date: IsoDate.describe("Date of the starting balance (the user's today)"),

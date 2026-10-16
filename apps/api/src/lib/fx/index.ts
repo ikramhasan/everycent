@@ -204,6 +204,17 @@ const RECENT_TTL_MS = 60 * 60 * 1000;
 const recentFetches = new Map<string, { at: number; rateDate: string }>();
 /** Fetches in progress, so identical concurrent lookups share one request. */
 const inFlight = new WeakMap<FxProvider, Map<string, Promise<FxRates | null>>>();
+const FAILED_TTL_MS = 10 * 60 * 1000;
+/**
+ * When each provider last failed or had nothing for a date and base: reads skip it for a while
+ * instead of waiting on its timeout again (an outage would otherwise slow every budget read).
+ */
+const failedFetches = new WeakMap<FxProvider, Map<string, number>>();
+
+/** Forgets a provider's recent failures (tests, or a provider known to be back). */
+export function forgetFxFailures(provider: FxProvider) {
+  failedFetches.delete(provider);
+}
 
 function recentKey(date: string, base: CurrencyCode) {
   return `${date}|${base}`;
@@ -222,6 +233,12 @@ function fetchOnce(
   const key = recentKey(date, base);
   const existing = pending.get(key);
   if (existing) return existing;
+  const failures = failedFetches.get(provider) ?? new Map<string, number>();
+  failedFetches.set(provider, failures);
+  const failedAt = failures.get(key);
+  if (failedAt !== undefined && Date.now() - failedAt < FAILED_TTL_MS) {
+    return Promise.resolve(null);
+  }
 
   const run = (async () => {
     let fetched: FxRates | null;
@@ -229,9 +246,14 @@ function fetchOnce(
       fetched = await provider.fetchRates(date, base, []);
     } catch (error) {
       console.warn(`FX provider ${provider.name} failed for ${base} on ${date}:`, error);
+      failures.set(key, Date.now());
       return null;
     }
-    if (!fetched) return null;
+    if (!fetched) {
+      failures.set(key, Date.now());
+      return null;
+    }
+    failures.delete(key);
     const rates: FxRates["rates"] = {};
     for (const [quote, rate] of Object.entries(fetched.rates) as [CurrencyCode, string][]) {
       if (quote === base) continue;

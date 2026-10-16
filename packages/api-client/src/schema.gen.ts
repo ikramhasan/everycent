@@ -2079,7 +2079,7 @@ export interface components {
              */
             type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
             /**
-             * @description Defaults to the budget's currency. Loans stay in the budget's currency, and until currency conversion arrives another currency is for tracking accounts (asset, liability) only. Amounts are in this currency's minor units.
+             * @description Defaults to the budget's currency. Loans stay in the budget's currency; any other type can be in another one (its activity is converted into the budget's). Amounts are in this currency's minor units.
              * @enum {string}
              */
             currency?: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
@@ -2588,6 +2588,8 @@ export interface components {
             transferSide?: components["schemas"]["TransferSideInput"];
             /** @description An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows */
             restore?: boolean;
+            /** @description With `restore`, for a deleted FX Revaluation only (amount 0): its booked amount in the budget's currency, with its rate in `fxRate` */
+            baseAmount?: string;
         };
         /** @description A transfer's fee: a separate outflow in the sending account (the one the money leaves), same date, payee and memo "Transfer fee", converted like any transaction. It isn't linked to the transfer */
         TransferFee: {

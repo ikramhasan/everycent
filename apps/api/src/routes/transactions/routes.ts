@@ -389,6 +389,12 @@ export const createTransaction = createRoute({
               "An undo bringing back a deleted transaction: its accounts (and its transfers' " +
                 "accounts) may have been closed since, as YNAB's Undo allows",
             ),
+          baseAmount: zMinorUnits
+            .optional()
+            .describe(
+              "With `restore`, for a deleted FX Revaluation only (amount 0): its booked amount in " +
+                "the budget's currency, with its rate in `fxRate`",
+            ),
         })
         .openapi("CreateTransaction"),
     ),

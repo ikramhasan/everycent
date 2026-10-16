@@ -287,4 +287,79 @@ describe("revaluing an account", () => {
     const row = (await register(euros.id)).find((t) => t.id === transaction.id);
     expect(row).toMatchObject({ memo: "October", baseAmount: "1000", amount: "0" });
   });
+
+  it("takes an undo's whole-row edit, and restores a deleted one with its base amount", async () => {
+    const { cookie, base, addAccount, revalue, register, month } = await setup();
+    const euros = await addAccount({
+      name: "Euros",
+      type: "checking",
+      currency: "EUR",
+      balance: "10000",
+    });
+    const { transaction } = await json<{ transaction: Txn }>(await revalue(euros.id));
+    // An undo sends every field, the rate as null ("the date's") because it wasn't typed.
+    const undone = await send(
+      "PATCH",
+      `${base}/transactions/${transaction.id}?today=${TODAY}`,
+      cookie,
+      {
+        accountId: euros.id,
+        date: TODAY,
+        amount: "0",
+        payeeName: "FX Revaluation",
+        memo: "",
+        flag: null,
+        fxRate: null,
+      },
+    );
+    expect(undone.status, await undone.clone().text()).toBe(200);
+    expect((await register(euros.id)).find((t) => t.id === transaction.id)?.baseAmount).toBe(
+      "1000",
+    );
+
+    // Deleted and brought back by undo: its booked base amount comes back too.
+    const row = (await register(euros.id)).find((t) => t.id === transaction.id) as Txn & {
+      categoryId: string;
+    };
+    expect((await send("DELETE", `${base}/transactions/${transaction.id}`, cookie)).status).toBe(
+      204,
+    );
+    const restore = (body: Record<string, unknown>) =>
+      send("POST", `${base}/transactions?today=${TODAY}`, cookie, {
+        accountId: euros.id,
+        date: TODAY,
+        amount: "0",
+        payeeName: "FX Revaluation",
+        categoryId: row.categoryId,
+        memo: "",
+        cleared: "cleared",
+        flag: null,
+        baseAmount: "1000",
+        fxRate: "1.2",
+        ...body,
+      });
+    expect((await restore({ restore: false })).status).toBe(400);
+    expect((await restore({ payeeName: "Shop", restore: true })).status).toBe(400);
+    const back = await restore({ restore: true });
+    expect(back.status, await back.clone().text()).toBe(201);
+    expect(await json<Txn>(back)).toMatchObject({ amount: "0", baseAmount: "1000", fxRate: "1.2" });
+    expect((await month()).readyToAssign).toBe("12000");
+  });
+
+  it("leaves revaluations out of a bulk Duplicate", async () => {
+    const { cookie, base, addAccount, revalue, register } = await setup();
+    const euros = await addAccount({
+      name: "Euros",
+      type: "checking",
+      currency: "EUR",
+      balance: "10000",
+    });
+    const { transaction } = await json<{ transaction: Txn }>(await revalue(euros.id));
+    const res = await send("POST", `${base}/transactions/bulk?today=${TODAY}`, cookie, {
+      selection: { ids: [transaction.id] },
+      action: { type: "duplicate" },
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect((await register(euros.id)).length).toBe(2);
+  });
 });

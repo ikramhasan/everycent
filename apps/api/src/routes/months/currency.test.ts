@@ -274,4 +274,43 @@ describe("foreign-currency activity in the plan", () => {
     // Today's rate (the 10th's, 1.2): €-50.00 is $-60.00.
     expect(upcoming.upcoming.amount).toBe("-6000");
   });
+
+  it("leaves a due foreign schedule waiting while no rate is available, without failing reads", async () => {
+    const { cookie, base, addAccount, groceries } = await setup();
+    const euros = await addAccount({ name: "Euros", type: "checking", currency: "EUR" });
+    const res = await send("POST", `${base}/scheduled-transactions`, cookie, {
+      accountId: euros.id,
+      today: TODAY,
+      date: "2026-10-20",
+      frequency: "monthly",
+      amount: "-5000",
+      categoryId: groceries.id,
+      payeeName: null,
+      memo: "",
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    await db.execute("delete from fx_rate");
+    fx.failing = true;
+    const read = (today: string) =>
+      send("GET", `${base}/transactions?accountId=${euros.id}&today=${today}`, cookie);
+    const waiting = await read("2026-10-20");
+    expect(waiting.status, await waiting.clone().text()).toBe(200);
+    expect((await json<{ transactions: Txn[] }>(waiting)).transactions).toHaveLength(1);
+    // Once a rate can be found, the next read enters it.
+    fx.reset().seed("2026-10-01", "EUR", { USD: "1.1" });
+    const entered = await json<{ transactions: Txn[] }>(await read("2026-10-20"));
+    expect(entered.transactions.map((t) => t.amount)).toContain("-5000");
+  });
+
+  it("doesn't ask a provider that just failed again for the same day", async () => {
+    const { cookie, base } = await setup();
+    await db.execute("delete from fx_rate");
+    fx.failing = true;
+    const look = () =>
+      send("GET", `${base}/fx-rates?from=KWD&date=2026-10-03&today=${TODAY}`, cookie);
+    expect((await look()).status).toBe(422);
+    const calls = fx.calls.length;
+    expect((await look()).status).toBe(422);
+    expect(fx.calls.length).toBe(calls);
+  });
 });

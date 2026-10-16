@@ -5,6 +5,7 @@ import {
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
+import { normalizeRate } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
 import { type FxDeps, oppositeSides, rebase, syncBases } from "../../lib/base-amount";
@@ -12,7 +13,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
-import { assertRevaluationEditable } from "../../lib/revaluation";
+import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -134,6 +135,8 @@ export interface CreateBody {
   restore?: boolean;
   /** In a foreign-currency account: the rate typed by hand (otherwise the date's). */
   fxRate?: string | null;
+  /** An undo restoring a deleted FX Revaluation: its booked base amount (with its `fxRate`). */
+  baseAmount?: string;
   /**
    * A transfer between currencies: the other side's amount, in its account's currency
    * (otherwise this side's base amount at the date's rate).
@@ -179,20 +182,35 @@ export async function insertWithFee(tx: Db, fx: FxDeps, budgetId: string, body: 
     assertSplitAllowed(account);
     assertLinesAddUp(split, amount);
   }
+  const payeeId = transferTo
+    ? await transferPayeeId(tx, transferTo)
+    : body.payeeName
+      ? await findOrCreatePayee(tx, budgetId, body.payeeName)
+      : null;
+  // An undo bringing back an FX Revaluation: its amount is 0, so only its booked base amount
+  // says what it did (EVERYCENT-56).
+  if (body.baseAmount !== undefined) {
+    if (!body.restore || amount !== 0n || !(await isRevaluationPayee(tx, payeeId))) {
+      throw new AppError(
+        400,
+        "BAD_REQUEST",
+        "`baseAmount` only restores a deleted FX Revaluation (with `restore`)",
+      );
+    }
+  }
   const id = await insertTransaction(tx, {
     budgetId,
     accountId: account.id,
     date: body.date,
     amount,
     currency: account.currency,
-    fx,
-    rate: body.fxRate,
-    split: split !== undefined,
-    payeeId: transferTo
-      ? await transferPayeeId(tx, transferTo)
-      : body.payeeName
-        ? await findOrCreatePayee(tx, budgetId, body.payeeName)
-        : null,
+    ...(body.baseAmount !== undefined
+      ? {
+          baseAmount: BigInt(body.baseAmount),
+          fxRate: body.fxRate ? normalizeRate(body.fxRate) : null,
+        }
+      : { fx, rate: body.fxRate, split: split !== undefined }),
+    payeeId,
     categoryId: split
       ? null
       : await resolveCategory(tx, budgetId, account, transferTo, body.categoryId),

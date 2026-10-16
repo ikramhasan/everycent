@@ -227,7 +227,19 @@ export async function enterDueScheduled(db: Database, fx: FxDeps, budgetId: stri
     for (const { schedule } of rows) {
       let date: string | null = schedule.dateNext;
       while (date !== null && date <= today) {
-        await enterOccurrence(tx, fx, schedule, date, false);
+        const day = date;
+        // A foreign account's occurrence with no rate available waits (still due) until one is,
+        // so a missing rate never stops the reads that enter schedules (EVERYCENT-54).
+        const entered = await tx
+          .transaction(async (sp) => {
+            await enterOccurrence(sp, fx, schedule, day, false);
+            return true;
+          })
+          .catch((error: unknown) => {
+            if (error instanceof AppError && error.code === "FX_RATE_UNAVAILABLE") return false;
+            throw error;
+          });
+        if (!entered) break;
         date = await advance(tx, schedule, date);
       }
     }

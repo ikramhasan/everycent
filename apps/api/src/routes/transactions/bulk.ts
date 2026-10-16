@@ -8,6 +8,7 @@ import type { FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
+import { isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -452,6 +453,8 @@ async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly str
     done.add(sourceId);
     const [source] = await queryRegisterRows(tx, budgetId, [sourceId]);
     if (!source) continue;
+    // A revaluation's copy would book nothing (amount 0): revalue the account instead.
+    if (await isRevaluationPayee(tx, source.payeeId)) continue;
     const accountIds = [
       source.accountId,
       source.transferAccountId,

@@ -1,5 +1,6 @@
 import type { FxRateSource } from "@everycent/db/schema";
 import type { CurrencyCode } from "@everycent/engine";
+import { forgetFxFailures } from ".";
 import type { FxProvider, FxRates } from "./providers";
 
 /**
@@ -19,6 +20,7 @@ export class FakeFxProvider implements FxProvider {
     this.table.clear();
     this.calls.length = 0;
     this.failing = false;
+    forgetFxFailures(this);
     return this;
   }
 

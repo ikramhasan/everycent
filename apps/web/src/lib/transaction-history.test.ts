@@ -144,6 +144,25 @@ describe("transaction history bodies", () => {
     expect(updateBodyFromTransaction(same)).not.toHaveProperty("transferAmount");
   });
 
+  it("brings back a deleted FX Revaluation with its booked base amount (EVERYCENT-56)", () => {
+    const revaluation: Transaction = {
+      ...transaction,
+      amount: "0",
+      currency: "EUR",
+      baseAmount: "5435",
+      fxRate: "1.25",
+      fxRateManual: false,
+      subtransactions: [],
+    };
+    expect(createBodyFromTransaction(revaluation)).toMatchObject({
+      amount: "0",
+      baseAmount: "5435",
+      fxRate: "1.25",
+      restore: true,
+    });
+    expect(createBodyFromTransaction(transaction)).not.toHaveProperty("baseAmount");
+  });
+
   it("keeps a reconciled transaction reconciled", () => {
     const reconciled = { ...transaction, cleared: "reconciled" as const };
     expect(createBodyFromTransaction(reconciled).cleared).toBe("reconciled");
