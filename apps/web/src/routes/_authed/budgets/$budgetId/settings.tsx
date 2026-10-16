@@ -22,6 +22,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { BudgetMembers } from "@/components/budget-members";
+import { ExchangeRates } from "@/components/exchange-rates";
 import { FreshStartDialog } from "@/components/fresh-start-dialog";
 import { useManagePayees } from "@/components/manage-payees";
 import { $api } from "@/lib/api";
@@ -128,6 +129,8 @@ function BudgetSettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <ExchangeRates budget={budget} />
 
       {/* An archived budget can start fresh again, as in YNAB. */}
       {budget.role === "owner" && (

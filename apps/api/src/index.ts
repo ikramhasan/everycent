@@ -4,6 +4,7 @@ import { createApp } from "./app";
 import { parseEnv } from "./env";
 import { createAuth } from "./lib/auth";
 import { createEmailSender } from "./lib/email/sender";
+import { defaultFxProviders } from "./lib/fx/providers";
 import { loadRootEnv } from "./load-env";
 
 if (process.env.NODE_ENV !== "production") loadRootEnv();
@@ -11,7 +12,13 @@ if (process.env.NODE_ENV !== "production") loadRootEnv();
 const env = parseEnv();
 const { db, close } = createDb(env.DATABASE_URL);
 const email = createEmailSender(env, db);
-const app = createApp({ db, env, email, auth: createAuth(db, env, email) });
+const app = createApp({
+  db,
+  env,
+  email,
+  auth: createAuth(db, env, email),
+  fxProviders: defaultFxProviders(),
+});
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`everycent API on http://localhost:${info.port} — docs at /docs`);

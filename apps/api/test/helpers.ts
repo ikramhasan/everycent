@@ -9,6 +9,7 @@ import {
   MemoryEmailSender,
   ThrottledEmailSender,
 } from "../src/lib/email/sender";
+import { FakeFxProvider } from "../src/lib/fx/fake";
 import { loadRootEnv } from "../src/load-env";
 import type { AppDeps } from "../src/types";
 
@@ -29,8 +30,9 @@ const outboxes = new WeakMap<App, MemoryEmailSender>();
 
 export function createTestApp({
   serverDate = () => null,
+  fxProviders = [new FakeFxProvider()],
   ...authOptions
-}: Pick<AppDeps, "serverDate"> & AuthOptions = {}) {
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders">> & AuthOptions = {}) {
   const env = testEnv();
   const { db, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
@@ -43,9 +45,10 @@ export function createTestApp({
     email,
     auth: createAuth(db, env, email, authOptions),
     serverDate,
+    fxProviders,
   });
   outboxes.set(app, outbox);
-  return { app, db, env, outbox, close };
+  return { app, db, env, outbox, fxProviders, close };
 }
 
 /** Every email `app` sent to `to` (optionally of one kind), oldest first. */

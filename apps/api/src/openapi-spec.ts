@@ -22,7 +22,9 @@ export function generateOpenApiDocument() {
   });
   const { db } = createDb(env.DATABASE_URL, { max: 1 });
   const email = new MemoryEmailSender();
-  return buildOpenApiDocument(createApp({ db, env, email, auth: createAuth(db, env, email) }));
+  return buildOpenApiDocument(
+    createApp({ db, env, email, auth: createAuth(db, env, email), fxProviders: [] }),
+  );
 }
 
 export function serializeOpenApi(doc: unknown): string {

@@ -62,7 +62,17 @@ export {
   type Upcoming,
   upcomingShort,
 } from "./funding";
-export { convert } from "./fx";
+export {
+  convert,
+  crossRate,
+  invertRate,
+  normalizeRate,
+  parseJsonExact,
+  parseJsonRates,
+  RATE_SCALE,
+  rateToScaled,
+  scaledToRate,
+} from "./fx";
 export {
   effectivePayment,
   type LoanHistoryMonth,
