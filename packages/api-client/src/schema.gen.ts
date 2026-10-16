@@ -1610,6 +1610,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/reports/age-of-money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Age of Money now, 30 days ago, and at each month's end
+         * @description YNAB's Age of Money: the average age in days of the last ten outflows from cash accounts (credit card payments and transfers to loan or tracking accounts included), each outflow's money taken oldest first. Null when there have been fewer than ten outflows.
+         */
+        get: operations["getAgeOfMoney"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/events": {
         parameters: {
             query?: never;
@@ -3867,6 +3887,23 @@ export interface components {
             native: string;
             /** @description In the budget's currency at the month-end rate; null when no rate is known */
             base: string | null;
+        };
+        AgeOfMoney: {
+            /**
+             * Format: date
+             * @description The day `current` is for (the user's today)
+             */
+            asOf: string;
+            /** @description Age of Money today, in days */
+            current: number | null;
+            /** @description Age of Money as of 30 days before `asOf` */
+            thirtyDaysAgo: number | null;
+            /** @description Each month from the first one with a cash-account transaction to this month */
+            months: {
+                month: string;
+                /** @description As of the month's last day (today for this month) */
+                days: number | null;
+            }[];
         };
     };
     responses: never;
@@ -10220,6 +10257,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAgeOfMoney: {
+        parameters: {
+            query?: {
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Age of Money */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgeOfMoney"];
                 };
             };
             /** @description Not signed in */
