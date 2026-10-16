@@ -68,7 +68,7 @@ export function AvailablePill({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm",
+        "inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm transition-colors duration-150 ease-out-quint",
         caution
           ? "bg-yellow-100 text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100"
           : [

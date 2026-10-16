@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
+import { ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
 import {
@@ -319,7 +319,12 @@ export function CategoryList({
                   onCollapsedChange?.(allCollapsed ? new Set() : new Set(layout.groupOrder))
                 }
               >
-                {allCollapsed ? <ChevronRight /> : <ChevronDown />}
+                <ChevronRight
+                  className={cn(
+                    "transition-transform duration-150 ease-out-quint motion-reduce:transition-none",
+                    !allCollapsed && "rotate-90",
+                  )}
+                />
               </Button>
               {selection && (
                 <span className={SLOT}>
@@ -668,7 +673,12 @@ function GroupSection({
             aria-expanded={!collapsed}
             onClick={onToggle}
           >
-            {collapsed ? <ChevronRight /> : <ChevronDown />}
+            <ChevronRight
+              className={cn(
+                "transition-transform duration-150 ease-out-quint motion-reduce:transition-none",
+                !collapsed && "rotate-90",
+              )}
+            />
           </Button>
           {onToggleSelection && (
             <span className={SLOT}>
@@ -854,9 +864,10 @@ function CategoryRow({
       ref={ref}
       className={cn(
         ROW,
-        "border-t first:border-t-0",
+        // The whole row selects on click, so it lights up on hover; selection wins over hover.
+        "border-t transition-colors duration-100 first:border-t-0",
         isDragSource && "opacity-60",
-        selected && SELECTED_ROW,
+        selected ? SELECTED_ROW : "hover:bg-muted/40",
       )}
       onClick={onRowClick}
     >
