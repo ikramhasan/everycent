@@ -1,8 +1,10 @@
 import { sql } from "@everycent/db";
 import {
+  auditEvent,
   budget,
   budgetMember,
   session,
+  transaction,
   twoFactor,
   userPreference,
   user as userTable,
@@ -12,6 +14,7 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { APIError } from "better-auth/api";
 import Bowser from "bowser";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { pauseAudit } from "../../lib/audit-context";
 import { AppError } from "../../lib/errors";
 import { consumePasswordCheck } from "../../lib/throttle";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -211,6 +214,17 @@ export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => 
     await tx.delete(verification).where(eq(verification.value, me.id));
     // Memberships, sessions, logins, options and two-step verification cascade from the user.
     await tx.delete(userTable).where(eq(userTable.id, me.id));
+    // Shared budgets keep their history and transactions, without the user's id.
+    await pauseAudit(tx);
+    await tx.update(auditEvent).set({ actorUserId: null }).where(eq(auditEvent.actorUserId, me.id));
+    await tx
+      .update(transaction)
+      .set({ createdByUserId: null })
+      .where(eq(transaction.createdByUserId, me.id));
+    await tx
+      .update(transaction)
+      .set({ updatedByUserId: null })
+      .where(eq(transaction.updatedByUserId, me.id));
   });
   return c.body(null, 204);
 };

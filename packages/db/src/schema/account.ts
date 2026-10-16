@@ -281,6 +281,15 @@ export const transaction = pgTable(
     transferSubTransactionId: text().references((): AnyPgColumn => subTransaction.id, {
       onDelete: "set null",
     }),
+    /**
+     * Who entered it and who changed it last (EVERYCENT-89), set by the `everycent_stamp_row`
+     * trigger from the request's actor; null when no one did (a scheduled occurrence entered on
+     * read) or once their user is deleted. Not foreign keys, like `audit_event`'s ids.
+     */
+    createdByUserId: text(),
+    updatedByUserId: text(),
+    /** Bumped by the trigger on every real change: undo sends it to detect a partner's edit. */
+    version: integer().notNull().default(1),
     ...timestamps,
   },
   (t) => [

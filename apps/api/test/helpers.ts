@@ -163,3 +163,36 @@ export async function createBudget(
     throw new Error(`create budget failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as TestBudget;
 }
+
+/**
+ * Shares a budget with a new user the way people do: the owner invites them, they sign up and
+ * accept the emailed link. `role` is the invitation's (editor unless given).
+ */
+export async function shareBudget(
+  app: App,
+  ownerCookie: string,
+  budgetId: string,
+  { name = "Pat", role }: { name?: string; role?: string } = {},
+): Promise<{ cookie: string; email: string; userId: string }> {
+  const email = `member-${crypto.randomUUID()}@example.com`;
+  const invited = await app.request(`/v1/budgets/${budgetId}/invitations`, {
+    method: "POST",
+    headers: { cookie: ownerCookie, "content-type": "application/json" },
+    body: JSON.stringify({ name, email, ...(role ? { role } : {}) }),
+  });
+  if (invited.status !== 201) throw new Error(`invite failed: ${invited.status}`);
+  const person = await signUp(app, { email, name });
+  const token = linkToken(emailsTo(app, email, "budget-invitation").at(-1));
+  const accepted = await app.request("/v1/invitations/accept", {
+    method: "POST",
+    headers: { cookie: person.cookie, "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (accepted.status !== 200) throw new Error(`accept failed: ${accepted.status}`);
+  const members = (await (
+    await app.request(`/v1/budgets/${budgetId}/members`, { headers: { cookie: ownerCookie } })
+  ).json()) as { members: { userId: string; email: string }[] };
+  const userId = members.members.find((m) => m.email === email)?.userId;
+  if (!userId) throw new Error("the new member isn't listed");
+  return { cookie: person.cookie, email, userId };
+}

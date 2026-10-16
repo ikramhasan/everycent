@@ -9820,6 +9820,150 @@
           "currency",
           "rate"
         ]
+      },
+      "ActivityPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            },
+            "description": "Newest first"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor"
+        ]
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActivityActor"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why a change without an actor happened: 'scheduled' for an entered occurrence"
+          },
+          "entity": {
+            "type": "string",
+            "description": "The table changed, e.g. 'transaction', 'category_assignment'"
+          },
+          "rowId": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "insert",
+              "update",
+              "delete"
+            ]
+          },
+          "before": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "The row before the change; null for an insert"
+          },
+          "after": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "The row after the change; null for a delete"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "source",
+          "entity",
+          "rowId",
+          "op",
+          "before",
+          "after"
+        ]
+      },
+      "ActivityActor": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null once their user is deleted"
+          },
+          "avatarColor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Null once they've left the budget"
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "avatarColor"
+        ],
+        "description": "Who made the change; null for one nobody made (see `source`)"
+      },
+      "TransactionHistory": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            }
+          }
+        },
+        "required": [
+          "events"
+        ]
       }
     },
     "parameters": {}
@@ -18805,6 +18949,197 @@
           },
           "404": {
             "description": "No such budget or override, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/activity": {
+      "get": {
+        "operationId": "listBudgetActivity",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The budget's change history, newest first",
+        "description": "Every insert, update and delete of the budget's data, who made it and when, with the row before and after (EVERYCENT-108). Changes to bookkeeping columns alone aren't listed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only this user's changes; 'none' for changes nobody made"
+            },
+            "required": false,
+            "description": "Only this user's changes; 'none' for changes nobody made",
+            "name": "member",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction')"
+            },
+            "required": false,
+            "description": "Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction')",
+            "name": "entity",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or cursor (INVALID_CURSOR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/history": {
+      "get": {
+        "operationId": "getTransactionHistory",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "One transaction's change history, oldest first",
+        "description": "Its insert, updates and delete, and those of its split lines (`sub_transaction`), with who made each. Works for a deleted transaction too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

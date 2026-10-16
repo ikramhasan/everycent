@@ -22,5 +22,7 @@ export interface AppDeps {
 export type AppEnv = {
   Variables: {
     deps: AppDeps;
+    /** Set by hono/request-id for every request. */
+    requestId: string;
   };
 };

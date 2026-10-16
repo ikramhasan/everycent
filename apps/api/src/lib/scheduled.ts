@@ -1,4 +1,4 @@
-import { type Database, newId } from "@everycent/db";
+import { type Database, newId, sql } from "@everycent/db";
 import {
   budgetAccount,
   category,
@@ -217,6 +217,10 @@ export async function enterDueScheduled(db: Database, fx: FxDeps, budgetId: stri
     .limit(1);
   if (!any) return;
   await db.transaction(async (tx) => {
+    // Entered on someone's read, not by them: logged with no actor (EVERYCENT-108).
+    await tx.execute(
+      sql`select set_config('everycent.source', 'scheduled', true) where everycent_setting('actor_id') is null`,
+    );
     const rows = await tx
       .select({ schedule: scheduledTransaction })
       .from(scheduledTransaction)

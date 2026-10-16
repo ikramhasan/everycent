@@ -6,6 +6,7 @@ import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { accountsRouter } from "./routes/accounts";
+import { activityRouter } from "./routes/activity";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
@@ -73,6 +74,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", viewsRouter);
   app.route("/v1", monthsRouter);
   app.route("/v1", fxRatesRouter);
+  app.route("/v1", activityRouter);
 
   registerDocs(app);
   return app;

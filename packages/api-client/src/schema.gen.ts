@@ -1506,6 +1506,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The budget's change history, newest first
+         * @description Every insert, update and delete of the budget's data, who made it and when, with the row before and after (EVERYCENT-108). Changes to bookkeeping columns alone aren't listed.
+         */
+        get: operations["listBudgetActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One transaction's change history, oldest first
+         * @description Its insert, updates and delete, and those of its split lines (`sub_transaction`), with who made each. Works for a deleted transaction too.
+         */
+        get: operations["getTransactionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3509,6 +3549,44 @@ export interface components {
              * @example 1.0842
              */
             rate: string;
+        };
+        ActivityPage: {
+            /** @description Newest first */
+            events: components["schemas"]["ActivityEvent"][];
+            /** @description Pass as `cursor` for the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        ActivityEvent: {
+            id: string;
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["ActivityActor"];
+            /** @description Why a change without an actor happened: 'scheduled' for an entered occurrence */
+            source: string | null;
+            /** @description The table changed, e.g. 'transaction', 'category_assignment' */
+            entity: string;
+            rowId: string;
+            /** @enum {string} */
+            op: "insert" | "update" | "delete";
+            /** @description The row before the change; null for an insert */
+            before: {
+                [key: string]: string | null;
+            } | null;
+            /** @description The row after the change; null for a delete */
+            after: {
+                [key: string]: string | null;
+            } | null;
+        };
+        /** @description Who made the change; null for one nobody made (see `source`) */
+        ActivityActor: {
+            userId: string;
+            /** @description Null once their user is deleted */
+            name: string | null;
+            /** @description Null once they've left the budget */
+            avatarColor: number | null;
+        } | null;
+        TransactionHistory: {
+            events: components["schemas"]["ActivityEvent"][];
         };
     };
     responses: never;
@@ -9455,6 +9533,121 @@ export interface operations {
                 };
             };
             /** @description No such budget or override, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listBudgetActivity: {
+        parameters: {
+            query?: {
+                /** @description Only this user's changes; 'none' for changes nobody made */
+                member?: string;
+                /** @description Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction') */
+                entity?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            /** @description Invalid input or cursor (INVALID_CURSOR) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTransactionHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Its changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionHistory"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;
