@@ -239,43 +239,6 @@ describe("transfers between currencies", () => {
     return { ...s, euro, checking, house };
   }
 
-  it("refuses a transfer between a foreign tracking account and a budget account", async () => {
-    const { createTransaction, euro, checking } = await pair();
-    await expectError(
-      await createTransaction({
-        accountId: checking.id,
-        amount: "-1000",
-        transferAccountId: euro.id,
-      }),
-      422,
-      "CROSS_CURRENCY_TRANSFER",
-    );
-    await expectError(
-      await createTransaction({
-        accountId: euro.id,
-        amount: "1000",
-        transferAccountId: checking.id,
-      }),
-      422,
-      "CROSS_CURRENCY_TRANSFER",
-    );
-  });
-
-  it("refuses turning a transaction into a transfer to another currency", async () => {
-    const { cookie, base, createTransaction, euro, checking } = await pair();
-    const res = await createTransaction({
-      accountId: checking.id,
-      amount: "-1000",
-      payeeName: "Shop",
-    });
-    const { id } = await json<{ id: string }>(res);
-    await expectError(
-      await send("PATCH", `${base}/transactions/${id}`, cookie, { transferAccountId: euro.id }),
-      422,
-      "CROSS_CURRENCY_TRANSFER",
-    );
-  });
-
   it("refuses moving a transaction into an account in another currency", async () => {
     const { cookie, base, createTransaction, euro, house } = await pair();
     const res = await createTransaction({
@@ -288,22 +251,6 @@ describe("transfers between currencies", () => {
       await send("PATCH", `${base}/transactions/${id}`, cookie, { accountId: euro.id }),
       422,
       "CROSS_CURRENCY_MOVE",
-    );
-  });
-
-  it("refuses a split line transferring to another currency", async () => {
-    const { createTransaction, euro, checking } = await pair();
-    await expectError(
-      await createTransaction({
-        accountId: checking.id,
-        amount: "-3000",
-        subtransactions: [
-          { amount: "-1000", payeeName: null, transferAccountId: euro.id, categoryId: null },
-          { amount: "-2000", payeeName: "Shop", categoryId: null },
-        ],
-      }),
-      422,
-      "CROSS_CURRENCY_TRANSFER",
     );
   });
 

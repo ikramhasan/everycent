@@ -372,7 +372,8 @@ async function moveSplitTransferSide(
     .where(eq(subTransaction.id, side.transferSubTransactionId ?? ""));
   if (!line || line.splitAccountId === target.id) return false;
   const splitAccount = await findAccount(tx, budgetId, line.splitAccountId);
-  assertSameCurrency(splitAccount, target, "transfer");
+  // Its amount is in its own account's currency.
+  assertSameCurrency(await findAccount(tx, budgetId, side.accountId), target, "move");
   const keepLine = accountUsesCategory(splitAccount, target) ? line.categoryId : null;
   await tx
     .update(subTransaction)
@@ -459,7 +460,12 @@ async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly str
       fxRate: source.fxRateManual ? source.fxRate : undefined,
       amount: source.amount,
       ...(source.transferAccountId
-        ? { payeeName: null, transferAccountId: source.transferAccountId }
+        ? {
+            payeeName: null,
+            transferAccountId: source.transferAccountId,
+            // Between currencies the other side's own amount is copied too.
+            transferAmount: crossAmount(source.currency, source.transferSide),
+          }
         : { payeeName: source.payeeName }),
       categoryId: split ? null : source.categoryId,
       memo: source.memo,
@@ -470,7 +476,11 @@ async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly str
             subtransactions: source.subtransactions.map((l) => ({
               amount: l.amount,
               ...(l.transferAccountId
-                ? { payeeName: null, transferAccountId: l.transferAccountId }
+                ? {
+                    payeeName: null,
+                    transferAccountId: l.transferAccountId,
+                    transferAmount: crossAmount(source.currency, l.transferSide),
+                  }
                 : { payeeName: l.payeeName }),
               categoryId: l.categoryId,
               memo: l.memo,
@@ -503,6 +513,14 @@ async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly str
     }
   }
   return { created, copies };
+}
+
+/** A transfer's other side's amount when it's in another currency (otherwise it follows). */
+function crossAmount(
+  currency: string,
+  side: { amount: string; currency: string } | null,
+): string | undefined {
+  return side && side.currency !== currency ? side.amount : undefined;
 }
 
 /** One array parameter rather than one per id, so big selections stay one statement. */

@@ -836,7 +836,7 @@ export interface paths {
         put?: never;
         /**
          * Add a transaction, a transfer or a split
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers).
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. Between accounts in different currencies each side has its own amount (`transferAmount`, in the other account's currency) and the two always have opposite base amounts: a side in the budget's currency sets it, otherwise the entered side at its rate; the other side's `fxRate` is the rate its amounts imply. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers).
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -901,7 +901,7 @@ export interface paths {
         head?: never;
         /**
          * Edit a transaction, move it to another account, or toggle cleared
-         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. On a transfer, date, amount and memo changes apply to both sides; cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category; its memo is the split line's too.
+         * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. Between accounts in different currencies each side has its own amount (`transferAmount`, in the other account's currency) and the two always have opposite base amounts: a side in the budget's currency sets it, otherwise the entered side at its rate; the other side's `fxRate` is the rate its amounts imply. On a transfer, date, amount and memo changes apply to both sides; cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category; its memo is the split line's too.
          */
         patch: operations["updateTransaction"];
         trace?: never;
@@ -2287,6 +2287,13 @@ export interface components {
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             approved: boolean;
             categoryId: string | null;
+            /** @description Its own amount, in its account's currency: the opposite amount in one currency, its own between currencies */
+            amount: string;
+            /**
+             * @description The other account's currency
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
         } | null;
         SubTransaction: {
             id: string;
@@ -2411,6 +2418,11 @@ export interface components {
             /** @enum {string} */
             type: "reject";
         };
+        /** @description The side in `accountId` */
+        CreatedTransaction: components["schemas"]["Transaction"] & {
+            /** @description The transfer's fee, a transaction of its own (deleting the transfer keeps it) */
+            feeTransactionId: string | null;
+        };
         CreateTransaction: {
             accountId: string;
             /**
@@ -2429,6 +2441,9 @@ export interface components {
             payeeName: string | null;
             /** @description Make this a transfer to or from that account; leave `payeeName` out */
             transferAccountId?: string;
+            /** @description A transfer to an account in another currency: the other side's amount in its currency, opposite in sign. Left out, this side's base amount at the date's rate */
+            transferAmount?: string;
+            fee?: components["schemas"]["TransferFee"];
             categoryId: string | null;
             /** @default  */
             memo: string;
@@ -2450,6 +2465,13 @@ export interface components {
             /** @description An undo bringing back a deleted transaction: its accounts (and its transfers' accounts) may have been closed since, as YNAB's Undo allows */
             restore?: boolean;
         };
+        /** @description A transfer's fee: a separate outflow in the sending account (the one the money leaves), same date, payee and memo "Transfer fee", converted like any transaction. It isn't linked to the transfer */
+        TransferFee: {
+            /** @description Positive: what the fee costs, in the sending account's currency */
+            amount: string;
+            /** @description Null: Uncategorized */
+            categoryId: string | null;
+        };
         SubTransactionInput: {
             /** @description An existing line of this split; leave out for new ones */
             id?: string;
@@ -2459,6 +2481,8 @@ export interface components {
             payeeName: string | null;
             /** @description Make this line a transfer */
             transferAccountId?: string;
+            /** @description A transfer line to an account in another currency (not the budget's: that one gets the line's base amount): the other side's amount in its currency, opposite in sign. Left out, the line's base amount at the date's rate, or on an edit the amount it had; null to go back to the date's rate */
+            transferAmount?: string | null;
             /** @default null */
             categoryId: string | null;
             /** @default  */
@@ -2477,6 +2501,8 @@ export interface components {
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             approved: boolean;
             categoryId: string | null;
+            /** @description Its own amount (a transfer between currencies; `transferAmount` wins) */
+            amount?: string;
         };
         UpdateTransaction: {
             accountId?: string;
@@ -2495,6 +2521,8 @@ export interface components {
             payeeName?: string | null;
             /** @description Make this a transfer to or from that account; leave `payeeName` out */
             transferAccountId?: string;
+            /** @description A transfer between currencies: the other side's amount in its currency, or null for this side's base amount at the date's rate. Left out, the other side keeps its own amount */
+            transferAmount?: string | null;
             categoryId?: string | null;
             memo?: string;
             /** @enum {string} */
@@ -6612,7 +6640,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Transaction"] & unknown;
+                    "application/json": components["schemas"]["CreatedTransaction"];
                 };
             };
             /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
@@ -6651,7 +6679,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
+            /** @description A move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6789,7 +6817,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
+            /** @description A move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6930,7 +6958,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
+            /** @description A move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;

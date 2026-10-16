@@ -3,13 +3,17 @@ import {
   type AccountType,
   accountFamily,
   distributeSplit,
+  impliedRate,
+  isCurrencyCode,
   isDebtAccount,
+  money,
+  roundRate,
   type ScheduleFrequency,
 } from "@everycent/engine";
 import { $api } from "./api";
 import type { CategoryList } from "./categories";
 import type { FlagColor } from "./flags";
-import { type MoneySettings, parseMoneyInput, toMoneyInput } from "./money-input";
+import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from "./money-input";
 
 export type Transaction = components["schemas"]["Transaction"];
 export type SubTransaction = components["schemas"]["SubTransaction"];
@@ -152,6 +156,14 @@ export interface Draft {
    * rate budget currency"); empty for the date's rate.
    */
   fxRate?: string;
+  /**
+   * A transfer to an account in another currency: what that account receives (or sends), in its
+   * currency, unsigned; empty for the date's rate (EVERYCENT-55).
+   */
+  transferAmount?: string;
+  /** A new transfer's fee, in the sending account's currency; empty for none. */
+  fee?: string;
+  feeCategoryId?: string | null;
 }
 
 /** One line of a split, as typed. */
@@ -233,7 +245,37 @@ export function draftFrom(t: Transaction, settings: MoneySettings): Draft {
     lines:
       t.subtransactions.length > 0 ? t.subtransactions.map((l) => lineFrom(l, settings)) : null,
     fxRate: t.fxRateManual && t.fxRate ? t.fxRate : "",
+    transferAmount: crossSide(t)
+      ? toMoneyInput(
+          abs(BigInt(t.transferSide.amount)),
+          inCurrency(settings, t.transferSide.currency),
+        )
+      : "",
   };
+}
+
+const abs = (n: bigint) => (n < 0n ? -n : n);
+
+/** Whether `t` is a transfer whose other side is in another currency (with its own amount). */
+export function crossSide<T extends Pick<Transaction, "currency" | "transferSide">>(
+  t: T,
+): t is T & { transferSide: NonNullable<Transaction["transferSide"]> } {
+  return t.transferSide !== null && t.transferSide.currency !== t.currency;
+}
+
+/**
+ * "1 EUR = 1.17647 USD": the rate a cross-currency transfer's two amounts imply, 1 of the other
+ * account's currency in this one's; null until both are typed.
+ */
+export function transferRateLabel(
+  own: bigint,
+  ownCurrency: string,
+  other: bigint,
+  otherCurrency: string,
+) {
+  if (!isCurrencyCode(ownCurrency) || !isCurrencyCode(otherCurrency)) return null;
+  const rate = impliedRate(money(abs(other), otherCurrency), money(abs(own), ownCurrency));
+  return rate ? `1 ${otherCurrency} = ${roundRate(rate)} ${ownCurrency}` : null;
 }
 
 function lineFrom(line: SubTransaction, settings: MoneySettings): LineDraft {
@@ -405,13 +447,61 @@ function typedRate(draft: Draft): Result<string | null> {
   return { ok: true, body: rate };
 }
 
-export function createBody(input: Draft, settings: MoneySettings): Result<CreateBody> {
+/**
+ * The other side's amount to send for a transfer between currencies (`other`: the money settings
+ * in its account's currency, given only then): the opposite way to `amount`; null when empty.
+ */
+function typedTransferAmount(
+  draft: Draft,
+  amount: bigint,
+  other: MoneySettings | undefined,
+): Result<string | null> {
+  const text = draft.transferAmount?.trim() ?? "";
+  if (!other || !draft.transferAccountId || draft.lines || text === "") {
+    return { ok: true, body: null };
+  }
+  const parsed = parseMoneyInput(text, other);
+  if (typeof parsed === "string") return { ok: false, error: parsed };
+  return { ok: true, body: (amount > 0n ? -abs(parsed) : abs(parsed)).toString() };
+}
+
+/** A new transfer's fee, in the sending account's currency (the other one's for an inflow). */
+function typedFee(
+  draft: Draft,
+  amount: bigint,
+  settings: MoneySettings,
+  other: MoneySettings | undefined,
+): Result<CreateBody["fee"] | null> {
+  const text = draft.fee?.trim() ?? "";
+  if (!draft.transferAccountId || draft.lines || text === "") return { ok: true, body: null };
+  const parsed = parseMoneyInput(text, amount > 0n && other ? other : settings);
+  if (typeof parsed === "string") return { ok: false, error: parsed };
+  if (parsed <= 0n) return { ok: false, error: "Enter the fee as an amount above zero." };
+  return {
+    ok: true,
+    body: { amount: parsed.toString(), categoryId: draft.feeCategoryId ?? null },
+  };
+}
+
+/**
+ * `other`: for a transfer to an account in another currency, the money settings in that
+ * account's currency (its amount and, for an inflow, the fee are in it).
+ */
+export function createBody(
+  input: Draft,
+  settings: MoneySettings,
+  other?: MoneySettings,
+): Result<CreateBody> {
   const draft = collapseSplit(input);
   const result = amountAndLines(draft, settings);
   if (!result.ok) return result;
   const rate = typedRate(draft);
   if (!rate.ok) return rate;
   const { amount, lines } = result.body;
+  const transferAmount = typedTransferAmount(draft, amount, other);
+  if (!transferAmount.ok) return transferAmount;
+  const fee = typedFee(draft, amount, settings, other);
+  if (!fee.ok) return fee;
   return {
     ok: true,
     body: {
@@ -427,6 +517,8 @@ export function createBody(input: Draft, settings: MoneySettings): Result<Create
       flag: draft.flag,
       ...(lines ? { subtransactions: lines } : {}),
       ...(rate.body ? { fxRate: rate.body } : {}),
+      ...(transferAmount.body ? { transferAmount: transferAmount.body } : {}),
+      ...(fee.body ? { fee: fee.body } : {}),
     },
   };
 }
@@ -439,6 +531,7 @@ export function updateBody(
   original: Transaction,
   input: Draft,
   settings: MoneySettings,
+  other?: MoneySettings,
 ): Result<UpdateBody> {
   const draft = collapseSplit(input);
   const result = amountAndLines(draft, settings);
@@ -446,10 +539,16 @@ export function updateBody(
   const { amount, lines } = result.body;
   const rate = typedRate(draft);
   if (!rate.ok) return rate;
+  const transferAmount = typedTransferAmount(draft, amount, other);
+  if (!transferAmount.ok) return transferAmount;
   const before = draftFrom(original, settings);
   const body: UpdateBody = {};
   // Emptied, it goes back to the date's rate.
   if ((draft.fxRate?.trim() ?? "") !== (before.fxRate ?? "")) body.fxRate = rate.body;
+  // Left as it was, the other side keeps its amount; emptied, the date's rate converts again.
+  if (other && (draft.transferAmount?.trim() ?? "") !== (before.transferAmount ?? "")) {
+    body.transferAmount = transferAmount.body;
+  }
   if (draft.accountId !== before.accountId) body.accountId = draft.accountId;
   if (draft.date !== before.date) body.date = draft.date;
   if (amount.toString() !== original.amount) body.amount = amount.toString();

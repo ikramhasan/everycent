@@ -11,6 +11,7 @@ import {
 } from "@everycent/db/schema";
 import {
   ACCOUNT_TYPES,
+  type CurrencyCode,
   isOnBudget,
   normalizeRate,
   parseSearch,
@@ -451,6 +452,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       sideFlag: other.flag,
       sideApproved: other.approved,
       sideCategoryId: other.categoryId,
+      sideAmount: other.amount,
+      sideCurrency: other.currency,
     })
     .from(subTransaction)
     .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
@@ -463,22 +466,40 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
     .orderBy(asc(subTransaction.sortOrder), asc(subTransaction.id));
   type Line = Omit<
     (typeof rows)[number],
-    "transactionId" | "sideMemo" | "sideCleared" | "sideFlag" | "sideApproved" | "sideCategoryId"
+    | "transactionId"
+    | "sideMemo"
+    | "sideCleared"
+    | "sideFlag"
+    | "sideApproved"
+    | "sideCategoryId"
+    | "sideAmount"
+    | "sideCurrency"
   > & { transferSide: TransferSide | null };
   const byTransaction = new Map<string, Line[]>();
   for (const row of rows) {
-    const { transactionId, sideMemo, sideCleared, sideFlag, sideApproved, sideCategoryId, ...l } =
-      row;
+    const {
+      transactionId,
+      sideMemo,
+      sideCleared,
+      sideFlag,
+      sideApproved,
+      sideCategoryId,
+      sideAmount,
+      sideCurrency,
+      ...l
+    } = row;
     const line: Line = {
       ...l,
       transferSide:
-        l.transferTransactionId && sideCleared !== null
+        l.transferTransactionId && sideCleared !== null && sideCurrency !== null
           ? {
               memo: sideMemo ?? "",
               cleared: sideCleared,
               flag: sideFlag,
               approved: sideApproved ?? true,
               categoryId: sideCategoryId,
+              amount: (sideAmount ?? 0n).toString(),
+              currency: sideCurrency,
             }
           : null,
     };
@@ -494,6 +515,9 @@ export interface TransferSide {
   flag: FlagColor | null;
   approved: boolean;
   categoryId: string | null;
+  /** Its own amount in its account's currency (its own between currencies; EVERYCENT-55). */
+  amount: string;
+  currency: CurrencyCode;
 }
 
 /** The other sides of these rows' transfers (not a split line's, which `queryLines` has). */
@@ -511,10 +535,14 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
       flag: transaction.flag,
       approved: transaction.approved,
       categoryId: transaction.categoryId,
+      amount: transaction.amount,
+      currency: transaction.currency,
     })
     .from(transaction)
     .where(inArray(transaction.id, ids));
-  for (const { id, ...side } of found) sides.set(id, side);
+  for (const { id, amount, ...side } of found) {
+    sides.set(id, { ...side, amount: amount.toString() });
+  }
   return sides;
 }
 

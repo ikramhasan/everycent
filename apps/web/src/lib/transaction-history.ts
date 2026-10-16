@@ -25,7 +25,7 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
     flag: transaction.flag,
     approved: transaction.approved,
     ...(transaction.transferAccountId && transaction.transferSide
-      ? { transferSide: transaction.transferSide }
+      ? { transferSide: sideInput(transaction.transferSide) }
       : {}),
     ...(transaction.subtransactions.length > 0
       ? {
@@ -35,7 +35,7 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
               ? {
                   payeeName: null,
                   transferAccountId: line.transferAccountId,
-                  ...(line.transferSide ? { transferSide: line.transferSide } : {}),
+                  ...(line.transferSide ? { transferSide: sideInput(line.transferSide) } : {}),
                 }
               : { payeeName: line.payeeName }),
             categoryId: line.categoryId,
@@ -49,6 +49,19 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
   };
 }
 
+type Side = NonNullable<Transaction["transferSide"]>;
+
+/** A transfer's other side as the create endpoint takes it back, its own amount included. */
+function sideInput(side: Side): NonNullable<CreateTransactionBody["transferSide"]> {
+  const { currency: _, ...input } = side;
+  return input;
+}
+
+/** The other side's own amount when it's in another currency (EVERYCENT-55). */
+function crossAmount(currency: string, side: Side | null) {
+  return side && side.currency !== currency ? { transferAmount: side.amount } : {};
+}
+
 /** Every mutable field, used to restore a transaction after an edit. */
 export function updateBodyFromTransaction(transaction: Transaction): UpdateTransactionBody {
   return {
@@ -56,7 +69,10 @@ export function updateBodyFromTransaction(transaction: Transaction): UpdateTrans
     date: transaction.date,
     amount: transaction.amount,
     ...(transaction.transferAccountId
-      ? { transferAccountId: transaction.transferAccountId }
+      ? {
+          transferAccountId: transaction.transferAccountId,
+          ...crossAmount(transaction.currency, transaction.transferSide),
+        }
       : { payeeName: transaction.payeeName }),
     categoryId: transaction.subtransactions.length > 0 ? undefined : transaction.categoryId,
     memo: transaction.memo,
@@ -75,7 +91,11 @@ export function updateBodyFromTransaction(transaction: Transaction): UpdateTrans
             id: line.id,
             amount: line.amount,
             ...(line.transferAccountId
-              ? { payeeName: null, transferAccountId: line.transferAccountId }
+              ? {
+                  payeeName: null,
+                  transferAccountId: line.transferAccountId,
+                  ...crossAmount(transaction.currency, line.transferSide),
+                }
               : { payeeName: line.payeeName }),
             categoryId: line.categoryId,
             memo: line.memo,

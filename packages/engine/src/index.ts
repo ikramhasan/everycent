@@ -73,6 +73,7 @@ export {
   parseJsonRates,
   RATE_SCALE,
   rateToScaled,
+  roundRate,
   scaledToRate,
 } from "./fx";
 export {
