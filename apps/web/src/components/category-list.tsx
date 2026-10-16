@@ -137,6 +137,12 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
 const ROW = "grid grid-cols-[minmax(10rem,1fr)_7rem_7rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
+/**
+ * The inset of a figure's text from its column's right edge. The Assigned input, the Activity
+ * button and the Available pill all pad their text by this much, so plain figures (headers, group
+ * totals, read-only cells) take the same padding to line up with them.
+ */
+const FIGURE_PAD = "px-2";
 /** Lets a name button shrink and truncate (shadcn's Button doesn't shrink by default). */
 const NAME_BUTTON = "min-w-0 shrink justify-start";
 const SELECTED_ROW = "bg-primary/5";
@@ -329,9 +335,9 @@ export function CategoryList({
             </div>
             {figures && (
               <>
-                <span className={FIGURE}>Assigned</span>
-                <span className={FIGURE}>Activity</span>
-                <span className={FIGURE}>Available</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Assigned</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Activity</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Available</span>
               </>
             )}
           </div>
@@ -367,7 +373,7 @@ export function CategoryList({
                 )}
               </div>
               {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
-              <span className={FIGURE}>–</span>
+              <span className={cn(FIGURE, FIGURE_PAD)}>–</span>
               <span className={cn(FIGURE, "text-sm")}>
                 <Activity
                   figures={figures}
@@ -931,7 +937,9 @@ function CategoryRow({
                 onStartedEditing={figures?.onEditAssignedStarted}
               />
             ) : (
-              <span className={cn(FIGURE, "block text-sm")}>{format(totals.assigned)}</span>
+              <span className={cn(FIGURE, FIGURE_PAD, "block text-sm")}>
+                {format(totals.assigned)}
+              </span>
             )}
             {figures?.moves?.withMoves.has(category.id) && (
               // Just past the amount, in the gap before Activity's right-aligned figure.
@@ -1027,11 +1035,15 @@ function TotalCells({
 }) {
   return (
     <>
-      <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.assigned)}</span>
-      <span className={cn(FIGURE, "font-medium text-sm")}>
-        {activity ?? format(totals.activity)}
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+        {format(totals.assigned)}
       </span>
-      <span className={cn(FIGURE, "pr-2 font-medium text-sm")}>{format(totals.available)}</span>
+      <span className={cn(FIGURE, "font-medium text-sm")}>
+        {activity ?? <span className={FIGURE_PAD}>{format(totals.activity)}</span>}
+      </span>
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+        {format(totals.available)}
+      </span>
     </>
   );
 }
@@ -1051,9 +1063,10 @@ function Activity({
   /** A payment category's card figures: the popover adds YNAB's card summary. */
   card?: CardSummary | null;
 }) {
-  if (!figures.activity) return <>{figures.format(amount)}</>;
+  if (!figures.activity) return <span className={FIGURE_PAD}>{figures.format(amount)}</span>;
   return (
     <ActivityButton
+      className={FIGURE_PAD}
       budgetId={figures.activity.budgetId}
       month={figures.month.month}
       target={target}

@@ -96,7 +96,7 @@ export function AssignedCell({
       aria-label={`Assigned to ${categoryName}: ${format(amount)}`}
       onClick={start}
       className={cn(
-        "h-7 w-full truncate rounded-md border border-transparent px-2 text-right text-sm tabular-nums hover:border-input",
+        "h-7 w-full truncate rounded-md px-2 text-right text-sm tabular-nums hover:ring-1 hover:ring-input",
         className,
       )}
     >
