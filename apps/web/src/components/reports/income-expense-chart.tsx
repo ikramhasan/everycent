@@ -1,4 +1,4 @@
-import { type BudgetMonth, currencyExponent, money, NUMBER_FORMAT_SPECS } from "@everycent/engine";
+import { type BudgetMonth, money, NUMBER_FORMAT_SPECS } from "@everycent/engine";
 import { type ChartConfig, ChartContainer } from "@everycent/ui/components/chart";
 import {
   Bar,
@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { useBudget } from "@/lib/budget-context";
 import type { IncomeExpenseTable } from "@/lib/income-expense";
-import { chartNumber, monthLabel } from "@/lib/reports";
+import { chartNumber, chartTick, monthLabel } from "@/lib/reports";
 
 const config = {
   income: { label: "Income", color: "var(--report-3)" },
@@ -53,13 +53,8 @@ export function IncomeExpenseChart({
   });
   const losing = data.filter((d) => d.exact.net < 0n).map((d) => d.month);
   const spec = NUMBER_FORMAT_SPECS[budget.numberFormat];
-  const exponent = currencyExponent(currency);
-  // Axis ticks in whole units ("$1,000"): positions only, so rounding them is fine.
   const tick = (units: number) =>
-    formatAmount(money(BigInt(Math.round(units)) * 10n ** BigInt(exponent), currency)).replace(
-      new RegExp(`\\${spec.decimal}\\d+`),
-      "",
-    );
+    chartTick(units, currency, (m) => formatAmount(money(m, currency)), spec.decimal);
   return (
     <div className="grid gap-2">
       <ChartContainer config={config} className="aspect-auto h-72 w-full">

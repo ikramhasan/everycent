@@ -111,12 +111,16 @@ export const listReportTransactionsHandler: RouteHandler<
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
   const filter = await reportFilter(c.var.deps, budgetId, query);
-  const lines = await reportLines(db, budgetId, filter, order);
+  // Total and count cover every match; only the listed lines are cut to `limit`.
+  const [lines, [sum]] = await Promise.all([
+    reportLines(db, budgetId, filter, order, limit),
+    reportSums(db, budgetId, filter, []),
+  ]);
   return c.json(
     {
-      total: lines.reduce((s, l) => s + l.amount, 0n).toString(),
-      count: lines.length,
-      transactions: lines.slice(0, limit).map(({ createdAt: _, ...l }) => ({
+      total: (sum?.net ?? 0n).toString(),
+      count: sum?.count ?? 0,
+      transactions: lines.map(({ createdAt: _, ...l }) => ({
         ...l,
         amount: l.amount.toString(),
         nativeAmount: l.nativeAmount.toString(),

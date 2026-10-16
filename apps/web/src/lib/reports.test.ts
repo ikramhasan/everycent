@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chartNumber,
+  chartTick,
   monthLabel,
   planColors,
   rangeLabel,
@@ -78,6 +79,17 @@ describe("report labels", () => {
     expect(monthLabel("2026-08", "axis")).toBe("08/26");
     expect(rangeLabel({ from: "2026-08", to: "2026-10" })).toBe("Aug 2026 – Oct 2026");
     expect(rangeLabel({ from: "2026-10", to: "2026-10" })).toBe("Oct 2026");
+  });
+
+  it("labels axis ticks to the minor unit, without decimals when whole", () => {
+    const format = (m: bigint) => `$${(Number(m) / 100).toFixed(2)}`;
+    expect([0, 0.5, 1, 1.5].map((t) => chartTick(t, "USD", format, "."))).toEqual([
+      "$0",
+      "$0.50",
+      "$1",
+      "$1.50",
+    ]);
+    expect(chartTick(1000, "USD", format, ".")).toBe("$1000");
   });
 
   it("converts amounts to numbers only for chart positions", () => {

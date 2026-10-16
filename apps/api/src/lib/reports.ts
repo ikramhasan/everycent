@@ -11,6 +11,8 @@ import {
 import { ACCOUNT_TYPES, type CurrencyCode, isOnBudget } from "@everycent/engine";
 import {
   and,
+  asc,
+  desc,
   eq,
   gte,
   inArray,
@@ -22,7 +24,7 @@ import {
   type SQL,
   type SQLWrapper,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
 import { type Db, internalCategoryId, internalPayeeId } from "./ledger";
 
 /**
@@ -257,16 +259,24 @@ export type ReportLineOrder = (typeof REPORT_LINE_ORDERS)[number];
 
 /**
  * The lines behind a report's sums (its drill-down and its transactions export): newest first as
- * the register lists them, or largest outflow first.
+ * the register lists them, or largest outflow first; at most `limit` of them (each query is
+ * ordered and cut in SQL, so a drill-down doesn't read the whole history).
  */
 export async function reportLines(
   db: Db,
   budgetId: string,
   filter: ReportFilter,
   order: ReportLineOrder = "newest",
+  limit?: number,
 ): Promise<ReportLine[]> {
   const ids = await reportIds(db, budgetId);
   const splitPayee = alias(payee, "split_payee");
+  const orderBy = (amount: AnyPgColumn, id: AnyPgColumn) => [
+    ...(order === "largest_outflow" ? [asc(amount)] : []),
+    desc(transaction.date),
+    desc(transaction.createdAt),
+    asc(id),
+  ];
   const common = {
     transactionId: transaction.id,
     accountId: transaction.accountId,
@@ -296,7 +306,9 @@ export async function reportLines(
       .leftJoin(category, eq(category.id, transaction.categoryId))
       .leftJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
       .leftJoin(payee, eq(payee.id, transaction.payeeId))
-      .where(whereFor(budgetId, ids, filter, wholeSource)),
+      .where(whereFor(budgetId, ids, filter, wholeSource))
+      .orderBy(...orderBy(transaction.baseAmount, transaction.id))
+      .limit(limit ?? MAX_LINES),
     db
       .select({
         ...common,
@@ -316,15 +328,22 @@ export async function reportLines(
       .leftJoin(categoryGroup, eq(categoryGroup.id, category.groupId))
       .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
       .leftJoin(splitPayee, eq(splitPayee.id, transaction.payeeId))
-      .where(whereFor(budgetId, ids, filter, lineSource)),
+      .where(whereFor(budgetId, ids, filter, lineSource))
+      .orderBy(...orderBy(subTransaction.baseAmount, subTransaction.id))
+      .limit(limit ?? MAX_LINES),
   ]);
   const newest = (a: ReportLine, b: ReportLine) =>
     b.date.localeCompare(a.date) ||
     b.createdAt.getTime() - a.createdAt.getTime() ||
     a.id.localeCompare(b.id);
-  return [...whole, ...lines].sort((a, b) =>
-    order === "largest_outflow"
-      ? (a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0) || newest(a, b)
-      : newest(a, b),
-  );
+  return [...whole, ...lines]
+    .sort((a, b) =>
+      order === "largest_outflow"
+        ? (a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0) || newest(a, b)
+        : newest(a, b),
+    )
+    .slice(0, limit);
 }
+
+/** A ceiling on lines read when no `limit` is given (an export of everything). */
+const MAX_LINES = 1_000_000;

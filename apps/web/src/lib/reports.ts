@@ -163,6 +163,22 @@ export const reportColor = (index: number) =>
   `var(--report-${(((index % REPORT_COLOR_COUNT) + REPORT_COLOR_COUNT) % REPORT_COLOR_COUNT) + 1})`;
 
 /**
+ * An axis tick's label: the tick (a chart position) rounded to the minor unit and formatted,
+ * without decimals when it's a whole unit ("$1,000", but "$0.50" on a narrow axis).
+ */
+export function chartTick(
+  units: number,
+  currency: CurrencyCode,
+  format: (minorUnits: bigint) => string,
+  decimalMark: string,
+) {
+  const factor = 10n ** BigInt(currencyExponent(currency));
+  const minor = BigInt(Math.round(units * Number(factor)));
+  const text = format(minor);
+  return minor % factor === 0n ? text.replace(new RegExp(`\\${decimalMark}\\d+`), "") : text;
+}
+
+/**
  * Each category's and group's colour, the same in every report: Uncategorized grey, then the
  * plan's groups and categories in plan order through the seven hues (grey is kept for
  * Uncategorized and "Other").

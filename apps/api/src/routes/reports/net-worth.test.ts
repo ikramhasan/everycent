@@ -291,6 +291,9 @@ describe("net worth report", () => {
     expect(yenRow?.balances[2]).toMatchObject({ native: "1000" });
     expect(yenRow?.balances[2]?.base).toBeNull();
     expect(sep?.missing).toEqual([yen.id]);
+    // Left out of the totals, so its booked gift is left out of what changed too: September's
+    // change is all the euro rate moving.
+    expect(sep?.parts).toMatchObject({ netSaved: "0", other: "-750" });
     expect(r.accounts.find((a) => a.id === dollars.id)?.balances[0]).toEqual({
       native: "10000",
       base: "10000",

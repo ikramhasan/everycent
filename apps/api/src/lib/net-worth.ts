@@ -263,15 +263,18 @@ export async function netWorthReport(
       missing: accounts.filter((a) => byAccount.get(a.id)?.base === null).map((a) => a.id),
       parts: netWorthParts(
         change,
-        accounts.map((a) => {
-          const f = flows.get(a.id)?.get(month) ?? ZERO_FLOWS;
-          return {
-            group: netWorthGroup(a.type),
-            total: f.base,
-            starting: f.starting,
-            transfers: f.transfers,
-          };
-        }),
+        // An account left out of the month's totals (no rate) is left out of what changed too.
+        accounts
+          .filter((a) => byAccount.get(a.id)?.base !== null)
+          .map((a) => {
+            const f = flows.get(a.id)?.get(month) ?? ZERO_FLOWS;
+            return {
+              group: netWorthGroup(a.type),
+              total: f.base,
+              starting: f.starting,
+              transfers: f.transfers,
+            };
+          }),
       ),
     });
   }
