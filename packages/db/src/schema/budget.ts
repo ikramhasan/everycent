@@ -21,7 +21,14 @@ import { timestamps } from "./columns";
 // (organization → budget, member → budgetMember, invitation → budgetInvitation). Plugin field
 // names must match exactly; `organizationId` is mapped to `budgetId`.
 
-export const BUDGET_ROLES = ["owner", "editor"] as const;
+/**
+ * YNAB has one role for everyone a plan is shared with (editor here). `viewer` is an everycent
+ * extra (EVERYCENT-88): a member who can see the budget but not change it.
+ */
+export const BUDGET_ROLES = ["owner", "editor", "viewer"] as const;
+/** The roles the owner can give someone they share the budget with. */
+export const MEMBER_ROLES = ["editor", "viewer"] as const;
+export type MemberRole = (typeof MEMBER_ROLES)[number];
 export type BudgetRole = (typeof BUDGET_ROLES)[number];
 
 export const budget = pgTable("budget", {

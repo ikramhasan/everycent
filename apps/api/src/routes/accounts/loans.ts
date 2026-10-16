@@ -134,8 +134,8 @@ export const dismissLoanBannerHandler: RouteHandler<typeof dismissLoanBanner, En
   const { budgetId, accountId } = c.req.valid("param");
   const { banner } = c.req.valid("json");
   const { db } = c.var.deps;
-  // Anyone on the plan can dismiss them, as anyone sees them.
-  const { budget } = await loadBudgetAccess(c, budgetId);
+  // Anyone on the plan can dismiss them, as anyone sees them (a viewer can't: it's the plan's).
+  const { budget } = await loadBudgetAccess(c, budgetId, { account: ["update"] });
   const account = await findLoan(db, budgetId, accountId);
   if (banner === "simulator") {
     await db

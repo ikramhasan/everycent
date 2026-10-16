@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/component
 import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
 import { type FormEvent, useState } from "react";
+import { useOptionalBudget } from "@/lib/budget-context";
 
 /**
  * YNAB's month note under the month name (checked 2026-10-12, "C5 First FS"): "Enter a note…" until
@@ -18,6 +19,7 @@ export function MonthNote({
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(note);
+  const readOnly = useOptionalBudget()?.readOnly ?? false;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -25,6 +27,10 @@ export function MonthNote({
     if (text.trim() !== note.trim()) await onSave(text.trim());
   }
 
+  // A viewer (EVERYCENT-88) reads the note but can't change it.
+  if (readOnly) {
+    return note ? <p className="max-w-48 truncate text-xs">{note}</p> : null;
+  }
   return (
     <Popover
       open={open}

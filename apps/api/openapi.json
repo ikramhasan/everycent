@@ -831,7 +831,8 @@
             "type": "string",
             "enum": [
               "owner",
-              "editor"
+              "editor",
+              "viewer"
             ],
             "description": "The signed-in user's role in this budget"
           },
@@ -1196,7 +1197,8 @@
             "type": "string",
             "enum": [
               "owner",
-              "editor"
+              "editor",
+              "viewer"
             ]
           },
           "joinedAt": {
@@ -1231,6 +1233,14 @@
           "email": {
             "type": "string"
           },
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ],
+            "description": "The role they get when they join"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -1245,6 +1255,7 @@
           "id",
           "name",
           "email",
+          "role",
           "createdAt",
           "expiresAt",
           "expired"
@@ -1263,6 +1274,15 @@
             "type": "string",
             "maxLength": 254,
             "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ],
+            "default": "editor",
+            "description": "`editor` (YNAB's only role: can change everything but sharing) or `viewer` (an everycent extra: can see the budget but not change it)"
           }
         },
         "required": [
@@ -1320,6 +1340,21 @@
         },
         "required": [
           "budgetId"
+        ]
+      },
+      "ChangeBudgetMemberRole": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "role"
         ]
       },
       "TransferBudgetOwnership": {
@@ -9077,6 +9112,7 @@
             "enum": [
               "owner",
               "editor",
+              "viewer",
               null
             ],
             "description": "The mover's role on the budget now; null once they've left it"
@@ -11503,6 +11539,109 @@
           },
           "409": {
             "description": "The owner (`CANNOT_REMOVE_OWNER`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "changeBudgetMemberRole",
+        "tags": [
+          "Sharing"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Make someone an editor or a viewer (owner only)",
+        "description": "A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The owner's own role changes only by transferring ownership (`CANNOT_CHANGE_OWNER`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeBudgetMemberRole"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the budget's owner can manage sharing, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or invitation, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The owner (`CANNOT_CHANGE_OWNER`)",
             "content": {
               "application/json": {
                 "schema": {

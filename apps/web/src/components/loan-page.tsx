@@ -177,7 +177,7 @@ export function LoanPage({
   accounts: readonly Account[];
   onEdit: () => void;
 }) {
-  const { budget, formatAmount } = useBudget();
+  const { budget, formatAmount, readOnly } = useBudget();
   const today = todayIso();
   const format = (minorUnits: bigint) =>
     formatAmount({ amount: minorUnits, currency: budget.currency });
@@ -266,7 +266,7 @@ export function LoanPage({
           </p>
           {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" hidden={readOnly}>
           <Button variant="outline" size="sm" onClick={onEdit} aria-label="Edit account">
             <Pencil />
           </Button>

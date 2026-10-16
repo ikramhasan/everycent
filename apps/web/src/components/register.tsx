@@ -75,7 +75,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
-import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
+import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
 import {
@@ -223,7 +223,7 @@ export function Register({
   openRecordPayment?: boolean;
   onRecordPaymentOpened?: () => void;
 }) {
-  const { budget, formatAmount, formatDate } = useBudget();
+  const { budget, formatAmount, formatDate, readOnly } = useBudget();
   const history = useUndo();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -370,9 +370,11 @@ export function Register({
           (c !== "balance" || view.showRunningBalance) &&
           (c !== "flag" || view.showFlags) &&
           (c !== "enteredBy" || view.showEnteredBy) &&
-          (c !== "review" || reviewing),
+          // A viewer (EVERYCENT-88) can't select, approve or change rows.
+          (c !== "select" || !readOnly) &&
+          (c !== "review" || (reviewing && !readOnly)),
       ),
-    [allAccounts, view.showRunningBalance, view.showFlags, view.showEnteredBy, reviewing],
+    [allAccounts, view.showRunningBalance, view.showFlags, view.showEnteredBy, reviewing, readOnly],
   );
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
@@ -912,6 +914,7 @@ export function Register({
    * memo and category; the split owns the rest.
    */
   function editableColumns(t: Transaction): CellColumn[] {
+    if (readOnly) return [];
     const categorized = hasCategory(t);
     return columnIds.filter(
       (c): c is CellColumn =>
@@ -1379,6 +1382,15 @@ export function Register({
           />
         );
       case "flag":
+        if (readOnly) {
+          const current = flags.find((f) => f.color === t.flag);
+          return current ? (
+            <Bookmark
+              className={cn("mx-auto size-4 fill-current", FLAG_CLASS[current.color])}
+              aria-label={`Flag: ${flagLabel(current)}`}
+            />
+          ) : null;
+        }
         return (
           <FlagMenu
             value={t.flag}
@@ -1478,6 +1490,13 @@ export function Register({
           />
         ) : null;
       case "cleared":
+        if (readOnly && t.cleared !== "reconciled") {
+          return t.cleared === "cleared" ? (
+            <CircleCheck className="mx-auto size-4 text-primary" aria-label="Cleared" />
+          ) : (
+            <Circle className="mx-auto size-4 text-muted-foreground" aria-label="Uncleared" />
+          );
+        }
         return t.cleared === "reconciled" ? (
           <Lock className="mx-auto size-4 text-muted-foreground" aria-label="Reconciled" />
         ) : (
@@ -1504,36 +1523,44 @@ export function Register({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!t.approved && (
+              {readOnly ? (
+                <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
+                  <History /> History
+                </DropdownMenuItem>
+              ) : (
                 <>
-                  <DropdownMenuItem onSelect={() => void approveRow(t)}>
-                    <Check /> Approve
+                  {!t.approved && (
+                    <>
+                      <DropdownMenuItem onSelect={() => void approveRow(t)}>
+                        <Check /> Approve
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void deleteRow(t, true)}>
+                        <CircleX /> Reject
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
+                    <DropdownMenuItem onSelect={() => openSplit(t, true)}>
+                      <Split /> Split
+                    </DropdownMenuItem>
+                  )}
+                  {!t.transferFromSplit && (
+                    <DropdownMenuItem onSelect={() => makeRepeating(t)}>
+                      <Repeat /> Make Repeating
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
+                    <History /> History
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void deleteRow(t, true)}>
-                    <CircleX /> Reject
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={t.transferFromSplit}
+                    onSelect={() => handleDelete(t)}
+                  >
+                    <Trash2 /> Delete
                   </DropdownMenuItem>
                 </>
               )}
-              {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
-                <DropdownMenuItem onSelect={() => openSplit(t, true)}>
-                  <Split /> Split
-                </DropdownMenuItem>
-              )}
-              {!t.transferFromSplit && (
-                <DropdownMenuItem onSelect={() => makeRepeating(t)}>
-                  <Repeat /> Make Repeating
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
-                <History /> History
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={t.transferFromSplit}
-                onSelect={() => handleDelete(t)}
-              >
-                <Trash2 /> Delete
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -1576,10 +1603,12 @@ export function Register({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
-          <Plus /> Add transaction
-        </Button>
-        {recordPayment && canAdd && (
+        {!readOnly && (
+          <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
+            <Plus /> Add transaction
+          </Button>
+        )}
+        {recordPayment && canAdd && !readOnly && (
           <Button
             size="sm"
             variant="outline"
@@ -1593,7 +1622,7 @@ export function Register({
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
         <div className="ml-auto flex items-center gap-1">
-          <UndoRedoButtons />
+          {!readOnly && <UndoRedoButtons />}
           <RegisterViewMenu
             view={view}
             onChange={setView}
@@ -1862,9 +1891,9 @@ export function Register({
                         className={cn(
                           "truncate py-1.5",
                           spec.align === "right" && "text-right tabular-nums",
-                          isEditable(id) && "cursor-text",
+                          isEditable(id) && !readOnly && "cursor-text",
                         )}
-                        onClick={isEditable(id) ? () => openSplit(t) : undefined}
+                        onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
                       >
                         {lineDisplay(t, row.line, id)}
                       </TableCell>

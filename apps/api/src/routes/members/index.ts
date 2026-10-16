@@ -2,6 +2,7 @@ import { createRouter } from "../../lib/router";
 import {
   acceptInvitationHandler,
   cancelInvitationHandler,
+  changeMemberRoleHandler,
   createInvitationHandler,
   leaveBudgetHandler,
   listMembersHandler,
@@ -13,6 +14,7 @@ import {
 import {
   acceptInvitation,
   cancelInvitation,
+  changeMemberRole,
   createInvitation,
   leaveBudget,
   listMembers,
@@ -30,5 +32,6 @@ export const membersRouter = createRouter()
   .openapi(viewInvitation, viewInvitationHandler)
   .openapi(acceptInvitation, acceptInvitationHandler)
   .openapi(removeMember, removeMemberHandler)
+  .openapi(changeMemberRole, changeMemberRoleHandler)
   .openapi(leaveBudget, leaveBudgetHandler)
   .openapi(transferOwnership, transferOwnershipHandler);

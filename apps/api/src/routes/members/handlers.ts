@@ -13,6 +13,7 @@ import type { AppEnv } from "../../types";
 import {
   type acceptInvitation,
   type cancelInvitation,
+  type changeMemberRole,
   type createInvitation,
   INVITATION_DAYS,
   type leaveBudget,
@@ -43,6 +44,7 @@ function toInvitationJson(row: InvitationRow) {
     id: row.id,
     name: row.name,
     email: row.email,
+    role: row.role === "viewer" ? ("viewer" as const) : ("editor" as const),
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     expired: row.expiresAt.getTime() <= Date.now(),
@@ -76,10 +78,8 @@ const FULL = () =>
     `A budget can be shared with up to ${MAX_BUDGET_PEOPLE - 1} people`,
   );
 
-export const listMembersHandler: RouteHandler<typeof listMembers, Env> = async (c) => {
-  const { budgetId } = c.req.valid("param");
-  const { db } = c.var.deps;
-  const { role } = await loadBudgetAccess(c, budgetId);
+/** The budget's members, the owner first, then by when they joined (YNAB's avatar order). */
+async function listedMembers(db: Db, budgetId: string) {
   const members = await db
     .select({
       userId: budgetMember.userId,
@@ -92,6 +92,19 @@ export const listMembersHandler: RouteHandler<typeof listMembers, Env> = async (
     .innerJoin(user, eq(user.id, budgetMember.userId))
     .where(eq(budgetMember.budgetId, budgetId))
     .orderBy(sql`${budgetMember.role} <> 'owner'`, asc(budgetMember.createdAt));
+  return {
+    members: members.map((m, i) => ({
+      ...m,
+      joinedAt: m.joinedAt.toISOString(),
+      avatarColor: Math.min(i + 1, 6),
+    })),
+  };
+}
+
+export const listMembersHandler: RouteHandler<typeof listMembers, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { db } = c.var.deps;
+  const { role } = await loadBudgetAccess(c, budgetId);
   const invitations =
     role === "owner"
       ? await db
@@ -104,12 +117,7 @@ export const listMembersHandler: RouteHandler<typeof listMembers, Env> = async (
       : [];
   return c.json(
     {
-      // Already in YNAB's avatar order: the owner first, then by when they joined.
-      members: members.map((m, i) => ({
-        ...m,
-        joinedAt: m.joinedAt.toISOString(),
-        avatarColor: Math.min(i + 1, 6),
-      })),
+      ...(await listedMembers(db, budgetId)),
       invitations: invitations.map(toInvitationJson),
       maxPeople: MAX_BUDGET_PEOPLE,
     },
@@ -166,7 +174,7 @@ export const createInvitationHandler: RouteHandler<typeof createInvitation, Env>
         budgetId,
         email,
         name: input.name,
-        role: "editor",
+        role: input.role,
         status: "pending",
         tokenHash,
         expiresAt: expiry(),
@@ -310,7 +318,7 @@ export const acceptInvitationHandler: RouteHandler<typeof acceptInvitation, Env>
         id: newId(),
         budgetId: invitation.budgetId,
         userId: me.id,
-        role: "editor",
+        role: invitation.role === "viewer" ? "viewer" : "editor",
       });
     }
     await tx
@@ -349,6 +357,28 @@ export const removeMemberHandler: RouteHandler<typeof removeMember, Env> = async
     await tx.delete(budgetMember).where(eq(budgetMember.id, row.id));
   });
   return c.body(null, 204);
+};
+
+export const changeMemberRoleHandler: RouteHandler<typeof changeMemberRole, Env> = async (c) => {
+  const { budgetId, userId } = c.req.valid("param");
+  const { role } = c.req.valid("json");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId, { member: ["update"] });
+  await db.transaction(async (tx) => {
+    const row = await memberRow(tx, budgetId, userId);
+    if (row.role === "owner") {
+      throw new AppError(
+        409,
+        "CANNOT_CHANGE_OWNER",
+        "The owner's role can't change. Transfer ownership first.",
+      );
+    }
+    await tx.update(budgetMember).set({ role }).where(eq(budgetMember.id, row.id));
+  });
+  const { members } = await listedMembers(db, budgetId);
+  const member = members.find((m) => m.userId === userId);
+  if (!member) throw new AppError(404, "NOT_FOUND", "That person doesn't share this budget");
+  return c.json(member, 200);
 };
 
 export const leaveBudgetHandler: RouteHandler<typeof leaveBudget, Env> = async (c) => {

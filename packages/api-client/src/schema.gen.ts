@@ -336,7 +336,11 @@ export interface paths {
         delete: operations["removeBudgetMember"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Make someone an editor or a viewer (owner only)
+         * @description A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The owner's own role changes only by transferring ownership (`CANNOT_CHANGE_OWNER`).
+         */
+        patch: operations["changeBudgetMemberRole"];
         trace?: never;
     };
     "/v1/budgets/{budgetId}/leave": {
@@ -1690,7 +1694,7 @@ export interface components {
              * @description The signed-in user's role in this budget
              * @enum {string}
              */
-            role: "owner" | "editor";
+            role: "owner" | "editor" | "viewer";
             /**
              * Format: date-time
              * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
@@ -1770,7 +1774,7 @@ export interface components {
             name: string;
             email: string;
             /** @enum {string} */
-            role: "owner" | "editor";
+            role: "owner" | "editor" | "viewer";
             joinedAt: string;
             /** @description YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined */
             avatarColor: number;
@@ -1780,6 +1784,11 @@ export interface components {
             /** @description The invitee's first name */
             name: string;
             email: string;
+            /**
+             * @description The role they get when they join
+             * @enum {string}
+             */
+            role: "editor" | "viewer";
             createdAt: string;
             expiresAt: string;
             expired: boolean;
@@ -1789,6 +1798,12 @@ export interface components {
             name: string;
             /** Format: email */
             email: string;
+            /**
+             * @description `editor` (YNAB's only role: can change everything but sharing) or `viewer` (an everycent extra: can see the budget but not change it)
+             * @default editor
+             * @enum {string}
+             */
+            role: "editor" | "viewer";
         };
         InvitationView: {
             /** @description The address it was sent to */
@@ -1803,6 +1818,10 @@ export interface components {
         };
         AcceptedInvitation: {
             budgetId: string;
+        };
+        ChangeBudgetMemberRole: {
+            /** @enum {string} */
+            role: "editor" | "viewer";
         };
         TransferBudgetOwnership: {
             userId: string;
@@ -3510,7 +3529,7 @@ export interface components {
              * @description The mover's role on the budget now; null once they've left it
              * @enum {string|null}
              */
-            memberRole: "owner" | "editor" | null;
+            memberRole: "owner" | "editor" | "viewer" | null;
             /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget */
             avatarColor: number | null;
         };
@@ -4794,6 +4813,78 @@ export interface operations {
                 };
             };
             /** @description The owner (`CANNOT_REMOVE_OWNER`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    changeBudgetMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeBudgetMemberRole"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMember"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Only the budget's owner can manage sharing, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or invitation, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The owner (`CANNOT_CHANGE_OWNER`) */
             409: {
                 headers: {
                     [name: string]: unknown;

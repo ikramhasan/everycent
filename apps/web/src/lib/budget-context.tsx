@@ -8,6 +8,11 @@ interface BudgetContextValue {
   formatAmount: (m: Money) => string;
   /** Formats a YYYY-MM-DD date with this budget's date format. */
   formatDate: (isoDate: string) => string;
+  /**
+   * The user is a viewer (EVERYCENT-88, an everycent extra): the budget shows without anything
+   * that changes it. The API refuses their writes anyway (READ_ONLY).
+   */
+  readOnly: boolean;
 }
 
 const BudgetContext = createContext<BudgetContextValue | null>(null);
@@ -18,6 +23,7 @@ export function BudgetProvider({ budget, children }: { budget: Budget; children:
       budget,
       formatAmount: (m) => formatAmount(m, budget),
       formatDate: (isoDate) => formatDate(isoDate, budget.dateFormat),
+      readOnly: budget.role === "viewer",
     }),
     [budget],
   );

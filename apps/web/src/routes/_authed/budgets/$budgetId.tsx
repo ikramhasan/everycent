@@ -8,6 +8,7 @@ import {
 } from "@everycent/ui/components/empty";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
+import { Eye } from "lucide-react";
 import { ManagePayeesProvider } from "@/components/manage-payees";
 import { apiBaseUrl } from "@/lib/api";
 import { BudgetProvider } from "@/lib/budget-context";
@@ -41,6 +42,14 @@ function BudgetLayout() {
     <BudgetProvider budget={budget}>
       <UndoProvider>
         <ManagePayeesProvider>
+          {budget.role === "viewer" && (
+            <p
+              role="status"
+              className="flex items-center justify-center gap-2 border-b bg-muted px-4 py-2 text-muted-foreground text-sm"
+            >
+              <Eye className="size-4" /> View only: you can see this budget but not change it.
+            </p>
+          )}
           <Outlet />
         </ManagePayeesProvider>
       </UndoProvider>

@@ -1,4 +1,4 @@
-import { BUDGET_ROLES } from "@everycent/db/schema";
+import { BUDGET_ROLES, MEMBER_ROLES } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { zAvatarColor } from "../../lib/member-colors";
@@ -24,6 +24,7 @@ const InvitationSchema = z
     id: z.string(),
     name: z.string().describe("The invitee's first name"),
     email: z.string(),
+    role: z.enum(MEMBER_ROLES).describe("The role they get when they join"),
     createdAt: z.string(),
     expiresAt: z.string(),
     expired: z.boolean(),
@@ -94,6 +95,13 @@ export const createInvitation = createRoute({
         .object({
           name: z.string().trim().min(1).max(100).describe("First name"),
           email: z.email().max(254),
+          role: z
+            .enum(MEMBER_ROLES)
+            .default("editor")
+            .describe(
+              "`editor` (YNAB's only role: can change everything but sharing) or `viewer` (an " +
+                "everycent extra: can see the budget but not change it)",
+            ),
         })
         .openapi("CreateBudgetInvitation"),
     ),
@@ -222,6 +230,31 @@ export const removeMember = createRoute({
     403: ownerOnly,
     404: notFound,
     409: jsonError("The owner (`CANNOT_REMOVE_OWNER`)"),
+  },
+});
+
+export const changeMemberRole = createRoute({
+  method: "patch",
+  path: "/budgets/{budgetId}/members/{userId}",
+  operationId: "changeBudgetMemberRole",
+  tags: ["Sharing"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Make someone an editor or a viewer (owner only)",
+  description:
+    "A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The " +
+    "owner's own role changes only by transferring ownership (`CANNOT_CHANGE_OWNER`).",
+  request: {
+    params: MemberParams,
+    body: body(z.object({ role: z.enum(MEMBER_ROLES) }).openapi("ChangeBudgetMemberRole")),
+  },
+  responses: {
+    200: ok("Changed", MemberSchema),
+    400: jsonError("Invalid input"),
+    401: jsonError("Not signed in"),
+    403: ownerOnly,
+    404: notFound,
+    409: jsonError("The owner (`CANNOT_CHANGE_OWNER`)"),
   },
 });
 

@@ -27,6 +27,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useOptionalBudget } from "@/lib/budget-context";
 import {
   availableMark,
   isCaution,
@@ -171,6 +172,8 @@ export function CategoryList({
   /** Greys out "Category Group" (YNAB does in a custom view). */
   addGroupDisabled?: boolean;
 }) {
+  // A viewer (EVERYCENT-88) can't add, rename, hide, delete or reorder.
+  const readOnly = useOptionalBudget()?.readOnly ?? false;
   const serverLayout = useMemo(() => visibleLayout(data), [data]);
   const [layout, setLayout] = useState<VisibleLayout>(serverLayout);
   const beforeDrag = useRef(layout);
@@ -278,16 +281,18 @@ export function CategoryList({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <NamePopover
-          title="New category group"
-          submitLabel="Add"
-          onSubmit={({ name }) => actions.createGroup(name)}
-          trigger={
-            <Button variant="outline" size="sm" disabled={addGroupDisabled}>
-              <Plus /> Category Group
-            </Button>
-          }
-        />
+        {!readOnly && (
+          <NamePopover
+            title="New category group"
+            submitLabel="Add"
+            onSubmit={({ name }) => actions.createGroup(name)}
+            trigger={
+              <Button variant="outline" size="sm" disabled={addGroupDisabled}>
+                <Plus /> Category Group
+              </Button>
+            }
+          />
+        )}
         {toolbar}
       </div>
 
@@ -434,7 +439,7 @@ export function CategoryList({
                       : groupFigures.get(groupId)
                   }
                   figures={figures}
-                  reorderable={!shown}
+                  reorderable={!shown && !readOnly}
                   onToggleSelection={selection && (() => toggleGroupSelection(groupId))}
                   checked={
                     selection &&
@@ -457,7 +462,7 @@ export function CategoryList({
                         actions={actions}
                         totals={categoryFigures.get(categoryId)}
                         figures={figures}
-                        reorderable={!shown}
+                        reorderable={!shown && !readOnly}
                         onDelete={() => requestDelete("category", category.id, category.name)}
                       />
                     );
@@ -629,6 +634,7 @@ function GroupSection({
   children: ReactNode;
 }) {
   const managed = group.kind === "credit_card_payments";
+  const readOnly = useOptionalBudget()?.readOnly ?? false;
   const format = figures?.format;
   const { ref, handleRef, isDragSource } = useSortable({
     id: group.id,
@@ -717,20 +723,22 @@ function GroupSection({
                   </Button>
                 }
               />
-              <NamePopover
-                title={`New category in ${group.name}`}
-                submitLabel="Add"
-                onSubmit={({ name }) => actions.createCategory(group.id, name)}
-                trigger={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Add a category to ${group.name}`}
-                  >
-                    <Plus />
-                  </Button>
-                }
-              />
+              {!readOnly && (
+                <NamePopover
+                  title={`New category in ${group.name}`}
+                  submitLabel="Add"
+                  onSubmit={({ name }) => actions.createCategory(group.id, name)}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Add a category to ${group.name}`}
+                    >
+                      <Plus />
+                    </Button>
+                  }
+                />
+              )}
             </>
           )}
         </div>
