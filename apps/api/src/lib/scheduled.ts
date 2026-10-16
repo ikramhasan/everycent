@@ -24,8 +24,9 @@ import {
 import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
 import {
   type AccountRow,
-  assertNotSelf,
   assertOpen,
+  assertSameCurrency,
+  assertTransferPair,
   clearedOnEntry,
   findAccount,
   insertOtherSide,
@@ -284,10 +285,13 @@ export async function writeSchedule(
   const restore = existing?.restore === true;
   const account = await findAccount(tx, budgetId, input.accountId);
   if (!restore && (!existing || existing.accountId !== account.id)) assertOpen(account);
+  if (existing && existing.accountId !== account.id) {
+    assertSameCurrency(await findAccount(tx, budgetId, existing.accountId), account, "move");
+  }
   let transferTo: AccountRow | null = null;
   if ("transferAccountId" in input.payee) {
     transferTo = await findAccount(tx, budgetId, input.payee.transferAccountId);
-    assertNotSelf(account, transferTo);
+    assertTransferPair(account, transferTo);
     if (!restore && existing?.transferAccountId !== transferTo.id) assertOpen(transferTo);
   }
   if (input.dateFirst > input.date) {
@@ -346,7 +350,7 @@ export async function writeSchedule(
     let lineTo: AccountRow | null = null;
     if (line.transferAccountId) {
       lineTo = await findAccount(tx, budgetId, line.transferAccountId);
-      assertNotSelf(account, lineTo);
+      assertTransferPair(account, lineTo);
       if (!restore) assertOpen(lineTo);
     }
     await tx.insert(scheduledSubTransaction).values({

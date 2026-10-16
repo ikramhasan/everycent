@@ -23,9 +23,10 @@ import type {
 } from "./routes";
 import {
   type AccountRow,
-  assertNotSelf,
   assertOnePayee,
   assertOpen,
+  assertSameCurrency,
+  assertTransferPair,
   clearedOnEntry,
   findAccount,
   insertOtherSide,
@@ -46,6 +47,17 @@ import {
 } from "./splits";
 
 type Env = AppEnv & AuthedEnv;
+/**
+ * How a register's search reads amounts: in its account's currency, or the budget's for all
+ * accounts (where amounts in other currencies are read in the budget's; EVERYCENT-52 gap).
+ */
+export function searchSettings<S extends { currency: AccountRow["currency"] }>(
+  budget: S,
+  account: Pick<AccountRow, "currency"> | null,
+): S {
+  return account ? { ...budget, currency: account.currency } : budget;
+}
+
 async function transactionJson(db: Db, budgetId: string, accountId: string, id: string) {
   const row = await queryRegisterRow(db, budgetId, accountId, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Transaction not found");
@@ -59,13 +71,13 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
   if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
-  if (filter.accountId) await findAccount(db, budgetId, filter.accountId);
+  const account = filter.accountId ? await findAccount(db, budgetId, filter.accountId) : null;
   const page = await queryRegister(
     db,
     budgetId,
     { ...filter, today },
     { sort: parseSort(sort), limit, cursor },
-    budget,
+    searchSettings(budget, account),
   );
   return c.json(page, 200);
 };
@@ -115,7 +127,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
   let transferTo: AccountRow | null = null;
   if (body.transferAccountId !== undefined) {
     transferTo = await findAccount(tx, budgetId, body.transferAccountId);
-    assertNotSelf(account, transferTo);
+    assertTransferPair(account, transferTo);
     if (!body.restore) assertOpen(transferTo);
   } else if (body.transferSide) {
     throw new AppError(400, "BAD_REQUEST", "`transferSide` needs `transferAccountId`");
@@ -232,7 +244,10 @@ export async function applyUpdate(
 
   const moved = body.accountId !== undefined && body.accountId !== existing.accountId;
   const account = await findAccount(tx, budgetId, body.accountId ?? existing.accountId);
-  if (moved) assertOpen(account);
+  if (moved) {
+    assertOpen(account);
+    assertSameCurrency(await findAccount(tx, budgetId, existing.accountId), account, "move");
+  }
 
   // The account the other side belongs in: unchanged unless the payee changes.
   const targetId =
@@ -241,7 +256,7 @@ export async function applyUpdate(
   let transferTo: AccountRow | null = null;
   if (targetId !== null) {
     transferTo = await findAccount(tx, budgetId, targetId);
-    assertNotSelf(account, transferTo);
+    assertTransferPair(account, transferTo);
     if (retargeted) {
       assertOpen(account);
       assertOpen(transferTo);

@@ -93,6 +93,10 @@ const notFound = jsonError("No such budget, account or scheduled transaction, or
 const forbidden = jsonError(
   "The caller's role can't change transactions, or the account's email address isn't confirmed",
 );
+const crossCurrency = jsonError(
+  "A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move " +
+    "into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet",
+);
 
 const ScheduledLineInput = z
   .object({
@@ -215,6 +219,7 @@ export const createScheduledTransaction = createRoute({
     403: forbidden,
     404: notFound,
     409: jsonError("`fromTransactionId` is a split's transfer side (`TRANSFER_IN_SPLIT`)"),
+    422: crossCurrency,
   },
 });
 
@@ -267,6 +272,7 @@ export const updateScheduledTransaction = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    422: crossCurrency,
   },
 });
 

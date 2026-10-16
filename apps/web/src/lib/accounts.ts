@@ -17,8 +17,16 @@ export interface SidebarSection {
   id: SidebarSectionId;
   title: string;
   accounts: Account[];
-  /** Sum of working balances in minor units (closed accounts: always zero). */
+  /**
+   * Sum of the working balances of the accounts in the budget's currency, in its minor units
+   * (closed accounts: always zero).
+   */
   total: bigint;
+  /**
+   * Accounts in other currencies, left out of `total`: their amounts don't add up with the
+   * budget's (converted totals: EVERYCENT-57).
+   */
+  excluded: Account[];
 }
 
 const SECTION_OF: Record<AccountFamily, SidebarSectionId> = {
@@ -48,9 +56,13 @@ export function isStarred(account: Account) {
 
 /**
  * YNAB's sidebar: Starred first (its own order; the accounts stay in their usual group too),
- * then open accounts by family, then closed ones. Empty sections are left out.
+ * then open accounts by family, then closed ones. Empty sections are left out. Totals add up the
+ * accounts in `budgetCurrency` only.
  */
-export function sidebarSections(accounts: readonly Account[]): SidebarSection[] {
+export function sidebarSections(
+  accounts: readonly Account[],
+  budgetCurrency: string,
+): SidebarSection[] {
   const order: SidebarSectionId[] = ["starred", "budget", "loans", "tracking", "closed"];
   const inSectionOf = (id: SidebarSectionId) => {
     if (id === "starred") {
@@ -65,8 +77,11 @@ export function sidebarSections(accounts: readonly Account[]): SidebarSection[] 
   return order
     .map((id) => {
       const inSection = inSectionOf(id);
-      const total = inSection.reduce((sum, a) => sum + BigInt(a.balances.working), 0n);
-      return { id, title: TITLES[id], accounts: inSection, total };
+      const total = inSection
+        .filter((a) => a.currency === budgetCurrency)
+        .reduce((sum, a) => sum + BigInt(a.balances.working), 0n);
+      const excluded = inSection.filter((a) => a.currency !== budgetCurrency);
+      return { id, title: TITLES[id], accounts: inSection, total, excluded };
     })
     .filter((s) => s.accounts.length > 0);
 }
@@ -83,6 +98,19 @@ export function closeAccountNotice(
   working: bigint,
 ): { adjustment: bigint; removesMoneyFromPlan: boolean } {
   return { adjustment: -working, removesMoneyFromPlan: working > 0n && isOnBudget(type) };
+}
+
+/**
+ * The hint on a sidebar total that leaves accounts out: "Excludes 1 EUR account", "Excludes 2
+ * accounts in other currencies".
+ */
+export function excludedHint(excluded: readonly Pick<Account, "currency">[]): string | null {
+  if (excluded.length === 0) return null;
+  const currencies = new Set(excluded.map((a) => a.currency));
+  const noun = excluded.length === 1 ? "account" : "accounts";
+  return currencies.size === 1
+    ? `Excludes ${excluded.length} ${[...currencies][0]} ${noun}`
+    : `Excludes ${excluded.length} ${noun} in other currencies`;
 }
 
 /** YNAB labels Edit Account's balance field "Today's Balance" for loans and tracking accounts. */

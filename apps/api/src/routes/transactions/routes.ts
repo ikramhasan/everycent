@@ -176,6 +176,10 @@ const notFound = jsonError("No such budget, account or transaction, or the calle
 const forbidden = jsonError(
   "The caller's role can't change transactions, or the account's email address isn't confirmed",
 );
+const crossCurrency = jsonError(
+  "A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move " +
+    "into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet",
+);
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state " +
     "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
@@ -332,6 +336,7 @@ export const createTransaction = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    422: crossCurrency,
   },
 });
 
@@ -392,6 +397,7 @@ export const updateTransaction = createRoute({
     403: forbidden,
     404: notFound,
     409: locked,
+    422: crossCurrency,
   },
 });
 
@@ -472,7 +478,15 @@ export const summarizeSelection = createRoute({
       z
         .object({
           count: z.number().int(),
-          total: zMinorUnits.describe("Sum of the amounts, in the budget's currency"),
+          total: zMinorUnits.describe(
+            "Sum of the amounts, in `currency`'s minor units; 0 when `currency` is null",
+          ),
+          currency: zCurrencyCode
+            .nullable()
+            .describe(
+              "The selected transactions' currency (their accounts'); null when they're in " +
+                "different currencies, or none are selected",
+            ),
           uncleared: z.number().int(),
           cleared: z.number().int(),
           reconciled: z.number().int(),
@@ -568,5 +582,6 @@ export const bulkUpdateTransactions = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
+    422: crossCurrency,
   },
 });

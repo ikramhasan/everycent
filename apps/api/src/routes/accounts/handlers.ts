@@ -241,6 +241,41 @@ async function pairCategory(tx: Db, account: AccountRow, categoryId: string | nu
     .where(eq(budgetAccount.id, account.id));
 }
 
+/**
+ * Which currencies an account of `type` may use. Loans stay in the budget's currency: their
+ * interest, escrow and paired category are budget amounts.
+ */
+function assertAccountCurrency(
+  type: AccountRow["type"],
+  currency: AccountRow["currency"],
+  budgetCurrency: AccountRow["currency"],
+) {
+  if (currency === budgetCurrency) return;
+  if (accountFamily(type) === "loan") {
+    throw new AppError(
+      422,
+      "LOAN_CURRENCY",
+      `Loan accounts use the budget's currency (${budgetCurrency})`,
+    );
+  }
+  assertForeignOffBudget(type);
+}
+
+/**
+ * Until currency conversion lands (EVERYCENT-54), a foreign-currency account can't feed the
+ * budget's math, so it must be a tracking account. Delete this guard with that ticket.
+ */
+function assertForeignOffBudget(type: AccountRow["type"]) {
+  if (isOnBudget(type)) {
+    throw new AppError(
+      422,
+      "FOREIGN_ON_BUDGET",
+      "Budget accounts in another currency arrive with currency conversion; " +
+        "add it as a tracking account (asset or liability) for now",
+    );
+  }
+}
+
 const hasEscrow = (type: AccountRow["type"]) => type === "mortgage";
 
 const optionalBigInt = (v: string | null | undefined) =>
@@ -318,22 +353,14 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   const body = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { account: ["create"] });
-  // Multi-currency arrives in phase 11 (see Design notes).
-  if (body.currency && body.currency !== budget.currency) {
-    throw new AppError(
-      400,
-      "BAD_REQUEST",
-      `Accounts must use the budget's currency (${budget.currency}) for now`,
-    );
-  }
+  const currency = body.currency ?? budget.currency;
+  assertAccountCurrency(body.type, currency, budget.currency);
   assertLoanFields(body.type, body);
 
   if (body.pairedCategoryId !== undefined && accountFamily(body.type) !== "loan") {
     throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
   }
-  const accountId = await db.transaction((tx) =>
-    insertAccount(tx, budgetId, budget.currency, body),
-  );
+  const accountId = await db.transaction((tx) => insertAccount(tx, budgetId, currency, body));
   return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
 };
 
@@ -375,6 +402,7 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
     if (original.closed) {
       throw new AppError(400, "ACCOUNT_CLOSED", "Reopen the account to update it");
     }
+    assertAccountCurrency(body.type, original.currency, budget.currency);
     // Rename first, so the loan can take the original's name and the payees stay distinct.
     const originalName = `${original.name} (Original)`.slice(0, 100);
     await tx
@@ -386,7 +414,8 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
       .set({ name: transferPayeeName(originalName) })
       .where(eq(payee.transferAccountId, original.id));
 
-    const loanId = await insertAccount(tx, budgetId, budget.currency, body);
+    // The loan keeps the original's currency (the budget's: loans can't be in another one).
+    const loanId = await insertAccount(tx, budgetId, original.currency, body);
 
     const working =
       (await accountBalances(tx, budgetId, body.date)).get(original.id)?.working ?? 0n;

@@ -77,10 +77,32 @@ export async function resolveCategory(
   return categoryId;
 }
 
-export function assertNotSelf(account: AccountRow, transferTo: AccountRow) {
+/** Whether `account` may transfer to `transferTo`: not itself, and in the same currency. */
+export function assertTransferPair(account: AccountRow, transferTo: AccountRow) {
   if (transferTo.id === account.id) {
     throw new AppError(400, "TRANSFER_SAME_ACCOUNT", "An account can't transfer to itself");
   }
+  assertSameCurrency(account, transferTo, "transfer");
+}
+
+/**
+ * Transfers between currencies, and moving a transaction into an account in another currency
+ * (its amount would change meaning), wait for cross-currency transfers (EVERYCENT-55).
+ */
+export function assertSameCurrency(
+  from: Pick<AccountRow, "name" | "currency">,
+  to: Pick<AccountRow, "name" | "currency">,
+  action: "transfer" | "move",
+) {
+  if (from.currency === to.currency) return;
+  throw new AppError(
+    422,
+    action === "transfer" ? "CROSS_CURRENCY_TRANSFER" : "CROSS_CURRENCY_MOVE",
+    `${from.name} (${from.currency}) and ${to.name} (${to.currency}) use different currencies; ` +
+      (action === "transfer"
+        ? "transfers between currencies aren't supported yet"
+        : "transactions can't be moved between currencies yet"),
+  );
 }
 
 export function assertOnePayee(body: { payeeName?: string | null; transferAccountId?: string }) {
@@ -130,6 +152,7 @@ export async function insertOtherSide(
   transferTo: AccountRow,
   options: OtherSideOptions = {},
 ) {
+  assertSameCurrency(account, transferTo, "transfer");
   const otherId = await insertTransaction(tx, {
     budgetId: side.budgetId,
     accountId: transferTo.id,

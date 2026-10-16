@@ -25,7 +25,7 @@ import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 import type { Account } from "@/lib/accounts";
 import type { Flag } from "@/lib/flags";
-import type { MoneySettings } from "@/lib/money-input";
+import { inCurrency, type MoneySettings } from "@/lib/money-input";
 import {
   type CategoryOption,
   clearedFor,
@@ -56,7 +56,7 @@ export function TransactionEditor({
   payees,
   categories,
   dateFormat,
-  settings,
+  settings: budgetSettings,
   flags,
   onRenameFlags,
   label = "New transaction",
@@ -77,6 +77,7 @@ export function TransactionEditor({
   payees: readonly Payee[];
   categories: readonly CategoryOption[];
   dateFormat: DateFormat;
+  /** The budget's; amounts use the draft account's currency. */
   settings: MoneySettings;
   flags: readonly Flag[];
   onRenameFlags: (changes: Flag[]) => Promise<void>;
@@ -100,6 +101,7 @@ export function TransactionEditor({
   const [draft, setDraft] = useState(initial);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const account = accounts.find((a) => a.id === draft.accountId);
+  const settings = inCurrency(budgetSettings, account?.currency);
   const transferTo = accounts.find((a) => a.id === draft.transferAccountId);
   const needsCategory = account ? usesCategory(account.type, transferTo?.type) : true;
   // Money can move to any other open account; a split can't itself be a transfer (its lines can).

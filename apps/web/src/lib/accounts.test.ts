@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type Account, closeAccountNotice, editBalanceLabel, sidebarSections } from "./accounts";
+import {
+  type Account,
+  closeAccountNotice,
+  editBalanceLabel,
+  excludedHint,
+  sidebarSections,
+} from "./accounts";
 
 function account(id: string, type: Account["type"], working: string, closed = false): Account {
   return {
@@ -28,13 +34,16 @@ function account(id: string, type: Account["type"], working: string, closed = fa
 
 describe("sidebarSections", () => {
   it("groups accounts like YNAB's sidebar, with totals", () => {
-    const sections = sidebarSections([
-      account("checking", "checking", "150000"),
-      account("visa", "credit_card", "-37500"),
-      account("mortgage", "mortgage", "-2500000"),
-      account("house", "asset", "40000000"),
-      account("old", "savings", "0", true),
-    ]);
+    const sections = sidebarSections(
+      [
+        account("checking", "checking", "150000"),
+        account("visa", "credit_card", "-37500"),
+        account("mortgage", "mortgage", "-2500000"),
+        account("house", "asset", "40000000"),
+        account("old", "savings", "0", true),
+      ],
+      "USD",
+    );
     expect(sections.map((s) => [s.id, s.accounts.map((a) => a.id), s.total])).toEqual([
       ["budget", ["checking", "visa"], 112500n],
       ["loans", ["mortgage"], -2500000n],
@@ -46,12 +55,15 @@ describe("sidebarSections", () => {
   // YNAB, 2026-10-15 (EVERYCENT-149).
   it("puts starred open cash and credit accounts first, in their own order", () => {
     const star = (a: Account, order: number) => ({ ...a, starredOrder: order });
-    const sections = sidebarSections([
-      star(account("checking", "checking", "1000"), 1),
-      star(account("visa", "credit_card", "-300"), 0),
-      account("savings", "savings", "50"),
-      star(account("closed", "savings", "0", true), 2),
-    ]);
+    const sections = sidebarSections(
+      [
+        star(account("checking", "checking", "1000"), 1),
+        star(account("visa", "credit_card", "-300"), 0),
+        account("savings", "savings", "50"),
+        star(account("closed", "savings", "0", true), 2),
+      ],
+      "USD",
+    );
     expect(sections.map((s) => [s.id, s.title, s.accounts.map((a) => a.id), s.total])).toEqual([
       ["starred", "Starred", ["visa", "checking"], 700n],
       ["budget", "Budget", ["checking", "visa", "savings"], 750n],
@@ -60,7 +72,48 @@ describe("sidebarSections", () => {
   });
 
   it("leaves out empty sections", () => {
-    expect(sidebarSections([account("cash", "cash", "100")]).map((s) => s.id)).toEqual(["budget"]);
+    expect(sidebarSections([account("cash", "cash", "100")], "USD").map((s) => s.id)).toEqual([
+      "budget",
+    ]);
+  });
+});
+
+describe("sidebarSections with accounts in other currencies", () => {
+  const inCurrency = (a: Account, currency: Account["currency"]): Account => ({ ...a, currency });
+
+  it("totals only the budget's currency and lists the accounts left out", () => {
+    const sections = sidebarSections(
+      [
+        account("house", "asset", "40000000"),
+        inCurrency(account("euro", "asset", "123456"), "EUR"),
+        inCurrency(account("yen", "liability", "-50000"), "JPY"),
+        account("checking", "checking", "1000"),
+      ],
+      "USD",
+    );
+    expect(
+      sections.map((s) => [s.id, s.total, s.excluded.map((a) => a.id), excludedHint(s.excluded)]),
+    ).toEqual([
+      ["budget", 1000n, [], null],
+      ["tracking", 40000000n, ["euro", "yen"], "Excludes 2 accounts in other currencies"],
+    ]);
+  });
+
+  it("names the currency when the accounts left out share one", () => {
+    expect(excludedHint([{ currency: "EUR" }])).toBe("Excludes 1 EUR account");
+    expect(excludedHint([{ currency: "EUR" }, { currency: "EUR" }])).toBe(
+      "Excludes 2 EUR accounts",
+    );
+    expect(excludedHint([])).toBeNull();
+  });
+
+  it("totals a group of foreign accounts as zero in the budget's currency", () => {
+    const [tracking] = sidebarSections(
+      [inCurrency(account("euro", "asset", "123456"), "EUR")],
+      "USD",
+    );
+    expect(tracking).toMatchObject({ id: "tracking", total: 0n });
+    expect(tracking?.excluded).toHaveLength(1);
   });
 });
 
