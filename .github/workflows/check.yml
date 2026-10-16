@@ -1,0 +1,49 @@
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everycent
+          POSTGRES_PASSWORD: everycent
+          POSTGRES_DB: everycent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U everycent -d everycent"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Same databases as docker compose (docker/postgres/init), and .env.example's settings,
+      # which point at them. Tests read the root .env: turbo's strict env mode drops job env vars.
+      - name: Prepare database and .env
+        run: |
+          PGPASSWORD=everycent psql -h localhost -U everycent -d everycent -c "CREATE DATABASE everycent_test OWNER everycent"
+          cp .env.example .env
+      - run: pnpm check
+        env:
+          # 2 vCPUs, but API tests mostly wait on Postgres: one worker more than cores keeps both busy.
+          API_TEST_WORKERS: 3
