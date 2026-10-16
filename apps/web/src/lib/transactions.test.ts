@@ -10,12 +10,14 @@ import {
   draftFrom,
   emptyDraft,
   emptyLine,
+  movableAccounts,
   paymentCategoryCard,
   splitMismatch,
   splitRemaining,
   startSplit,
   type Transaction,
   transferChoiceLabel,
+  transferRateLabel,
   transferRowLabel,
   updateBody,
   withSplitTotal,
@@ -177,6 +179,93 @@ describe("register drafts", () => {
     expect(draftFrom(looked, usd).fxRate).toBe("");
   });
 
+  describe("transfers between currencies (EVERYCENT-55)", () => {
+    const eur = inCurrency(usd, "EUR");
+    const jpy = inCurrency(usd, "JPY");
+    const draft: Draft = {
+      ...emptyDraft("a1", "2026-10-01"),
+      outflow: "100",
+      payeeName: "Transfer : Euros",
+      transferAccountId: "a2",
+    };
+
+    it("sends what the other account receives, the other way, in its currency", () => {
+      expect(createBody({ ...draft, transferAmount: "85.00" }, usd, eur)).toMatchObject({
+        ok: true,
+        body: { amount: "-10000", transferAccountId: "a2", transferAmount: "8500" },
+      });
+      // An inflow: what the other account sends, here in yen (no decimals).
+      expect(
+        createBody({ ...draft, outflow: "", inflow: "100", transferAmount: "15,000" }, usd, jpy),
+      ).toMatchObject({ ok: true, body: { amount: "10000", transferAmount: "-15000" } });
+      // Empty, it's the date's rate; in one currency it isn't sent at all.
+      expect(createBody(draft, usd, eur)).toMatchObject({
+        ok: true,
+        body: expect.not.objectContaining({ transferAmount: expect.anything() }),
+      });
+      expect(createBody({ ...draft, transferAmount: "85" }, usd)).toMatchObject({
+        ok: true,
+        body: expect.not.objectContaining({ transferAmount: expect.anything() }),
+      });
+      expect(createBody({ ...draft, transferAmount: "8x" }, usd, eur)).toMatchObject({ ok: false });
+    });
+
+    it("sends a fee in the sending account's currency with its category", () => {
+      expect(createBody({ ...draft, fee: "3", feeCategoryId: "c1" }, usd, eur)).toMatchObject({
+        ok: true,
+        body: { fee: { amount: "300", categoryId: "c1" } },
+      });
+      // An inflow's fee is the other (yen) account's.
+      expect(
+        createBody({ ...draft, outflow: "", inflow: "100", fee: "500" }, usd, jpy),
+      ).toMatchObject({ ok: true, body: { fee: { amount: "500", categoryId: null } } });
+      expect(createBody({ ...draft, fee: "0" }, usd, eur)).toMatchObject({ ok: false });
+      // Only a transfer has one.
+      expect(
+        createBody({ ...draft, transferAccountId: null, payeeName: "Shop", fee: "3" }, usd),
+      ).toMatchObject({ ok: true, body: expect.not.objectContaining({ fee: expect.anything() }) });
+    });
+
+    it("keeps the other side's amount unless it's changed, and clears it to null", () => {
+      const transfer: Transaction = {
+        ...txn,
+        cleared: "uncleared",
+        amount: "-10000",
+        transferAccountId: "a2",
+        transferTransactionId: "t2",
+        transferSide: {
+          memo: "",
+          cleared: "uncleared",
+          flag: null,
+          approved: true,
+          categoryId: null,
+          amount: "8500",
+          currency: "EUR",
+        },
+      };
+      const before = draftFrom(transfer, usd);
+      expect(before.transferAmount).toBe("85.00");
+      expect(updateBody(transfer, { ...before, outflow: "200" }, usd, eur)).toEqual({
+        ok: true,
+        body: { amount: "-20000" },
+      });
+      expect(updateBody(transfer, { ...before, transferAmount: "90" }, usd, eur)).toEqual({
+        ok: true,
+        body: { transferAmount: "9000" },
+      });
+      expect(updateBody(transfer, { ...before, transferAmount: "" }, usd, eur)).toEqual({
+        ok: true,
+        body: { transferAmount: null },
+      });
+    });
+
+    it("shows the rate the two amounts imply", () => {
+      expect(transferRateLabel(-10000n, "USD", 8500n, "EUR")).toBe("1 EUR = 1.17647 USD");
+      expect(transferRateLabel(10000n, "USD", -15000n, "JPY")).toBe("1 JPY = 0.00666667 USD");
+      expect(transferRateLabel(0n, "USD", 8500n, "EUR")).toBeNull();
+    });
+  });
+
   it("explains an amount it can't read", () => {
     const draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "12.345" };
     expect(createBody(draft, usd)).toEqual({ ok: false, error: "Enter an amount like 1,234.56" });
@@ -279,6 +368,26 @@ describe("a transaction in an account's own currency (EVERYCENT-52)", () => {
       body: { amount: "-1500" },
     });
     expect(createBody(draft, usd)).toMatchObject({ ok: true, body: { amount: "-150" } });
+  });
+});
+
+describe("movableAccounts (EVERYCENT-193)", () => {
+  it("offers open accounts in the transaction's currency, and the one it's in", () => {
+    const accounts = [
+      { id: "usd", closed: false, currency: "USD" },
+      { id: "usd2", closed: false, currency: "USD" },
+      { id: "eur", closed: false, currency: "EUR" },
+      { id: "old", closed: true, currency: "USD" },
+    ];
+    expect(
+      movableAccounts(accounts, { accountId: "usd", currency: "USD" }).map((a) => a.id),
+    ).toEqual(["usd", "usd2"]);
+    expect(
+      movableAccounts(accounts, { accountId: "eur", currency: "EUR" }).map((a) => a.id),
+    ).toEqual(["eur"]);
+    expect(
+      movableAccounts(accounts, { accountId: "old", currency: "USD" }).map((a) => a.id),
+    ).toEqual(["usd", "usd2", "old"]);
   });
 });
 

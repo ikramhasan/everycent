@@ -157,3 +157,15 @@ export function impliedRate(native: Money, base: Money): string | null {
   const denominator = abs(native.amount) * 10n ** BigInt(currencyExponent(base.currency));
   return scaledToRate(divideRounded(numerator, denominator, "half-even"));
 }
+
+/**
+ * A rate rounded half-even to `significant` significant digits, for showing it ("1 EUR =
+ * 1.17647 USD"), trailing zeros trimmed. Stored rates keep their 12 decimals.
+ */
+export function roundRate(rate: string, significant = 6): string {
+  const scaled = rateToScaled(rate);
+  const drop = scaled.toString().length - significant;
+  if (drop <= 0) return scaledToRate(scaled);
+  const unit = 10n ** BigInt(drop);
+  return scaledToRate(divideRounded(scaled, unit) * unit);
+}

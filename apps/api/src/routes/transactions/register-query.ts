@@ -11,6 +11,7 @@ import {
 } from "@everycent/db/schema";
 import {
   ACCOUNT_TYPES,
+  type CurrencyCode,
   isOnBudget,
   normalizeRate,
   parseSearch,
@@ -299,6 +300,42 @@ function searchTerms(filter: RegisterFilter, settings: SearchSettings): SearchTe
 }
 
 /**
+ * How a register reads its search: the budget's formats, in the register's account's currency.
+ * All accounts list `currencies`, every currency the budget's accounts use: each row's amounts
+ * are then read in its own (EVERYCENT-193).
+ */
+export interface RegisterSearch extends SearchSettings {
+  currencies?: readonly CurrencyCode[];
+}
+
+/** The search's terms, per currency when rows in several currencies are searched. */
+type TermSet = { currency: CurrencyCode | null; terms: SearchTerm[] };
+
+function termSets(filter: RegisterFilter, settings: RegisterSearch): TermSet[] {
+  const currencies = settings.currencies ?? [];
+  if (currencies.length < 2) {
+    const currency = currencies[0] ?? settings.currency;
+    const terms = searchTerms(filter, { ...settings, currency });
+    return terms.length > 0 ? [{ currency: null, terms }] : [];
+  }
+  return currencies
+    .map((currency) => ({ currency, terms: searchTerms(filter, { ...settings, currency }) }))
+    .filter((set) => set.terms.length > 0);
+}
+
+/** Every term of a set matches `unit`, in a row of the set's currency. */
+function setsWhere(r: Register, unit: Unit, sets: readonly TermSet[], budgetId: string) {
+  return sql.join(
+    sets.map((set) =>
+      set.currency === null
+        ? sql`(${allTerms(r, unit, set.terms, budgetId)})`
+        : sql`(${r.currency} = ${set.currency} and ${allTerms(r, unit, set.terms, budgetId)})`,
+    ),
+    sql` or `,
+  );
+}
+
+/**
  * A transaction shows when it, or one of its split lines, matches every search term (YNAB then
  * shows only the lines that match). Dates and reconciled rows are the View menu's.
  */
@@ -306,14 +343,14 @@ function filterWhere(
   r: Register,
   budgetId: string,
   filter: RegisterFilter,
-  settings: SearchSettings,
+  settings: RegisterSearch,
 ) {
   const conditions: (SQL | undefined)[] = [];
-  const terms = searchTerms(filter, settings);
-  if (terms.length > 0) {
+  const sets = termSets(filter, settings);
+  if (sets.length > 0) {
     conditions.push(sql`(
-      (${allTerms(r, parentUnit(r), terms, budgetId)})
-      or ${lineMatches(r, allTerms(r, lineUnit(r), terms, budgetId))}
+      (${setsWhere(r, parentUnit(r), sets, budgetId)})
+      or ${lineMatches(r, setsWhere(r, lineUnit(r), sets, budgetId))}
     )`);
   }
   if (filter.from) conditions.push(sql`${r.date} >= ${filter.from}`);
@@ -330,7 +367,7 @@ export function matchingTransactions(
   db: Db,
   budgetId: string,
   filter: RegisterFilter,
-  settings: SearchSettings,
+  settings: RegisterSearch,
 ) {
   const r = registerCte(db, budgetId, filter.accountId);
   return db
@@ -451,6 +488,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       sideFlag: other.flag,
       sideApproved: other.approved,
       sideCategoryId: other.categoryId,
+      sideAmount: other.amount,
+      sideCurrency: other.currency,
     })
     .from(subTransaction)
     .leftJoin(payee, eq(payee.id, subTransaction.payeeId))
@@ -463,22 +502,40 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
     .orderBy(asc(subTransaction.sortOrder), asc(subTransaction.id));
   type Line = Omit<
     (typeof rows)[number],
-    "transactionId" | "sideMemo" | "sideCleared" | "sideFlag" | "sideApproved" | "sideCategoryId"
+    | "transactionId"
+    | "sideMemo"
+    | "sideCleared"
+    | "sideFlag"
+    | "sideApproved"
+    | "sideCategoryId"
+    | "sideAmount"
+    | "sideCurrency"
   > & { transferSide: TransferSide | null };
   const byTransaction = new Map<string, Line[]>();
   for (const row of rows) {
-    const { transactionId, sideMemo, sideCleared, sideFlag, sideApproved, sideCategoryId, ...l } =
-      row;
+    const {
+      transactionId,
+      sideMemo,
+      sideCleared,
+      sideFlag,
+      sideApproved,
+      sideCategoryId,
+      sideAmount,
+      sideCurrency,
+      ...l
+    } = row;
     const line: Line = {
       ...l,
       transferSide:
-        l.transferTransactionId && sideCleared !== null
+        l.transferTransactionId && sideCleared !== null && sideCurrency !== null
           ? {
               memo: sideMemo ?? "",
               cleared: sideCleared,
               flag: sideFlag,
               approved: sideApproved ?? true,
               categoryId: sideCategoryId,
+              amount: (sideAmount ?? 0n).toString(),
+              currency: sideCurrency,
             }
           : null,
     };
@@ -494,6 +551,9 @@ export interface TransferSide {
   flag: FlagColor | null;
   approved: boolean;
   categoryId: string | null;
+  /** Its own amount in its account's currency (its own between currencies; EVERYCENT-55). */
+  amount: string;
+  currency: CurrencyCode;
 }
 
 /** The other sides of these rows' transfers (not a split line's, which `queryLines` has). */
@@ -511,10 +571,14 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
       flag: transaction.flag,
       approved: transaction.approved,
       categoryId: transaction.categoryId,
+      amount: transaction.amount,
+      currency: transaction.currency,
     })
     .from(transaction)
     .where(inArray(transaction.id, ids));
-  for (const { id, ...side } of found) sides.set(id, side);
+  for (const { id, amount, ...side } of found) {
+    sides.set(id, { ...side, amount: amount.toString() });
+  }
   return sides;
 }
 
@@ -594,7 +658,7 @@ export function registerPageQuery(
   budgetId: string,
   filter: RegisterFilter,
   page: RegisterPage,
-  settings: SearchSettings,
+  settings: RegisterSearch,
 ) {
   const r = registerCte(db, budgetId, filter.accountId);
   const keys = page.sort.map((f) => ({ ...sortKey(r, f.column), dir: f.dir }));
@@ -634,21 +698,21 @@ export async function queryRegister(
   budgetId: string,
   filter: RegisterFilter,
   page: RegisterPage,
-  settings: SearchSettings,
+  settings: RegisterSearch,
 ) {
   const rows = await registerPageQuery(db, budgetId, filter, page, settings);
   const more = rows.length > page.limit;
   const pageRows = rows.slice(0, page.limit);
   const last = pageRows.at(-1);
-  const terms = searchTerms(filter, settings);
+  const sets = termSets(filter, settings);
   const matching =
-    terms.length > 0
+    sets.length > 0
       ? await matchingLines(
           db,
           budgetId,
           filter.accountId,
           pageRows.map((row) => row.id),
-          terms,
+          sets,
         )
       : null;
   return {
@@ -675,7 +739,7 @@ async function matchingLines(
   budgetId: string,
   accountId: string | undefined,
   ids: readonly string[],
-  terms: readonly SearchTerm[],
+  sets: readonly TermSet[],
 ) {
   const byTransaction = new Map<string, string[]>();
   if (ids.length === 0) return byTransaction;
@@ -687,7 +751,7 @@ async function matchingLines(
     .innerJoin(sql`${subTransaction} st`, sql`st.transaction_id = ${r.id}`)
     .leftJoin(sql`${payee} sp`, sql`sp.id = st.payee_id`)
     .leftJoin(sql`${category} sc`, sql`sc.id = st.category_id`)
-    .where(and(inArray(r.id, [...ids]), allTerms(r, lineUnit(r), terms, budgetId)));
+    .where(and(inArray(r.id, [...ids]), setsWhere(r, lineUnit(r), sets, budgetId)));
   for (const { id, transactionId } of rows) {
     byTransaction.set(transactionId, [...(byTransaction.get(transactionId) ?? []), id]);
   }
@@ -699,7 +763,7 @@ async function someHidden(
   db: Db,
   budgetId: string,
   filter: RegisterFilter,
-  settings: SearchSettings,
+  settings: RegisterSearch,
 ) {
   const r = registerCte(db, budgetId, filter.accountId);
   const where = filterWhere(r, budgetId, filter, settings);

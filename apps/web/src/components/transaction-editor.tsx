@@ -25,11 +25,12 @@ import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 import type { Account } from "@/lib/accounts";
 import type { Flag } from "@/lib/flags";
-import { inCurrency, type MoneySettings } from "@/lib/money-input";
+import { inCurrency, type MoneySettings, parseMoneyInput } from "@/lib/money-input";
 import {
   type CategoryOption,
   clearedFor,
   type Draft,
+  draftAmount,
   emptyLine,
   type LineDraft,
   type Payee,
@@ -38,6 +39,7 @@ import {
   splitRemaining,
   startSplit,
   type TransferDirection,
+  transferRateLabel,
   withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
@@ -53,6 +55,7 @@ export function TransactionEditor({
   initial,
   columns,
   accounts,
+  accountChoices,
   payees,
   categories,
   dateFormat,
@@ -74,6 +77,8 @@ export function TransactionEditor({
   columns: readonly ColumnId[];
   /** Accounts a new transaction can go in (open ones). */
   accounts: readonly Account[];
+  /** The account list, when narrower than `accounts` (an existing one stays in its currency). */
+  accountChoices?: readonly Account[];
   payees: readonly Payee[];
   categories: readonly CategoryOption[];
   dateFormat: DateFormat;
@@ -102,14 +107,30 @@ export function TransactionEditor({
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const account = accounts.find((a) => a.id === draft.accountId);
   const settings = inCurrency(budgetSettings, account?.currency);
-  // A schedule has no rate of its own: it takes the date's when it's entered.
-  const foreign =
-    !scheduled && account !== undefined && account.currency !== budgetSettings.currency;
   const transferTo = accounts.find((a) => a.id === draft.transferAccountId);
   const needsCategory = account ? usesCategory(account.type, transferTo?.type) : true;
   // Money can move to any other open account; a split can't itself be a transfer (its lines can).
-  const transfers = accounts.filter((a) => a.id !== draft.accountId);
+  // Scheduled transfers stay in one currency (EVERYCENT-55).
+  const transfers = accounts.filter(
+    (a) => a.id !== draft.accountId && (!scheduled || a.currency === account?.currency),
+  );
   const lines = draft.lines;
+  // A transfer to an account in another currency: that side's own amount (EVERYCENT-55).
+  const crossTo =
+    !scheduled && !lines && account && transferTo && transferTo.currency !== account.currency
+      ? transferTo
+      : null;
+  // A schedule has no rate of its own: it takes the date's when it's entered. Across currencies
+  // a side in the budget's currency sets the base amount, so a rate would do nothing.
+  const foreign =
+    !scheduled &&
+    account !== undefined &&
+    account.currency !== budgetSettings.currency &&
+    crossTo?.currency !== budgetSettings.currency;
+  // A new transfer's fee comes out of the sending account (the other one for an inflow).
+  const sending = typedDirection(draft) === "in" ? transferTo : account;
+  const withFee = Boolean(onSaveAndAddAnother && !scheduled && !lines && transferTo && sending);
+  const feeSettings = inCurrency(budgetSettings, sending?.currency);
   const canSplit = account ? usesCategory(account.type, null) && !draft.transferAccountId : false;
   // Remounts the payee field focused, after the card's "Payment to <card>" is picked.
   const [payeeFocus, setPayeeFocus] = useState(0);
@@ -194,7 +215,7 @@ export function TransactionEditor({
             }}
             className="h-8 w-full"
           >
-            {accounts.map((a) => (
+            {(accountChoices ?? accounts).map((a) => (
               <NativeSelectOption key={a.id} value={a.id}>
                 {a.name}
               </NativeSelectOption>
@@ -233,6 +254,8 @@ export function TransactionEditor({
                   ...d,
                   payeeName: name,
                   transferAccountId,
+                  // What another account receives is typed again for a new one.
+                  ...(transferAccountId !== d.transferAccountId ? { transferAmount: "" } : {}),
                   ...(!uses ? { categoryId: null } : {}),
                   // YNAB fills in the payee's category, by its Categorization setting.
                   ...(payee?.prefillCategoryId && uses && d.categoryId === null && !d.lines
@@ -412,6 +435,7 @@ export function TransactionEditor({
 
   const split = lines ? splitRemaining(draft, settings) : null;
   const remaining = split && "remaining" in split ? split.remaining : null;
+  const rateLabel = transferRate(draft, settings, account?.currency, crossTo?.currency);
 
   return (
     <>
@@ -445,7 +469,13 @@ export function TransactionEditor({
       ))}
       <TableRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
         <TableCell colSpan={columns.length} className="px-1.5 pt-0">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/*
+           * EVERYCENT-194: the register's table can be wider than its scrolling container, so a
+           * footer as wide as the row ran past the visible edge. It takes the container's visible
+           * width (`100cqw`: the register's container is a query container), sticks to its left
+           * edge while scrolling sideways, and wraps within it.
+           */}
+          <div className="sticky left-1.5 flex w-[calc(100cqw-0.75rem)] max-w-full flex-wrap items-center justify-end gap-2 whitespace-normal">
             {lines && (
               <>
                 <Button
@@ -470,6 +500,56 @@ export function TransactionEditor({
               </>
             )}
             {error && <FieldError className="mr-auto">{error}</FieldError>}
+            {crossTo && (
+              // EVERYCENT-55: the other account's own amount; left empty, the date's rate.
+              <div className="flex flex-col items-end gap-0.5 text-muted-foreground text-sm">
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden>
+                    {crossTo.name} {typedDirection(draft) === "in" ? "sends" : "receives"}
+                  </span>
+                  <Input
+                    aria-label={`${crossTo.name} ${
+                      typedDirection(draft) === "in" ? "sends" : "receives"
+                    } (${crossTo.currency})`}
+                    className="h-7 w-28 text-right tabular-nums"
+                    inputMode="decimal"
+                    placeholder="Date's rate"
+                    value={draft.transferAmount ?? ""}
+                    onChange={(e) => set({ transferAmount: e.target.value })}
+                  />
+                  <span aria-hidden>{crossTo.currency}</span>
+                </div>
+                {rateLabel && (
+                  <span className="text-xs tabular-nums" aria-live="polite">
+                    {rateLabel}
+                  </span>
+                )}
+              </div>
+            )}
+            {withFee && sending && (
+              <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                <span aria-hidden>Fee</span>
+                <Input
+                  aria-label={`Transfer fee (${feeSettings.currency})`}
+                  className="h-7 w-20 text-right tabular-nums"
+                  inputMode="decimal"
+                  placeholder="None"
+                  value={draft.fee ?? ""}
+                  onChange={(e) => set({ fee: e.target.value })}
+                />
+                <span aria-hidden>{feeSettings.currency}</span>
+                {draft.fee?.trim() && usesCategory(sending.type, null) && (
+                  <div className="w-44">
+                    <CategoryField
+                      label="Fee category"
+                      value={draft.feeCategoryId ?? null}
+                      onChange={(feeCategoryId) => set({ feeCategoryId })}
+                      categories={categories}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             {foreign && account && (
               // EVERYCENT-54: what the plan counts is this amount at the rate; left empty, the
               // date's rate (locked once saved, looked up again only when the date changes).
@@ -539,6 +619,21 @@ export function TransactionEditor({
 
 /** The card's own "Payment to <card>" entry in its category list. */
 const CARD_PAYMENT = "__card_payment";
+
+/** "1 EUR = 1.17647 USD" from the typed amounts of a transfer between currencies, or null. */
+function transferRate(
+  draft: Draft,
+  settings: MoneySettings,
+  own: string | undefined,
+  other: string | undefined,
+) {
+  const text = draft.transferAmount?.trim() ?? "";
+  if (!own || !other || text === "") return null;
+  const amount = draftAmount(draft, settings);
+  const otherAmount = parseMoneyInput(text, inCurrency(settings, other));
+  if (typeof amount === "string" || typeof otherAmount === "string") return null;
+  return transferRateLabel(amount, own, otherAmount, other);
+}
 
 /** Which way the typed amount goes: YNAB words its transfers by it ("Payment from …"). */
 function typedDirection(amounts: { outflow: string; inflow: string }): TransferDirection {

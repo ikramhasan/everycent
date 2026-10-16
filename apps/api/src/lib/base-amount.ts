@@ -1,5 +1,12 @@
 import { budget, subTransaction, transaction } from "@everycent/db/schema";
-import { type CurrencyCode, convert, convertLines, money, normalizeRate } from "@everycent/engine";
+import {
+  type CurrencyCode,
+  convert,
+  convertLines,
+  impliedRate,
+  money,
+  normalizeRate,
+} from "@everycent/engine";
 import { asc, eq } from "drizzle-orm";
 import type { AppDeps } from "../types";
 import { resolveRate } from "./fx";
@@ -113,10 +120,58 @@ export async function rebase(
   };
 }
 
+/** A transfer side's rate: null in the budget's currency, else what its amounts imply. */
+function sideRate(
+  amount: bigint,
+  currency: CurrencyCode,
+  base: bigint,
+  budgetCurrency: CurrencyCode,
+  fallback: string | null,
+) {
+  if (currency === budgetCurrency) return null;
+  const fallbackRate = fallback === null ? null : normalizeRate(fallback);
+  return impliedRate(money(amount, currency), money(base, budgetCurrency)) ?? fallbackRate;
+}
+
+/**
+ * The other side's amount of a transfer between currencies when none is given (EVERYCENT-55):
+ * the entered side's base amount, negated, in the other side's currency at the date's rate.
+ */
+export async function otherSideAmount(
+  db: Db,
+  deps: FxDeps,
+  input: {
+    budgetId: string;
+    budgetCurrency: CurrencyCode;
+    /** The entered side's base amount. */
+    base: bigint;
+    currency: CurrencyCode;
+    date: string;
+  },
+) {
+  if (input.currency === input.budgetCurrency) return -input.base;
+  const { rate } = await resolveRate(db, deps, {
+    budgetId: input.budgetId,
+    from: input.budgetCurrency,
+    to: input.currency,
+    date: input.date,
+  });
+  return -convert(money(input.base, input.budgetCurrency), rate, input.currency).amount;
+}
+
+/** Whether `other` can be the other side of a transfer of `amount`: never the same way. */
+export function oppositeSides(amount: bigint, other: bigint) {
+  return amount === 0n ? other === 0n : amount < 0n ? other > 0n : other < 0n;
+}
+
 /**
  * Brings what follows a transaction's base amount in line with it: a split's lines (at its rate,
- * adding up to it), the other side of a transfer and of each transfer line (always the opposite
- * base amount, so a transfer moves no money in the budget).
+ * adding up to it), the other side of a transfer and of each transfer line. A transfer's sides
+ * always have opposite base amounts, so it moves no money in the budget. Between currencies
+ * (EVERYCENT-55) each side keeps its own amount: a side in the budget's currency decides the base
+ * amount (its amount is it), otherwise this side's does; the other side's rate is the one its
+ * amounts imply. A split's transfer line follows the split's rate, so a line's other side in the
+ * budget's currency takes the line's base amount as its amount.
  */
 export async function syncBases(db: Db, transactionId: string) {
   const [parent] = await db
@@ -132,12 +187,50 @@ export async function syncBases(db: Db, transactionId: string) {
     .innerJoin(budget, eq(budget.id, transaction.budgetId))
     .where(eq(transaction.id, transactionId));
   if (!parent) return;
+  const { budgetCurrency } = parent;
+  const fxRate = parent.fxRate === null ? null : normalizeRate(parent.fxRate);
+  if (parent.transferTransactionId) {
+    const [other] = await db
+      .select({
+        amount: transaction.amount,
+        currency: transaction.currency,
+        fxRate: transaction.fxRate,
+      })
+      .from(transaction)
+      .where(eq(transaction.id, parent.transferTransactionId));
+    if (other && other.currency !== parent.currency && other.currency === budgetCurrency) {
+      // The other side is in the budget's currency: its amount is the transfer's base amount.
+      const baseAmount = -other.amount;
+      await db
+        .update(transaction)
+        .set({
+          baseAmount,
+          fxRate: sideRate(parent.amount, parent.currency, baseAmount, budgetCurrency, fxRate),
+        })
+        .where(eq(transaction.id, transactionId));
+      await db
+        .update(transaction)
+        .set({ baseAmount: other.amount, fxRate: null })
+        .where(eq(transaction.id, parent.transferTransactionId));
+    } else if (other) {
+      const baseAmount = -parent.baseAmount;
+      await db
+        .update(transaction)
+        .set({
+          baseAmount,
+          fxRate:
+            other.currency === parent.currency
+              ? fxRate
+              : sideRate(other.amount, other.currency, baseAmount, budgetCurrency, other.fxRate),
+        })
+        .where(eq(transaction.id, parent.transferTransactionId));
+    }
+  }
   const lines = await db
     .select({ id: subTransaction.id, amount: subTransaction.amount })
     .from(subTransaction)
     .where(eq(subTransaction.transactionId, transactionId))
     .orderBy(asc(subTransaction.sortOrder));
-  const fxRate = parent.fxRate === null ? null : normalizeRate(parent.fxRate);
   const bases =
     fxRate === null
       ? lines.map((l) => l.amount)
@@ -146,20 +239,32 @@ export async function syncBases(db: Db, transactionId: string) {
           lines.map((l) => l.amount),
           parent.currency,
           fxRate,
-          parent.budgetCurrency,
+          budgetCurrency,
         );
   for (const [i, line] of lines.entries()) {
     const baseAmount = bases[i] as bigint;
     await db.update(subTransaction).set({ baseAmount }).where(eq(subTransaction.id, line.id));
-    await db
-      .update(transaction)
-      .set({ baseAmount: -baseAmount, fxRate })
+    const [other] = await db
+      .select({
+        id: transaction.id,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        fxRate: transaction.fxRate,
+      })
+      .from(transaction)
       .where(eq(transaction.transferSubTransactionId, line.id));
-  }
-  if (parent.transferTransactionId) {
+    if (!other) continue;
+    const sameCurrency = other.currency === parent.currency;
+    const toBudget = !sameCurrency && other.currency === budgetCurrency;
     await db
       .update(transaction)
-      .set({ baseAmount: -parent.baseAmount, fxRate })
-      .where(eq(transaction.id, parent.transferTransactionId));
+      .set({
+        ...(toBudget ? { amount: -baseAmount } : {}),
+        baseAmount: -baseAmount,
+        fxRate: sameCurrency
+          ? fxRate
+          : sideRate(other.amount, other.currency, -baseAmount, budgetCurrency, other.fxRate),
+      })
+      .where(eq(transaction.id, other.id));
   }
 }

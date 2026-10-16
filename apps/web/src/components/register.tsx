@@ -120,6 +120,7 @@ import {
   type Draft,
   draftFrom,
   emptyDraft,
+  movableAccounts,
   payeesQueryOptions,
   paymentCategoryCard,
   REGISTER_PAGE_SIZE,
@@ -373,6 +374,16 @@ export function Register({
   /** The budget's number format with account `id`'s currency, for its amounts. */
   const settingsOf = (id: string | undefined) =>
     inCurrency(budget, id ? accountById.get(id)?.currency : undefined);
+  /** A transfer to an account in another currency: the money settings in that one's currency. */
+  const otherSettingsOf = (draft: Pick<Draft, "accountId" | "transferAccountId">) => {
+    const own = accountById.get(draft.accountId)?.currency;
+    const other = draft.transferAccountId
+      ? accountById.get(draft.transferAccountId)?.currency
+      : undefined;
+    return own && other && own !== other
+      ? settingsOf(draft.transferAccountId ?? undefined)
+      : undefined;
+  };
   /**
    * A foreign-currency amount with what the plan counts under it, in the budget's currency
    * (EVERYCENT-54), and its rate on hover.
@@ -388,7 +399,11 @@ export function Register({
         className="inline-flex flex-col items-end leading-tight"
         title={t.fxRate ? `1 ${t.currency} = ${t.fxRate} ${budget.currency}` : undefined}
       >
-        <span>{native}</span>
+        <span>
+          {native}
+          {/* All accounts mixes currencies: name the row's, which a symbol may not (EVERYCENT-193). */}
+          {!accountId && <span className="ml-1 text-muted-foreground text-xs">{t.currency}</span>}
+        </span>
         <span className="text-muted-foreground text-xs">{show(base < 0n ? -base : base)}</span>
       </span>
     );
@@ -895,7 +910,7 @@ export function Register({
 
   async function saveSplit(t: Transaction, draft: Draft, confirmed = false) {
     if (!draft.date) return setSplitError("Enter a date.");
-    const result = updateBody(t, draft, settingsOf(draft.accountId));
+    const result = updateBody(t, draft, settingsOf(draft.accountId), otherSettingsOf(draft));
     if (!result.ok) return setSplitError(result.error);
     if (draft.date > today) {
       if (await reschedule(t, draft)) setEditingSplit(null);
@@ -973,8 +988,9 @@ export function Register({
   async function saveNew(draft: Draft, another = false) {
     if (!draft.date) return setNewError("Enter a date.");
     if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
-    const result = createBody(draft, settingsOf(draft.accountId));
+    const result = createBody(draft, settingsOf(draft.accountId), otherSettingsOf(draft));
     if (!result.ok) return setNewError(result.error);
+    const fee = result.body.fee;
     try {
       const created = await create.mutateAsync({
         params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
@@ -987,12 +1003,19 @@ export function Register({
           await remove.mutateAsync({
             params: { path: { budgetId: budget.id, transactionId: current.id } },
           });
+          // A transfer's fee is a transaction of its own; it goes with the transfer it came with.
+          const feeId = current.feeTransactionId;
+          if (feeId) {
+            await remove.mutateAsync({
+              params: { path: { budgetId: budget.id, transactionId: feeId } },
+            });
+          }
           await refresh();
         },
         redo: async () => {
           current = await create.mutateAsync({
             params: { path: { budgetId: budget.id }, query: { today: todayIso() } },
-            body: createBodyFromTransaction(created),
+            body: { ...createBodyFromTransaction(created), ...(fee ? { fee } : {}) },
           });
           await refresh();
         },
@@ -1618,7 +1641,8 @@ export function Register({
 
       <Table
         containerRef={scrollRef}
-        containerClassName="max-h-[70vh] overflow-auto rounded-lg border"
+        // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
+        containerClassName="@container max-h-[70vh] overflow-auto rounded-lg border"
         className="min-w-[74rem] table-fixed"
       >
         <colgroup>
@@ -1758,6 +1782,7 @@ export function Register({
                   label="Edit transaction"
                   columns={columnIds}
                   accounts={editorAccounts(accountList, t.accountId)}
+                  accountChoices={movableAccounts(accountList, t)}
                   payees={payeeList}
                   categories={options}
                   dateFormat={budget.dateFormat}
@@ -1824,7 +1849,7 @@ export function Register({
                           column={editing.column}
                           settings={inCurrency(budget, t.currency)}
                           dateFormat={budget.dateFormat}
-                          accounts={editorAccounts(accountList, t.accountId)}
+                          accounts={movableAccounts(accountList, t)}
                           payees={payeeList}
                           transfers={transferTargets(t)}
                           categories={options}

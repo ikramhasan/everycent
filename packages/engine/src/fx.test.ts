@@ -9,6 +9,7 @@ import {
   parseJsonExact,
   parseJsonRates,
   rateToScaled,
+  roundRate,
 } from "./fx";
 import { money } from "./money";
 
@@ -159,5 +160,16 @@ describe("impliedRate", () => {
   it("is null for zero or opposite signs", () => {
     expect(impliedRate(money(0n, "EUR"), money(100n, "USD"))).toBeNull();
     expect(impliedRate(money(-1n, "EUR"), money(1n, "USD"))).toBeNull();
+  });
+});
+
+describe("roundRate", () => {
+  it("keeps six significant digits by default, rounding half-even", () => {
+    expect(roundRate("1.176470588235")).toBe("1.17647");
+    expect(roundRate("0.006666666667")).toBe("0.00666667");
+    expect(roundRate("150")).toBe("150");
+    expect(roundRate("1.0842")).toBe("1.0842");
+    expect(roundRate("9.9999995")).toBe("10");
+    expect(roundRate("1.23455", 5)).toBe("1.2346");
   });
 });

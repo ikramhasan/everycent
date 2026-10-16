@@ -1,13 +1,21 @@
 import { newId } from "@everycent/db";
-import { type ClearedState, subTransaction, transaction } from "@everycent/db/schema";
+import { budget, type ClearedState, subTransaction, transaction } from "@everycent/db/schema";
+import { normalizeRate } from "@everycent/engine";
 import { asc, eq, inArray } from "drizzle-orm";
-import { syncBases } from "../../lib/base-amount";
+import {
+  type FxDeps,
+  linesToBase,
+  oppositeSides,
+  otherSideAmount,
+  syncBases,
+} from "../../lib/base-amount";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import {
   type AccountRow,
   assertOpen,
   assertTransferPair,
+  checkTransferAmount,
   clearedOnEntry,
   findAccount,
   resolveCategory,
@@ -28,6 +36,11 @@ export interface LineInput {
   memo: string;
   /** A restored transfer line's other side, as it was. */
   transferSide?: TransferSideInput;
+  /**
+   * A transfer line between currencies: the other side's amount, in its account's currency
+   * (otherwise the line's base amount at the date's rate; kept on an edit unless given).
+   */
+  transferAmount?: string | null;
 }
 
 /** A line to write: from the request, or kept as it is (`payeeName`/`memo` undefined). */
@@ -42,6 +55,7 @@ interface LineSpec {
   explicitCategory: boolean;
   memo?: string;
   transferSide?: TransferSideInput;
+  transferAmount?: string | null;
 }
 
 export function assertSplitAllowed(account: AccountRow) {
@@ -102,6 +116,8 @@ export async function syncLines(
     counterpart?: { cleared: (account: AccountRow) => ClearedState; approved: boolean };
     /** An undo bringing back a deleted split: its transfer lines may reach closed accounts. */
     restore?: boolean;
+    /** To convert a transfer line between currencies (EVERYCENT-55). */
+    fx?: FxDeps;
   },
   input?: readonly LineInput[],
 ) {
@@ -125,6 +141,7 @@ export async function syncLines(
         explicitCategory: true,
         memo: l.memo,
         transferSide: l.transferSide,
+        transferAmount: l.transferAmount !== undefined ? l.transferAmount : l.transferSide?.amount,
       }))
     : existing.map((l) => ({
         id: l.id,
@@ -143,6 +160,11 @@ export async function syncLines(
     await tx.delete(subTransaction).where(eq(subTransaction.id, line.id));
   }
 
+  const parent = await parentBases(
+    tx,
+    parentId,
+    specs.map((s) => s.amount),
+  );
   for (const [index, spec] of specs.entries()) {
     const old = spec.id ? byId.get(spec.id) : undefined;
     if (spec.id && !old) throw new AppError(400, "BAD_REQUEST", "No such line in this split");
@@ -196,6 +218,17 @@ export async function syncLines(
       await tx.insert(subTransaction).values({ id: lineId, transactionId: parentId, ...values });
     }
 
+    const otherAmount = () =>
+      lineOtherAmount(tx, ctx.fx, {
+        budgetId,
+        date,
+        spec,
+        account,
+        transferTo: transferTo as AccountRow,
+        other,
+        base: parent.bases[index] as bigint,
+        budgetCurrency: parent.budgetCurrency,
+      });
     if (other && !transferTo) {
       await tx.delete(transaction).where(eq(transaction.id, other.id));
     } else if (other && transferTo) {
@@ -206,7 +239,7 @@ export async function syncLines(
           accountId: transferTo.id,
           currency: transferTo.currency,
           date,
-          amount: -spec.amount,
+          amount: await otherAmount(),
           payeeId: moved ? await transferPayeeId(tx, account) : undefined,
           categoryId:
             moved || retargeted
@@ -222,7 +255,7 @@ export async function syncLines(
         budgetId,
         accountId: transferTo.id,
         date,
-        amount: -spec.amount,
+        amount: await otherAmount(),
         currency: transferTo.currency,
         baseAmount: 0n,
         payeeId: await transferPayeeId(tx, account),
@@ -243,6 +276,70 @@ export async function syncLines(
     }
   }
   await syncBases(tx, parentId);
+}
+
+/** The split's lines (these amounts) in the budget's currency at its rate, and that currency. */
+async function parentBases(tx: Db, parentId: string, amounts: readonly bigint[]) {
+  const [parent] = await tx
+    .select({
+      amount: transaction.amount,
+      currency: transaction.currency,
+      fxRate: transaction.fxRate,
+      budgetCurrency: budget.currency,
+    })
+    .from(transaction)
+    .innerJoin(budget, eq(budget.id, transaction.budgetId))
+    .where(eq(transaction.id, parentId));
+  if (!parent) throw new Error(`Split ${parentId} missing`);
+  const rate = parent.fxRate === null ? null : normalizeRate(parent.fxRate);
+  return {
+    budgetCurrency: parent.budgetCurrency,
+    bases: linesToBase(parent.amount, amounts, parent.currency, rate, parent.budgetCurrency),
+  };
+}
+
+/**
+ * A transfer line's other side's amount: the opposite amount in one currency. Between currencies
+ * (EVERYCENT-55) the split's rate decides the line's base amount, so a side in the budget's
+ * currency takes that; another currency takes `transferAmount`, or keeps its own amount on an
+ * edit, or gets the line's base amount at the date's rate.
+ */
+async function lineOtherAmount(
+  tx: Db,
+  fx: FxDeps | undefined,
+  input: {
+    budgetId: string;
+    date: string;
+    spec: LineSpec;
+    account: AccountRow;
+    transferTo: AccountRow;
+    other: { amount: bigint; currency: AccountRow["currency"] } | undefined;
+    /** The line's base amount. */
+    base: bigint;
+    budgetCurrency: AccountRow["currency"];
+  },
+) {
+  const { spec, account, transferTo, other, base } = input;
+  const given = checkTransferAmount(spec.amount, spec.transferAmount, account, transferTo);
+  if (account.currency === transferTo.currency) return -spec.amount;
+  // Its amount is its base amount, which the split's rate sets (a given one is left aside).
+  if (transferTo.currency === input.budgetCurrency) return -base;
+  if (given !== undefined) return given;
+  const keep =
+    other !== undefined &&
+    spec.transferAmount !== null &&
+    other.currency === transferTo.currency &&
+    oppositeSides(spec.amount, other.amount);
+  if (keep) return other.amount;
+  if (spec.amount === 0n) return 0n;
+  if (!fx) throw new Error("A transfer line between currencies needs `fx` or its amount");
+  return otherSideAmount(tx, fx, {
+    budgetId: input.budgetId,
+    budgetCurrency: input.budgetCurrency,
+    base,
+    currency: transferTo.currency,
+    date: input.date,
+  });
 }
 
 /** Removes a split's transfer lines' other sides before the split itself is deleted. */

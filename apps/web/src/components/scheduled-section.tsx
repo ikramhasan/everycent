@@ -34,7 +34,7 @@ import {
   scheduleRestoreBody,
   scheduleUpdateBody,
 } from "@/lib/scheduled";
-import type { CategoryOption, Draft, Payee } from "@/lib/transactions";
+import { type CategoryOption, type Draft, movableAccounts, type Payee } from "@/lib/transactions";
 import { useUndo } from "@/lib/undo";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable } from "./register-columns";
@@ -400,6 +400,7 @@ export function ScheduledSection({
                 label="Edit scheduled transaction"
                 columns={columns}
                 accounts={accounts.filter((a) => !a.closed || a.id === row.accountId)}
+                accountChoices={movableAccounts(accounts, row)}
                 payees={payees}
                 categories={categories}
                 dateFormat={budget.dateFormat}

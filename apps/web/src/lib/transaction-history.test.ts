@@ -88,7 +88,10 @@ describe("transaction history bodies", () => {
       flag: "red" as const,
       approved: true,
       categoryId: "c9",
+      amount: "500",
+      currency: "USD" as const,
     };
+    const { currency: _, ...input } = side;
     const transfer = {
       ...transaction,
       payeeName: "Transfer : Savings",
@@ -102,7 +105,7 @@ describe("transaction history bodies", () => {
       transferAccountId: "a2",
       payeeName: null,
       approved: false,
-      transferSide: side,
+      transferSide: input,
       restore: true,
     });
     // A split's transfer lines keep their other sides' state too.
@@ -111,8 +114,34 @@ describe("transaction history bodies", () => {
     );
     expect(
       createBodyFromTransaction({ ...transaction, subtransactions: lines }).subtransactions?.[1],
-    ).toMatchObject({ transferAccountId: "a2", transferSide: side });
+    ).toMatchObject({ transferAccountId: "a2", transferSide: input });
     expect(createBodyFromTransaction(transaction)).not.toHaveProperty("transferSide");
+  });
+
+  it("brings back a cross-currency transfer's other amount (EVERYCENT-55)", () => {
+    const side = {
+      memo: "",
+      cleared: "uncleared" as const,
+      flag: null,
+      approved: true,
+      categoryId: null,
+      amount: "430",
+      currency: "EUR" as const,
+    };
+    const transfer = {
+      ...transaction,
+      payeeName: "Transfer : Euros",
+      transferAccountId: "a3",
+      transferTransactionId: "t3",
+      transferSide: side,
+      subtransactions: [],
+    };
+    const { currency: _, ...input } = side;
+    expect(createBodyFromTransaction(transfer).transferSide).toEqual(input);
+    expect(updateBodyFromTransaction(transfer).transferAmount).toBe("430");
+    // In one currency the other side just follows.
+    const same = { ...transfer, transferSide: { ...side, currency: "USD" as const } };
+    expect(updateBodyFromTransaction(same)).not.toHaveProperty("transferAmount");
   });
 
   it("keeps a reconciled transaction reconciled", () => {

@@ -26,7 +26,8 @@ const SearchText = z
       "before and after include the day), `Income:` (a month name, full or " +
       "three letters, with an optional year, e.g. `Income: October 2026`: what's in Ready to " +
       "Assign that month, including Starting Balances of budget accounts; no year means this " +
-      "year). Split lines are matched one by one.",
+      "year). Split lines are matched one by one. Amounts are read in each row's own account's " +
+      "currency (with all accounts, a row in euros matches `12` as €12.00 and one in yen as ¥12).",
   );
 const PayeeName = z.string().trim().min(1).max(200);
 const Memo = z.string().max(500);
@@ -46,6 +47,11 @@ const TransferSideSchema = z
     flag: Flag,
     approved: z.boolean(),
     categoryId: z.string().nullable(),
+    amount: zMinorUnits.describe(
+      "Its own amount, in its account's currency: the opposite amount in one currency, its own " +
+        "between currencies",
+    ),
+    currency: zCurrencyCode.describe("The other account's currency"),
   })
   .describe(
     "Transfers: the other side's own state, which `createTransaction` takes back as " +
@@ -195,9 +201,8 @@ const forbidden = jsonError(
   "The caller's role can't change transactions, or the account's email address isn't confirmed",
 );
 const crossCurrency = jsonError(
-  "A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move " +
-    "into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no " +
-    "rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate`",
+  "A move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or " +
+    "no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate`",
 );
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state " +
@@ -214,7 +219,10 @@ const transferRules =
   "`transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction " +
   "with the opposite amount is kept in that account. Only a transfer from a budget account to " +
   "a tracking account has a category (on the budget side), as money leaves the budget. New " +
-  "transfers need both accounts open.";
+  "transfers need both accounts open. Between accounts in different currencies each side has " +
+  "its own amount (`transferAmount`, in the other account's currency) and the two always have " +
+  "opposite base amounts: a side in the budget's currency sets it, otherwise the entered side " +
+  "at its rate; the other side's `fxRate` is the rate its amounts imply.";
 
 const splitRules =
   "`subtransactions` (two or more lines, adding up to the amount) splits it across categories; " +
@@ -228,6 +236,9 @@ const TransferSideInput = z
     flag: Flag,
     approved: z.boolean(),
     categoryId: z.string().nullable(),
+    amount: zMinorUnits
+      .optional()
+      .describe("Its own amount (a transfer between currencies; `transferAmount` wins)"),
   })
   .describe(
     "Restoring a deleted transfer (an undo): its other side's own state, from the deleted " +
@@ -242,12 +253,33 @@ const SubTransactionInput = z
     amount: zMinorUnits.describe("Negative is an outflow"),
     payeeName: PayeeName.nullable().default(null),
     transferAccountId: z.string().optional().describe("Make this line a transfer"),
+    transferAmount: zMinorUnits
+      .nullable()
+      .optional()
+      .describe(
+        "A transfer line to an account in another currency (not the budget's: that one gets " +
+          "the line's base amount): the other side's amount in its currency, opposite in sign. " +
+          "Left out, the line's base amount at the date's rate, or on an edit the amount it had; " +
+          "null to go back to the date's rate",
+      ),
     categoryId: z.string().nullable().default(null),
     memo: Memo.default(""),
     transferSide: TransferSideInput.optional(),
   })
   .openapi("SubTransactionInput");
 const SubTransactions = z.array(SubTransactionInput).min(2);
+
+const Fee = z
+  .object({
+    amount: zMinorUnits.describe("Positive: what the fee costs, in the sending account's currency"),
+    categoryId: z.string().nullable().describe("Null: Uncategorized"),
+  })
+  .describe(
+    "A transfer's fee: a separate outflow in the sending account (the one the money leaves), " +
+      'same date, payee and memo "Transfer fee", converted like any transaction. It isn\'t ' +
+      "linked to the transfer",
+  )
+  .openapi("TransferFee");
 
 const TransferAccountId = z
   .string()
@@ -331,6 +363,13 @@ export const createTransaction = createRoute({
             ),
           payeeName: PayeeName.nullable().default(null),
           transferAccountId: TransferAccountId.optional(),
+          transferAmount: zMinorUnits
+            .optional()
+            .describe(
+              "A transfer to an account in another currency: the other side's amount in its " +
+                "currency, opposite in sign. Left out, this side's base amount at the date's rate",
+            ),
+          fee: Fee.optional(),
           categoryId: z.string().nullable(),
           memo: Memo.default(""),
           subtransactions: SubTransactions.optional(),
@@ -355,7 +394,19 @@ export const createTransaction = createRoute({
     ),
   },
   responses: {
-    201: ok("Created", TransactionSchema.describe("The side in `accountId`")),
+    201: ok(
+      "Created",
+      TransactionSchema.extend({
+        feeTransactionId: z
+          .string()
+          .nullable()
+          .describe(
+            "The transfer's fee, a transaction of its own (deleting the transfer keeps it)",
+          ),
+      })
+        .describe("The side in `accountId`")
+        .openapi("CreatedTransaction"),
+    ),
     400: jsonError(
       "Invalid input, a closed account, a category the account can't use, a transfer to the " +
         "same account, or a date after today (DATE_IN_FUTURE)",
@@ -405,6 +456,14 @@ export const updateTransaction = createRoute({
             ),
           payeeName: PayeeName.nullable().optional(),
           transferAccountId: TransferAccountId.optional(),
+          transferAmount: zMinorUnits
+            .nullable()
+            .optional()
+            .describe(
+              "A transfer between currencies: the other side's amount in its currency, or null " +
+                "for this side's base amount at the date's rate. Left out, the other side keeps " +
+                "its own amount",
+            ),
           categoryId: z.string().nullable().optional(),
           memo: Memo.optional(),
           cleared: SettableCleared.optional(),

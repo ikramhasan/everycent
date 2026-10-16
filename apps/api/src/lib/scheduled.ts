@@ -136,6 +136,7 @@ export async function enterOccurrence(
         account,
         moved: false,
         counterpart: { cleared: clearedOnEntry, approved },
+        fx,
       },
       lines.map(
         (l): LineInput => ({
@@ -160,6 +161,7 @@ export async function enterOccurrence(
         categoryId: usesCategory(transferTo, account) ? schedule.categoryId : null,
         cleared: clearedOnEntry(transferTo),
         approved,
+        fx,
       },
     );
   }
@@ -296,7 +298,8 @@ export async function writeSchedule(
   let transferTo: AccountRow | null = null;
   if ("transferAccountId" in input.payee) {
     transferTo = await findAccount(tx, budgetId, input.payee.transferAccountId);
-    assertTransferPair(account, transferTo);
+    // A schedule has one amount; its other side between currencies isn't stored yet.
+    assertTransferPair(account, transferTo, true);
     if (!restore && existing?.transferAccountId !== transferTo.id) assertOpen(transferTo);
   }
   if (input.dateFirst > input.date) {
@@ -355,7 +358,7 @@ export async function writeSchedule(
     let lineTo: AccountRow | null = null;
     if (line.transferAccountId) {
       lineTo = await findAccount(tx, budgetId, line.transferAccountId);
-      assertTransferPair(account, lineTo);
+      assertTransferPair(account, lineTo, true);
       if (!restore) assertOpen(lineTo);
     }
     await tx.insert(scheduledSubTransaction).values({

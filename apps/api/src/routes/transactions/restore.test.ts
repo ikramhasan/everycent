@@ -171,6 +171,8 @@ describe("restoring a deleted transaction (undo)", () => {
       flag: "red",
       approved: true,
       categoryId: null,
+      amount: "1000",
+      currency: "USD",
     });
     // This side keeps its own state.
     expect(before).toMatchObject({ memo: "checking side", cleared: "uncleared", flag: null });
@@ -311,6 +313,8 @@ describe("restoring a deleted transaction (undo)", () => {
       flag: "blue",
       approved: true,
       categoryId: null,
+      amount: "2000",
+      currency: "USD",
     });
 
     await ctx.remove(split.id);
