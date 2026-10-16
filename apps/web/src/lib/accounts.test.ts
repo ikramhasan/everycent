@@ -5,6 +5,7 @@ import {
   editBalanceLabel,
   excludedHint,
   sidebarSections,
+  totalHint,
 } from "./accounts";
 
 function account(id: string, type: Account["type"], working: string, closed = false): Account {
@@ -28,6 +29,9 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     migratedToAccountId: null,
     migratedFromAccountId: null,
     toReview: 0,
+    unrealizedGain: null,
+    rate: null,
+    rateDate: null,
     balances: { cleared: working, uncleared: "0", working },
   };
 }
@@ -114,6 +118,61 @@ describe("sidebarSections with accounts in other currencies", () => {
     );
     expect(tracking).toMatchObject({ id: "tracking", total: 0n });
     expect(tracking?.excluded).toHaveLength(1);
+  });
+});
+
+describe("sidebarSections with converted totals (EVERYCENT-57)", () => {
+  const total = (amount: string, converted: boolean, missing: string[] = [], currency = "USD") => ({
+    currency: currency as Account["currency"],
+    amount,
+    converted,
+    missing,
+  });
+  const totals = {
+    starred: total("0", false),
+    budget: total("16000", true),
+    loans: total("0", false),
+    tracking: total("40000000", false, ["yen"]),
+    closed: total("0", false),
+    netWorth: total("40016000", true, ["yen"]),
+  };
+
+  it("uses the API's totals, marking converted ones and those missing a rate", () => {
+    const sections = sidebarSections(
+      [
+        account("checking", "checking", "5000"),
+        { ...account("euro", "savings", "10000"), currency: "EUR" },
+        account("house", "asset", "40000000"),
+        { ...account("yen", "liability", "-50000"), currency: "JPY" },
+      ],
+      "USD",
+      totals,
+    );
+    expect(
+      sections.map((s) => [s.id, s.total, s.currency, s.converted, s.excluded.map((a) => a.id)]),
+    ).toEqual([
+      ["budget", 16000n, "USD", true, []],
+      ["tracking", 40000000n, "USD", false, ["yen"]],
+    ]);
+    expect(sections.map(totalHint)).toEqual([
+      "Converted to USD at today's rates",
+      "Excludes 1 JPY account",
+    ]);
+  });
+
+  it("shows totals in the display currency", () => {
+    const [budget] = sidebarSections([account("checking", "checking", "5000")], "USD", {
+      ...totals,
+      budget: total("4500", true, [], "EUR"),
+    });
+    expect(budget).toMatchObject({ total: 4500n, currency: "EUR", converted: true });
+    expect(totalHint({ converted: true, currency: "EUR", excluded: [] })).toBe(
+      "Converted to EUR at today's rates",
+    );
+  });
+
+  it("has no hint for a total all in one currency", () => {
+    expect(totalHint({ converted: false, currency: "USD", excluded: [] })).toBeNull();
   });
 });
 

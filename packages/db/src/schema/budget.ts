@@ -122,5 +122,10 @@ export const userPreference = pgTable("user_preference", {
   openLastBudget: boolean().notNull().default(true),
   /** YNAB's "Enable keyboard shortcuts" (undo/redo included). */
   keyboardShortcuts: boolean().notNull().default(true),
+  /**
+   * The currency account totals and net worth are shown in, in every budget (EVERYCENT-57);
+   * null is each budget's own currency.
+   */
+  displayCurrency: char({ length: 3 }).$type<CurrencyCode>(),
   ...timestamps,
 });

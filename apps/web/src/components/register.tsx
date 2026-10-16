@@ -1399,9 +1399,12 @@ export function Register({
       case "memo":
         return t.memo;
       case "outflow":
-        return amount < 0n ? withBase(show(-amount, t.currency), t) : "";
-      case "inflow":
-        return amount > 0n ? withBase(show(amount, t.currency), t) : "";
+      case "inflow": {
+        // An FX revaluation has no native amount: its side is its base amount's (EVERYCENT-56).
+        const sign = amount === 0n ? BigInt(t.baseAmount) : amount;
+        if (id === "outflow" ? sign >= 0n : sign <= 0n) return "";
+        return withBase(show(amount < 0n ? -amount : amount, t.currency), t);
+      }
       case "balance": {
         const balance = BigInt(t.runningBalance);
         return (

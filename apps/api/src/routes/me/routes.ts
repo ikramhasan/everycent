@@ -1,3 +1,4 @@
+import { zCurrencyCode } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -189,6 +190,12 @@ const PreferencesSchema = z
       .boolean()
       .describe("Open the last used budget at start (else the budget list), as YNAB's option"),
     keyboardShortcuts: z.boolean().describe("Keyboard shortcuts, undo and redo included"),
+    displayCurrency: zCurrencyCode
+      .nullable()
+      .describe(
+        "The currency account totals and net worth are shown in, in every budget (converted at " +
+          "today's rates); null shows each budget's own currency",
+      ),
   })
   .openapi("Preferences");
 

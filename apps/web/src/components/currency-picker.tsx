@@ -22,10 +22,16 @@ export function CurrencyPicker({
   id,
   value,
   onChange,
+  noneLabel,
+  onNone,
 }: {
   id?: string;
-  value: CurrencyCode;
+  /** Null shows `noneLabel` (a picker that offers "no currency of its own"). */
+  value: CurrencyCode | null;
   onChange: (code: CurrencyCode) => void;
+  /** The first option, standing for no currency (e.g. "Budget's currency"). */
+  noneLabel?: string;
+  onNone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -40,7 +46,7 @@ export function CurrencyPicker({
           className="w-full justify-between font-normal"
         >
           <span className="truncate">
-            {value} — {currencyName(value)}
+            {value === null ? noneLabel : `${value} — ${currencyName(value)}`}
           </span>
           <ChevronsUpDown className="opacity-50" />
         </Button>
@@ -51,6 +57,18 @@ export function CurrencyPicker({
           <CommandList>
             <CommandEmpty>No currency found.</CommandEmpty>
             <CommandGroup>
+              {noneLabel && (
+                <CommandItem
+                  value={noneLabel}
+                  onSelect={() => {
+                    onNone?.();
+                    setOpen(false);
+                  }}
+                >
+                  <span className="truncate">{noneLabel}</span>
+                  {value === null && <CheckIcon className="ml-auto" />}
+                </CommandItem>
+              )}
               {CURRENCY_CODES.map((code) => (
                 <CommandItem
                   key={code}

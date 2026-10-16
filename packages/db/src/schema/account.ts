@@ -132,6 +132,8 @@ export const INTERNAL_PAYEE_KINDS = [
   "starting_balance",
   "manual_balance_adjustment",
   "reconciliation_balance_adjustment",
+  /** A foreign-currency account's revaluation (EVERYCENT-56): base amount only, native zero. */
+  "fx_revaluation",
 ] as const;
 export type InternalPayeeKind = (typeof INTERNAL_PAYEE_KINDS)[number];
 

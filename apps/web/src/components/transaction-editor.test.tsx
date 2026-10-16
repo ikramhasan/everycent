@@ -34,6 +34,9 @@ const account = (id: string, type: Account["type"]): Account => ({
   migratedToAccountId: null,
   migratedFromAccountId: null,
   toReview: 0,
+  unrealizedGain: null,
+  rate: null,
+  rateDate: null,
   balances: { cleared: "0", uncleared: "0", working: "0" },
 });
 

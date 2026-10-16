@@ -233,11 +233,179 @@
           "keyboardShortcuts": {
             "type": "boolean",
             "description": "Keyboard shortcuts, undo and redo included"
+          },
+          "displayCurrency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG",
+              null
+            ],
+            "description": "The currency account totals and net worth are shown in, in every budget (converted at today's rates); null shows each budget's own currency"
           }
         },
         "required": [
           "openLastBudget",
-          "keyboardShortcuts"
+          "keyboardShortcuts",
+          "displayCurrency"
         ]
       },
       "UpdatePreferences": {
@@ -250,6 +418,173 @@
           "keyboardShortcuts": {
             "type": "boolean",
             "description": "Keyboard shortcuts, undo and redo included"
+          },
+          "displayCurrency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG",
+              null
+            ],
+            "description": "The currency account totals and net worth are shown in, in every budget (converted at today's rates); null shows each budget's own currency"
           }
         }
       },
@@ -2040,14 +2375,303 @@
           "accounts": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Account"
+              "$ref": "#/components/schemas/ListedAccount"
             },
             "description": "In sidebar order, closed ones included"
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "starred": {
+                "$ref": "#/components/schemas/AccountTotal"
+              },
+              "budget": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AccountTotal"
+                  },
+                  {
+                    "description": "Open cash and credit accounts"
+                  }
+                ]
+              },
+              "loans": {
+                "$ref": "#/components/schemas/AccountTotal"
+              },
+              "tracking": {
+                "$ref": "#/components/schemas/AccountTotal"
+              },
+              "closed": {
+                "$ref": "#/components/schemas/AccountTotal"
+              },
+              "netWorth": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AccountTotal"
+                  },
+                  {
+                    "description": "Every open account"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "starred",
+              "budget",
+              "loans",
+              "tracking",
+              "closed",
+              "netWorth"
+            ],
+            "description": "The sidebar's group totals and net worth in the display currency (the caller's preference, else the budget's), at today's known rates; no provider is asked"
+          },
+          "missingRates": {
+            "type": "integer",
+            "description": "How many accounts have no known rate to the display currency (left out)"
           }
         },
         "required": [
-          "accounts"
+          "accounts",
+          "totals",
+          "missingRates"
         ]
+      },
+      "ListedAccount": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Account"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "converted": {
+                "$ref": "#/components/schemas/ConvertedBalances"
+              }
+            },
+            "required": [
+              "converted"
+            ]
+          }
+        ]
+      },
+      "AccountBalances": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "uncleared": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "working": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "cleared",
+          "uncleared",
+          "working"
+        ],
+        "description": "Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date."
+      },
+      "ConvertedBalances": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "ISO 4217 currency code"
+          },
+          "cleared": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "uncleared": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          },
+          "working": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          }
+        },
+        "required": [
+          "currency",
+          "cleared",
+          "uncleared",
+          "working"
+        ],
+        "description": "Its balances in the display currency; null when no rate is known yet"
       },
       "Account": {
         "type": "object",
@@ -2336,6 +2960,31 @@
           "toReview": {
             "type": "integer",
             "description": "Transactions that are unapproved or need a category (YNAB's \"N new transactions to approve or categorize\" and the dot by the account in the sidebar)"
+          },
+          "unrealizedGain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Accounts in another currency than the budget's: unrealized FX gain (positive) or loss, in the budget's minor units: the working balance at today's known rate (`rate`, converted half-even) less what its transactions were booked at in the budget's currency. Null in the budget's currency, or when no rate is known yet (no provider is asked for it)."
+          },
+          "rate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d+(\\.\\d{1,12})?$",
+            "example": "1.0842",
+            "description": "The rate `unrealizedGain` uses: 1 `currency` = rate budget currency"
+          },
+          "rateDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The date `rate` is from (an earlier one when today's isn't known)"
           }
         },
         "required": [
@@ -2358,34 +3007,201 @@
           "lastPaymentFromAccountId",
           "migratedToAccountId",
           "migratedFromAccountId",
-          "toReview"
+          "toReview",
+          "unrealizedGain",
+          "rate",
+          "rateDate"
         ]
       },
-      "AccountBalances": {
+      "AccountTotal": {
         "type": "object",
         "properties": {
-          "cleared": {
+          "currency": {
             "type": "string",
-            "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BGN",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VED",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "The display currency"
           },
-          "uncleared": {
+          "amount": {
             "type": "string",
             "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+            "description": "Sum of the converted working balances"
           },
-          "working": {
-            "type": "string",
-            "pattern": "^(0|-?[1-9]\\d*)$",
-            "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+          "converted": {
+            "type": "boolean",
+            "description": "Some account in it is in another currency and was converted at today's rate"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Accounts left out: no rate to the display currency is known yet"
           }
         },
         "required": [
-          "cleared",
-          "uncleared",
-          "working"
-        ],
-        "description": "Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date."
+          "currency",
+          "amount",
+          "converted",
+          "missing"
+        ]
       },
       "CreateAccount": {
         "type": "object",
@@ -2807,6 +3623,71 @@
         },
         "required": [
           "date"
+        ]
+      },
+      "RevalueAccountResult": {
+        "type": "object",
+        "properties": {
+          "transaction": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "Calendar date, YYYY-MM-DD"
+              },
+              "baseAmount": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The gain (positive) or loss booked, in the budget's minor units; its native amount is zero"
+              },
+              "fxRate": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,12})?$",
+                "example": "1.0842",
+                "description": "The rate it was worked out at"
+              }
+            },
+            "required": [
+              "id",
+              "date",
+              "baseAmount",
+              "fxRate"
+            ],
+            "description": "The FX Revaluation posted; null when there was no difference"
+          },
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "transaction",
+          "account"
+        ]
+      },
+      "RevalueAccount": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The revaluation's date; its rate is the one used"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today (`date` can't be after it)"
+          }
+        },
+        "required": [
+          "date",
+          "today"
         ]
       },
       "UpdateToLoanAccountResult": {
@@ -11798,6 +12679,175 @@
             "description": "The user's today; later transactions are left out of balances. Defaults to the server's UTC date.",
             "name": "today",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AED",
+                "AFN",
+                "ALL",
+                "AMD",
+                "ANG",
+                "AOA",
+                "ARS",
+                "AUD",
+                "AWG",
+                "AZN",
+                "BAM",
+                "BBD",
+                "BDT",
+                "BGN",
+                "BHD",
+                "BIF",
+                "BMD",
+                "BND",
+                "BOB",
+                "BRL",
+                "BSD",
+                "BTN",
+                "BWP",
+                "BYN",
+                "BZD",
+                "CAD",
+                "CDF",
+                "CHF",
+                "CLP",
+                "CNY",
+                "COP",
+                "CRC",
+                "CUP",
+                "CVE",
+                "CZK",
+                "DJF",
+                "DKK",
+                "DOP",
+                "DZD",
+                "EGP",
+                "ERN",
+                "ETB",
+                "EUR",
+                "FJD",
+                "FKP",
+                "GBP",
+                "GEL",
+                "GHS",
+                "GIP",
+                "GMD",
+                "GNF",
+                "GTQ",
+                "GYD",
+                "HKD",
+                "HNL",
+                "HTG",
+                "HUF",
+                "IDR",
+                "ILS",
+                "INR",
+                "IQD",
+                "IRR",
+                "ISK",
+                "JMD",
+                "JOD",
+                "JPY",
+                "KES",
+                "KGS",
+                "KHR",
+                "KMF",
+                "KPW",
+                "KRW",
+                "KWD",
+                "KYD",
+                "KZT",
+                "LAK",
+                "LBP",
+                "LKR",
+                "LRD",
+                "LSL",
+                "LYD",
+                "MAD",
+                "MDL",
+                "MGA",
+                "MKD",
+                "MMK",
+                "MNT",
+                "MOP",
+                "MRU",
+                "MUR",
+                "MVR",
+                "MWK",
+                "MXN",
+                "MYR",
+                "MZN",
+                "NAD",
+                "NGN",
+                "NIO",
+                "NOK",
+                "NPR",
+                "NZD",
+                "OMR",
+                "PAB",
+                "PEN",
+                "PGK",
+                "PHP",
+                "PKR",
+                "PLN",
+                "PYG",
+                "QAR",
+                "RON",
+                "RSD",
+                "RUB",
+                "RWF",
+                "SAR",
+                "SBD",
+                "SCR",
+                "SDG",
+                "SEK",
+                "SGD",
+                "SHP",
+                "SLE",
+                "SOS",
+                "SRD",
+                "SSP",
+                "STN",
+                "SVC",
+                "SYP",
+                "SZL",
+                "THB",
+                "TJS",
+                "TMT",
+                "TND",
+                "TOP",
+                "TRY",
+                "TTD",
+                "TWD",
+                "TZS",
+                "UAH",
+                "UGX",
+                "USD",
+                "UYU",
+                "UZS",
+                "VED",
+                "VES",
+                "VND",
+                "VUV",
+                "WST",
+                "XAF",
+                "XCD",
+                "XCG",
+                "XOF",
+                "XPF",
+                "YER",
+                "ZAR",
+                "ZMW",
+                "ZWG"
+              ],
+              "description": "Totals and converted balances in this currency for this request, instead of the caller's display currency preference"
+            },
+            "required": false,
+            "description": "Totals and converted balances in this currency for this request, instead of the caller's display currency preference",
+            "name": "displayCurrency",
+            "in": "query"
           }
         ],
         "responses": {
@@ -12575,6 +13625,111 @@
           },
           "404": {
             "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/revalue": {
+      "post": {
+        "operationId": "revalueAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Book a foreign-currency account's unrealized FX gain or loss",
+        "description": "Brings what an account in another currency is booked at in the budget's currency up to date: its working balance at `date`'s rate (converted half-even) less the sum of its base amounts. The difference is posted as a cleared FX Revaluation dated `date`, with a native amount of zero and that base amount, into Ready to Assign for a budget account (none for a tracking account). Nothing is posted when there's no difference (a second revaluation on the same date and rate), and `transaction` is null. A revaluation's amount, date, account and payee can't be edited later (`REVALUATION_LOCKED`); it can be deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevalueAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The revaluation (null when there was nothing to post) and the account after it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevalueAccountResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The account is in the budget's currency (NOT_FOREIGN_CURRENCY), is closed (ACCOUNT_CLOSED), or `date` is after today (DATE_IN_FUTURE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't add transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FX_RATE_UNAVAILABLE: no rate for `date`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13675,7 +14830,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
+            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
             "content": {
               "application/json": {
                 "schema": {

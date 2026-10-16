@@ -721,6 +721,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/revalue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a foreign-currency account's unrealized FX gain or loss
+         * @description Brings what an account in another currency is booked at in the budget's currency up to date: its working balance at `date`'s rate (converted half-even) less the sum of its base amounts. The difference is posted as a cleared FX Revaluation dated `date`, with a native amount of zero and that base amount, into Ready to Assign for a budget account (none for a tracking account). Nothing is posted when there's no difference (a second revaluation on the same date and rate), and `transaction` is null. A revaluation's amount, date, account and payee can't be edited later (`REVALUATION_LOCKED`); it can be deleted.
+         */
+        post: operations["revalueAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
         parameters: {
             query?: never;
@@ -1559,12 +1579,22 @@ export interface components {
             openLastBudget: boolean;
             /** @description Keyboard shortcuts, undo and redo included */
             keyboardShortcuts: boolean;
+            /**
+             * @description The currency account totals and net worth are shown in, in every budget (converted at today's rates); null shows each budget's own currency
+             * @enum {string|null}
+             */
+            displayCurrency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG" | null;
         };
         UpdatePreferences: {
             /** @description Open the last used budget at start (else the budget list), as YNAB's option */
             openLastBudget?: boolean;
             /** @description Keyboard shortcuts, undo and redo included */
             keyboardShortcuts?: boolean;
+            /**
+             * @description The currency account totals and net worth are shown in, in every budget (converted at today's rates); null shows each budget's own currency
+             * @enum {string|null}
+             */
+            displayCurrency?: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG" | null;
         };
         DeleteAccount: {
             password: string;
@@ -1929,8 +1959,45 @@ export interface components {
         };
         AccountList: {
             /** @description In sidebar order, closed ones included */
-            accounts: components["schemas"]["Account"][];
+            accounts: components["schemas"]["ListedAccount"][];
+            /** @description The sidebar's group totals and net worth in the display currency (the caller's preference, else the budget's), at today's known rates; no provider is asked */
+            totals: {
+                starred: components["schemas"]["AccountTotal"];
+                budget: components["schemas"]["AccountTotal"] & unknown;
+                loans: components["schemas"]["AccountTotal"];
+                tracking: components["schemas"]["AccountTotal"];
+                closed: components["schemas"]["AccountTotal"];
+                netWorth: components["schemas"]["AccountTotal"] & unknown;
+            };
+            /** @description How many accounts have no known rate to the display currency (left out) */
+            missingRates: number;
         };
+        ListedAccount: components["schemas"]["Account"] & {
+            converted: components["schemas"]["ConvertedBalances"];
+        };
+        /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
+        AccountBalances: {
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            cleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            uncleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            working: string;
+        };
+        /** @description Its balances in the display currency; null when no rate is known yet */
+        ConvertedBalances: {
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            cleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            uncleared: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            working: string;
+        } | null;
         Account: {
             id: string;
             name: string;
@@ -1978,15 +2045,31 @@ export interface components {
             migratedFromAccountId: string | null;
             /** @description Transactions that are unapproved or need a category (YNAB's "N new transactions to approve or categorize" and the dot by the account in the sidebar) */
             toReview: number;
+            /** @description Accounts in another currency than the budget's: unrealized FX gain (positive) or loss, in the budget's minor units: the working balance at today's known rate (`rate`, converted half-even) less what its transactions were booked at in the budget's currency. Null in the budget's currency, or when no rate is known yet (no provider is asked for it). */
+            unrealizedGain: string | null;
+            /**
+             * @description The rate `unrealizedGain` uses: 1 `currency` = rate budget currency
+             * @example 1.0842
+             */
+            rate: string | null;
+            /**
+             * Format: date
+             * @description The date `rate` is from (an earlier one when today's isn't known)
+             */
+            rateDate: string | null;
         };
-        /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
-        AccountBalances: {
-            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
-            cleared: string;
-            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
-            uncleared: string;
-            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
-            working: string;
+        AccountTotal: {
+            /**
+             * @description The display currency
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description Sum of the converted working balances */
+            amount: string;
+            /** @description Some account in it is in another currency and was converted at today's rate */
+            converted: boolean;
+            /** @description Accounts left out: no rate to the display currency is known yet */
+            missing: string[];
         };
         CreateAccount: {
             name: string;
@@ -2084,6 +2167,37 @@ export interface components {
              * @description Calendar date, YYYY-MM-DD
              */
             date: string;
+        };
+        RevalueAccountResult: {
+            /** @description The FX Revaluation posted; null when there was no difference */
+            transaction: {
+                id: string;
+                /**
+                 * Format: date
+                 * @description Calendar date, YYYY-MM-DD
+                 */
+                date: string;
+                /** @description The gain (positive) or loss booked, in the budget's minor units; its native amount is zero */
+                baseAmount: string;
+                /**
+                 * @description The rate it was worked out at
+                 * @example 1.0842
+                 */
+                fxRate: string;
+            } | null;
+            account: components["schemas"]["Account"];
+        };
+        RevalueAccount: {
+            /**
+             * Format: date
+             * @description The revaluation's date; its rate is the one used
+             */
+            date: string;
+            /**
+             * Format: date
+             * @description The user's today (`date` can't be after it)
+             */
+            today: string;
         };
         UpdateToLoanAccountResult: {
             loan: components["schemas"]["Account"];
@@ -5682,6 +5796,8 @@ export interface operations {
             query?: {
                 /** @description The user's today; later transactions are left out of balances. Defaults to the server's UTC date. */
                 today?: string;
+                /** @description Totals and converted balances in this currency for this request, instead of the caller's display currency preference */
+                displayCurrency?: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
             };
             header?: never;
             path: {
@@ -6213,6 +6329,78 @@ export interface operations {
             };
             /** @description No such budget or account, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    revalueAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevalueAccount"];
+            };
+        };
+        responses: {
+            /** @description The revaluation (null when there was nothing to post) and the account after it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevalueAccountResult"];
+                };
+            };
+            /** @description The account is in the budget's currency (NOT_FOREIGN_CURRENCY), is closed (ACCOUNT_CLOSED), or `date` is after today (DATE_IN_FUTURE) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't add transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FX_RATE_UNAVAILABLE: no rate for `date` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6956,7 +7144,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

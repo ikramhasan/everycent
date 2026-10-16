@@ -36,6 +36,7 @@ import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components
 import { Register } from "@/components/register";
 import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
 import { StarButton } from "@/components/star-button";
+import { signedAmount, UnrealizedGain } from "@/components/unrealized-gain";
 import { UpdateToLoanDialog, UpdateToLoanSection } from "@/components/update-to-loan";
 import { accountsQueryOptions, closeAccountNotice } from "@/lib/accounts";
 import { $api } from "@/lib/api";
@@ -94,6 +95,7 @@ function AccountPage() {
   const close = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/close");
   const reopen = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/reopen");
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/accounts/{accountId}");
+  const revalue = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/revalue");
   const reconcile = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/accounts/{accountId}/reconcile",
@@ -182,6 +184,21 @@ function AccountPage() {
       toast.success(done);
     } catch (error) {
       toast.error(apiErrorMessage(error, failure));
+    }
+  }
+
+  async function handleRevalue() {
+    try {
+      const today = todayIso();
+      const result = await revalue.mutateAsync({ params: { path }, body: { date: today, today } });
+      await refresh();
+      toast.success(
+        result.transaction
+          ? `Revalued: ${signedAmount(BigInt(result.transaction.baseAmount), (m) => showBudget(m))}`
+          : "Nothing to revalue: the account is booked at today's rate",
+      );
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Couldn't revalue the account."));
     }
   }
 
@@ -592,6 +609,15 @@ function AccountPage() {
           negative={working < 0n}
           strong
         />
+        {account.currency !== budget.currency && (
+          <UnrealizedGain
+            account={account}
+            budgetCurrency={budget.currency}
+            format={(m) => showBudget(m)}
+            pending={revalue.isPending}
+            onRevalue={handleRevalue}
+          />
+        )}
         {cardPayment && (
           <div className="ml-auto flex items-end gap-4">
             <OverspendingFigure

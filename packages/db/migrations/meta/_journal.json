@@ -253,6 +253,13 @@
       "when": 1792117216540,
       "tag": "0035_familiar_hairball",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792121286792,
+      "tag": "0036_display_currency",
+      "breakpoints": true
     }
   ]
 }
