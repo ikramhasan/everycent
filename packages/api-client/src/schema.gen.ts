@@ -7386,7 +7386,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A reconciled or locked row, or the transaction changed since `expectedVersion` (STALE_VERSION) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`); or the transaction changed since `expectedVersion` (`STALE_VERSION`) */
             409: {
                 headers: {
                     [name: string]: unknown;

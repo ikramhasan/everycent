@@ -222,8 +222,9 @@ const crossCurrency = jsonError(
 );
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state " +
-    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a " +
-    "change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
+    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); a " +
+    "change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`); " +
+    "or the transaction changed since `expectedVersion` (`STALE_VERSION`)",
 );
 
 const categoryRules =
@@ -520,10 +521,7 @@ export const updateTransaction = createRoute({
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: jsonError(
-      "A reconciled or locked row, or the transaction changed since `expectedVersion` " +
-        "(STALE_VERSION)",
-    ),
+    409: locked,
     422: crossCurrency,
   },
 });
