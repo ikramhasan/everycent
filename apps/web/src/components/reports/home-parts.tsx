@@ -54,7 +54,8 @@ export function KeyTile({
   budgetId: string;
   label: string;
   value: string;
-  change?: { text: string; up: boolean; good: boolean } | null;
+  /** `neutral`: a note under the number rather than a change (no arrow or colour). */
+  change?: { text: string; up: boolean; good: boolean; neutral?: boolean } | null;
   spark?: { values: number[]; label: string };
   target: ReportTarget;
 }) {
@@ -67,7 +68,10 @@ export function KeyTile({
     >
       <span className="text-muted-foreground text-sm">{label}</span>
       <span className="font-semibold text-2xl tabular-nums">{value}</span>
-      {change && (
+      {change?.neutral && (
+        <span className="text-muted-foreground text-xs tabular-nums">{change.text}</span>
+      )}
+      {change && !change.neutral && (
         <span
           className={cn(
             "flex items-center gap-1 text-xs tabular-nums",
@@ -144,7 +148,7 @@ export function describeObservation(
       };
     case "net_worth_high":
       return {
-        text: `Net worth reached a new high of ${format(note.netWorth)} (the previous high was ${format(note.previousHigh)}).`,
+        text: `Net worth reached a new high of ${format(note.netWorth)}.`,
         target: { to: "/budgets/$budgetId/reports/net-worth" },
       };
     case "income_lower":

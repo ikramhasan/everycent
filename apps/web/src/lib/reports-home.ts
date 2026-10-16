@@ -1,16 +1,17 @@
 import {
+  accountFamily,
   addMonths,
   type BudgetMonth,
   type CategorySpending,
   currencyExponent,
   monthsIn,
-  type ObservationInput,
   observations,
   percentOf,
 } from "@everycent/engine";
 import { useQuery } from "@tanstack/react-query";
 import { categoriesQueryOptions } from "./categories";
 import { monthQueryOptions } from "./months";
+import { netWorthOptions } from "./net-worth";
 import { currentMonth, type ReportSum, reportActivityOptions } from "./reports";
 
 /** Spending per month, positive (YNAB's Total Spending: minus the months' category nets). */
@@ -73,12 +74,10 @@ export const homeRange = (month: BudgetMonth) => ({ from: addMonths(month, -11),
  * Everything the Reports home reads that the reports endpoints already give: monthly spending and
  * income, categories' spending, this month's payees and overspending.
  */
-export function useReportsHomeData(
-  budgetId: string,
-  extra: Pick<ObservationInput, "netWorth"> = {},
-) {
+export function useReportsHomeData(budgetId: string) {
   const month = currentMonth();
   const range = homeRange(month);
+  const worth = useQuery(netWorthOptions({ budgetId, range }));
   const spending = useQuery(reportActivityOptions({ budgetId, range, groupBy: ["month"] }));
   const income = useQuery(
     reportActivityOptions({ budgetId, range, kind: "income", groupBy: ["month"] }),
@@ -113,6 +112,7 @@ export function useReportsHomeData(
   const spent = spentByMonth(spending.data?.rows ?? []);
   const earned = incomeByMonth(income.data?.rows ?? []);
   const ready =
+    worth.data &&
     spending.data &&
     income.data &&
     byCategory.data &&
@@ -136,7 +136,13 @@ export function useReportsHomeData(
               ]
             : [],
         ),
-        netWorth: extra.netWorth,
+        // The report marks an all-time high against the whole history, not just these 12 months.
+        netWorth: worth.data?.months.at(-1)?.allTimeHigh
+          ? worth.data.months.map((m) => ({
+              month: m.month as BudgetMonth,
+              netWorth: BigInt(m.netWorth),
+            }))
+          : undefined,
         income: earned,
         topPayees: payees.data.rows
           .flatMap((r) =>
@@ -159,9 +165,15 @@ export function useReportsHomeData(
       })
     : [];
 
+  // Cash in open budget cash accounts (the budget's currency, today's rate) for the runway.
+  const cash = (worth.data?.accounts ?? [])
+    .filter((a) => !a.closed && accountFamily(a.type) === "cash")
+    .reduce((s, a) => s + BigInt(a.balances.at(-1)?.base ?? "0"), 0n);
   return {
     month,
     loading: !ready,
+    netWorth: worth.data,
+    cash,
     months: monthsIn(range),
     spent,
     earned,

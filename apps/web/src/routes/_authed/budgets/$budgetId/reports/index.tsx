@@ -1,4 +1,11 @@
-import { addMonths, averageOf, type BudgetMonth, money, percentOf } from "@everycent/engine";
+import {
+  addMonths,
+  averageOf,
+  type BudgetMonth,
+  money,
+  monthsOfRunway,
+  percentOf,
+} from "@everycent/engine";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
@@ -44,6 +51,13 @@ function ReportsHome() {
     home.earned.get(addMonths(month, -2)) ?? 0n,
     home.spent.get(addMonths(month, -2)) ?? 0n,
   );
+  const worthMonths = home.netWorth?.months ?? [];
+  const worthNow = worthMonths.at(-1);
+  const worthBefore = worthMonths.at(-2) ?? home.netWorth?.opening;
+  const worthChange =
+    worthNow && worthBefore ? BigInt(worthNow.netWorth) - BigInt(worthBefore.netWorth) : null;
+  // Runway: cash in budget accounts over the average spending of the last 6 complete months.
+  const runway = monthsOfRunway(home.cash, previousSix);
   const spark = (values: Map<BudgetMonth, bigint>) =>
     home.months.map((m) => chartNumber(values.get(m) ?? 0n, budget.currency));
   const topCategories = home.byCategory
@@ -78,6 +92,27 @@ function ReportsHome() {
                 search: { range: "last_12_months" },
               }}
             />
+            {worthNow && (
+              <KeyTile
+                budgetId={budget.id}
+                label="Net worth"
+                value={format(BigInt(worthNow.netWorth))}
+                change={
+                  worthChange === null
+                    ? null
+                    : {
+                        text: `${format(worthChange < 0n ? -worthChange : worthChange)} since ${monthLabel(last, "long")}`,
+                        up: worthChange >= 0n,
+                        good: worthChange >= 0n,
+                      }
+                }
+                spark={{
+                  values: worthMonths.map((m) => chartNumber(m.netWorth, budget.currency)),
+                  label: "Net worth over the last 12 months",
+                }}
+                target={{ to: "/budgets/$budgetId/reports/net-worth" }}
+              />
+            )}
             {rate !== null && (
               <KeyTile
                 budgetId={budget.id}
@@ -101,6 +136,23 @@ function ReportsHome() {
                 target={{
                   to: "/budgets/$budgetId/reports/income-expense",
                   search: { range: "last_12_months" },
+                }}
+              />
+            )}
+            {runway !== null && (
+              <KeyTile
+                budgetId={budget.id}
+                label="Months of runway"
+                value={runway.toFixed(1)}
+                change={{
+                  text: `${format(home.cash)} in cash over ${format(average)} a month`,
+                  up: true,
+                  good: true,
+                  neutral: true,
+                }}
+                target={{
+                  to: "/budgets/$budgetId/reports/spending-trends",
+                  search: { range: "last_6_months" },
                 }}
               />
             )}
