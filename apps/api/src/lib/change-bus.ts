@@ -26,7 +26,13 @@ export class ChangeBus {
 
   /** Calls `onChange` for each change to the budget until the returned function is called. */
   async subscribe(budgetId: string, onChange: Subscriber): Promise<() => void> {
-    this.#listening ??= this.listen("budget_change", (payload) => this.#publish(payload));
+    this.#listening ??= this.listen("budget_change", (payload) => this.#publish(payload)).catch(
+      (error: unknown) => {
+        // The next subscriber tries again (the database may be back).
+        this.#listening = null;
+        throw error;
+      },
+    );
     await this.#listening;
     const set = this.#subscribers.get(budgetId) ?? new Set();
     set.add(onChange);

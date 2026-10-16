@@ -139,6 +139,8 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         createdByUserId: transaction.createdByUserId,
         updatedByUserId: transaction.updatedByUserId,
         version: transaction.version,
+        // Changed by a later request (one request's writes all share its now()).
+        changed: sql<boolean>`${transaction.updatedAt} > ${transaction.createdAt}`.as("changed"),
         // As text, so the cursor keeps Postgres's microseconds.
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
         runningBalance: sql<string>`sum(${transaction.amount}) over (
@@ -614,6 +616,7 @@ function columns(r: Register) {
     createdByUserId: r.createdByUserId,
     updatedByUserId: r.updatedByUserId,
     version: r.version,
+    changed: r.changed,
     createdAt: r.createdAt,
     runningBalance: r.runningBalance,
   };
@@ -645,11 +648,11 @@ async function toJson(
     budgetId,
     rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
   );
-  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, ...row }) => ({
+  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, changed, ...row }) => ({
     ...row,
     enteredBy: member(createdByUserId),
     // Only once someone changed it after entering it.
-    changedBy: row.version > 1 ? member(updatedByUserId) : null,
+    changedBy: changed ? member(updatedByUserId) : null,
     amount: row.amount.toString(),
     baseAmount: row.baseAmount.toString(),
     fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),

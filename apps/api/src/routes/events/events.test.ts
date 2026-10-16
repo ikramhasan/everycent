@@ -19,22 +19,34 @@ function send(method: string, path: string, cookie: string, body?: unknown, head
   });
 }
 
-/** Reads a server-sent event stream until `done` says so (or the stream ends). */
-async function readUntil(res: Response, done: (text: string) => boolean, ms = 5000) {
+/**
+ * Opens a server-sent event stream and waits until it's subscribed (its ": connected" line);
+ * `until` then reads on until `done` says so, the stream ends or `ms` pass.
+ */
+async function openStream(res: Response) {
   const reader = (res.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let text = "";
-  const deadline = Date.now() + ms;
-  while (!done(text) && Date.now() < deadline) {
-    const chunk = await Promise.race([
-      reader.read(),
-      new Promise<null>((r) => setTimeout(() => r(null), deadline - Date.now())),
-    ]);
-    if (!chunk || chunk.done) break;
-    text += decoder.decode(chunk.value);
-  }
-  await reader.cancel();
-  return text;
+  const read = async (done: (text: string) => boolean, ms: number) => {
+    const deadline = Date.now() + ms;
+    while (!done(text) && Date.now() < deadline) {
+      const chunk = await Promise.race([
+        reader.read(),
+        new Promise<null>((r) => setTimeout(() => r(null), deadline - Date.now())),
+      ]);
+      if (!chunk || chunk.done) return true;
+      text += decoder.decode(chunk.value);
+    }
+    return false;
+  };
+  await read((t) => t.includes(": connected"), 5000);
+  return {
+    until: async (done: (text: string) => boolean, ms = 5000) => {
+      const ended = await read(done, ms);
+      await reader.cancel();
+      return { text, ended };
+    },
+  };
 }
 
 const changes = (text: string) =>
@@ -52,9 +64,7 @@ describe("live updates (EVERYCENT-90)", () => {
     expect(stream.status).toBe(200);
     expect(stream.headers.get("content-type")).toContain("text/event-stream");
 
-    const reading = readUntil(stream, (text) => changes(text).length > 0);
-    // Let the stream subscribe before the change commits.
-    await new Promise((r) => setTimeout(r, 200));
+    const open = await openStream(stream);
     const noted = await send(
       "PUT",
       `/v1/budgets/${budget.id}/months/2026-10/note`,
@@ -63,7 +73,8 @@ describe("live updates (EVERYCENT-90)", () => {
       { "x-client-id": "pats-tab" },
     );
     expect(noted.status).toBe(200);
-    expect(changes(await reading)).toEqual([
+    const { text } = await open.until((text) => changes(text).length > 0);
+    expect(changes(text)).toEqual([
       { table: "month_note", actorId: pat.userId, clientId: "pats-tab" },
     ]);
   });
@@ -78,9 +89,8 @@ describe("live updates (EVERYCENT-90)", () => {
 
     const pat = await shareBudget(app, owner.cookie, budget.id);
     const stream = await send("GET", `/v1/budgets/${budget.id}/events`, pat.cookie);
+    const open = await openStream(stream);
     const started = Date.now();
-    const reading = readUntil(stream, () => false, 4000);
-    await new Promise((r) => setTimeout(r, 200));
     const removed = await send(
       "DELETE",
       `/v1/budgets/${budget.id}/members/${pat.userId}`,
@@ -91,9 +101,10 @@ describe("live updates (EVERYCENT-90)", () => {
     await send("PUT", `/v1/budgets/${budget.id}/months/2026-10/note`, owner.cookie, {
       note: "secret",
     });
-    const text = await reading;
+    const { text, ended } = await open.until(() => false, 4000);
     expect(changes(text).filter((c) => c.table === "month_note")).toEqual([]);
     // It ended on the removal, well before the read gave up.
+    expect(ended).toBe(true);
     expect(Date.now() - started).toBeLessThan(3000);
   });
 });

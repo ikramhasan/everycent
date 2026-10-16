@@ -219,6 +219,21 @@ describe("who entered a transaction (EVERYCENT-89)", () => {
       changedBy: { userId: pat.userId, name: "Pat", avatarColor: 2 },
     });
     expect(changed.version).toBeGreaterThan(1);
+    // A split's (or transfer's) own writes on create aren't a change.
+    const split = await json<Txn>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-300",
+        payeeName: "Shop",
+        categoryId: null,
+        subtransactions: [
+          { amount: "-100", categoryId: null },
+          { amount: "-200", categoryId: null },
+        ],
+      }),
+    );
+    expect(split).toMatchObject({ enteredBy: { name: "Owner" }, changedBy: null });
     // The register lists the same.
     const { transactions } = await json<{ transactions: Txn[] }>(
       await send("GET", `${base}/transactions?accountId=${account.id}`, owner.cookie),

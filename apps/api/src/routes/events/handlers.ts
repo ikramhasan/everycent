@@ -28,13 +28,14 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
     let closed = false;
     let wake: () => void = () => {};
     const unsubscribe = await changes.subscribe(budgetId, (change) => {
-      void (async () => {
+      // Never left unhandled: a failed write (the client just left) or check ends the stream.
+      const end = () => {
+        closed = true;
+        wake();
+      };
+      (async () => {
         // Someone removed from the budget (or who left) hears nothing more.
-        if (change.table === "budget_member" && !(await stillMember())) {
-          closed = true;
-          wake();
-          return;
-        }
+        if (change.table === "budget_member" && !(await stillMember())) return end();
         await stream.writeSSE({
           event: "change",
           data: JSON.stringify({
@@ -43,7 +44,7 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
             clientId: change.clientId,
           }),
         });
-      })();
+      })().catch(end);
     });
     stream.onAbort(() => {
       closed = true;
