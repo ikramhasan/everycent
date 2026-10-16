@@ -159,7 +159,10 @@ export interface SpendingRow<K> {
 export interface SpendingSplit<K> {
   /** Rows that spent money or broke even (net ≤ 0), most spent first. */
   spending: SpendingRow<K>[];
-  /** YNAB's "Positive Inflow Categories": rows whose inflows beat their outflows, largest first. */
+  /**
+   * YNAB's "Positive Inflow Categories": rows whose inflows beat their outflows, smallest first
+   * (YNAB, 2026-10-17: +$2 rows, then +$4, then +$20).
+   */
   positive: SpendingRow<K>[];
   /** What the spending rows spent, as a positive amount (the base for their shares). */
   grossOutflows: bigint;
@@ -175,7 +178,7 @@ export interface SpendingSplit<K> {
 /** Splits per-category (or per-group) nets into Spending Breakdown's two lists and totals. */
 export function splitSpending<K>(rows: readonly SpendingRow<K>[]): SpendingSplit<K> {
   const spending = rows.filter((r) => r.net <= 0n).sort((a, b) => cmp(a.net, b.net));
-  const positive = rows.filter((r) => r.net > 0n).sort((a, b) => cmp(b.net, a.net));
+  const positive = rows.filter((r) => r.net > 0n).sort((a, b) => cmp(a.net, b.net));
   const grossOutflows = -spending.reduce((s, r) => s + r.net, 0n);
   const positiveInflows = positive.reduce((s, r) => s + r.net, 0n);
   return {

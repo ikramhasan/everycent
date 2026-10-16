@@ -114,7 +114,7 @@ describe("splitSpending", () => {
       { key: "Vacation", net: 200n },
     ]);
     expect(split.spending.map((r) => r.key)).toEqual(["uncategorized", "O13", "R4"]);
-    expect(split.positive.map((r) => r.key)).toEqual(["T8 D", "Vacation"]);
+    expect(split.positive.map((r) => r.key)).toEqual(["Vacation", "T8 D"]);
     expect(split.grossOutflows).toBe(296200n);
     expect(split.positiveInflows).toBe(2200n);
     expect(split.total).toBe(294000n);
