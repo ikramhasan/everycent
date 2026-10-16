@@ -17,10 +17,11 @@ import type { CategoryList } from "./categories";
 import { COLOR_LABEL } from "./flags";
 import {
   monthLabel,
+  planColors,
   type ReportSum,
   type ReportTransaction,
-  reportColor,
   reportSearchSchema,
+  UNCATEGORIZED_COLOR,
 } from "./reports";
 
 /**
@@ -76,6 +77,7 @@ export interface Catalog {
 const UNCATEGORIZED_LABEL = "Uncategorized";
 
 export function catalogOf(list: CategoryList): Catalog {
+  const colors = planColors(list);
   const categories = new Map<string, SeriesInfo>();
   const groups = new Map<string, SeriesInfo>();
   // Uncategorized first, as the category filter lists it (YNAB keeps it where its internal group
@@ -83,7 +85,7 @@ export function catalogOf(list: CategoryList): Catalog {
   categories.set(list.uncategorizedCategoryId, {
     key: list.uncategorizedCategoryId,
     label: UNCATEGORIZED_LABEL,
-    color: "var(--report-8)",
+    color: UNCATEGORIZED_COLOR,
     order: -1,
     groupId: null,
     groupName: "",
@@ -93,7 +95,7 @@ export function catalogOf(list: CategoryList): Catalog {
     groups.set(g.id, {
       key: g.id,
       label: g.name,
-      color: reportColor(groupIndex),
+      color: colors.groups.get(g.id) ?? UNCATEGORIZED_COLOR,
       order: groupIndex,
       groupId: g.id,
       groupName: g.name,
@@ -102,7 +104,7 @@ export function catalogOf(list: CategoryList): Catalog {
       categories.set(c.id, {
         key: c.id,
         label: c.name,
-        color: reportColor(index),
+        color: colors.categories.get(c.id) ?? UNCATEGORIZED_COLOR,
         order: index,
         groupId: g.id,
         groupName: g.name,

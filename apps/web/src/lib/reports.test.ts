@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   chartNumber,
   monthLabel,
+  planColors,
   rangeLabel,
   reportFilters,
   reportSearchSchema,
   resolveRange,
   splitIds,
+  UNCATEGORIZED_COLOR,
 } from "./reports";
 
 describe("report search", () => {
@@ -47,6 +49,25 @@ describe("report search", () => {
     expect(splitIds(undefined)).toBeUndefined();
     expect(splitIds("")).toEqual([]);
     expect(splitIds("a,b")).toEqual(["a", "b"]);
+  });
+});
+
+describe("planColors", () => {
+  it("gives each category and group one colour, Uncategorized grey", () => {
+    const colors = planColors({
+      uncategorizedCategoryId: "u",
+      groups: [
+        { id: "g1", categories: [{ id: "a" }, { id: "b" }] },
+        { id: "g2", categories: [{ id: "c" }] },
+      ],
+    });
+    expect(colors.categories.get("u")).toBe(UNCATEGORIZED_COLOR);
+    expect([...colors.categories.values()].slice(1)).toEqual([
+      "var(--report-1)",
+      "var(--report-2)",
+      "var(--report-3)",
+    ]);
+    expect(colors.groups.get("g2")).toBe("var(--report-2)");
   });
 });
 

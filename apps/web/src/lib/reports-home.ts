@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { categoriesQueryOptions } from "./categories";
 import { monthQueryOptions } from "./months";
 import { netWorthOptions } from "./net-worth";
-import { currentMonth, type ReportSum, reportActivityOptions } from "./reports";
+import { currentMonth, planColors, type ReportSum, reportActivityOptions } from "./reports";
 
 /** Spending per month, positive (YNAB's Total Spending: minus the months' category nets). */
 export function spentByMonth(rows: readonly ReportSum[]): Map<BudgetMonth, bigint> {
@@ -178,6 +178,9 @@ export function useReportsHomeData(budgetId: string) {
     spent,
     earned,
     categoryNames: names,
+    categoryColors: categories.data
+      ? planColors(categories.data).categories
+      : new Map<string, string>(),
     byCategory: byCategory.data?.rows ?? [],
     observations: notes,
   };

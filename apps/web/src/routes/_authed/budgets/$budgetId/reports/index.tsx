@@ -19,7 +19,7 @@ import {
 import { ReportPage } from "@/components/reports/report-page";
 import { ageOfMoneyOptions, changeLabel, daysLabel } from "@/lib/age-of-money";
 import { useBudget } from "@/lib/budget-context";
-import { chartNumber, monthLabel, reportColor } from "@/lib/reports";
+import { chartNumber, monthLabel, UNCATEGORIZED_COLOR } from "@/lib/reports";
 import { savingsRate, useReportsHomeData } from "@/lib/reports-home";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/reports/")({
@@ -215,7 +215,8 @@ function ReportsHome() {
                             className="block h-full rounded"
                             style={{
                               width: `${largest ? Number((spent * 1000n) / largest) / 10 : 0}%`,
-                              background: reportColor(i),
+                              background:
+                                home.categoryColors.get(r.categoryId ?? "") ?? UNCATEGORIZED_COLOR,
                             }}
                           />
                         </span>

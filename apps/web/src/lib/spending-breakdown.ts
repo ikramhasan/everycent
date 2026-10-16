@@ -18,10 +18,12 @@ import type { CategoryList } from "./categories";
 import { COLOR_LABEL, type Flag, type FlagColor } from "./flags";
 import {
   monthLabel,
+  planColors,
   type ReportSum,
   type ReportTransaction,
   reportColor,
   reportSearchSchema,
+  UNCATEGORIZED_COLOR,
 } from "./reports";
 
 /**
@@ -83,8 +85,11 @@ export function planCategories(list: CategoryList | undefined) {
     groupName: string;
     index: number;
     groupIndex: number;
+    color: string;
+    groupColor: string;
   }[] = [];
   if (!list) return out;
+  const colors = planColors(list);
   out.push({
     id: list.uncategorizedCategoryId,
     name: "Uncategorized",
@@ -92,6 +97,8 @@ export function planCategories(list: CategoryList | undefined) {
     groupName: "Uncategorized",
     index: 0,
     groupIndex: 0,
+    color: UNCATEGORIZED_COLOR,
+    groupColor: UNCATEGORIZED_COLOR,
   });
   list.groups.forEach((g, gi) => {
     for (const c of g.categories) {
@@ -102,6 +109,8 @@ export function planCategories(list: CategoryList | undefined) {
         groupName: g.name,
         index: out.length,
         groupIndex: gi + 1,
+        color: colors.categories.get(c.id) ?? UNCATEGORIZED_COLOR,
+        groupColor: colors.groups.get(g.id) ?? UNCATEGORIZED_COLOR,
       });
     }
   });
@@ -143,9 +152,9 @@ export function breakdownRows(
       const row = rows.get(key) ?? {
         key,
         name: by === "group" && group === undefined ? (c?.groupName ?? "") : (c?.name ?? ""),
-        color: reportColor(
-          by === "group" && group === undefined ? (c?.groupIndex ?? 0) : (c?.index ?? 0),
-        ),
+        // The same colour in every report (planColors).
+        color:
+          (by === "group" && group === undefined ? c?.groupColor : c?.color) ?? UNCATEGORIZED_COLOR,
         ...(c && { groupKey: c.groupKey, groupName: c.groupName }),
         net: 0n,
         count: 0,

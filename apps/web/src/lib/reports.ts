@@ -161,6 +161,29 @@ export const REPORT_COLOR_COUNT = 8;
 export const reportColor = (index: number) =>
   `var(--report-${(((index % REPORT_COLOR_COUNT) + REPORT_COLOR_COUNT) % REPORT_COLOR_COUNT) + 1})`;
 
+/**
+ * Each category's and group's colour, the same in every report: Uncategorized grey, then the
+ * plan's groups and categories in plan order through the seven hues (grey is kept for
+ * Uncategorized and "Other").
+ */
+export function planColors(list: {
+  uncategorizedCategoryId: string;
+  groups: readonly { id: string; categories: readonly { id: string }[] }[];
+}) {
+  const hue = (i: number) => reportColor(i % (REPORT_COLOR_COUNT - 1));
+  const categories = new Map<string, string>([[list.uncategorizedCategoryId, UNCATEGORIZED_COLOR]]);
+  const groups = new Map<string, string>();
+  let index = 0;
+  list.groups.forEach((g, groupIndex) => {
+    groups.set(g.id, hue(groupIndex));
+    for (const c of g.categories) categories.set(c.id, hue(index++));
+  });
+  return { categories, groups };
+}
+
+/** Uncategorized and "Other": the palette's grey. */
+export const UNCATEGORIZED_COLOR = reportColor(REPORT_COLOR_COUNT - 1);
+
 /** A file a report exports. */
 export interface ExportFile {
   name: string;
