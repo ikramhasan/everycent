@@ -1,6 +1,7 @@
 import { addMonths, type BudgetMonth, type CurrencyCode, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
+import { cn } from "@everycent/ui/lib/utils";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { LayoutTemplate, Pencil, Plus } from "lucide-react";
@@ -80,6 +81,9 @@ import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
 import { useViewportWidth } from "@/lib/use-viewport-width";
+
+/** The category list and the inspector; the header shares them so Ready to Assign fills the inspector's width. */
+const COLUMNS = "lg:grid-cols-[minmax(0,1fr)_16rem]";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
   // The month on screen, YYYY-MM; the current month when absent.
@@ -601,7 +605,12 @@ function BudgetPage() {
           if (await templates.importTemplate(importing.id, categoryIds)) setTemplate(undefined);
         }}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-4 lg:grid lg:gap-6",
+          COLUMNS,
+        )}
+      >
         <div className="grid gap-1">
           <h1 className="truncate font-semibold text-muted-foreground text-sm">{budget.name}</h1>
           <MonthNav
@@ -672,7 +681,7 @@ function BudgetPage() {
           <AddAccountDialog budget={budget} open={addingAccount} onOpenChange={setAddingAccount} />
         </div>
       )}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className={cn("grid items-start gap-6", COLUMNS)}>
         {categories.isPending ? (
           <Skeleton className="h-64" />
         ) : categories.isError ? (
