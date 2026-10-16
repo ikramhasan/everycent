@@ -2,29 +2,53 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/component
 import { cn } from "@everycent/ui/lib/utils";
 
 /**
- * Who made a money move, as YNAB marks it (checked 2026-10-14): a small round avatar with the
- * first letter of the name and the name as its tooltip, " (you)" added for you. The plan's owner
- * ("manager" in YNAB) is avatar-one, #545BFE with white text. Someone no longer on the plan is an
- * inactive member: an empty grey avatar (#DBD7CC) with the tooltip "Inactive Member". The colours
- * YNAB gives the other members couldn't be seen yet (EVERYCENT-166), so they get a neutral one.
+ * YNAB's six member avatar colours (avatar-one … avatar-six, checked 2026-10-16 on a shared plan,
+ * EVERYCENT-166): the owner ("manager") is #545BFE with white text, everyone else black text. The
+ * API numbers them 1–6 (the owner 1, the others by when they joined).
+ */
+const AVATAR_COLORS: Record<number, string> = {
+  1: "bg-[#545BFE] text-white",
+  2: "bg-[#AEE865] text-black",
+  3: "bg-[#41D298] text-black",
+  4: "bg-[#D4D5FF] text-black",
+  5: "bg-[#FBE48E] text-black",
+  6: "bg-[#FAADA5] text-black",
+};
+
+/** An avatar's tooltip, as YNAB words it: "Pat", "Pat (you)", "Pat (removed)", "Inactive Member". */
+export function memberTooltip(
+  userId: string | null,
+  userName: string | null,
+  avatarColor: number | null,
+  currentUserId: string | undefined,
+): string {
+  if (!userId || !userName) return "Inactive Member";
+  if (!avatarColor) return `${userName} (removed)`;
+  return `${userName}${userId === currentUserId ? " (you)" : ""}`;
+}
+
+/**
+ * Who made a change, as YNAB marks a money move: a small round avatar with the first letter of the
+ * name in the member's colour and the name as its tooltip. Someone no longer on the budget gets the
+ * grey inactive avatar (#DBD7CC): with their initial and "(removed)" while their user exists, empty
+ * with "Inactive Member" once it's deleted.
  */
 export function MemberAvatar({
   userId,
   userName,
-  memberRole,
+  avatarColor,
   currentUserId,
   className,
 }: {
   userId: string | null;
   userName: string | null;
-  memberRole: "owner" | "editor" | null;
+  /** 1–6 from the API; null once they've left the budget. */
+  avatarColor: number | null;
   currentUserId: string | undefined;
   className?: string;
 }) {
-  const active = Boolean(userId && userName && memberRole);
-  const tooltip = active
-    ? `${userName}${userId === currentUserId ? " (you)" : ""}`
-    : "Inactive Member";
+  const tooltip = memberTooltip(userId, userName, avatarColor, currentUserId);
+  const colors = (avatarColor && AVATAR_COLORS[avatarColor]) || "bg-[#DBD7CC] text-[#696763]";
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -33,15 +57,11 @@ export function MemberAvatar({
           aria-label={tooltip}
           className={cn(
             "inline-flex size-6 shrink-0 select-none items-center justify-center rounded-full font-bold text-xs uppercase",
-            !active
-              ? "bg-[#DBD7CC] text-[#696763]"
-              : memberRole === "owner"
-                ? "bg-[#545BFE] text-white"
-                : "bg-muted text-foreground ring-1 ring-border",
+            colors,
             className,
           )}
         >
-          {active ? userName?.trim().charAt(0) : ""}
+          {userId && userName ? userName.trim().charAt(0) : ""}
         </span>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>

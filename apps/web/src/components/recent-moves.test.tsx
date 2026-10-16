@@ -45,6 +45,7 @@ function move(over: Partial<MoneyMove>): MoneyMove {
     userId: "me",
     userName: "ihni7",
     memberRole: "owner",
+    avatarColor: 1,
     ...over,
   };
 }
@@ -127,12 +128,37 @@ describe("Recent Moves", () => {
     expect(screen.getByText("No moves yet.")).toBeInTheDocument();
   });
 
-  it("marks a member who left as inactive", () => {
+  it("marks a member who left as removed, and a deleted user as inactive", () => {
     renderList([
-      move({ toCategoryId: "a", amount: "100", userName: "Pat", userId: "pat", memberRole: null }),
+      move({
+        toCategoryId: "a",
+        amount: "100",
+        userName: "Pat",
+        userId: "pat",
+        memberRole: null,
+        avatarColor: null,
+      }),
+      move({ toCategoryId: "b", amount: "200", userName: null, userId: null, avatarColor: null }),
     ]);
     expect(screen.getByText("Pat assigned")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Inactive Member" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Pat (removed)" })).toHaveTextContent("P");
+    expect(screen.getByRole("img", { name: "Inactive Member" })).toHaveTextContent("");
+  });
+
+  it("colours each member as YNAB does: the owner avatar-one, the next to join avatar-two", () => {
+    renderList([
+      move({ toCategoryId: "a", amount: "100" }),
+      move({
+        toCategoryId: "b",
+        amount: "200",
+        userId: "pat",
+        userName: "Pat",
+        memberRole: "editor",
+        avatarColor: 2,
+      }),
+    ]);
+    expect(screen.getByRole("img", { name: "ihni7 (you)" })).toHaveClass("bg-[#545BFE]");
+    expect(screen.getByRole("img", { name: "Pat" })).toHaveClass("bg-[#AEE865]", "text-black");
   });
 });
 

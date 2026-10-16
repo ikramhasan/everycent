@@ -104,7 +104,12 @@ export const listMembersHandler: RouteHandler<typeof listMembers, Env> = async (
       : [];
   return c.json(
     {
-      members: members.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
+      // Already in YNAB's avatar order: the owner first, then by when they joined.
+      members: members.map((m, i) => ({
+        ...m,
+        joinedAt: m.joinedAt.toISOString(),
+        avatarColor: Math.min(i + 1, 6),
+      })),
       invitations: invitations.map(toInvitationJson),
       maxPeople: MAX_BUDGET_PEOPLE,
     },

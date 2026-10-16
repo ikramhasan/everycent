@@ -1712,6 +1712,8 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "editor";
             joinedAt: string;
+            /** @description YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined */
+            avatarColor: number;
         };
         BudgetInvitation: {
             id: string;
@@ -3429,6 +3431,8 @@ export interface components {
              * @enum {string|null}
              */
             memberRole: "owner" | "editor" | null;
+            /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget */
+            avatarColor: number | null;
         };
         ExpectedIncome: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */

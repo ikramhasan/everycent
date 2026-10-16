@@ -1201,6 +1201,12 @@
           },
           "joinedAt": {
             "type": "string"
+          },
+          "avatarColor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined"
           }
         },
         "required": [
@@ -1208,7 +1214,8 @@
           "name",
           "email",
           "role",
-          "joinedAt"
+          "joinedAt",
+          "avatarColor"
         ]
       },
       "BudgetInvitation": {
@@ -9003,6 +9010,15 @@
               null
             ],
             "description": "The mover's role on the budget now; null once they've left it"
+          },
+          "avatarColor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget"
           }
         },
         "required": [
@@ -9019,7 +9035,8 @@
           "autoAssign",
           "userId",
           "userName",
-          "memberRole"
+          "memberRole",
+          "avatarColor"
         ]
       },
       "ExpectedIncome": {

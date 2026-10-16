@@ -1,6 +1,7 @@
 import { BUDGET_ROLES } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
+import { zAvatarColor } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 
 /** YNAB Together: a group is the manager and up to five others. */
@@ -14,6 +15,7 @@ const MemberSchema = z
     email: z.string(),
     role: z.enum(BUDGET_ROLES),
     joinedAt: z.string(),
+    avatarColor: zAvatarColor,
   })
   .openapi("BudgetMember");
 

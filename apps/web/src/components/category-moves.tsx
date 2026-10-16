@@ -99,7 +99,7 @@ export function CategoryMovesButton({
                   <MemberAvatar
                     userId={move.userId}
                     userName={move.userName}
-                    memberRole={move.memberRole}
+                    avatarColor={move.avatarColor}
                     currentUserId={context.currentUserId}
                   />
                 </td>

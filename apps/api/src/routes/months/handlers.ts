@@ -75,6 +75,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { resolveRate } from "../../lib/fx";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
+import { memberAvatarColors } from "../../lib/member-colors";
 import {
   type CategoryUpcoming,
   enterDueScheduled,
@@ -1295,6 +1296,7 @@ async function movesJson(
       ),
     )
     .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id));
+  const colors = await memberAvatarColors(db, budgetId);
   return rows.map((m) => {
     const fromReady = m.fromCategoryId === readyToAssignId;
     const toReady = m.toCategoryId === readyToAssignId;
@@ -1320,6 +1322,7 @@ async function movesJson(
       userId: m.userId,
       userName: m.userName,
       memberRole: m.memberRole,
+      avatarColor: (m.userId && colors.get(m.userId)) || null,
     };
   });
 }

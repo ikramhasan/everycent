@@ -1,5 +1,6 @@
 import type { BudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Spinner } from "@everycent/ui/components/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
@@ -17,10 +18,18 @@ import {
   Zap,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { $api } from "@/lib/api";
 import type { CategoryList } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { monthLabel } from "@/lib/months";
-import { type MoneyMove, type MoveEntry, moveEntries, movesQueryOptions } from "@/lib/moves";
+import {
+  type MoneyMove,
+  type MoveEntry,
+  matchesMember,
+  memberFilterOptions,
+  moveEntries,
+  movesQueryOptions,
+} from "@/lib/moves";
 import { sessionQueryOptions } from "@/lib/session";
 import { autoAssignMethodLabel } from "./auto-assign";
 import { MemberAvatar } from "./member-avatar";
@@ -51,8 +60,17 @@ export function RecentMoves({
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [member, setMember] = useState("");
   const moves = useQuery({ ...movesQueryOptions(budgetId), enabled: open });
+  const members = $api.useQuery(
+    "get",
+    "/v1/budgets/{budgetId}/members",
+    { params: { path: { budgetId } } },
+    { enabled: open },
+  );
   const session = useQuery(sessionQueryOptions);
+  const all = moves.data?.moves ?? [];
+  const memberOptions = memberFilterOptions(all, members.data?.members ?? []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -68,7 +86,24 @@ export function RecentMoves({
       </Tooltip>
       <PopoverContent align="start" className="w-[min(26rem,calc(100vw-2rem))] p-0">
         <div className="flex items-center justify-between gap-2 border-b p-3">
-          <h2 className="font-semibold">Recent Moves</h2>
+          <div className="grid gap-1">
+            <h2 className="font-semibold">Recent Moves</h2>
+            {memberOptions.length >= 2 && (
+              <NativeSelect
+                size="sm"
+                aria-label="Member"
+                value={member}
+                onChange={(e) => setMember(e.target.value)}
+              >
+                <NativeSelectOption value="">Everyone</NativeSelectOption>
+                {memberOptions.map((o) => (
+                  <NativeSelectOption key={o.value} value={o.value}>
+                    {o.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            )}
+          </div>
           <ToggleGroup
             type="single"
             size="sm"
@@ -86,7 +121,7 @@ export function RecentMoves({
             <Spinner className="mx-auto" />
           ) : (
             <RecentMovesList
-              moves={moves.data?.moves ?? []}
+              moves={member ? all.filter((m) => matchesMember(m, member)) : all}
               filter={filter}
               categories={categories}
               format={format}
@@ -296,7 +331,7 @@ function EntryCard({
       <MemberAvatar
         userId={m.userId}
         userName={m.userName}
-        memberRole={m.memberRole}
+        avatarColor={m.avatarColor}
         currentUserId={currentUserId}
       />
     </div>
