@@ -154,6 +154,16 @@ export {
   zBudgetMonth,
 } from "./months";
 export {
+  ABOVE_AVERAGE_PERCENT,
+  type CategorySpending,
+  MAX_OBSERVATIONS,
+  monthsOfRunway,
+  type Observation,
+  type ObservationInput,
+  observations,
+  TOP_PAYEES,
+} from "./observations";
+export {
   type FormatMoneyOptions,
   formatMoney,
   parseMoney,
