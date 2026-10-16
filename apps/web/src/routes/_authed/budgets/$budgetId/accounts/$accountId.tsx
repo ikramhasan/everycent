@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
+import { BalanceHistory } from "@/components/balance-history";
 import {
   cardPaymentDraft,
   OverspendingFigure,
@@ -648,6 +649,13 @@ function AccountPage() {
           onFinish={() => void finishReconciling(reconcilingTo)}
         />
       )}
+
+      <BalanceHistory
+        key={`history-${accountId}`}
+        budgetId={budget.id}
+        accountId={accountId}
+        currency={account.currency}
+      />
 
       <Register
         key={accountId}
