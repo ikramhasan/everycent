@@ -18,6 +18,8 @@ import { type ReportRequest, rangeLabel, reportTransactionsOptions } from "@/lib
 export interface DrillDown {
   title: string;
   request: ReportRequest;
+  /** What the lines cover, when it isn't the request's months (e.g. "Oct 2, 2026"). */
+  period?: string;
 }
 
 /** Rows shown at most; the total and count still cover every match. */
@@ -62,7 +64,7 @@ function DrillDownBody({ drill, onClose }: { drill: DrillDown; onClose: () => vo
       <SheetHeader className="border-b">
         <SheetTitle>{drill.title}</SheetTitle>
         <SheetDescription>
-          {rangeLabel(drill.request.range)}
+          {drill.period ?? rangeLabel(drill.request.range)}
           {lines.data && (
             <>
               {" · "}

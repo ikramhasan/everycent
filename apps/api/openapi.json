@@ -10306,6 +10306,13 @@
             ],
             "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
           },
+          "day": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
           "groupId": {
             "type": [
               "string",
@@ -20098,6 +20105,28 @@
             "schema": {
               "type": "string",
               "format": "date",
+              "description": "Narrows the range to start on this day (e.g. one day of a calendar)"
+            },
+            "required": false,
+            "description": "Narrows the range to start on this day (e.g. one day of a calendar)",
+            "name": "fromDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to end on this day (inclusive)"
+            },
+            "required": false,
+            "description": "Narrows the range to end on this day (inclusive)",
+            "name": "toDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
               "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
             },
             "required": false,
@@ -20277,6 +20306,28 @@
             "required": false,
             "description": "Comma-separated flag colours; \"none\" matches unflagged transactions",
             "name": "flags",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to start on this day (e.g. one day of a calendar)"
+            },
+            "required": false,
+            "description": "Narrows the range to start on this day (e.g. one day of a calendar)",
+            "name": "fromDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Narrows the range to end on this day (inclusive)"
+            },
+            "required": false,
+            "description": "Narrows the range to end on this day (inclusive)",
+            "name": "toDate",
             "in": "query"
           },
           {

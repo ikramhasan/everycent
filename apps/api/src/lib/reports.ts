@@ -38,7 +38,15 @@ export const REPORT_KINDS = ["spending", "income"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 
 /** What a report's sums can be grouped by. */
-export const REPORT_GROUPINGS = ["month", "group", "category", "payee", "account", "flag"] as const;
+export const REPORT_GROUPINGS = [
+  "month",
+  "day",
+  "group",
+  "category",
+  "payee",
+  "account",
+  "flag",
+] as const;
 export type ReportGrouping = (typeof REPORT_GROUPINGS)[number];
 
 /**
@@ -138,6 +146,8 @@ function groupExpression(grouping: ReportGrouping, source: LineSource): SQL<stri
   switch (grouping) {
     case "month":
       return sql<string>`to_char(${transaction.date}, 'YYYY-MM')`;
+    case "day":
+      return sql<string>`to_char(${transaction.date}, 'YYYY-MM-DD')`;
     case "group":
       return sql<string | null>`${category.groupId}`;
     case "category":
