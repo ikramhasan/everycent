@@ -315,8 +315,13 @@ export function Register({
   const payees = useQuery(payeesQueryOptions(budget.id));
   const flagList = useQuery(flagsQueryOptions(budget.id));
   const renameFlagMutation = $api.useMutation("put", "/v1/budgets/{budgetId}/flags/{color}");
-  const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
-  const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}");
+  // Every transaction a save returns goes into the undo history's version record (EVERYCENT-36).
+  const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions", {
+    onSuccess: (row) => history.noteVersions([row]),
+  });
+  const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}", {
+    onSuccess: (row) => history.noteVersions([row]),
+  });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const [adding, setAdding] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
@@ -340,7 +345,9 @@ export function Register({
   } | null>(null);
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
-  const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk");
+  const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk", {
+    onSuccess: (result) => history.noteVersions(result.versions),
+  });
   const scheduledBulk = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/scheduled-transactions/bulk",
@@ -776,8 +783,8 @@ export function Register({
     after: Record<string, number>,
   ) {
     let current = before;
-    /** Each row's version as this command left it, so a partner's change since is refused. */
-    let versions = after;
+    // The versions the action left, for the first undo; every later save notes its own.
+    history.noteVersions(after);
     // Reject deletes the unapproved rows, so it's undone like a delete.
     const deletes = action.type === "delete" || action.type === "reject";
     return {
@@ -794,21 +801,19 @@ export function Register({
           }
           current = restored;
         } else {
-          const undone: Record<string, number> = {};
           for (const transaction of before) {
-            const saved = await update.mutateAsync({
+            // Read each time: putting one side of a transfer back can change the other's.
+            await update.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
                 query: { today: todayIso() },
               },
               body: {
                 ...updateBodyFromTransaction(transaction),
-                expectedVersion: versions[transaction.id],
+                expectedVersion: history.expectedVersion(transaction.id),
               },
             });
-            undone[transaction.id] = saved.version;
           }
-          versions = undone;
           current = before;
         }
       },
@@ -818,20 +823,27 @@ export function Register({
             await remove.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
-                query: { expectedVersion: transaction.version },
+                query: {
+                  expectedVersion: history.expectedVersion(transaction.id, transaction.version),
+                },
               },
             });
           }
         } else if (action.type !== "duplicate") {
-          const result = await bulk.mutateAsync({
+          const ids = current.map((transaction) => transaction.id);
+          await bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
             body: {
-              selection: { ids: current.map((transaction) => transaction.id) },
+              selection: { ids },
               action,
-              expectedVersions: versions,
+              expectedVersions: Object.fromEntries(
+                ids.flatMap((id) => {
+                  const version = history.expectedVersion(id);
+                  return version === undefined ? [] : [[id, version]];
+                }),
+              ),
             },
           });
-          versions = result.versions;
         }
       },
     };
@@ -842,16 +854,17 @@ export function Register({
    * (`expectedVersion`; the API refuses with STALE_VERSION, EVERYCENT-36).
    */
   function recordUpdate(label: string, before: Transaction, after: Transaction) {
-    let version = after.version;
     const replay = async (row: Transaction) => {
-      const saved = await update.mutateAsync({
+      await update.mutateAsync({
         params: {
           path: { budgetId: budget.id, transactionId: row.id },
           query: { today: todayIso() },
         },
-        body: { ...updateBodyFromTransaction(row), expectedVersion: version },
+        body: {
+          ...updateBodyFromTransaction(row),
+          expectedVersion: history.expectedVersion(row.id, after.version),
+        },
       });
-      version = saved.version;
       await refresh();
     };
     history.record({ label, undo: () => replay(before), redo: () => replay(after) });
@@ -1028,7 +1041,7 @@ export function Register({
           await remove.mutateAsync({
             params: {
               path: { budgetId: budget.id, transactionId: current.id },
-              query: { expectedVersion: current.version },
+              query: { expectedVersion: history.expectedVersion(current.id, current.version) },
             },
           });
           // A transfer's fee is a transaction of its own; it goes with the transfer it came with.
@@ -1303,7 +1316,7 @@ export function Register({
           await remove.mutateAsync({
             params: {
               path: { budgetId: budget.id, transactionId: current.id },
-              query: { expectedVersion: current.version },
+              query: { expectedVersion: history.expectedVersion(current.id, current.version) },
             },
           });
           await refresh();

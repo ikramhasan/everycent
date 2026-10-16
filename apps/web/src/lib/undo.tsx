@@ -1,4 +1,12 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useShortcutsEnabled } from "./preferences";
 
 export interface UndoCommand {
@@ -8,7 +16,23 @@ export interface UndoCommand {
   redo: () => Promise<void>;
 }
 
+/** A transaction as a mutation returned it: its version, and its transfer's other side's. */
+export interface VersionedRow {
+  id: string;
+  version: number;
+  transferSide?: { id: string; version: number } | null;
+}
+
 interface UndoState {
+  /**
+   * The version this tab's own last save left each transaction at (EVERYCENT-36). Undo and redo
+   * send it as `expectedVersion`, so a chain of the user's own edits replays, while a partner's
+   * change (which this tab never saw a response for) is refused as stale. Only mutation responses
+   * go in: a refetched list would hide the partner's change.
+   */
+  noteVersions: (rows: Iterable<VersionedRow> | Record<string, number>) => void;
+  /** The version to expect for `id`: this tab's last, else `fallback`. */
+  expectedVersion: (id: string, fallback?: number) => number | undefined;
   undoLabel: string | null;
   redoLabel: string | null;
   busy: boolean;
@@ -43,6 +67,22 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const [past, setPast] = useState<UndoCommand[]>([]);
   const [future, setFuture] = useState<UndoCommand[]>([]);
   const [busy, setBusy] = useState(false);
+  const versions = useRef(new Map<string, number>());
+
+  const noteVersions = useCallback((rows: Iterable<VersionedRow> | Record<string, number>) => {
+    if (Symbol.iterator in rows) {
+      for (const row of rows) {
+        versions.current.set(row.id, row.version);
+        if (row.transferSide) versions.current.set(row.transferSide.id, row.transferSide.version);
+      }
+    } else {
+      for (const [id, version] of Object.entries(rows)) versions.current.set(id, version);
+    }
+  }, []);
+  const expectedVersion = useCallback(
+    (id: string, fallback?: number) => versions.current.get(id) ?? fallback,
+    [],
+  );
 
   const record = useCallback((command: UndoCommand) => {
     setPast((commands) => [...commands, command]);
@@ -84,6 +124,8 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   return (
     <UndoContext.Provider
       value={{
+        noteVersions,
+        expectedVersion,
         undoLabel: past.at(-1)?.label ?? null,
         redoLabel: future.at(-1)?.label ?? null,
         busy,

@@ -492,6 +492,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       sideMemo: other.memo,
       sideCleared: other.cleared,
       sideFlag: other.flag,
+      sideId: other.id,
+      sideVersion: other.version,
       sideApproved: other.approved,
       sideCategoryId: other.categoryId,
       sideAmount: other.amount,
@@ -509,6 +511,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
   type Line = Omit<
     (typeof rows)[number],
     | "transactionId"
+    | "sideId"
+    | "sideVersion"
     | "sideMemo"
     | "sideCleared"
     | "sideFlag"
@@ -521,6 +525,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
   for (const row of rows) {
     const {
       transactionId,
+      sideId,
+      sideVersion,
       sideMemo,
       sideCleared,
       sideFlag,
@@ -533,8 +539,14 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
     const line: Line = {
       ...l,
       transferSide:
-        l.transferTransactionId && sideCleared !== null && sideCurrency !== null
+        l.transferTransactionId &&
+        sideId !== null &&
+        sideVersion !== null &&
+        sideCleared !== null &&
+        sideCurrency !== null
           ? {
+              id: sideId,
+              version: sideVersion,
               memo: sideMemo ?? "",
               cleared: sideCleared,
               flag: sideFlag,
@@ -552,6 +564,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
 
 /** A transfer's other side's own state (what an undo needs to bring it back as it was). */
 export interface TransferSide {
+  id: string;
+  version: number;
   memo: string;
   cleared: ClearedState;
   flag: FlagColor | null;
@@ -572,6 +586,7 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
   const found = await db
     .select({
       id: transaction.id,
+      version: transaction.version,
       memo: transaction.memo,
       cleared: transaction.cleared,
       flag: transaction.flag,
@@ -582,8 +597,8 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
     })
     .from(transaction)
     .where(inArray(transaction.id, ids));
-  for (const { id, amount, ...side } of found) {
-    sides.set(id, { ...side, amount: amount.toString() });
+  for (const { amount, ...side } of found) {
+    sides.set(side.id, { ...side, amount: amount.toString() });
   }
   return sides;
 }

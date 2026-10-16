@@ -237,6 +237,8 @@ describe("register drafts", () => {
         transferAccountId: "a2",
         transferTransactionId: "t2",
         transferSide: {
+          id: "side",
+          version: 1,
           memo: "",
           cleared: "uncleared",
           flag: null,

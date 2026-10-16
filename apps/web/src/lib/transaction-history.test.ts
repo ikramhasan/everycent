@@ -86,6 +86,8 @@ describe("transaction history bodies", () => {
 
   it("brings a transfer's other side back as it was, even to an account closed since", () => {
     const side = {
+      id: "side",
+      version: 1,
       memo: "their memo",
       cleared: "reconciled" as const,
       flag: "red" as const,
@@ -123,6 +125,8 @@ describe("transaction history bodies", () => {
 
   it("brings back a cross-currency transfer's other amount (EVERYCENT-55)", () => {
     const side = {
+      id: "side",
+      version: 1,
       memo: "",
       cleared: "uncleared" as const,
       flag: null,

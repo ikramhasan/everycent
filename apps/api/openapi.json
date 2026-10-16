@@ -4545,6 +4545,13 @@
           "null"
         ],
         "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "description": "The other side's `version`: an edit of this side can change it (memo, approval)"
+          },
           "memo": {
             "type": "string"
           },
@@ -4751,6 +4758,8 @@
           }
         },
         "required": [
+          "id",
+          "version",
           "memo",
           "cleared",
           "flag",

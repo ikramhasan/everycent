@@ -165,7 +165,7 @@ describe("restoring a deleted transaction (undo)", () => {
     });
     expect(bulk.status).toBe(200);
     const [before] = await ctx.register(checking.id);
-    expect(before?.transferSide).toEqual({
+    expect(before?.transferSide).toMatchObject({
       memo: "savings side",
       cleared: "cleared",
       flag: "red",
@@ -307,7 +307,7 @@ describe("restoring a deleted transaction (undo)", () => {
     const [before] = await ctx.register(checking.id);
     if (!before) throw new Error("missing");
     expect(before.transferSide).toBeNull();
-    expect(before.subtransactions[1]?.transferSide).toEqual({
+    expect(before.subtransactions[1]?.transferSide).toMatchObject({
       memo: "own",
       cleared: "cleared",
       flag: "blue",

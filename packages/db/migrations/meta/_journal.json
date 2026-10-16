@@ -281,6 +281,13 @@
       "when": 1792169902579,
       "tag": "0039_split_bump_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792171756136,
+      "tag": "0040_notify_budget_delete",
+      "breakpoints": true
     }
   ]
 }

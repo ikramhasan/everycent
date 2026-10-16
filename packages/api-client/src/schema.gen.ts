@@ -2486,6 +2486,9 @@ export interface components {
         };
         /** @description Transfers: the other side's own state (null when the other side is a split's line, or for other transactions) */
         TransferSide: {
+            id: string;
+            /** @description The other side's `version`: an edit of this side can change it (memo, approval) */
+            version: number;
             memo: string;
             /** @enum {string} */
             cleared: "uncleared" | "cleared" | "reconciled";

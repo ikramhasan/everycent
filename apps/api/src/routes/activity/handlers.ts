@@ -1,7 +1,7 @@
 import { sql } from "@everycent/db";
 import { auditEvent, user } from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
@@ -86,7 +86,7 @@ export const listActivityHandler: Handler<typeof listActivity> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const { member, entity, cursor, limit } = c.req.valid("query");
   const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId);
+  const { role } = await loadBudgetAccess(c, budgetId);
   const after = cursor ? decodeCursor(cursor) : null;
   const entities = entity?.split(",").filter(Boolean);
   const rows = await events(
@@ -99,6 +99,8 @@ export const listActivityHandler: Handler<typeof listActivity> = async (c) => {
           ? eq(auditEvent.actorUserId, member)
           : undefined,
       entities?.length ? inArray(auditEvent.tableName, entities) : undefined,
+      // Pending invitations (who, which address) are the owner's, as on the members list.
+      role === "owner" ? undefined : ne(auditEvent.tableName, "budget_invitation"),
       after
         ? sql`(${auditEvent.createdAt}, ${auditEvent.id}) < (${after.at}::timestamptz, ${after.id})`
         : undefined,

@@ -70,6 +70,19 @@ describe("UndoProvider", () => {
     expect(result.current.redoLabel).toBeNull();
   });
 
+  it("expects the version this tab's own last save left, transfer sides included", () => {
+    const { result } = renderHook(useUndo, { wrapper });
+    expect(result.current.expectedVersion("t1", 1)).toBe(1);
+    // An edit (v2), then another of the user's own (v3): an older entry's undo expects v3.
+    result.current.noteVersions([{ id: "t1", version: 2 }]);
+    result.current.noteVersions([{ id: "t1", version: 3, transferSide: { id: "t2", version: 5 } }]);
+    expect(result.current.expectedVersion("t1", 2)).toBe(3);
+    // Saving one side of a transfer can change the other's.
+    expect(result.current.expectedVersion("t2")).toBe(5);
+    result.current.noteVersions({ t2: 6 });
+    expect(result.current.expectedVersion("t2")).toBe(6);
+  });
+
   it("answers Cmd/Ctrl+Z only while keyboard shortcuts are on", async () => {
     for (const keyboardShortcuts of [true, false]) {
       const queryClient = new QueryClient();

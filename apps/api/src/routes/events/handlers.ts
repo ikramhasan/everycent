@@ -35,7 +35,9 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
       };
       (async () => {
         // Someone removed from the budget (or who left) hears nothing more.
-        if (change.table === "budget_member" && !(await stillMember())) return end();
+        // Removed from the budget, left it, or the budget was deleted: nothing more to hear.
+        const membership = change.table === "budget_member" || change.table === "budget";
+        if (membership && !(await stillMember())) return end();
         await stream.writeSSE({
           event: "change",
           data: JSON.stringify({

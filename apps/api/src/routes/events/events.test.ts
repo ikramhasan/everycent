@@ -107,4 +107,17 @@ describe("live updates (EVERYCENT-90)", () => {
     expect(ended).toBe(true);
     expect(Date.now() - started).toBeLessThan(3000);
   });
+
+  it("ends every member's stream when the budget is deleted", async () => {
+    const owner = await signUp(app, { name: "Owner" });
+    const budget = await createBudget(app, owner.cookie);
+    const pat = await shareBudget(app, owner.cookie, budget.id);
+    const stream = await send("GET", `/v1/budgets/${budget.id}/events`, pat.cookie);
+    const open = await openStream(stream);
+    const started = Date.now();
+    expect((await send("DELETE", `/v1/budgets/${budget.id}`, owner.cookie)).status).toBe(204);
+    const { ended } = await open.until(() => false, 4000);
+    expect(ended).toBe(true);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
 });

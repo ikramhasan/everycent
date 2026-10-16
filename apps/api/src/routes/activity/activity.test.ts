@@ -148,6 +148,18 @@ describe("the budget's change history (EVERYCENT-108)", () => {
     ).toEqual([]);
   });
 
+  it("shows invitations only to the owner, as the members list does", async () => {
+    const { owner, pat, budget, base, activity } = await setup();
+    const viewer = await shareBudget(app, owner.cookie, budget.id, { name: "Vi", role: "viewer" });
+    const invited = (events: Event[]) => events.filter((e) => e.entity === "budget_invitation");
+    expect(invited((await activity()).events).length).toBeGreaterThan(0);
+    expect(invited((await activity("", pat.cookie)).events)).toEqual([]);
+    expect(invited((await activity("?entity=budget_invitation", viewer.cookie)).events)).toEqual(
+      [],
+    );
+    expect((await send("GET", `${base}/activity`, viewer.cookie)).status).toBe(200);
+  });
+
   it("is only for the budget's members", async () => {
     const { base } = await setup();
     const stranger = await signUp(app);
@@ -309,6 +321,47 @@ describe("undo conflicts between partners (EVERYCENT-36)", () => {
       owner.cookie,
     );
     expect(deleted.status).toBe(204);
+  });
+
+  it("returns a transfer's other side's version, so undoing both sides isn't refused", async () => {
+    const { owner, base, account } = await setup();
+    const savings = await json<{ id: string }>(
+      await send("POST", `${base}/accounts`, owner.cookie, {
+        name: "Savings",
+        type: "savings",
+        balance: "0",
+        date: TODAY,
+      }),
+    );
+    type Side = Txn & {
+      transferTransactionId: string;
+      transferSide: { id: string; version: number };
+    };
+    const out = await json<Side>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-500",
+        categoryId: null,
+        transferAccountId: savings.id,
+      }),
+    );
+    // A memo edit on one side is copied to the other, moving its version too.
+    const edited = await json<Side>(
+      await send("PATCH", `${base}/transactions/${out.id}`, owner.cookie, {
+        memo: "move",
+        expectedVersion: out.version,
+      }),
+    );
+    expect(edited.transferSide.id).toBe(out.transferTransactionId);
+    expect(edited.transferSide.version).toBeGreaterThan(out.transferSide.version);
+    const otherSide = await send(
+      "PATCH",
+      `${base}/transactions/${out.transferTransactionId}`,
+      owner.cookie,
+      { memo: "", expectedVersion: edited.transferSide.version },
+    );
+    expect(otherSide.status).toBe(200);
   });
 
   it("refuses to set back an assigned amount a partner changed since", async () => {

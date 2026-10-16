@@ -43,6 +43,11 @@ const Flag = z
 
 const TransferSideSchema = z
   .object({
+    id: z.string(),
+    version: z
+      .number()
+      .int()
+      .describe("The other side's `version`: an edit of this side can change it (memo, approval)"),
     memo: z.string(),
     cleared: z.enum(CLEARED_STATES),
     flag: Flag,

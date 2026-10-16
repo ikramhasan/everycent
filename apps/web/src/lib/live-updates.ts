@@ -42,6 +42,11 @@ export function useBudgetEvents(budgetId: string, baseUrl: string) {
       if (opened) refetch();
       opened = true;
     });
+    // Closed for good (the budget was deleted or the user removed from it, so reconnecting got a
+    // 404): refetch, so the page shows that instead of a budget that isn't there any more.
+    source.addEventListener("error", () => {
+      if (source.readyState === EventSource.CLOSED) refetch();
+    });
     source.addEventListener("change", (event) => {
       try {
         const { clientId } = JSON.parse((event as MessageEvent<string>).data) as {
