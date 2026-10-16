@@ -262,13 +262,13 @@ Done (8a–8f, and loan debt targets with 7g) — what's left is in Plane (cycle
 
 YNAB parity:
 
-- [ ] Spending breakdown (by category group / category / payee, donut + table)
-- [ ] Spending trends (over time, by category/payee)
-- [ ] Net worth (assets vs debts over time)
-- [ ] Income vs expense (monthly table)
-- [ ] Age of Money
-- [ ] Report filters: date range, accounts, categories, payees; export to CSV
-- [ ] Budget-screen reflection stats (month summary: assigned, spent, avg, cost to be me)
+- [x] Spending breakdown (by category group / category / payee, donut + table)
+- [x] Spending trends (over time, by category/payee)
+- [x] Net worth (assets vs debts over time)
+- [x] Income vs expense (monthly table)
+- [x] Age of Money
+- [x] Report filters: date range, accounts, categories, payees; export to CSV
+- [x] Budget-screen reflection stats (month summary: assigned, spent, avg, cost to be me)
 
 Extras:
 
