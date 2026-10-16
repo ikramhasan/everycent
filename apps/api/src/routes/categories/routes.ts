@@ -2,6 +2,7 @@ import { CATEGORY_GROUP_KINDS } from "@everycent/db/schema";
 import {
   BUDGET_MONTH_PATTERN,
   TARGET_REPEAT_UNITS,
+  zCurrencyCode,
   zMinorUnits,
   zTargetBehavior,
   zTargetCadence,
@@ -40,7 +41,11 @@ const TargetSchema = z
     amount: zMinorUnits.describe(
       "Per week (weekly), per month (monthly, payment_monthly, debt_monthly) or per period " +
         "(yearly, custom); " +
-        "0 for payoff_by_date, which pays off what the card owes",
+        "0 for payoff_by_date, which pays off what the card owes. In `currency`'s minor units",
+    ),
+    currency: zCurrencyCode.describe(
+      "The target's own currency (a EUR holiday target in a USD budget). Its amount is converted " +
+        "into the budget's currency at today's rate, rounded up, before the month's math",
     ),
     dueDay: z
       .number()
@@ -139,6 +144,12 @@ const SetTargetSchema = z
   .and(
     z.object({
       month: zMonth.describe("The month the target is set from"),
+      currency: zCurrencyCode
+        .optional()
+        .describe(
+          "The target's currency (defaults to the budget's); `amount` is in its minor units. " +
+            "payoff_by_date and debt_monthly targets stay in the budget's currency",
+        ),
       today: z.iso
         .date()
         .optional()
@@ -520,6 +531,10 @@ export const setCategoryTarget = createRoute({
     404: notFound,
     409: jsonError(
       "MANAGED_CATEGORY: payment categories take only payment targets, other categories none",
+    ),
+    422: jsonError(
+      "TARGET_CURRENCY: a payoff_by_date or debt_monthly target in another currency than the " +
+        "budget's",
     ),
   },
 });

@@ -3,6 +3,7 @@ import type { MonthFigures } from "./months";
 import {
   type CategoryTarget,
   periodRollover,
+  targetInBase,
   targetNeed,
   targetPercent,
   weekdaysIn,
@@ -484,5 +485,49 @@ describe("debt payment targets", () => {
     expect(october && targetPercent(october)).toBe(33);
     // November asks $300.00 again with $50.00 carried in.
     expect(need(h, debt, "2026-11")).toMatchObject({ funded: 0n, underfunded: 300_00n });
+  });
+});
+
+describe("targetInBase", () => {
+  const t = (amount: bigint, currency: "EUR" | "JPY" | "KWD" | "USD") => ({
+    ...target("set_aside"),
+    amount,
+    currency,
+    dueDay: 15,
+  });
+
+  it("leaves a target in the budget's currency alone", () => {
+    const usd = t(100_00n, "USD");
+    expect(targetInBase(usd, "1.5", "USD")).toBe(usd);
+  });
+
+  it("converts only the amount, keeping cadence and dates", () => {
+    expect(targetInBase(t(1500_00n, "EUR"), "1.0842", "USD")).toEqual(t(1626_30n, "USD"));
+  });
+
+  it("rounds up at the budget currency's minor unit (2 decimals)", () => {
+    // €10.01 × 1.1 = $11.011 → $11.02, never $11.01.
+    expect(targetInBase(t(10_01n, "EUR"), "1.1", "USD").amount).toBe(11_02n);
+    // An exact result isn't pushed up.
+    expect(targetInBase(t(10_00n, "EUR"), "1.1", "USD").amount).toBe(11_00n);
+  });
+
+  it("rounds up into a currency without minor units (JPY, 0 decimals)", () => {
+    // $10.01 × 149.333 = ¥1494.82… → ¥1495.
+    expect(targetInBase(t(10_01n, "USD"), "149.333", "JPY")).toMatchObject({
+      amount: 1495n,
+      currency: "JPY",
+    });
+  });
+
+  it("rounds up from JPY and into a three-decimal currency (KWD)", () => {
+    // ¥1000 × 0.0067 = $6.70 exactly; ¥1001 × 0.0067 = $6.7067 → $6.71.
+    expect(targetInBase(t(1000n, "JPY"), "0.0067", "USD").amount).toBe(6_70n);
+    expect(targetInBase(t(1001n, "JPY"), "0.0067", "USD").amount).toBe(6_71n);
+    // $100.00 × 0.30771 = KD 30.771 exactly; $100.01 → KD 30.7740771 → KD 30.775.
+    expect(targetInBase(t(100_00n, "USD"), "0.30771", "KWD").amount).toBe(30_771n);
+    expect(targetInBase(t(100_01n, "USD"), "0.30771", "KWD").amount).toBe(30_775n);
+    // KD 1.001 × 3.25 = $3.25325 → $3.26.
+    expect(targetInBase(t(1_001n, "KWD"), "3.25", "USD").amount).toBe(3_26n);
   });
 });

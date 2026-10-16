@@ -1,4 +1,7 @@
 import { z } from "zod";
+import type { CurrencyCode } from "./currency";
+import { convert } from "./fx";
+import { money } from "./money";
 import {
   addMonths,
   type BudgetMonth,
@@ -109,6 +112,23 @@ export interface TargetNeed {
   overfunded: bigint;
   /** The due date of the period `month` is in (yearly, custom), YYYY-MM-DD; null otherwise. */
   dueDate: string | null;
+}
+
+/**
+ * A target set in its own currency (a EUR holiday target in a USD budget) restated in the budget's
+ * currency, so `targetNeed` and everything after it run on base amounts as usual. Only the amount
+ * converts, rounded up at the budget currency's minor unit so rounding never leaves the target
+ * underfunded; cadence, dates and snoozes stay as they are. `rate` is "1 target currency = rate
+ * budget currency" (today's rate). A target already in the budget's currency comes back as is.
+ */
+export function targetInBase<T extends { amount: bigint; currency: CurrencyCode }>(
+  target: T,
+  rate: string,
+  budgetCurrency: CurrencyCode,
+): T {
+  if (target.currency === budgetCurrency) return target;
+  const amount = convert(money(target.amount, target.currency), rate, budgetCurrency, "ceil");
+  return { ...target, amount: amount.amount, currency: budgetCurrency };
 }
 
 /** Months from `a` to `b`, counting both ends (a ≤ b). */

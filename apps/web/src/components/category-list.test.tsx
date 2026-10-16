@@ -151,6 +151,8 @@ const totals = (assigned: string, activity: string, available: string) => ({
   autoAssign: NO_AUTO_ASSIGN,
   bar: null,
   underfundedParts: [],
+  targetConversion: null,
+  targetRateMissing: false,
   upcoming: null,
 });
 
@@ -183,6 +185,8 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      targetConversion: null,
+      targetRateMissing: false,
       upcoming: null,
     },
     {
@@ -191,6 +195,8 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      targetConversion: null,
+      targetRateMissing: false,
       upcoming: null,
     },
     {
@@ -199,6 +205,8 @@ const month: BudgetMonthData = {
       autoAssign: NO_AUTO_ASSIGN,
       bar: null,
       underfundedParts: [],
+      targetConversion: null,
+      targetRateMissing: false,
       upcoming: null,
     },
   ],

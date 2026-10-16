@@ -350,6 +350,7 @@ describe("fresh start", () => {
       cadence: "monthly",
       behavior: "refill",
       amount: "12000",
+      currency: "USD",
       dueDay: 5,
       dueDate: null,
       repeatEvery: null,
