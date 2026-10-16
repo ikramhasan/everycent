@@ -1546,6 +1546,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live changes to the budget (server-sent events)
+         * @description An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.
+         */
+        get: operations["streamBudgetEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9655,6 +9675,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionHistory"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    streamBudgetEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             /** @description Not signed in */

@@ -1,0 +1,66 @@
+import { budgetMember } from "@everycent/db/schema";
+import type { RouteHandler } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
+import { streamSSE } from "hono/streaming";
+import { loadBudgetAccess } from "../../lib/budget-access";
+import type { AuthedEnv } from "../../middleware/require-auth";
+import type { AppEnv } from "../../types";
+import type { budgetEvents } from "./routes";
+
+const HEARTBEAT_MS = 25_000;
+
+export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & AuthedEnv> = async (
+  c,
+) => {
+  const { budgetId } = c.req.valid("param");
+  const { db, changes } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const userId = c.var.user.id;
+  const stillMember = async () => {
+    const [row] = await db
+      .select({ id: budgetMember.id })
+      .from(budgetMember)
+      .where(and(eq(budgetMember.budgetId, budgetId), eq(budgetMember.userId, userId)));
+    return Boolean(row);
+  };
+
+  return streamSSE(c, async (stream) => {
+    let closed = false;
+    let wake: () => void = () => {};
+    const unsubscribe = await changes.subscribe(budgetId, (change) => {
+      void (async () => {
+        // Someone removed from the budget (or who left) hears nothing more.
+        if (change.table === "budget_member" && !(await stillMember())) {
+          closed = true;
+          wake();
+          return;
+        }
+        await stream.writeSSE({
+          event: "change",
+          data: JSON.stringify({
+            table: change.table,
+            actorId: change.actorId,
+            clientId: change.clientId,
+          }),
+        });
+      })();
+    });
+    stream.onAbort(() => {
+      closed = true;
+      wake();
+    });
+    try {
+      // The client's EventSource reconnects itself; this says it's still connected.
+      await stream.write(": connected\n\n");
+      while (!closed) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+          setTimeout(resolve, HEARTBEAT_MS);
+        });
+        if (!closed) await stream.write(": ping\n\n");
+      }
+    } finally {
+      unsubscribe();
+    }
+  }) as never;
+};

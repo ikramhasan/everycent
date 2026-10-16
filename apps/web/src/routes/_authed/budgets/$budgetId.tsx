@@ -9,8 +9,10 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
 import { ManagePayeesProvider } from "@/components/manage-payees";
+import { apiBaseUrl } from "@/lib/api";
 import { BudgetProvider } from "@/lib/budget-context";
 import { apiErrorCode, budgetQueryOptions } from "@/lib/budgets";
+import { useBudgetEvents } from "@/lib/live-updates";
 import { UndoProvider } from "@/lib/undo";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId")({
@@ -34,6 +36,7 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId")({
 function BudgetLayout() {
   const { budgetId } = Route.useParams();
   const { data: budget } = useSuspenseQuery(budgetQueryOptions(budgetId));
+  useBudgetEvents(budgetId, apiBaseUrl);
   return (
     <BudgetProvider budget={budget}>
       <UndoProvider>

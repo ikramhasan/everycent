@@ -3,6 +3,7 @@ import type { App } from "../src/app";
 import { createApp } from "../src/app";
 import { type Env, parseEnv } from "../src/env";
 import { type AuthOptions, createAuth } from "../src/lib/auth";
+import { ChangeBus } from "../src/lib/change-bus";
 import {
   type EmailKind,
   type EmailMessage,
@@ -34,7 +35,7 @@ export function createTestApp({
   ...authOptions
 }: Partial<Pick<AppDeps, "serverDate" | "fxProviders">> & AuthOptions = {}) {
   const env = testEnv();
-  const { db, close } = createDb(env.DATABASE_URL, { max: 2 });
+  const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
   const outbox = new MemoryEmailSender();
   const email = new ThrottledEmailSender(outbox, db);
@@ -44,6 +45,7 @@ export function createTestApp({
     env,
     email,
     auth: createAuth(db, env, email, authOptions),
+    changes: new ChangeBus(listen),
     serverDate,
     fxProviders,
   });

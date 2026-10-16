@@ -3,6 +3,7 @@ import { createDb } from "@everycent/db";
 import { createApp } from "./app";
 import { parseEnv } from "./env";
 import { createAuth } from "./lib/auth";
+import { ChangeBus } from "./lib/change-bus";
 import { buildOpenApiDocument } from "./lib/docs";
 import { MemoryEmailSender } from "./lib/email/sender";
 
@@ -20,10 +21,17 @@ export function generateOpenApiDocument() {
     BETTER_AUTH_URL: "http://localhost:3000",
     WEB_ORIGIN: "http://localhost:5173",
   });
-  const { db } = createDb(env.DATABASE_URL, { max: 1 });
+  const { db, listen } = createDb(env.DATABASE_URL, { max: 1 });
   const email = new MemoryEmailSender();
   return buildOpenApiDocument(
-    createApp({ db, env, email, auth: createAuth(db, env, email), fxProviders: [] }),
+    createApp({
+      db,
+      env,
+      email,
+      auth: createAuth(db, env, email),
+      changes: new ChangeBus(listen),
+      fxProviders: [],
+    }),
   );
 }
 

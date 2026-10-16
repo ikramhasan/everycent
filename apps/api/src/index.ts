@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { parseEnv } from "./env";
 import { createAuth } from "./lib/auth";
+import { ChangeBus } from "./lib/change-bus";
 import { createEmailSender } from "./lib/email/sender";
 import { defaultFxProviders } from "./lib/fx/providers";
 import { loadRootEnv } from "./load-env";
@@ -10,13 +11,14 @@ import { loadRootEnv } from "./load-env";
 if (process.env.NODE_ENV !== "production") loadRootEnv();
 
 const env = parseEnv();
-const { db, close } = createDb(env.DATABASE_URL);
+const { db, listen, close } = createDb(env.DATABASE_URL);
 const email = createEmailSender(env, db);
 const app = createApp({
   db,
   env,
   email,
   auth: createAuth(db, env, email),
+  changes: new ChangeBus(listen),
   fxProviders: defaultFxProviders(),
 });
 

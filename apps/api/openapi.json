@@ -19224,6 +19224,73 @@
           }
         }
       }
+    },
+    "/v1/budgets/{budgetId}/events": {
+      "get": {
+        "operationId": "streamBudgetEvents",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Live changes to the budget (server-sent events)",
+        "description": "An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {}
