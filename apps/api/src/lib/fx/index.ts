@@ -106,27 +106,35 @@ export async function resolveRate(
  * cached market rate, or the nearest earlier of either; null when there's none. For reads that
  * project (a schedule's upcoming amount), which shouldn't wait on the network.
  */
-export async function knownRate(
+export async function knownRate(db: Db, input: KnownRateInput): Promise<string | null> {
+  return (await knownRateOn(db, input))?.rate ?? null;
+}
+
+export interface KnownRateInput {
+  budgetId: string;
+  budgetCurrency: CurrencyCode;
+  from: CurrencyCode;
+  to: CurrencyCode;
+  date: string;
+}
+
+/** `knownRate` with the date the rate is from (an earlier one when it fell back). */
+export async function knownRateOn(
   db: Db,
-  input: {
-    budgetId: string;
-    budgetCurrency: CurrencyCode;
-    from: CurrencyCode;
-    to: CurrencyCode;
-    date: string;
-  },
-): Promise<string | null> {
+  input: KnownRateInput,
+): Promise<{ rate: string; rateDate: string } | null> {
   const { budgetId, from, to, date } = input;
-  if (from === to) return "1";
+  if (from === to) return { rate: "1", rateDate: date };
   const foreign = foreignSide(input.budgetCurrency, from, to);
   if (foreign) {
     const override = await overrideOn(db, budgetId, foreign, date);
-    if (override) return foreign === from ? override : invertRate(override);
+    if (override)
+      return { rate: foreign === from ? override : invertRate(override), rateDate: date };
   }
   const cached = await cachedMarketRate(db, from, to, date);
-  if (cached) return cached.rate;
+  if (cached) return cached;
   const earlier = await nearestEarlier(db, budgetId, foreign, from, to, date);
-  return earlier?.rate ?? null;
+  return earlier ? { rate: earlier.rate, rateDate: earlier.rateDate } : null;
 }
 
 /** The non-budget currency when exactly one side is the budget's currency (overrides apply). */

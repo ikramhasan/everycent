@@ -11,6 +11,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { assertRevaluationEditable } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -248,6 +249,8 @@ export async function applyUpdate(
   if (body.date !== undefined && body.date !== existing.date)
     assertNotFuture(body.date, latestDate);
   if (existing.cleared === "reconciled" && body.cleared !== undefined) reconciledStays();
+  // A revaluation keeps its base amount: converting its zero amount again would erase it.
+  const revaluation = await assertRevaluationEditable(tx, existing, body);
   if (existing.transferSubTransactionId) {
     return updateSplitTransferSide(tx, budgetId, existing, body);
   }
@@ -309,12 +312,14 @@ export async function applyUpdate(
     categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
   }
 
-  const base = await rebase(tx, fx, existing, {
-    currency: account.currency,
-    date: body.date ?? existing.date,
-    amount,
-    rate: body.fxRate,
-  });
+  const base = revaluation
+    ? {}
+    : await rebase(tx, fx, existing, {
+        currency: account.currency,
+        date: body.date ?? existing.date,
+        amount,
+        rate: body.fxRate,
+      });
   await tx
     .update(transaction)
     .set({

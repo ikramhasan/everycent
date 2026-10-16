@@ -21,6 +21,7 @@ const INTERNAL_PAYEE_NAMES: Record<InternalPayeeKind, string> = {
   starting_balance: "Starting Balance",
   manual_balance_adjustment: "Manual Balance Adjustment",
   reconciliation_balance_adjustment: "Reconciliation Balance Adjustment",
+  fx_revaluation: "FX Revaluation",
 };
 
 /** The budget's built-in payee of this kind, created on first use. */

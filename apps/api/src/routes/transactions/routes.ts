@@ -200,8 +200,9 @@ const crossCurrency = jsonError(
     "rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate`",
 );
 const locked = jsonError(
-  "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state " +
-    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
+  "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state " +
+    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a " +
+    "change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
 );
 
 const categoryRules =

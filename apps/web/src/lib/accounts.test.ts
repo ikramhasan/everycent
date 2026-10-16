@@ -28,6 +28,9 @@ function account(id: string, type: Account["type"], working: string, closed = fa
     migratedToAccountId: null,
     migratedFromAccountId: null,
     toReview: 0,
+    unrealizedGain: null,
+    rate: null,
+    rateDate: null,
     balances: { cleared: working, uncleared: "0", working },
   };
 }

@@ -17,6 +17,7 @@ import {
   recordLoanPaymentHandler,
   setLoanChargeHandler,
 } from "./loans";
+import { revalueAccountHandler } from "./revaluation";
 import {
   closeAccount,
   createAccount,
@@ -29,6 +30,7 @@ import {
   reconcileAccount,
   recordLoanPayment,
   reopenAccount,
+  revalueAccount,
   setLoanCharge,
   updateAccount,
   updateToLoanAccount,
@@ -43,6 +45,7 @@ export const accountsRouter = createRouter()
   .openapi(reconcileAccount, reconcileAccountHandler)
   .openapi(closeAccount, closeAccountHandler)
   .openapi(reopenAccount, reopenAccountHandler)
+  .openapi(revalueAccount, revalueAccountHandler)
   .openapi(deleteAccount, deleteAccountHandler)
   .openapi(updateToLoanAccount, updateToLoanAccountHandler)
   .openapi(getLoanActivity, getLoanActivityHandler)

@@ -49,6 +49,7 @@ import {
   saveLoanTerms,
 } from "../../lib/loans";
 import { reorder, writeOrder } from "../../lib/ordering";
+import { type Unrealized, unrealizedGains } from "../../lib/revaluation";
 import { transactionsToReview } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -80,6 +81,7 @@ function toAccountJson(
   terms: LoanTerms | undefined,
   migratedFromAccountId: string | null,
   toReview: number,
+  unrealized: Unrealized | undefined,
 ) {
   return {
     id: a.id,
@@ -106,6 +108,9 @@ function toAccountJson(
     migratedToAccountId: a.migratedToAccountId,
     migratedFromAccountId,
     toReview,
+    unrealizedGain: unrealized?.gain.toString() ?? null,
+    rate: unrealized?.rate ?? null,
+    rateDate: unrealized?.rateDate ?? null,
   };
 }
 
@@ -121,6 +126,18 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     .where(eq(category.budgetId, budgetId));
   const paymentByAccount = new Map(payments.map((p) => [p.accountId, p.id]));
   const balances = await accountBalances(db, budgetId, today);
+  const booked = await accountBalances(db, budgetId, today, "base");
+  const unrealized = await unrealizedGains(db, {
+    budgetId,
+    budgetCurrency: await budgetCurrencyOf(db, budgetId),
+    today,
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      currency: a.currency,
+      native: balances.get(a.id)?.working ?? 0n,
+      booked: booked.get(a.id)?.working ?? 0n,
+    })),
+  });
   const startingBalancePayee = await internalPayeeId(db, budgetId, "starting_balance");
   const withHistory = await db
     .selectDistinct({ accountId: transaction.accountId })
@@ -154,6 +171,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       terms.get(a.id),
       migratedFrom.get(a.id) ?? null,
       toReview.get(a.id) ?? 0,
+      unrealized.get(a.id),
     ),
   );
 }

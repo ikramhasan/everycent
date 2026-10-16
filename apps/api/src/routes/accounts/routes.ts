@@ -9,6 +9,7 @@ import {
 import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate, TodayQuery } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
+import { zFxRate } from "../../lib/fx/rate-schema";
 import { requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
@@ -82,6 +83,21 @@ export const AccountSchema = z
         "Transactions that are unapproved or need a category (YNAB's \"N new transactions to " +
           'approve or categorize" and the dot by the account in the sidebar)',
       ),
+    unrealizedGain: zMinorUnits
+      .nullable()
+      .describe(
+        "Accounts in another currency than the budget's: unrealized FX gain (positive) or loss, " +
+          "in the budget's minor units: the working balance at today's known rate (`rate`, " +
+          "converted half-even) less what its transactions were booked at in the budget's " +
+          "currency. Null in the budget's currency, or when no rate is known yet (no provider " +
+          "is asked for it).",
+      ),
+    rate: zFxRate
+      .nullable()
+      .describe("The rate `unrealizedGain` uses: 1 `currency` = rate budget currency"),
+    rateDate: IsoDate.nullable().describe(
+      "The date `rate` is from (an earlier one when today's isn't known)",
+    ),
   })
   .openapi("Account");
 
@@ -394,6 +410,67 @@ export const closeAccount = createRoute({
       "The caller's role can't manage accounts, or the account's email address isn't confirmed",
     ),
     404: notFound,
+  },
+});
+
+export const revalueAccount = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/accounts/{accountId}/revalue",
+  operationId: "revalueAccount",
+  tags: ["Accounts"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Book a foreign-currency account's unrealized FX gain or loss",
+  description:
+    "Brings what an account in another currency is booked at in the budget's currency up to " +
+    "date: its working balance at `date`'s rate (converted half-even) less the sum of its base " +
+    "amounts. The difference is posted as a cleared FX Revaluation dated `date`, with a native " +
+    "amount of zero and that base amount, into Ready to Assign for a budget account (none for " +
+    "a tracking account). Nothing is posted when there's no difference (a second revaluation " +
+    "on the same date and rate), and `transaction` is null. A revaluation's amount, date, " +
+    "account and payee can't be edited later (`REVALUATION_LOCKED`); it can be deleted.",
+  request: {
+    params: AccountParams,
+    body: json(
+      z
+        .object({
+          date: IsoDate.describe("The revaluation's date; its rate is the one used"),
+          today: IsoDate.describe("The user's today (`date` can't be after it)"),
+        })
+        .openapi("RevalueAccount"),
+    ),
+  },
+  responses: {
+    200: ok(
+      "The revaluation (null when there was nothing to post) and the account after it",
+      z
+        .object({
+          transaction: z
+            .object({
+              id: z.string(),
+              date: IsoDate,
+              baseAmount: zMinorUnits.describe(
+                "The gain (positive) or loss booked, in the budget's minor units; its native " +
+                  "amount is zero",
+              ),
+              fxRate: zFxRate.describe("The rate it was worked out at"),
+            })
+            .nullable()
+            .describe("The FX Revaluation posted; null when there was no difference"),
+          account: AccountSchema,
+        })
+        .openapi("RevalueAccountResult"),
+    ),
+    400: jsonError(
+      "The account is in the budget's currency (NOT_FOREIGN_CURRENCY), is closed " +
+        "(ACCOUNT_CLOSED), or `date` is after today (DATE_IN_FUTURE)",
+    ),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't add transactions, or the account's email address isn't confirmed",
+    ),
+    404: notFound,
+    422: jsonError("FX_RATE_UNAVAILABLE: no rate for `date`"),
   },
 });
 

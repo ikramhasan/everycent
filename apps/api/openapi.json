@@ -2009,6 +2009,31 @@
           "toReview": {
             "type": "integer",
             "description": "Transactions that are unapproved or need a category (YNAB's \"N new transactions to approve or categorize\" and the dot by the account in the sidebar)"
+          },
+          "unrealizedGain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Accounts in another currency than the budget's: unrealized FX gain (positive) or loss, in the budget's minor units: the working balance at today's known rate (`rate`, converted half-even) less what its transactions were booked at in the budget's currency. Null in the budget's currency, or when no rate is known yet (no provider is asked for it)."
+          },
+          "rate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d+(\\.\\d{1,12})?$",
+            "example": "1.0842",
+            "description": "The rate `unrealizedGain` uses: 1 `currency` = rate budget currency"
+          },
+          "rateDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The date `rate` is from (an earlier one when today's isn't known)"
           }
         },
         "required": [
@@ -2031,7 +2056,10 @@
           "lastPaymentFromAccountId",
           "migratedToAccountId",
           "migratedFromAccountId",
-          "toReview"
+          "toReview",
+          "unrealizedGain",
+          "rate",
+          "rateDate"
         ]
       },
       "AccountBalances": {
@@ -2480,6 +2508,71 @@
         },
         "required": [
           "date"
+        ]
+      },
+      "RevalueAccountResult": {
+        "type": "object",
+        "properties": {
+          "transaction": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "Calendar date, YYYY-MM-DD"
+              },
+              "baseAmount": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "The gain (positive) or loss booked, in the budget's minor units; its native amount is zero"
+              },
+              "fxRate": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,12})?$",
+                "example": "1.0842",
+                "description": "The rate it was worked out at"
+              }
+            },
+            "required": [
+              "id",
+              "date",
+              "baseAmount",
+              "fxRate"
+            ],
+            "description": "The FX Revaluation posted; null when there was no difference"
+          },
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "transaction",
+          "account"
+        ]
+      },
+      "RevalueAccount": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The revaluation's date; its rate is the one used"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "The user's today (`date` can't be after it)"
+          }
+        },
+        "required": [
+          "date",
+          "today"
         ]
       },
       "UpdateToLoanAccountResult": {
@@ -12051,6 +12144,111 @@
         }
       }
     },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/revalue": {
+      "post": {
+        "operationId": "revalueAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Book a foreign-currency account's unrealized FX gain or loss",
+        "description": "Brings what an account in another currency is booked at in the budget's currency up to date: its working balance at `date`'s rate (converted half-even) less the sum of its base amounts. The difference is posted as a cleared FX Revaluation dated `date`, with a native amount of zero and that base amount, into Ready to Assign for a budget account (none for a tracking account). Nothing is posted when there's no difference (a second revaluation on the same date and rate), and `transaction` is null. A revaluation's amount, date, account and payee can't be edited later (`REVALUATION_LOCKED`); it can be deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevalueAccount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The revaluation (null when there was nothing to post) and the account after it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevalueAccountResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The account is in the budget's currency (NOT_FOREIGN_CURRENCY), is closed (ACCOUNT_CLOSED), or `date` is after today (DATE_IN_FUTURE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't add transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FX_RATE_UNAVAILABLE: no rate for `date`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
       "post": {
         "operationId": "updateToLoanAccount",
@@ -13140,7 +13338,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`)",
+            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
             "content": {
               "application/json": {
                 "schema": {

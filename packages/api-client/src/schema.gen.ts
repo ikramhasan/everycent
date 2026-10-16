@@ -721,6 +721,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/revalue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a foreign-currency account's unrealized FX gain or loss
+         * @description Brings what an account in another currency is booked at in the budget's currency up to date: its working balance at `date`'s rate (converted half-even) less the sum of its base amounts. The difference is posted as a cleared FX Revaluation dated `date`, with a native amount of zero and that base amount, into Ready to Assign for a budget account (none for a tracking account). Nothing is posted when there's no difference (a second revaluation on the same date and rate), and `transaction` is null. A revaluation's amount, date, account and payee can't be edited later (`REVALUATION_LOCKED`); it can be deleted.
+         */
+        post: operations["revalueAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/update-to-loan": {
         parameters: {
             query?: never;
@@ -1968,6 +1988,18 @@ export interface components {
             migratedFromAccountId: string | null;
             /** @description Transactions that are unapproved or need a category (YNAB's "N new transactions to approve or categorize" and the dot by the account in the sidebar) */
             toReview: number;
+            /** @description Accounts in another currency than the budget's: unrealized FX gain (positive) or loss, in the budget's minor units: the working balance at today's known rate (`rate`, converted half-even) less what its transactions were booked at in the budget's currency. Null in the budget's currency, or when no rate is known yet (no provider is asked for it). */
+            unrealizedGain: string | null;
+            /**
+             * @description The rate `unrealizedGain` uses: 1 `currency` = rate budget currency
+             * @example 1.0842
+             */
+            rate: string | null;
+            /**
+             * Format: date
+             * @description The date `rate` is from (an earlier one when today's isn't known)
+             */
+            rateDate: string | null;
         };
         /** @description Future-dated transactions don't count until their date: responses take the user's `today` (or a request's `date` that is the user's today), else the server's UTC date. */
         AccountBalances: {
@@ -2074,6 +2106,37 @@ export interface components {
              * @description Calendar date, YYYY-MM-DD
              */
             date: string;
+        };
+        RevalueAccountResult: {
+            /** @description The FX Revaluation posted; null when there was no difference */
+            transaction: {
+                id: string;
+                /**
+                 * Format: date
+                 * @description Calendar date, YYYY-MM-DD
+                 */
+                date: string;
+                /** @description The gain (positive) or loss booked, in the budget's minor units; its native amount is zero */
+                baseAmount: string;
+                /**
+                 * @description The rate it was worked out at
+                 * @example 1.0842
+                 */
+                fxRate: string;
+            } | null;
+            account: components["schemas"]["Account"];
+        };
+        RevalueAccount: {
+            /**
+             * Format: date
+             * @description The revaluation's date; its rate is the one used
+             */
+            date: string;
+            /**
+             * Format: date
+             * @description The user's today (`date` can't be after it)
+             */
+            today: string;
         };
         UpdateToLoanAccountResult: {
             loan: components["schemas"]["Account"];
@@ -6187,6 +6250,78 @@ export interface operations {
             };
         };
     };
+    revalueAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevalueAccount"];
+            };
+        };
+        responses: {
+            /** @description The revaluation (null when there was nothing to post) and the account after it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevalueAccountResult"];
+                };
+            };
+            /** @description The account is in the budget's currency (NOT_FOREIGN_CURRENCY), is closed (ACCOUNT_CLOSED), or `date` is after today (DATE_IN_FUTURE) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't add transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FX_RATE_UNAVAILABLE: no rate for `date` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     updateToLoanAccount: {
         parameters: {
             query?: never;
@@ -6921,7 +7056,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`) */
             409: {
                 headers: {
                     [name: string]: unknown;
