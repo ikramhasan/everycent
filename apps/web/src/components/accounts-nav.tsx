@@ -26,9 +26,9 @@ import { toast } from "sonner";
 import {
   type Account,
   accountsQueryOptions,
-  excludedHint,
   type SidebarSection,
   sidebarSections,
+  totalHint,
 } from "@/lib/accounts";
 import { $api } from "@/lib/api";
 import { apiErrorMessage, type Budget } from "@/lib/budgets";
@@ -48,7 +48,7 @@ export function AccountsNav({ budget }: { budget: Budget }) {
   const [adding, setAdding] = useState(false);
 
   const serverSections = useMemo(
-    () => sidebarSections(accounts.data?.accounts ?? [], budget.currency),
+    () => sidebarSections(accounts.data?.accounts ?? [], budget.currency, accounts.data?.totals),
     [accounts.data, budget.currency],
   );
   // Local order per section so a drag shows immediately.
@@ -152,7 +152,7 @@ function AccountSection({
   budgetId: string;
   format: (minorUnits: bigint, currency?: string) => string;
 }) {
-  const hint = excludedHint(section.excluded);
+  const hint = totalHint(section);
   return (
     <Collapsible defaultOpen={section.id !== "closed"} className="group/collapsible" asChild>
       <SidebarGroup>
@@ -162,13 +162,11 @@ function AccountSection({
             <span className="uppercase tracking-wide">{section.title}</span>
             {section.id !== "closed" && (
               <span className="ml-auto tabular-nums" title={hint ?? undefined}>
-                {format(section.total)}
-                {hint && (
-                  <>
-                    <span aria-hidden>*</span>
-                    <span className="sr-only">, {hint}</span>
-                  </>
-                )}
+                {section.converted && <span aria-hidden>≈</span>}
+                {format(section.total, section.currency)}
+                {/* The `*` marks accounts left out for want of a rate. */}
+                {section.excluded.length > 0 && <span aria-hidden>*</span>}
+                {hint && <span className="sr-only">, {hint}</span>}
               </span>
             )}
           </CollapsibleTrigger>

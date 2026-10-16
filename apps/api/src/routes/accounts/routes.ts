@@ -108,8 +108,61 @@ const PairedCategoryId = z
       "from any other loan). Not an internal or credit card payment category.",
   );
 
+const ConvertedBalancesSchema = z
+  .object({
+    currency: zCurrencyCode,
+    cleared: zMinorUnits,
+    uncleared: zMinorUnits,
+    working: zMinorUnits,
+  })
+  .openapi("ConvertedBalances", {
+    description:
+      "An account's balances in the display currency at today's known rate (converted " +
+      "half-even): today's value, not what the plan booked",
+  });
+
+const AccountTotalSchema = z
+  .object({
+    currency: zCurrencyCode.describe("The display currency"),
+    amount: zMinorUnits.describe("Sum of the converted working balances"),
+    converted: z
+      .boolean()
+      .describe("Some account in it is in another currency and was converted at today's rate"),
+    missing: z
+      .array(z.string())
+      .describe("Accounts left out: no rate to the display currency is known yet"),
+  })
+  .openapi("AccountTotal");
+
 const AccountListSchema = z
-  .object({ accounts: z.array(AccountSchema).describe("In sidebar order, closed ones included") })
+  .object({
+    accounts: z
+      .array(
+        AccountSchema.extend({
+          converted: ConvertedBalancesSchema.nullable().describe(
+            "Its balances in the display currency; null when no rate is known yet",
+          ),
+        }).openapi("ListedAccount"),
+      )
+      .describe("In sidebar order, closed ones included"),
+    totals: z
+      .object({
+        starred: AccountTotalSchema,
+        budget: AccountTotalSchema.describe("Open cash and credit accounts"),
+        loans: AccountTotalSchema,
+        tracking: AccountTotalSchema,
+        closed: AccountTotalSchema,
+        netWorth: AccountTotalSchema.describe("Every open account"),
+      })
+      .describe(
+        "The sidebar's group totals and net worth in the display currency (the caller's " +
+          "preference, else the budget's), at today's known rates; no provider is asked",
+      ),
+    missingRates: z
+      .number()
+      .int()
+      .describe("How many accounts have no known rate to the display currency (left out)"),
+  })
   .openapi("AccountList");
 
 const BudgetParams = z.object({
@@ -137,7 +190,14 @@ export const listAccounts = createRoute({
   summary: "The budget's accounts with their balances",
   request: {
     params: BudgetParams,
-    query: TodayQuery,
+    query: TodayQuery.extend({
+      displayCurrency: zCurrencyCode
+        .optional()
+        .describe(
+          "Totals and converted balances in this currency for this request, instead of the " +
+            "caller's display currency preference",
+        ),
+    }),
   },
   responses: {
     200: ok("Accounts in sidebar order", AccountListSchema),

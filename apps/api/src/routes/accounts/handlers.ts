@@ -11,6 +11,7 @@ import {
 } from "@everycent/db/schema";
 import {
   accountFamily,
+  type CurrencyCode,
   hasPaymentCategory,
   impliedRate,
   isOnBudget,
@@ -20,6 +21,13 @@ import {
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import {
+  convertedTotals,
+  displayCurrencyOf,
+  TOTAL_IDS,
+  type Total,
+  type TotalId,
+} from "../../lib/account-totals";
 import { budgetCurrencyOf, type FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
@@ -176,6 +184,58 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
   );
 }
 
+/**
+ * The account list with each account's balances and the sidebar's totals and net worth in
+ * `display` (the user's display currency, else the budget's; EVERYCENT-57).
+ */
+async function accountListJson(
+  db: Db,
+  budgetId: string,
+  today: string,
+  display: CurrencyCode | null,
+) {
+  const accounts = await listAccountJson(db, budgetId, today);
+  const budgetCurrency = await budgetCurrencyOf(db, budgetId);
+  const { converted, totals, missingRates } = await convertedTotals(db, {
+    budgetId,
+    budgetCurrency,
+    display: display ?? budgetCurrency,
+    today,
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      type: a.type,
+      currency: a.currency,
+      closed: a.closed,
+      starredSortOrder: a.starredOrder,
+      balances: {
+        cleared: BigInt(a.balances.cleared),
+        uncleared: BigInt(a.balances.uncleared),
+        working: BigInt(a.balances.working),
+      },
+    })),
+  });
+  return {
+    accounts: accounts.map((a) => {
+      const c = converted.get(a.id);
+      return {
+        ...a,
+        converted: c
+          ? {
+              currency: c.currency,
+              cleared: c.cleared.toString(),
+              uncleared: c.uncleared.toString(),
+              working: c.working.toString(),
+            }
+          : null,
+      };
+    }),
+    totals: Object.fromEntries(
+      TOTAL_IDS.map((id) => [id, { ...totals[id], amount: totals[id].amount.toString() }]),
+    ) as Record<TotalId, Omit<Total, "amount"> & { amount: string }>,
+    missingRates,
+  };
+}
+
 export async function accountJson(
   db: Db,
   budgetId: string,
@@ -298,7 +358,8 @@ export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async
       budgetId,
       entryDate(c.var.deps, query.today),
     );
-  return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
+  const display = query.displayCurrency ?? (await displayCurrencyOf(c.var.deps.db, c.var.user.id));
+  return c.json(await accountListJson(c.var.deps.db, budgetId, today, display), 200);
 };
 
 type NewAccount = {
@@ -778,7 +839,10 @@ export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (
       ),
     );
   });
-  return c.json({ accounts: await listAccountJson(db, budgetId, today) }, 200);
+  return c.json(
+    await accountListJson(db, budgetId, today, await displayCurrencyOf(db, c.var.user.id)),
+    200,
+  );
 };
 
 export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async (c) => {
