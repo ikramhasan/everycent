@@ -131,8 +131,19 @@ export const listPayees = createRoute({
   method: "get",
   path: "/budgets/{budgetId}/payees",
   operationId: "listPayees",
-  summary: "The budget's payees, by name (built-in and transfer ones left out)",
-  request: { params: BudgetParams },
+  summary: "The budget's payees, by name (built-in and transfer ones left out unless asked for)",
+  request: {
+    params: BudgetParams,
+    query: z.object({
+      include: z
+        .enum(["all"])
+        .optional()
+        .describe(
+          '"all" adds the transfer payees ("Transfer : <account>") and built-in ones like ' +
+            '"Starting Balance", for naming every payee an id points at (the Activity feed)',
+        ),
+    }),
+  },
   responses: {
     200: ok("Payees", z.object({ payees: z.array(PayeeSchema) }).openapi("PayeeList")),
     401: jsonError("Not signed in"),

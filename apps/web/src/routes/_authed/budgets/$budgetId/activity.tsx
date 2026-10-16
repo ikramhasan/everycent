@@ -52,7 +52,8 @@ function ActivityPage() {
   }, [activity.data]);
 
   return (
-    <main className="mx-auto grid w-full max-w-3xl gap-4 p-4 md:p-6">
+    // The app shell pads the page; the page width matches the others, the feed stays readable.
+    <main className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,48rem)] content-start gap-4">
       <header className="grid gap-1">
         <h1 className="font-semibold text-2xl">Activity</h1>
         <p className="text-muted-foreground text-sm">
