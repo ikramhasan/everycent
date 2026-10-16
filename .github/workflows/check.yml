@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     timeout-minutes: 20
     services:
       postgres:
@@ -44,3 +44,6 @@ jobs:
           PGPASSWORD=everycent psql -h localhost -U everycent -d everycent -c "CREATE DATABASE everycent_test OWNER everycent"
           cp .env.example .env
       - run: pnpm check
+        env:
+          # 2 vCPUs, but API tests mostly wait on Postgres: one worker more than cores keeps both busy.
+          API_TEST_WORKERS: 3

@@ -25,7 +25,8 @@
     },
     "test": {
       "dependsOn": ["^generate", "generate"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["API_TEST_WORKERS"]
     },
     "build": {
       "dependsOn": ["^generate", "generate"],
