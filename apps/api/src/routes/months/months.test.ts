@@ -1539,15 +1539,28 @@ describe("budget months", () => {
       ).toBe(200);
 
       expect(await monthMoves()).toMatchObject([
-        { toCategoryId: phone.id, amount: "100", userName: "Pat", memberRole: "editor" },
-        { toCategoryId: phone.id, amount: "500", userName: "Test User", memberRole: "owner" },
+        // YNAB's avatar colours: the owner 1, the next member to join 2 (EVERYCENT-166).
+        {
+          toCategoryId: phone.id,
+          amount: "100",
+          userName: "Pat",
+          memberRole: "editor",
+          avatarColor: 2,
+        },
+        {
+          toCategoryId: phone.id,
+          amount: "500",
+          userName: "Test User",
+          memberRole: "owner",
+          avatarColor: 1,
+        },
         { toCategoryId: rent.id, amount: "2000" },
-        { toCategoryId: phone.id, amount: "90", userId: null, memberRole: null },
+        { toCategoryId: phone.id, amount: "90", userId: null, memberRole: null, avatarColor: null },
       ]);
 
       await db.delete(budgetMember).where(eq(budgetMember.userId, partnerUser?.id ?? ""));
       const [left] = await monthMoves();
-      expect(left).toMatchObject({ userName: "Pat", memberRole: null });
+      expect(left).toMatchObject({ userName: "Pat", memberRole: null, avatarColor: null });
       expect(left?.userId).toBe(partnerUser?.id);
       expect((await send("GET", `${base}/months/2026-10/moves`, partner.cookie)).status).toBe(404);
     });

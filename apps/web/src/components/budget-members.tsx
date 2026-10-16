@@ -33,6 +33,7 @@ import {
 } from "@everycent/ui/components/dropdown-menu";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
+import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -72,8 +73,9 @@ export function BudgetMembers() {
       <CardHeader>
         <CardTitle>Sharing</CardTitle>
         <CardDescription>
-          People you share this budget with can see and edit everything in it. Only the owner can
-          invite or remove people, delete the budget or make a fresh start.
+          People you share this budget with can see and edit everything in it, or only see it if
+          they're a viewer. Only the owner can invite or remove people, change who can edit, delete
+          the budget or make a fresh start.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -92,9 +94,11 @@ export function BudgetMembers() {
                     </p>
                     <p className="truncate text-muted-foreground text-xs">{m.email}</p>
                   </div>
-                  <span className="text-muted-foreground text-xs">
-                    {m.role === "owner" ? "Owner" : "Member"}
-                  </span>
+                  {owner && m.role !== "owner" ? (
+                    <RoleSelect member={m} onChanged={refresh} />
+                  ) : (
+                    <span className="text-muted-foreground text-xs">{ROLE_LABELS[m.role]}</span>
+                  )}
                   <MemberActions member={m} isMe={m.userId === me?.id} onChanged={refresh} />
                 </li>
               ))}
@@ -110,7 +114,7 @@ export function BudgetMembers() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium text-sm">{i.name}</p>
                         <p className="truncate text-muted-foreground text-xs">
-                          {i.email} ·{" "}
+                          {i.email} · {i.role === "viewer" ? "Can view" : "Can edit"} ·{" "}
                           {i.expired
                             ? "Expired"
                             : `Expires ${formatDate(i.expiresAt.slice(0, 10))}`}
@@ -187,6 +191,48 @@ export function BudgetMembers() {
 }
 
 export type Member = components["schemas"]["BudgetMember"];
+type MemberRole = components["schemas"]["ChangeBudgetMemberRole"]["role"];
+
+/** YNAB calls everyone a plan is shared with a member; a viewer is an everycent extra. */
+const ROLE_LABELS: Record<Member["role"], string> = {
+  owner: "Owner",
+  editor: "Member",
+  viewer: "Viewer",
+};
+
+/** The owner picks whether a member can edit or only view (EVERYCENT-88). */
+function RoleSelect({ member, onChanged }: { member: Member; onChanged: () => Promise<unknown> }) {
+  const { budget } = useBudget();
+  const change = $api.useMutation("patch", "/v1/budgets/{budgetId}/members/{userId}");
+  return (
+    <NativeSelect
+      size="sm"
+      aria-label={`What ${member.name} can do`}
+      value={member.role}
+      disabled={change.isPending}
+      onChange={async (e) => {
+        const role = e.target.value as MemberRole;
+        try {
+          await change.mutateAsync({
+            params: { path: { budgetId: budget.id, userId: member.userId } },
+            body: { role },
+          });
+          toast.success(
+            role === "viewer"
+              ? `${member.name} can now only view this budget`
+              : `${member.name} can now edit this budget`,
+          );
+        } catch (error) {
+          toast.error(apiErrorMessage(error, "Couldn't change that. Try again."));
+        }
+        await onChanged();
+      }}
+    >
+      <NativeSelectOption value="editor">Can edit</NativeSelectOption>
+      <NativeSelectOption value="viewer">Can view</NativeSelectOption>
+    </NativeSelect>
+  );
+}
 
 function Avatar({ name, muted }: { name: string; muted?: boolean }) {
   return (
@@ -219,12 +265,13 @@ function InviteDialog({
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
+    const role = form.get("role") === "viewer" ? "viewer" : "editor";
     if (!name) return setError("Enter their first name.");
     setError(null);
     try {
       await invite.mutateAsync({
         params: { path: { budgetId: budget.id } },
-        body: { name, email },
+        body: { name, email, role },
       });
       await onInvited(email);
     } catch (e) {
@@ -249,6 +296,13 @@ function InviteDialog({
           <Field>
             <FieldLabel htmlFor="invite-email">Email</FieldLabel>
             <Input id="invite-email" name="email" type="email" required autoComplete="off" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="invite-role">They can</FieldLabel>
+            <NativeSelect id="invite-role" name="role" defaultValue="editor">
+              <NativeSelectOption value="editor">Edit everything (a member)</NativeSelectOption>
+              <NativeSelectOption value="viewer">Only view (a viewer)</NativeSelectOption>
+            </NativeSelect>
           </Field>
           {error && <FieldError>{error}</FieldError>}
           <DialogFooter>

@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/settings")({
 });
 
 function BudgetSettingsPage() {
-  const { budget } = useBudget();
+  const { budget, readOnly } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const update = $api.useMutation("patch", "/v1/budgets/{budgetId}");
@@ -94,29 +94,32 @@ function BudgetSettingsPage() {
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
       <h1 className="font-semibold text-2xl tracking-tight">Budget settings</h1>
+      {/* A viewer (EVERYCENT-88) sees the settings but can't change them. */}
       <Card>
         <CardContent>
-          <BudgetForm
-            // Reset the form to the saved values after each save.
-            key={budget.updatedAt}
-            currencyLocked
-            defaultValues={{
-              name: budget.name,
-              currency: budget.currency,
-              numberFormat: budget.numberFormat,
-              currencySymbolPosition: budget.currencySymbolPosition,
-              dateFormat: budget.dateFormat,
-            }}
-            submitLabel="Save changes"
-            pendingLabel="Saving…"
-            onSubmit={handleSave}
-          />
+          <fieldset disabled={readOnly} className="contents">
+            <BudgetForm
+              // Reset the form to the saved values after each save.
+              key={budget.updatedAt}
+              currencyLocked
+              defaultValues={{
+                name: budget.name,
+                currency: budget.currency,
+                numberFormat: budget.numberFormat,
+                currencySymbolPosition: budget.currencySymbolPosition,
+                dateFormat: budget.dateFormat,
+              }}
+              submitLabel="Save changes"
+              pendingLabel="Saving…"
+              onSubmit={handleSave}
+            />
+          </fieldset>
         </CardContent>
       </Card>
 
       <BudgetMembers />
 
-      <Card>
+      <Card hidden={readOnly}>
         <CardHeader>
           <CardTitle>Payees</CardTitle>
           <CardDescription>
@@ -130,7 +133,9 @@ function BudgetSettingsPage() {
         </CardContent>
       </Card>
 
-      <ExchangeRates budget={budget} />
+      <fieldset disabled={readOnly} className="contents">
+        <ExchangeRates budget={budget} />
+      </fieldset>
 
       {/* An archived budget can start fresh again, as in YNAB. */}
       {budget.role === "owner" && (

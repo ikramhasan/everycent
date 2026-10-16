@@ -69,7 +69,7 @@ type Confirm = "close" | "delete" | "reopen" | null;
 function AccountPage() {
   const { accountId } = Route.useParams();
   const { transaction, recordPayment: openPayment, ...registerSearch } = Route.useSearch();
-  const { budget, formatAmount } = useBudget();
+  const { budget, formatAmount, readOnly } = useBudget();
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
   const onSearchChange = useCallback(
@@ -545,11 +545,13 @@ function AccountPage() {
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
-            <StarButton
-              budgetId={budget.id}
-              account={account}
-              accounts={accounts.data?.accounts ?? []}
-            />
+            {!readOnly && (
+              <StarButton
+                budgetId={budget.id}
+                account={account}
+                accounts={accounts.data?.accounts ?? []}
+              />
+            )}
             {account.closed && <Badge variant="secondary">Closed</Badge>}
           </div>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
@@ -577,10 +579,12 @@ function AccountPage() {
               </Link>
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <Pencil /> Edit account
-          </Button>
-          {reconcilable && (
+          {!readOnly && (
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Pencil /> Edit account
+            </Button>
+          )}
+          {reconcilable && !readOnly && (
             <ReconcilePopover
               account={account}
               settings={accountSettings}

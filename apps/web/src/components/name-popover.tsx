@@ -4,6 +4,7 @@ import { Input } from "@everycent/ui/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Textarea } from "@everycent/ui/components/textarea";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { useOptionalBudget } from "@/lib/budget-context";
 
 export interface NameValues {
   name: string;
@@ -35,6 +36,8 @@ export function NamePopover({
   /** Extra buttons; call `close()` when one finishes. */
   actions?: (close: () => void) => ReactNode;
 }) {
+  // A viewer (EVERYCENT-88) sees the trigger, but it opens nothing to change.
+  const readOnly = useOptionalBudget()?.readOnly ?? false;
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(initial);
   const [pending, setPending] = useState(false);
@@ -57,6 +60,8 @@ export function NamePopover({
       setPending(false);
     }
   }
+
+  if (readOnly) return <>{trigger}</>;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

@@ -23,6 +23,8 @@ describe("register view", () => {
       showReconciled: false,
       showRunningBalance: false,
       showFlags: true,
+      // An everycent extra (EVERYCENT-89), off like YNAB, which has none.
+      showEnteredBy: false,
       scheduledCollapsed: false,
       sort: [{ column: "date", dir: "desc" }],
     });

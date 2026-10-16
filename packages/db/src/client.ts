@@ -14,7 +14,15 @@ export interface CreateDbOptions {
 export function createDb(url: string, { max = 10 }: CreateDbOptions = {}) {
   const client = postgres(url, { max, onnotice: () => {} });
   const db = drizzle({ client, schema, casing: "snake_case" });
-  return { db, close: () => client.end({ timeout: 5 }) };
+  /**
+   * LISTEN on a channel over a connection of its own, which postgres.js reconnects (and
+   * re-listens) after a drop. Resolves once listening; `unlisten` stops.
+   */
+  const listen = (channel: string, onNotify: (payload: string) => void) =>
+    client.listen(channel, onNotify).then(({ unlisten }) => ({ unlisten }));
+  return { db, listen, close: () => client.end({ timeout: 5 }) };
 }
+
+export type Listen = ReturnType<typeof createDb>["listen"];
 
 export type Database = ReturnType<typeof createDb>["db"];

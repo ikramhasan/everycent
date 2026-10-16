@@ -29,6 +29,9 @@ const base: Transaction = {
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
+  enteredBy: null,
+  changedBy: null,
+  version: 1,
 };
 const transfer: Transaction = {
   ...base,

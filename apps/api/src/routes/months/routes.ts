@@ -7,6 +7,7 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
+import { zAvatarColor } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 
 const zBudgetMonth = z
@@ -416,6 +417,12 @@ export const assignCategory = createRoute({
             .object({
               assigned: zMinorUnits.describe("The new Assigned amount; negative takes money out"),
               today: Today.optional(),
+              expectedAssigned: zMinorUnits
+                .optional()
+                .describe(
+                  "Refuse (409 STALE_VERSION) unless Assigned is still this: undo and redo " +
+                    "send it so a partner's later change isn't overwritten",
+                ),
             })
             .openapi("AssignCategory"),
         },
@@ -433,6 +440,7 @@ export const assignCategory = createRoute({
       "The caller's role can't assign money, or the account's email address isn't confirmed",
     ),
     404: jsonError("No such budget or category, or the caller isn't a member"),
+    409: jsonError("Assigned changed since `expectedAssigned` (STALE_VERSION)"),
   },
 });
 
@@ -644,6 +652,11 @@ const MoneyMoveSchema = z
       .enum(BUDGET_ROLES)
       .nullable()
       .describe("The mover's role on the budget now; null once they've left it"),
+    avatarColor: zAvatarColor
+      .nullable()
+      .describe(
+        "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget",
+      ),
   })
   .openapi("MoneyMove");
 

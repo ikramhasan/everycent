@@ -119,20 +119,24 @@ export function AccountsNav({ budget }: { budget: Budget }) {
             byId={byId}
             budgetId={budget.id}
             format={format}
+            reorderable={budget.role !== "viewer"}
           />
         ))}
       </DragDropProvider>
 
-      <SidebarGroup>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAdding(true)}
-          className="justify-start"
-        >
-          <Plus /> Add Account
-        </Button>
-      </SidebarGroup>
+      {/* A viewer (EVERYCENT-88) can't add accounts. */}
+      {budget.role !== "viewer" && (
+        <SidebarGroup>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAdding(true)}
+            className="justify-start"
+          >
+            <Plus /> Add Account
+          </Button>
+        </SidebarGroup>
+      )}
 
       <AddAccountDialog budget={budget} open={adding} onOpenChange={setAdding} />
     </>
@@ -145,12 +149,14 @@ function AccountSection({
   byId,
   budgetId,
   format,
+  reorderable,
 }: {
   section: SidebarSection;
   ids: string[];
   byId: Map<string, Account>;
   budgetId: string;
   format: (minorUnits: bigint, currency?: string) => string;
+  reorderable: boolean;
 }) {
   const hint = totalHint(section);
   return (
@@ -184,6 +190,7 @@ function AccountSection({
                     section={section.id}
                     budgetId={budgetId}
                     format={format}
+                    reorderable={reorderable}
                   />
                 ) : null;
               })}
@@ -201,12 +208,15 @@ function AccountItem({
   section,
   budgetId,
   format,
+  reorderable,
 }: {
   account: Account;
   index: number;
   section: string;
   budgetId: string;
   format: (minorUnits: bigint, currency?: string) => string;
+  /** False for a viewer, who can't reorder. */
+  reorderable: boolean;
 }) {
   const { ref, isDragSource } = useSortable({
     // A starred account is in two sections, so its id here includes the section.
@@ -216,6 +226,7 @@ function AccountItem({
     type: `account-${section}`,
     accept: [`account-${section}`],
     data: { section, accountId: account.id },
+    disabled: !reorderable,
   });
   const working = BigInt(account.balances.working);
   return (

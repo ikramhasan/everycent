@@ -137,3 +137,42 @@ export function categoriesWithMoves(moves: readonly MoneyMove[]) {
  * months, or up to three months in the past".
  */
 export const HISTORY_MONTHS_BACK = 3;
+
+/** The member filter's value for moves with no mover left (YNAB's "Inactive members"). */
+export const INACTIVE_MEMBERS = "inactive";
+
+export interface MemberFilterOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * YNAB's Recent Moves member filter (checked 2026-10-16, EVERYCENT-166), after "Everyone": each
+ * member by name; someone who left the budget only if they made one of the moves, as "Name
+ * (removed)"; "Inactive members" when a move's user is gone. YNAB shows the filter only with two or
+ * more of these.
+ */
+export function memberFilterOptions(
+  moves: readonly MoneyMove[],
+  members: readonly { userId: string; name: string }[],
+): MemberFilterOption[] {
+  const options = members.map((m) => ({ value: m.userId, label: m.name }));
+  const listed = new Set(options.map((o) => o.value));
+  let inactive = false;
+  for (const m of moves) {
+    if (!m.userId || !m.userName) inactive = true;
+    else if (!listed.has(m.userId)) {
+      listed.add(m.userId);
+      options.push({ value: m.userId, label: `${m.userName} (removed)` });
+    }
+  }
+  if (inactive) options.push({ value: INACTIVE_MEMBERS, label: "Inactive members" });
+  return options;
+}
+
+/** Whether a move passes the member filter ("" is Everyone). */
+export function matchesMember(move: MoneyMove, member: string): boolean {
+  if (!member) return true;
+  if (member === INACTIVE_MEMBERS) return !move.userId || !move.userName;
+  return move.userId === member;
+}

@@ -260,6 +260,34 @@
       "when": 1792121286792,
       "tag": "0036_display_currency",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792163911182,
+      "tag": "0037_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792163912591,
+      "tag": "0038_audit_triggers",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792169902579,
+      "tag": "0039_split_bump_updated_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792171756136,
+      "tag": "0040_notify_budget_delete",
+      "breakpoints": true
     }
   ]
 }

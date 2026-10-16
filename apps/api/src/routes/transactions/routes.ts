@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
+import { zMemberRef } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
@@ -42,6 +43,11 @@ const Flag = z
 
 const TransferSideSchema = z
   .object({
+    id: z.string(),
+    version: z
+      .number()
+      .int()
+      .describe("The other side's `version`: an edit of this side can change it (memo, approval)"),
     memo: z.string(),
     cleared: z.enum(CLEARED_STATES),
     flag: Flag,
@@ -163,8 +169,35 @@ export const TransactionSchema = z
         "Under a search: the split lines that match it (the register shows only those). Null " +
           "without a search",
       ),
+    enteredBy: zMemberRef
+      .nullable()
+      .describe(
+        "Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on " +
+          "its date) or for transactions from before this was recorded",
+      ),
+    changedBy: zMemberRef
+      .nullable()
+      .describe("Who changed it last; null if it hasn't changed since it was entered"),
+    version: z
+      .number()
+      .int()
+      .describe(
+        "Goes up with every change; send it back as `expectedVersion` to refuse a stale edit",
+      ),
   })
   .openapi("Transaction");
+
+/**
+ * The versions rows had just before a write (a transfer's other side too). With the versions
+ * after it, a client knows which version steps were its own (EVERYCENT-36).
+ */
+const PreviousVersions = z
+  .record(z.string(), z.number().int())
+  .describe("Transaction id → `version` just before this write, transfer sides included");
+
+const UpdatedTransactionSchema = TransactionSchema.extend({
+  previousVersions: PreviousVersions,
+}).openapi("UpdatedTransaction");
 
 const TransactionListSchema = z
   .object({
@@ -206,8 +239,9 @@ const crossCurrency = jsonError(
 );
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state " +
-    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a " +
-    "change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
+    "for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); a " +
+    "change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`); " +
+    "or the transaction changed since `expectedVersion` (`STALE_VERSION`)",
 );
 
 const categoryRules =
@@ -475,6 +509,14 @@ export const updateTransaction = createRoute({
           cleared: SettableCleared.optional(),
           flag: Flag.optional(),
           subtransactions: SubTransactions.optional(),
+          expectedVersion: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: " +
+                "undo and redo send it so a partner's later change isn't overwritten",
+            ),
           approved: z
             .boolean()
             .optional()
@@ -488,7 +530,7 @@ export const updateTransaction = createRoute({
     ),
   },
   responses: {
-    200: ok("Updated", TransactionSchema),
+    200: ok("Updated", UpdatedTransactionSchema),
     400: jsonError(
       "Invalid input, a closed account, a category the account can't use, a transfer to the " +
         "same account, or a date after today (DATE_IN_FUTURE)",
@@ -513,13 +555,25 @@ export const deleteTransaction = createRoute({
     "Deleting either side of a transfer deletes both, reconciled or not. Deleting a split " +
     "deletes its transfer lines' other sides; those can't be deleted on their own " +
     "(`TRANSFER_IN_SPLIT`).",
-  request: { params: TransactionParams },
+  request: {
+    params: TransactionParams,
+    query: z.object({
+      expectedVersion: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe("Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"),
+    }),
+  },
   responses: {
     204: { description: "Deleted" },
     401: jsonError("Not signed in"),
     403: forbidden,
     404: notFound,
-    409: jsonError("A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)"),
+    409: jsonError(
+      "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the " +
+        "transaction changed since `expectedVersion` (STALE_VERSION)",
+    ),
   },
 });
 
@@ -654,7 +708,19 @@ export const bulkUpdateTransactions = createRoute({
     "accounts are skipped. All of it happens in one database transaction.",
   request: {
     params: BudgetParams,
-    body: json(z.object({ selection: SelectionSchema, action: BulkActionSchema })),
+    body: json(
+      z.object({
+        selection: SelectionSchema,
+        action: BulkActionSchema,
+        expectedVersions: z
+          .record(z.string(), z.number().int())
+          .optional()
+          .describe(
+            "Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since " +
+              "(redo sends it)",
+          ),
+      }),
+    ),
   },
   responses: {
     200: ok(
@@ -674,6 +740,13 @@ export const bulkUpdateTransactions = createRoute({
               "`duplicate`: every row of the copies whose original row was selected, so a " +
                 "transfer selected from both sides has both sides of its copy here (empty for " +
                 "other actions)",
+            ),
+          previousVersions: PreviousVersions,
+          versions: z
+            .record(z.string(), z.number().int())
+            .describe(
+              "The changed transactions' `version` now (their transfers' other sides too), for " +
+                "undo's `expectedVersion`",
             ),
         })
         .openapi("BulkUpdateResult"),

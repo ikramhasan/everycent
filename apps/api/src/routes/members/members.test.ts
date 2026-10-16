@@ -15,7 +15,7 @@ beforeEach(() => resetDatabase(db));
 afterAll(close);
 
 type Members = {
-  members: { userId: string; email: string; role: string }[];
+  members: { userId: string; email: string; role: string; avatarColor: number }[];
   invitations: { id: string; email: string; name: string; expired: boolean }[];
   maxPeople: number;
 };
@@ -77,9 +77,10 @@ describe("budget invitations", () => {
     expect(await json(accepted)).toEqual({ budgetId: budget.id });
 
     const after = await members();
-    expect(after.members.map((m) => [m.email, m.role])).toEqual([
-      [owner.email, "owner"],
-      [email, "editor"],
+    // YNAB's avatar colours: the owner 1, then 2 onwards by when they joined (EVERYCENT-166).
+    expect(after.members.map((m) => [m.email, m.role, m.avatarColor])).toEqual([
+      [owner.email, "owner", 1],
+      [email, "editor", 2],
     ]);
     expect(after.invitations).toEqual([]);
     // The partner sees the budget, but not invitations.

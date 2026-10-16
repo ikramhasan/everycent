@@ -70,17 +70,19 @@ import {
   or,
 } from "drizzle-orm";
 import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
-import { adjustAssigned, assignedAmount, logMove } from "../../lib/assignments";
+import { adjustAssigned, assignedAmount, assignmentRow, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { resolveRate } from "../../lib/fx";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
+import { memberAvatarColors } from "../../lib/member-colors";
 import {
   type CategoryUpcoming,
   enterDueScheduled,
   entryDate,
   upcomingByCategory,
 } from "../../lib/scheduled";
+import { lastAssignedBy, staleVersion } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppDeps, AppEnv } from "../../types";
 import type {
@@ -1124,7 +1126,7 @@ export const setMonthNoteHandler: RouteHandler<typeof setMonthNote, Env> = async
 
 export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = async (c) => {
   const { budgetId, month, categoryId } = c.req.valid("param");
-  const { assigned, today = serverToday() } = c.req.valid("json");
+  const { assigned, expectedAssigned, today = serverToday() } = c.req.valid("json");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
@@ -1133,7 +1135,13 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
   await assertMonthInRange(db, budgetId, month, today);
 
   await db.transaction(async (tx) => {
-    const delta = BigInt(assigned) - (await assignedAmount(tx, categoryId, month));
+    const current = await assignedAmount(tx, categoryId, month, { lock: true });
+    if (expectedAssigned !== undefined && current !== BigInt(expectedAssigned)) {
+      const row = await assignmentRow(tx, categoryId, month);
+      const by = row ? await lastAssignedBy(tx, budgetId, row.id) : null;
+      throw await staleVersion(tx, by, c.var.user.id, "assigned amount");
+    }
+    const delta = BigInt(assigned) - current;
     await adjustAssigned(tx, budget, categoryId, month, delta);
     if (delta === 0n) return;
     const readyToAssignId = await internalCategoryId(tx, budgetId, "ready_to_assign");
@@ -1295,6 +1303,7 @@ async function movesJson(
       ),
     )
     .orderBy(desc(moneyMove.createdAt), desc(moneyMove.id));
+  const colors = await memberAvatarColors(db, budgetId);
   return rows.map((m) => {
     const fromReady = m.fromCategoryId === readyToAssignId;
     const toReady = m.toCategoryId === readyToAssignId;
@@ -1320,6 +1329,7 @@ async function movesJson(
       userId: m.userId,
       userName: m.userName,
       memberRole: m.memberRole,
+      avatarColor: (m.userId && colors.get(m.userId)) || null,
     };
   });
 }

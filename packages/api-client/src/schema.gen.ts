@@ -336,7 +336,11 @@ export interface paths {
         delete: operations["removeBudgetMember"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Make someone an editor or a viewer (owner only)
+         * @description A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The owner's own role changes only by transferring ownership (`CANNOT_CHANGE_OWNER`).
+         */
+        patch: operations["changeBudgetMemberRole"];
         trace?: never;
     };
     "/v1/budgets/{budgetId}/leave": {
@@ -1506,6 +1510,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The budget's change history, newest first
+         * @description Every insert, update and delete of the budget's data, who made it and when, with the row before and after (EVERYCENT-108). Changes to bookkeeping columns alone aren't listed.
+         */
+        get: operations["listBudgetActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One transaction's change history, oldest first
+         * @description Its insert, updates and delete, and those of its split lines (`sub_transaction`), with who made each. Works for a deleted transaction too.
+         */
+        get: operations["getTransactionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live changes to the budget (server-sent events)
+         * @description An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.
+         */
+        get: operations["streamBudgetEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1630,7 +1694,7 @@ export interface components {
              * @description The signed-in user's role in this budget
              * @enum {string}
              */
-            role: "owner" | "editor";
+            role: "owner" | "editor" | "viewer";
             /**
              * Format: date-time
              * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
@@ -1710,14 +1774,21 @@ export interface components {
             name: string;
             email: string;
             /** @enum {string} */
-            role: "owner" | "editor";
+            role: "owner" | "editor" | "viewer";
             joinedAt: string;
+            /** @description YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined */
+            avatarColor: number;
         };
         BudgetInvitation: {
             id: string;
             /** @description The invitee's first name */
             name: string;
             email: string;
+            /**
+             * @description The role they get when they join
+             * @enum {string}
+             */
+            role: "editor" | "viewer";
             createdAt: string;
             expiresAt: string;
             expired: boolean;
@@ -1727,6 +1798,12 @@ export interface components {
             name: string;
             /** Format: email */
             email: string;
+            /**
+             * @description `editor` (YNAB's only role: can change everything but sharing) or `viewer` (an everycent extra: can see the budget but not change it)
+             * @default editor
+             * @enum {string}
+             */
+            role: "editor" | "viewer";
         };
         InvitationView: {
             /** @description The address it was sent to */
@@ -1741,6 +1818,10 @@ export interface components {
         };
         AcceptedInvitation: {
             budgetId: string;
+        };
+        ChangeBudgetMemberRole: {
+            /** @enum {string} */
+            role: "editor" | "viewer";
         };
         TransferBudgetOwnership: {
             userId: string;
@@ -2398,9 +2479,16 @@ export interface components {
             runningBalance: string;
             /** @description Under a search: the split lines that match it (the register shows only those). Null without a search */
             matchingLineIds: string[] | null;
+            enteredBy: components["schemas"]["MemberRef"];
+            changedBy: components["schemas"]["MemberRef"] & unknown;
+            /** @description Goes up with every change; send it back as `expectedVersion` to refuse a stale edit */
+            version: number;
         };
         /** @description Transfers: the other side's own state (null when the other side is a split's line, or for other transactions) */
         TransferSide: {
+            id: string;
+            /** @description The other side's `version`: an edit of this side can change it (memo, approval) */
+            version: number;
             memo: string;
             /** @enum {string} */
             cleared: "uncleared" | "cleared" | "reconciled";
@@ -2438,6 +2526,14 @@ export interface components {
             transferReconciled: boolean;
             transferSide: components["schemas"]["TransferSide"] & unknown;
         };
+        /** @description Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on its date) or for transactions from before this was recorded */
+        MemberRef: {
+            userId: string;
+            /** @description Null once their user is deleted */
+            name: string | null;
+            /** @description Null once they've left the budget */
+            avatarColor: number | null;
+        } | null;
         SelectionSummary: {
             count: number;
             /** @description Sum of the amounts, in `currency`'s minor units; 0 when `currency` is null */
@@ -2503,6 +2599,14 @@ export interface components {
             created: string[];
             /** @description `duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions) */
             copies: string[];
+            /** @description Transaction id → `version` just before this write, transfer sides included */
+            previousVersions: {
+                [key: string]: number;
+            };
+            /** @description The changed transactions' `version` now (their transfers' other sides too), for undo's `expectedVersion` */
+            versions: {
+                [key: string]: number;
+            };
         };
         BulkAction: {
             /** @enum {string} */
@@ -2630,6 +2734,12 @@ export interface components {
             /** @description Its own amount (a transfer between currencies; `transferAmount` wins) */
             amount?: string;
         };
+        UpdatedTransaction: components["schemas"]["Transaction"] & {
+            /** @description Transaction id → `version` just before this write, transfer sides included */
+            previousVersions: {
+                [key: string]: number;
+            };
+        };
         UpdateTransaction: {
             accountId?: string;
             /**
@@ -2659,6 +2769,8 @@ export interface components {
              */
             flag?: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             subtransactions?: components["schemas"]["SubTransactionInput"][];
+            /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten */
+            expectedVersion?: number;
             /** @description Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB */
             approved?: boolean;
         };
@@ -3320,6 +3432,8 @@ export interface components {
              * @description The user's today; later transactions don't count. Defaults to the server's UTC date.
              */
             today?: string;
+            /** @description Refuse (409 STALE_VERSION) unless Assigned is still this: undo and redo send it so a partner's later change isn't overwritten */
+            expectedAssigned?: string;
         };
         MonthNote: {
             /** @description A month, YYYY-MM */
@@ -3428,7 +3542,9 @@ export interface components {
              * @description The mover's role on the budget now; null once they've left it
              * @enum {string|null}
              */
-            memberRole: "owner" | "editor" | null;
+            memberRole: "owner" | "editor" | "viewer" | null;
+            /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget */
+            avatarColor: number | null;
         };
         ExpectedIncome: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -3505,6 +3621,36 @@ export interface components {
              * @example 1.0842
              */
             rate: string;
+        };
+        ActivityPage: {
+            /** @description Newest first */
+            events: components["schemas"]["ActivityEvent"][];
+            /** @description Pass as `cursor` for the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        ActivityEvent: {
+            id: string;
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["MemberRef"] & unknown;
+            /** @description Why a change without an actor happened: 'scheduled' for an entered occurrence */
+            source: string | null;
+            /** @description The table changed, e.g. 'transaction', 'category_assignment' */
+            entity: string;
+            rowId: string;
+            /** @enum {string} */
+            op: "insert" | "update" | "delete";
+            /** @description The row before the change; null for an insert */
+            before: {
+                [key: string]: string | null;
+            } | null;
+            /** @description The row after the change; null for a delete */
+            after: {
+                [key: string]: string | null;
+            } | null;
+        };
+        TransactionHistory: {
+            events: components["schemas"]["ActivityEvent"][];
         };
     };
     responses: never;
@@ -4680,6 +4826,78 @@ export interface operations {
                 };
             };
             /** @description The owner (`CANNOT_REMOVE_OWNER`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    changeBudgetMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeBudgetMemberRole"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetMember"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Only the budget's owner can manage sharing, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or invitation, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The owner (`CANNOT_CHANGE_OWNER`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6993,6 +7211,10 @@ export interface operations {
                 "application/json": {
                     selection: components["schemas"]["TransactionSelection"];
                     action: components["schemas"]["BulkAction"];
+                    /** @description Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since (redo sends it) */
+                    expectedVersions?: {
+                        [key: string]: number;
+                    };
                 };
             };
         };
@@ -7055,7 +7277,10 @@ export interface operations {
     };
     deleteTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version` */
+                expectedVersion?: number | null;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -7099,7 +7324,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`) */
+            /** @description A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the transaction changed since `expectedVersion` (STALE_VERSION) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7135,7 +7360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Transaction"];
+                    "application/json": components["schemas"]["UpdatedTransaction"];
                 };
             };
             /** @description Invalid input, a closed account, a category the account can't use, a transfer to the same account, or a date after today (DATE_IN_FUTURE) */
@@ -7174,7 +7399,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`) */
+            /** @description A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`); or the transaction changed since `expectedVersion` (`STALE_VERSION`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8804,6 +9029,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Assigned changed since `expectedAssigned` (STALE_VERSION) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     setMonthNote: {
@@ -9451,6 +9685,170 @@ export interface operations {
                 };
             };
             /** @description No such budget or override, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listBudgetActivity: {
+        parameters: {
+            query?: {
+                /** @description Only this user's changes; 'none' for changes nobody made */
+                member?: string;
+                /** @description Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction') */
+                entity?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            /** @description Invalid input or cursor (INVALID_CURSOR) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTransactionHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Its changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionHistory"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    streamBudgetEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

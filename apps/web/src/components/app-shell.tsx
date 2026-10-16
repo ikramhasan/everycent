@@ -24,6 +24,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
+  Activity,
   ChevronsUpDown,
   Landmark,
   LayoutGrid,
@@ -107,6 +108,18 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       >
                         <Landmark />
                         <span>All Accounts</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/budgets/$budgetId/activity"
+                        params={{ budgetId }}
+                        activeProps={{ "data-active": true }}
+                      >
+                        <Activity />
+                        <span>Activity</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

@@ -6,9 +6,11 @@ import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { accountsRouter } from "./routes/accounts";
+import { activityRouter } from "./routes/activity";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
+import { eventsRouter } from "./routes/events";
 import { flagsRouter } from "./routes/flags";
 import { fxRatesRouter } from "./routes/fx-rates";
 import { healthRouter } from "./routes/health";
@@ -73,6 +75,8 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", viewsRouter);
   app.route("/v1", monthsRouter);
   app.route("/v1", fxRatesRouter);
+  app.route("/v1", activityRouter);
+  app.route("/v1", eventsRouter);
 
   registerDocs(app);
   return app;

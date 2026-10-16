@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { createTestApp, testEnv } from "../../../test/helpers";
 import { createApp } from "../../app";
 import { createAuth } from "../../lib/auth";
+import { ChangeBus } from "../../lib/change-bus";
 import { MemoryEmailSender } from "../../lib/email/sender";
 
 const { app, close } = createTestApp();
@@ -25,6 +26,7 @@ describe("GET /v1/health", () => {
       env,
       email,
       auth: createAuth(broken.db, env, email),
+      changes: new ChangeBus(broken.listen),
       fxProviders: [],
     }).request("/v1/health");
     spy.mockRestore();

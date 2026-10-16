@@ -78,7 +78,8 @@ export function ScheduledSection({
   selected: ReadonlySet<string>;
   onSelect: (id: string, on: boolean, shift: boolean) => void;
 }) {
-  const { budget, formatAmount } = useBudget();
+  // A viewer (EVERYCENT-88) sees the schedules but can't change or enter them.
+  const { budget, formatAmount, readOnly: viewer } = useBudget();
   const history = useUndo();
   const [editing, setEditing] = useState<{ id: string; draft: Draft } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -264,7 +265,7 @@ export function ScheduledSection({
   }
 
   function open(row: ScheduledTransaction) {
-    if (row.kind === "splitTransfer") return;
+    if (row.kind === "splitTransfer" || viewer) return;
     setError(null);
     setEditing({ id: row.id, draft: draftFromScheduled(row, inCurrency(budget, row.currency)) });
   }
@@ -287,7 +288,7 @@ export function ScheduledSection({
           />
         );
       case "flag":
-        return row.kind === "splitTransfer" ? null : (
+        return row.kind === "splitTransfer" || viewer ? null : (
           <FlagMenu
             value={row.flag}
             flags={flags}
@@ -343,7 +344,7 @@ export function ScheduledSection({
       case "inflow":
         return amount > 0n ? show(amount, row.currency) : "";
       case "actions":
-        return (
+        return viewer ? null : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Scheduled transaction actions">
@@ -429,7 +430,7 @@ export function ScheduledSection({
             >
               {columns.map((id) => {
                 const spec = COLUMN_SPECS[id];
-                const editable = !readOnly && isEditable(id);
+                const editable = !readOnly && !viewer && isEditable(id);
                 return (
                   <TableCell
                     key={id}
@@ -483,7 +484,7 @@ export function ScheduledSection({
                         COLUMN_SPECS[id].align === "right" && "text-right tabular-nums",
                         isEditable(id) && "cursor-text",
                       )}
-                      onClick={isEditable(id) ? () => open(row) : undefined}
+                      onClick={isEditable(id) && !viewer ? () => open(row) : undefined}
                     >
                       {cells[id] ?? null}
                     </TableCell>

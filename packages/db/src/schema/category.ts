@@ -112,6 +112,8 @@ export const categoryAssignment = pgTable(
     /** Minor units; negative when money was taken out. */
     amount: bigint({ mode: "bigint" }).notNull(),
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    /** Bumped by the trigger on every real change: undo sends it to detect a partner's edit. */
+    version: integer().notNull().default(1),
     ...timestamps,
   },
   (t) => [

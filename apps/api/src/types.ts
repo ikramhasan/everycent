@@ -1,6 +1,7 @@
 import type { Database } from "@everycent/db";
 import type { Env } from "./env";
 import type { Auth } from "./lib/auth";
+import type { ChangeBus } from "./lib/change-bus";
 import type { EmailSender } from "./lib/email/sender";
 import type { FxProvider } from "./lib/fx/providers";
 
@@ -9,6 +10,8 @@ export interface AppDeps {
   db: Database;
   env: Env;
   auth: Auth;
+  /** Budget change notifications for live updates (`GET …/events`). */
+  changes: ChangeBus;
   email: EmailSender;
   /** Exchange-rate providers, tried in order (tests use an in-memory fake). */
   fxProviders: FxProvider[];
@@ -22,5 +25,7 @@ export interface AppDeps {
 export type AppEnv = {
   Variables: {
     deps: AppDeps;
+    /** Set by hono/request-id for every request. */
+    requestId: string;
   };
 };

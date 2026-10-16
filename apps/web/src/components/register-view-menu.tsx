@@ -100,7 +100,10 @@ export function RegisterViewMenu({
     );
   }
 
-  function checkbox(key: "showReconciled" | "showRunningBalance" | "showFlags", label: string) {
+  function checkbox(
+    key: "showReconciled" | "showRunningBalance" | "showFlags" | "showEnteredBy",
+    label: string,
+  ) {
     return (
       <div className="flex items-center gap-2">
         <Checkbox
@@ -163,6 +166,7 @@ export function RegisterViewMenu({
           {checkbox("showReconciled", "Show Reconciled Transactions")}
           {runningBalance && checkbox("showRunningBalance", "Show Running Balance")}
           {checkbox("showFlags", "Show Flags")}
+          {checkbox("showEnteredBy", "Show Entered By")}
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>

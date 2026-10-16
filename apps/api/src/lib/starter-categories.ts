@@ -1,5 +1,6 @@
 import { type Database, newId } from "@everycent/db";
 import { category, categoryGroup } from "@everycent/db/schema";
+import type { Db } from "./ledger";
 
 /**
  * Categories a new budget starts with, in YNAB's default groups. The setup flow lets people
@@ -52,7 +53,7 @@ export async function seedInternalCategories(db: Database, budgetId: string): Pr
 }
 
 /** The starter template, for budgets created from scratch (a fresh start copies instead). */
-export async function seedStarterCategories(db: Database, budgetId: string): Promise<void> {
+export async function seedStarterCategories(db: Db, budgetId: string): Promise<void> {
   await db.transaction(async (tx) => {
     const groups = STARTER_CATEGORIES.map((g, i) => ({ ...g, id: newId(), sortOrder: i }));
     await tx

@@ -22,6 +22,7 @@ import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
+import { memberRefs } from "../../lib/member-colors";
 
 export type { SearchSettings };
 
@@ -135,6 +136,11 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
           where other_side.id = ${transaction.transferTransactionId}
             and other_side.cleared = 'reconciled'
         )`.as("transfer_reconciled"),
+        createdByUserId: transaction.createdByUserId,
+        updatedByUserId: transaction.updatedByUserId,
+        version: transaction.version,
+        // Changed by a later request (one request's writes all share its now()).
+        changed: sql<boolean>`${transaction.updatedAt} > ${transaction.createdAt}`.as("changed"),
         // As text, so the cursor keeps Postgres's microseconds.
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
         runningBalance: sql<string>`sum(${transaction.amount}) over (
@@ -486,6 +492,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       sideMemo: other.memo,
       sideCleared: other.cleared,
       sideFlag: other.flag,
+      sideId: other.id,
+      sideVersion: other.version,
       sideApproved: other.approved,
       sideCategoryId: other.categoryId,
       sideAmount: other.amount,
@@ -503,6 +511,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
   type Line = Omit<
     (typeof rows)[number],
     | "transactionId"
+    | "sideId"
+    | "sideVersion"
     | "sideMemo"
     | "sideCleared"
     | "sideFlag"
@@ -515,6 +525,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
   for (const row of rows) {
     const {
       transactionId,
+      sideId,
+      sideVersion,
       sideMemo,
       sideCleared,
       sideFlag,
@@ -527,8 +539,14 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
     const line: Line = {
       ...l,
       transferSide:
-        l.transferTransactionId && sideCleared !== null && sideCurrency !== null
+        l.transferTransactionId &&
+        sideId !== null &&
+        sideVersion !== null &&
+        sideCleared !== null &&
+        sideCurrency !== null
           ? {
+              id: sideId,
+              version: sideVersion,
               memo: sideMemo ?? "",
               cleared: sideCleared,
               flag: sideFlag,
@@ -546,6 +564,8 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
 
 /** A transfer's other side's own state (what an undo needs to bring it back as it was). */
 export interface TransferSide {
+  id: string;
+  version: number;
   memo: string;
   cleared: ClearedState;
   flag: FlagColor | null;
@@ -566,6 +586,7 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
   const found = await db
     .select({
       id: transaction.id,
+      version: transaction.version,
       memo: transaction.memo,
       cleared: transaction.cleared,
       flag: transaction.flag,
@@ -576,8 +597,8 @@ async function queryTransferSides(db: Db, rows: readonly Row[]) {
     })
     .from(transaction)
     .where(inArray(transaction.id, ids));
-  for (const { id, amount, ...side } of found) {
-    sides.set(id, { ...side, amount: amount.toString() });
+  for (const { amount, ...side } of found) {
+    sides.set(side.id, { ...side, amount: amount.toString() });
   }
   return sides;
 }
@@ -607,6 +628,10 @@ function columns(r: Register) {
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,
     transferReconciled: r.transferReconciled,
+    createdByUserId: r.createdByUserId,
+    updatedByUserId: r.updatedByUserId,
+    version: r.version,
+    changed: r.changed,
     createdAt: r.createdAt,
     runningBalance: r.runningBalance,
   };
@@ -624,6 +649,7 @@ function selectPage(db: Db, r: Register) {
  */
 async function toJson(
   db: Db,
+  budgetId: string,
   rows: readonly Row[],
   matching: ReadonlyMap<string, string[]> | null = null,
 ) {
@@ -632,8 +658,16 @@ async function toJson(
     rows.map((row) => row.id),
   );
   const sides = await queryTransferSides(db, rows);
-  return rows.map(({ createdAt: _, ...row }) => ({
+  const member = await memberRefs(
+    db,
+    budgetId,
+    rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
+  );
+  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, changed, ...row }) => ({
     ...row,
+    enteredBy: member(createdByUserId),
+    // Only once someone changed it after entering it.
+    changedBy: changed ? member(updatedByUserId) : null,
     amount: row.amount.toString(),
     baseAmount: row.baseAmount.toString(),
     fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
@@ -716,7 +750,7 @@ export async function queryRegister(
         )
       : null;
   return {
-    transactions: await toJson(db, pageRows, matching),
+    transactions: await toJson(db, budgetId, pageRows, matching),
     // Asked once, with the first page.
     someHidden: page.cursor ? null : await someHidden(db, budgetId, filter, settings),
     nextCursor:
@@ -781,13 +815,13 @@ async function someHidden(
 export async function queryRegisterRows(db: Db, budgetId: string, ids: readonly string[]) {
   if (ids.length === 0) return [];
   const r = registerCte(db, budgetId);
-  return toJson(db, await selectPage(db, r).where(inArray(r.id, [...ids])));
+  return toJson(db, budgetId, await selectPage(db, r).where(inArray(r.id, [...ids])));
 }
 
 /** One transaction as the register shows it (with its running balance). */
 export async function queryRegisterRow(db: Db, budgetId: string, accountId: string, id: string) {
   const r = registerCte(db, budgetId, accountId);
   const rows = await selectPage(db, r).where(eq(r.id, id));
-  const [row] = await toJson(db, rows);
+  const [row] = await toJson(db, budgetId, rows);
   return row;
 }

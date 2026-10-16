@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { BudgetProvider } from "@/lib/budget-context";
+import type { Budget } from "@/lib/budgets";
 import type { CategoryList as CategoryListData } from "@/lib/categories";
 import type { BudgetMonthData } from "@/lib/months";
 import { NO_AUTO_ASSIGN } from "@/test/fixtures";
@@ -243,6 +245,37 @@ describe("CategoryList", () => {
     expect(names).toEqual(["Bills", "Rent", "Electric"]);
     expect(screen.queryByText("Cable")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Has a note")).toBeInTheDocument();
+  });
+
+  it("offers a viewer nothing to change (EVERYCENT-88)", async () => {
+    const actions = makeActions();
+    const viewing = {
+      id: "b",
+      name: "Household",
+      currency: "USD",
+      numberFormat: "comma_dot",
+      currencySymbolPosition: "before",
+      dateFormat: "MM/DD/YYYY",
+      role: "viewer",
+      archivedAt: null,
+      lastUsedAt: null,
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    } as Budget;
+    render(
+      <BudgetProvider budget={viewing}>
+        <CategoryList data={data} actions={actions} />
+      </BudgetProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /Category Group/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add a category to Bills" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reorder/ })).not.toBeInTheDocument();
+    // Its name opens no editor.
+    await userEvent.click(screen.getByRole("button", { name: "Electric" }));
+    expect(screen.queryByLabelText("Category name")).not.toBeInTheDocument();
+    expect(actions.updateCategory).not.toHaveBeenCalled();
   });
 
   it("renames a category and edits its note", async () => {

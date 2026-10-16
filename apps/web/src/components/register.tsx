@@ -56,6 +56,7 @@ import {
   CircleHelp,
   CircleX,
   CreditCard,
+  History,
   Lock,
   MoreHorizontal,
   Plus,
@@ -74,7 +75,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
-import { type Flag, type FlagColor, flagsQueryOptions } from "@/lib/flags";
+import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
 import {
@@ -111,6 +112,7 @@ import {
   selectionBody,
   setSelected,
 } from "@/lib/selection";
+import { sessionQueryOptions } from "@/lib/session";
 import { createBodyFromTransaction, updateBodyFromTransaction } from "@/lib/transaction-history";
 import {
   type CellColumn,
@@ -133,7 +135,9 @@ import {
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
+import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FlagMenu } from "./flag-menu";
+import { MemberAvatar } from "./member-avatar";
 import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
@@ -200,6 +204,14 @@ interface EditingSplit {
  * load as you scroll, and rows are virtualized so long histories stay fast. `focusId` scrolls to
  * that transaction and highlights it (the other side of a transfer, when jumping to it).
  */
+/** A saved transaction's version, and its transfer's other side's, by id. */
+function versionsOf(row: Transaction): Record<string, number> {
+  return {
+    [row.id]: row.version,
+    ...(row.transferSide ? { [row.transferSide.id]: row.transferSide.version } : {}),
+  };
+}
+
 export function Register({
   accountId,
   focusId,
@@ -219,7 +231,7 @@ export function Register({
   openRecordPayment?: boolean;
   onRecordPaymentOpened?: () => void;
 }) {
-  const { budget, formatAmount, formatDate } = useBudget();
+  const { budget, formatAmount, formatDate, readOnly } = useBudget();
   const history = useUndo();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -312,7 +324,10 @@ export function Register({
   const flagList = useQuery(flagsQueryOptions(budget.id));
   const renameFlagMutation = $api.useMutation("put", "/v1/budgets/{budgetId}/flags/{color}");
   const create = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions");
-  const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}");
+  // Every edit's own version steps go into the undo history (EVERYCENT-36).
+  const update = $api.useMutation("patch", "/v1/budgets/{budgetId}/transactions/{transactionId}", {
+    onSuccess: (row) => history.noteSave(row.previousVersions, versionsOf(row)),
+  });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const [adding, setAdding] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
@@ -321,6 +336,9 @@ export function Register({
   const [addingPicker, setAddingPicker] = useState(false);
   const [addingKey, setAddingKey] = useState(0);
   const [newError, setNewError] = useState<string | null>(null);
+  /** The transaction whose History dialog is open. */
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const session = useQuery(sessionQueryOptions);
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
@@ -333,7 +351,9 @@ export function Register({
   } | null>(null);
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
-  const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk");
+  const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk", {
+    onSuccess: (result) => history.noteSave(result.previousVersions, result.versions),
+  });
   const scheduledBulk = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/scheduled-transactions/bulk",
@@ -362,9 +382,12 @@ export function Register({
         (c) =>
           (c !== "balance" || view.showRunningBalance) &&
           (c !== "flag" || view.showFlags) &&
-          (c !== "review" || reviewing),
+          (c !== "enteredBy" || view.showEnteredBy) &&
+          // A viewer (EVERYCENT-88) can't select, approve or change rows.
+          (c !== "select" || !readOnly) &&
+          (c !== "review" || (reviewing && !readOnly)),
       ),
-    [allAccounts, view.showRunningBalance, view.showFlags, reviewing],
+    [allAccounts, view.showRunningBalance, view.showFlags, view.showEnteredBy, reviewing, readOnly],
   );
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
@@ -590,7 +613,7 @@ export function Register({
           // Every copy row whose original was ticked: both sides of a transfer ticked from both.
           nextSelection = { mode: "some", ids: new Set(result.copies) };
         } else if (result.updated > 0) {
-          commands.push(bulkCommand(action, result.before));
+          commands.push(bulkCommand(action, result.before, result.versions));
         }
       }
       if (
@@ -760,8 +783,14 @@ export function Register({
   }
 
   /** Undo for a bulk action on transactions, from their state before it. */
-  function bulkCommand(action: Exclude<BulkAction, { type: "enterNow" }>, before: Transaction[]) {
+  function bulkCommand(
+    action: Exclude<BulkAction, { type: "enterNow" }>,
+    before: Transaction[],
+    after: Record<string, number>,
+  ) {
     let current = before;
+    /** The version this command last left each row at; undo and redo follow the tab's steps. */
+    let left = after;
     // Reject deletes the unapproved rows, so it's undone like a delete.
     const deletes = action.type === "delete" || action.type === "reject";
     return {
@@ -778,15 +807,23 @@ export function Register({
           }
           current = restored;
         } else {
+          const undone: Record<string, number> = {};
           for (const transaction of before) {
-            await update.mutateAsync({
+            // Followed each time: putting one side of a transfer back moves the other's too.
+            const from = left[transaction.id] ?? transaction.version;
+            const saved = await update.mutateAsync({
               params: {
                 path: { budgetId: budget.id, transactionId: transaction.id },
                 query: { today: todayIso() },
               },
-              body: updateBodyFromTransaction(transaction),
+              body: {
+                ...updateBodyFromTransaction(transaction),
+                expectedVersion: history.expectedVersion(transaction.id, from),
+              },
             });
+            Object.assign(undone, versionsOf(saved));
           }
+          left = undone;
           current = before;
         }
       },
@@ -794,43 +831,55 @@ export function Register({
         if (deletes) {
           for (const transaction of current) {
             await remove.mutateAsync({
-              params: { path: { budgetId: budget.id, transactionId: transaction.id } },
+              params: {
+                path: { budgetId: budget.id, transactionId: transaction.id },
+                query: { expectedVersion: transaction.version },
+              },
             });
           }
         } else if (action.type !== "duplicate") {
-          await bulk.mutateAsync({
+          const ids = current.map((transaction) => transaction.id);
+          const result = await bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
-            body: { selection: { ids: current.map((transaction) => transaction.id) }, action },
+            body: {
+              selection: { ids },
+              action,
+              expectedVersions: Object.fromEntries(
+                ids.flatMap((id) => {
+                  const from = left[id];
+                  return from === undefined ? [] : [[id, history.expectedVersion(id, from)]];
+                }),
+              ),
+            },
           });
+          left = result.versions;
         }
       },
     };
   }
 
+  /**
+   * Undo for a single edit: puts the row back as it was, unless a partner changed it since
+   * (`expectedVersion`; the API refuses with STALE_VERSION, EVERYCENT-36).
+   */
   function recordUpdate(label: string, before: Transaction, after: Transaction) {
-    history.record({
-      label,
-      undo: async () => {
-        await update.mutateAsync({
-          params: {
-            path: { budgetId: budget.id, transactionId: before.id },
-            query: { today: todayIso() },
-          },
-          body: updateBodyFromTransaction(before),
-        });
-        await refresh();
-      },
-      redo: async () => {
-        await update.mutateAsync({
-          params: {
-            path: { budgetId: budget.id, transactionId: after.id },
-            query: { today: todayIso() },
-          },
-          body: updateBodyFromTransaction(after),
-        });
-        await refresh();
-      },
-    });
+    // The version this command last left the row at; the tab's own steps lead on from it.
+    let left = after.version;
+    const replay = async (row: Transaction) => {
+      const saved = await update.mutateAsync({
+        params: {
+          path: { budgetId: budget.id, transactionId: row.id },
+          query: { today: todayIso() },
+        },
+        body: {
+          ...updateBodyFromTransaction(row),
+          expectedVersion: history.expectedVersion(row.id, left),
+        },
+      });
+      left = saved.version;
+      await refresh();
+    };
+    history.record({ label, undo: () => replay(before), redo: () => replay(after) });
   }
 
   /** A transfer's payee as YNAB's register words it ("Payment: X" / "Transfer: X"). */
@@ -890,6 +939,7 @@ export function Register({
    * memo and category; the split owns the rest.
    */
   function editableColumns(t: Transaction): CellColumn[] {
+    if (readOnly) return [];
     const categorized = hasCategory(t);
     return columnIds.filter(
       (c): c is CellColumn =>
@@ -1001,7 +1051,10 @@ export function Register({
         label: "new transaction",
         undo: async () => {
           await remove.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: current.id } },
+            params: {
+              path: { budgetId: budget.id, transactionId: current.id },
+              query: { expectedVersion: history.expectedVersion(current.id, current.version) },
+            },
           });
           // A transfer's fee is a transaction of its own; it goes with the transfer it came with.
           const feeId = current.feeTransactionId;
@@ -1273,7 +1326,10 @@ export function Register({
         redo: async () => {
           if (!current) return;
           await remove.mutateAsync({
-            params: { path: { budgetId: budget.id, transactionId: current.id } },
+            params: {
+              path: { budgetId: budget.id, transactionId: current.id },
+              query: { expectedVersion: history.expectedVersion(current.id, current.version) },
+            },
           });
           await refresh();
         },
@@ -1351,6 +1407,15 @@ export function Register({
           />
         );
       case "flag":
+        if (readOnly) {
+          const current = flags.find((f) => f.color === t.flag);
+          return current ? (
+            <Bookmark
+              className={cn("mx-auto size-4 fill-current", FLAG_CLASS[current.color])}
+              aria-label={`Flag: ${flagLabel(current)}`}
+            />
+          ) : null;
+        }
         return (
           <FlagMenu
             value={t.flag}
@@ -1436,7 +1501,27 @@ export function Register({
           </span>
         );
       }
+      case "enteredBy":
+        // Nothing for rows nobody entered (scheduled) or from before this was recorded.
+        return t.enteredBy ? (
+          <MemberAvatar
+            className="mx-auto"
+            userId={t.enteredBy.userId}
+            userName={t.enteredBy.name}
+            avatarColor={t.enteredBy.avatarColor}
+            currentUserId={session.data?.user.id}
+            tooltipPrefix="Entered by "
+            tooltipSuffix={t.changedBy?.name ? `, last changed by ${t.changedBy.name}` : ""}
+          />
+        ) : null;
       case "cleared":
+        if (readOnly && t.cleared !== "reconciled") {
+          return t.cleared === "cleared" ? (
+            <CircleCheck className="mx-auto size-4 text-primary" aria-label="Cleared" />
+          ) : (
+            <Circle className="mx-auto size-4 text-muted-foreground" aria-label="Uncleared" />
+          );
+        }
         return t.cleared === "reconciled" ? (
           <Lock className="mx-auto size-4 text-muted-foreground" aria-label="Reconciled" />
         ) : (
@@ -1463,33 +1548,44 @@ export function Register({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!t.approved && (
+              {readOnly ? (
+                <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
+                  <History /> History
+                </DropdownMenuItem>
+              ) : (
                 <>
-                  <DropdownMenuItem onSelect={() => void approveRow(t)}>
-                    <Check /> Approve
+                  {!t.approved && (
+                    <>
+                      <DropdownMenuItem onSelect={() => void approveRow(t)}>
+                        <Check /> Approve
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void deleteRow(t, true)}>
+                        <CircleX /> Reject
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
+                    <DropdownMenuItem onSelect={() => openSplit(t, true)}>
+                      <Split /> Split
+                    </DropdownMenuItem>
+                  )}
+                  {!t.transferFromSplit && (
+                    <DropdownMenuItem onSelect={() => makeRepeating(t)}>
+                      <Repeat /> Make Repeating
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => setHistoryFor(t.id)}>
+                    <History /> History
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void deleteRow(t, true)}>
-                    <CircleX /> Reject
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={t.transferFromSplit}
+                    onSelect={() => handleDelete(t)}
+                  >
+                    <Trash2 /> Delete
                   </DropdownMenuItem>
                 </>
               )}
-              {hasCategory(t) && !t.transferFromSplit && t.subtransactions.length === 0 && (
-                <DropdownMenuItem onSelect={() => openSplit(t, true)}>
-                  <Split /> Split
-                </DropdownMenuItem>
-              )}
-              {!t.transferFromSplit && (
-                <DropdownMenuItem onSelect={() => makeRepeating(t)}>
-                  <Repeat /> Make Repeating
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={t.transferFromSplit}
-                onSelect={() => handleDelete(t)}
-              >
-                <Trash2 /> Delete
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -1532,10 +1628,12 @@ export function Register({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
-          <Plus /> Add transaction
-        </Button>
-        {recordPayment && canAdd && (
+        {!readOnly && (
+          <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
+            <Plus /> Add transaction
+          </Button>
+        )}
+        {recordPayment && canAdd && !readOnly && (
           <Button
             size="sm"
             variant="outline"
@@ -1549,7 +1647,7 @@ export function Register({
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
         <div className="ml-auto flex items-center gap-1">
-          <UndoRedoButtons />
+          {!readOnly && <UndoRedoButtons />}
           <RegisterViewMenu
             view={view}
             onChange={setView}
@@ -1598,6 +1696,11 @@ export function Register({
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
         />
       )}
+
+      <ChangeHistoryDialog
+        transactionId={historyFor}
+        onOpenChange={(open) => !open && setHistoryFor(null)}
+      />
 
       <AlertDialog
         open={warning !== null}
@@ -1813,9 +1916,9 @@ export function Register({
                         className={cn(
                           "truncate py-1.5",
                           spec.align === "right" && "text-right tabular-nums",
-                          isEditable(id) && "cursor-text",
+                          isEditable(id) && !readOnly && "cursor-text",
                         )}
-                        onClick={isEditable(id) ? () => openSplit(t) : undefined}
+                        onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
                       >
                         {lineDisplay(t, row.line, id)}
                       </TableCell>

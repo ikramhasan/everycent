@@ -2,6 +2,7 @@ import { newId, sql } from "@everycent/db";
 import { budget, budgetMember, userPreference } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
+import { setAuditContext } from "../../lib/audit-context";
 import { type BudgetAccess, loadBudgetAccess, rememberLastBudget } from "../../lib/budget-access";
 import { ARCHIVED_STAMP, copyIntoFreshStart } from "../../lib/fresh-start";
 import { seedStarterCategories } from "../../lib/starter-categories";
@@ -70,7 +71,11 @@ export const createBudgetHandler: RouteHandler<typeof createBudget, Env> = async
     headers: c.req.raw.headers,
   });
   if (!created) throw new Error("Budget creation returned nothing");
-  await seedStarterCategories(db, created.id);
+  // The plugin wrote the budget on its own connection; the starter categories are the user's.
+  await db.transaction(async (tx) => {
+    await setAuditContext(tx, { actorId: c.var.user.id, requestId: c.var.requestId });
+    await seedStarterCategories(tx, created.id);
+  });
   await rememberLastBudget(db, c.var.user.id, created.id);
   return c.json(toBudgetJson(await loadBudgetAccess(c, created.id)), 201);
 };
@@ -86,11 +91,10 @@ export const updateBudgetHandler: RouteHandler<typeof updateBudget, Env> = async
   const { budgetId } = c.req.valid("param");
   const data = c.req.valid("json");
   const { budget: current } = await loadBudgetAccess(c, budgetId, { organization: ["update"] });
+  // Straight to the row rather than the plugin's updateOrganization (which only sets these
+  // columns, on its own connection), so the change is in this request's transaction and log.
   if (Object.keys(data).length > 0) {
-    await c.var.deps.auth.api.updateOrganization({
-      body: { organizationId: budgetId, data },
-      headers: c.req.raw.headers,
-    });
+    await c.var.deps.db.update(budget).set(data).where(eq(budget.id, budgetId));
   }
   // YNAB's archive is only the name's stamp: renaming it away restores the plan (2026-10-15).
   if (current.archivedAt && data.name !== undefined && !data.name.includes(ARCHIVED_STAMP)) {
@@ -131,9 +135,10 @@ export const freshStartBudgetHandler: RouteHandler<typeof freshStartBudget, Env>
   if (!created) throw new Error("Budget creation returned nothing");
 
   try {
-    await db.transaction((tx) =>
-      copyIntoFreshStart(tx, { old, newBudgetId: created.id, ownerId: c.var.user.id, date }),
-    );
+    await db.transaction(async (tx) => {
+      await setAuditContext(tx, { actorId: c.var.user.id, requestId: c.var.requestId });
+      await copyIntoFreshStart(tx, { old, newBudgetId: created.id, ownerId: c.var.user.id, date });
+    });
   } catch (error) {
     // The plugin created the budget outside our transaction; don't leave a half-copied one.
     await db.delete(budget).where(eq(budget.id, created.id));

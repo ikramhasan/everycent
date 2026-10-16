@@ -10,6 +10,7 @@ import { Textarea } from "@everycent/ui/components/textarea";
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, SquarePen } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { useOptionalBudget } from "@/lib/budget-context";
 import type { Breakdown } from "@/lib/budget-view";
 import { monthName } from "@/lib/months";
 
@@ -645,7 +646,9 @@ function NoteField({
   onChange: (note: string) => Promise<void>;
 }) {
   const [text, setText] = useState(note);
+  const readOnly = useOptionalBudget()?.readOnly ?? false;
   useEffect(() => setText(note), [note]);
+  if (readOnly && !note) return null;
   return (
     <div className="grid gap-1.5">
       <label htmlFor="category-note" className="font-semibold text-sm">
@@ -656,6 +659,7 @@ function NoteField({
         value={text}
         placeholder="Enter a note..."
         rows={3}
+        readOnly={readOnly}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => {
           if (text !== note) void onChange(text);

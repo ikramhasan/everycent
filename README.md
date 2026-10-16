@@ -287,10 +287,10 @@ Extras:
 ### 16. Sharing (YNAB Together)
 
 - [x] Invite members to a budget by email (up to N members)
-- [ ] Roles: owner, editor, viewer **(extra over YNAB's single role)**
-- [ ] Per-member activity attribution ("entered by")
+- [x] Roles: owner, editor, viewer **(extra over YNAB's single role)**
+- [x] Per-member activity attribution ("entered by")
 - [x] Leave budget / remove member / transfer ownership
-- [ ] Real-time updates across clients (WebSocket / SSE) **(extra)**
+- [x] Real-time updates across clients (WebSocket / SSE) **(extra)**
 
 ### 17. UX polish
 
@@ -322,7 +322,7 @@ Off by default, per-user toggle, clear data-usage notice, no data sent unless en
 
 - [ ] Public REST API with personal access tokens (YNAB API parity) + rate limits
 - [ ] Webhooks for transaction / budget changes **(extra)**
-- [ ] Audit log / change history per budget
+- [x] Audit log / change history per budget
 - [ ] Automated backups and point-in-time restore
 - [ ] Observability: structured logs, metrics, error tracking
 - [ ] Deployment: Docker images, production config, migrations on deploy

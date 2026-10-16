@@ -97,7 +97,7 @@ export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
 });
 
 function BudgetPage() {
-  const { budget, formatAmount, formatDate } = useBudget();
+  const { budget, formatAmount, formatDate, readOnly } = useBudget();
   const navigate = Route.useNavigate();
   const today = currentMonth();
   const search = Route.useSearch();
@@ -324,69 +324,75 @@ function BudgetPage() {
         selectOnly: (id) => setSelected(new Set([id])),
         setAll: (ids) => setSelected(new Set(ids)),
       },
-      assign: {
-        parse,
-        toInput,
-        assign: (categoryId, amount) => {
-          const before = data.categories.find((c) => c.categoryId === categoryId)?.assigned ?? "0";
-          const delta = amount - BigInt(before);
-          const readyToAssignId = categories.data?.readyToAssignCategoryId;
-          const assign = () =>
-            assignMutation.mutateAsync({
-              params: { path: { budgetId: budget.id, month: data.month, categoryId } },
-              body: { assigned: amount.toString(), today: todayIso() },
-            });
-          const moveDelta = (reverse: boolean) => {
-            if (!readyToAssignId || delta === 0n) return assign();
-            const positive = delta > 0n !== reverse;
-            return moveMutation.mutateAsync({
-              params: { path: { budgetId: budget.id, month: data.month } },
-              body: {
-                fromCategoryId: positive ? readyToAssignId : categoryId,
-                toCategoryId: positive ? categoryId : readyToAssignId,
-                amount: (delta > 0n ? delta : -delta).toString(),
-                today: todayIso(),
-              },
-            });
-          };
-          return save(
-            assign,
-            () => moveDelta(true),
-            "assigned amount",
-            "Couldn't assign the money.",
-            () => moveDelta(false),
-          );
-        },
-      },
-      move: categories.data && {
-        options: moneyOptions(categories.data, data),
-        readyToAssignId: categories.data.readyToAssignCategoryId,
-        parse,
-        toInput,
-        move: (fromCategoryId, toCategoryId, amount) =>
-          moveIn(data.month, fromCategoryId, toCategoryId, amount),
-        moveIn,
-        moveFrom: (fromMonth, fromCategoryId, toCategoryId, amount) => {
-          // To the month on screen from `fromMonth`; undone the other way round.
-          const mutate = (to: BudgetMonth, from: BudgetMonth, fromId: string, toId: string) =>
-            moveMutation.mutateAsync({
-              params: { path: { budgetId: budget.id, month: to } },
-              body: {
-                fromCategoryId: fromId,
-                toCategoryId: toId,
-                amount: amount.toString(),
-                fromMonth: from,
-                today: todayIso(),
-              },
-            });
-          return save(
-            () => mutate(data.month, fromMonth, fromCategoryId, toCategoryId),
-            () => mutate(fromMonth, data.month, toCategoryId, fromCategoryId),
-            "money move",
-            "Couldn't move the money.",
-          );
-        },
-      },
+      // A viewer (EVERYCENT-88) sees the numbers but can't assign or move money.
+      assign: readOnly
+        ? undefined
+        : {
+            parse,
+            toInput,
+            assign: (categoryId, amount) => {
+              const before =
+                data.categories.find((c) => c.categoryId === categoryId)?.assigned ?? "0";
+              const delta = amount - BigInt(before);
+              const readyToAssignId = categories.data?.readyToAssignCategoryId;
+              const assign = () =>
+                assignMutation.mutateAsync({
+                  params: { path: { budgetId: budget.id, month: data.month, categoryId } },
+                  body: { assigned: amount.toString(), today: todayIso() },
+                });
+              const moveDelta = (reverse: boolean) => {
+                if (!readyToAssignId || delta === 0n) return assign();
+                const positive = delta > 0n !== reverse;
+                return moveMutation.mutateAsync({
+                  params: { path: { budgetId: budget.id, month: data.month } },
+                  body: {
+                    fromCategoryId: positive ? readyToAssignId : categoryId,
+                    toCategoryId: positive ? categoryId : readyToAssignId,
+                    amount: (delta > 0n ? delta : -delta).toString(),
+                    today: todayIso(),
+                  },
+                });
+              };
+              return save(
+                assign,
+                () => moveDelta(true),
+                "assigned amount",
+                "Couldn't assign the money.",
+                () => moveDelta(false),
+              );
+            },
+          },
+      move: readOnly
+        ? undefined
+        : categories.data && {
+            options: moneyOptions(categories.data, data),
+            readyToAssignId: categories.data.readyToAssignCategoryId,
+            parse,
+            toInput,
+            move: (fromCategoryId, toCategoryId, amount) =>
+              moveIn(data.month, fromCategoryId, toCategoryId, amount),
+            moveIn,
+            moveFrom: (fromMonth, fromCategoryId, toCategoryId, amount) => {
+              // To the month on screen from `fromMonth`; undone the other way round.
+              const mutate = (to: BudgetMonth, from: BudgetMonth, fromId: string, toId: string) =>
+                moveMutation.mutateAsync({
+                  params: { path: { budgetId: budget.id, month: to } },
+                  body: {
+                    fromCategoryId: fromId,
+                    toCategoryId: toId,
+                    amount: amount.toString(),
+                    fromMonth: from,
+                    today: todayIso(),
+                  },
+                });
+              return save(
+                () => mutate(data.month, fromMonth, fromCategoryId, toCategoryId),
+                () => mutate(fromMonth, data.month, toCategoryId, fromCategoryId),
+                "money move",
+                "Couldn't move the money.",
+              );
+            },
+          },
     };
 
     function moveIn(m: BudgetMonth, fromCategoryId: string, toCategoryId: string, amount: bigint) {
@@ -409,6 +415,7 @@ function BudgetPage() {
     }
     // mutateAsync is stable; the mutation objects themselves change every render.
   }, [
+    readOnly,
     figures.data,
     categories.data,
     formatAmount,
@@ -470,7 +477,8 @@ function BudgetPage() {
    * empty one (the Ready to Assign banner's Assign pop-up, YNAB's "Auto" tab).
    */
   const autoAssignPanel = (selection: ReadonlySet<string>, bare = false) =>
-    listFigures && (
+    listFigures &&
+    !readOnly && (
       <AutoAssignPanel
         bare={bare}
         // The selected categories, or the rows in view (hidden categories never are).
@@ -727,7 +735,7 @@ function BudgetPage() {
               addGroupDisabled={Boolean(customView)}
               toolbar={
                 <div className="flex flex-1 items-center gap-1">
-                  <UndoRedoButtons />
+                  {!readOnly && <UndoRedoButtons />}
                   {listFigures && (
                     <RecentMoves
                       budgetId={budget.id}
@@ -741,7 +749,12 @@ function BudgetPage() {
                       }
                     />
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => setGalleryOpen(true)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    hidden={readOnly}
+                    onClick={() => setGalleryOpen(true)}
+                  >
                     <LayoutTemplate /> Templates
                   </Button>
                   {customView && (

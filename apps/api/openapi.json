@@ -831,7 +831,8 @@
             "type": "string",
             "enum": [
               "owner",
-              "editor"
+              "editor",
+              "viewer"
             ],
             "description": "The signed-in user's role in this budget"
           },
@@ -1196,11 +1197,18 @@
             "type": "string",
             "enum": [
               "owner",
-              "editor"
+              "editor",
+              "viewer"
             ]
           },
           "joinedAt": {
             "type": "string"
+          },
+          "avatarColor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined"
           }
         },
         "required": [
@@ -1208,7 +1216,8 @@
           "name",
           "email",
           "role",
-          "joinedAt"
+          "joinedAt",
+          "avatarColor"
         ]
       },
       "BudgetInvitation": {
@@ -1224,6 +1233,14 @@
           "email": {
             "type": "string"
           },
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ],
+            "description": "The role they get when they join"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -1238,6 +1255,7 @@
           "id",
           "name",
           "email",
+          "role",
           "createdAt",
           "expiresAt",
           "expired"
@@ -1256,6 +1274,15 @@
             "type": "string",
             "maxLength": 254,
             "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ],
+            "default": "editor",
+            "description": "`editor` (YNAB's only role: can change everything but sharing) or `viewer` (an everycent extra: can see the budget but not change it)"
           }
         },
         "required": [
@@ -1313,6 +1340,21 @@
         },
         "required": [
           "budgetId"
+        ]
+      },
+      "ChangeBudgetMemberRole": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "role"
         ]
       },
       "TransferBudgetOwnership": {
@@ -4446,6 +4488,23 @@
               "type": "string"
             },
             "description": "Under a search: the split lines that match it (the register shows only those). Null without a search"
+          },
+          "enteredBy": {
+            "$ref": "#/components/schemas/MemberRef"
+          },
+          "changedBy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "description": "Who changed it last; null if it hasn't changed since it was entered"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "description": "Goes up with every change; send it back as `expectedVersion` to refuse a stale edit"
           }
         },
         "required": [
@@ -4474,7 +4533,10 @@
           "transferSide",
           "subtransactions",
           "runningBalance",
-          "matchingLineIds"
+          "matchingLineIds",
+          "enteredBy",
+          "changedBy",
+          "version"
         ]
       },
       "TransferSide": {
@@ -4483,6 +4545,13 @@
           "null"
         ],
         "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "description": "The other side's `version`: an edit of this side can change it (memo, approval)"
+          },
           "memo": {
             "type": "string"
           },
@@ -4689,6 +4758,8 @@
           }
         },
         "required": [
+          "id",
+          "version",
           "memo",
           "cleared",
           "flag",
@@ -4785,6 +4856,39 @@
           "transferReconciled",
           "transferSide"
         ]
+      },
+      "MemberRef": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null once their user is deleted"
+          },
+          "avatarColor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Null once they've left the budget"
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "avatarColor"
+        ],
+        "description": "Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on its date) or for transactions from before this was recorded"
       },
       "SelectionSummary": {
         "type": "object",
@@ -5113,13 +5217,29 @@
               "type": "string"
             },
             "description": "`duplicate`: every row of the copies whose original row was selected, so a transfer selected from both sides has both sides of its copy here (empty for other actions)"
+          },
+          "previousVersions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Transaction id → `version` just before this write, transfer sides included"
+          },
+          "versions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The changed transactions' `version` now (their transfers' other sides too), for undo's `expectedVersion`"
           }
         },
         "required": [
           "updated",
           "before",
           "created",
-          "copies"
+          "copies",
+          "previousVersions",
+          "versions"
         ]
       },
       "BulkAction": {
@@ -5567,6 +5687,28 @@
         ],
         "description": "Restoring a deleted transfer (an undo): its other side's own state, from the deleted transaction's `transferSide`. Left out, the other side starts uncleared, approved, unflagged and with this side's memo"
       },
+      "UpdatedTransaction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Transaction"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "previousVersions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "description": "Transaction id → `version` just before this write, transfer sides included"
+              }
+            },
+            "required": [
+              "previousVersions"
+            ]
+          }
+        ]
+      },
       "UpdateTransaction": {
         "type": "object",
         "properties": {
@@ -5651,6 +5793,10 @@
               "$ref": "#/components/schemas/SubTransactionInput"
             },
             "minItems": 2
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten"
           },
           "approved": {
             "type": "boolean",
@@ -8519,6 +8665,11 @@
             "type": "string",
             "format": "date",
             "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+          },
+          "expectedAssigned": {
+            "type": "string",
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "Refuse (409 STALE_VERSION) unless Assigned is still this: undo and redo send it so a partner's later change isn't overwritten"
           }
         },
         "required": [
@@ -9000,9 +9151,19 @@
             "enum": [
               "owner",
               "editor",
+              "viewer",
               null
             ],
             "description": "The mover's role on the budget now; null once they've left it"
+          },
+          "avatarColor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 6,
+            "description": "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget"
           }
         },
         "required": [
@@ -9019,7 +9180,8 @@
           "autoAssign",
           "userId",
           "userName",
-          "memberRole"
+          "memberRole",
+          "avatarColor"
         ]
       },
       "ExpectedIncome": {
@@ -9802,6 +9964,124 @@
           "date",
           "currency",
           "rate"
+        ]
+      },
+      "ActivityPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            },
+            "description": "Newest first"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor"
+        ]
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "description": "Who made the change; null for one nobody made (see `source`)"
+              }
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why a change without an actor happened: 'scheduled' for an entered occurrence"
+          },
+          "entity": {
+            "type": "string",
+            "description": "The table changed, e.g. 'transaction', 'category_assignment'"
+          },
+          "rowId": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "insert",
+              "update",
+              "delete"
+            ]
+          },
+          "before": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "The row before the change; null for an insert"
+          },
+          "after": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "The row after the change; null for a delete"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "source",
+          "entity",
+          "rowId",
+          "op",
+          "before",
+          "after"
+        ]
+      },
+      "TransactionHistory": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            }
+          }
+        },
+        "required": [
+          "events"
         ]
       }
     },
@@ -11298,6 +11578,109 @@
           },
           "409": {
             "description": "The owner (`CANNOT_REMOVE_OWNER`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "changeBudgetMemberRole",
+        "tags": [
+          "Sharing"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Make someone an editor or a viewer (owner only)",
+        "description": "A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The owner's own role changes only by transferring ownership (`CANNOT_CHANGE_OWNER`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeBudgetMemberRole"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the budget's owner can manage sharing, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or invitation, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The owner (`CANNOT_CHANGE_OWNER`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -14894,6 +15277,13 @@
                   },
                   "action": {
                     "$ref": "#/components/schemas/BulkAction"
+                  },
+                  "expectedVersions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "description": "Transaction id → `version`: refuse (409 STALE_VERSION) if any changed since (redo sends it)"
                   }
                 },
                 "required": [
@@ -15026,7 +15416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Transaction"
+                  "$ref": "#/components/schemas/UpdatedTransaction"
                 }
               }
             }
@@ -15072,7 +15462,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); or a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`)",
+            "description": "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); a new cleared state for a reconciled transaction, which stays reconciled (`TRANSACTION_RECONCILED`); a change to an FX revaluation's amount, date, account, payee or rate (`REVALUATION_LOCKED`); or the transaction changed since `expectedVersion` (`STALE_VERSION`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -15121,6 +15511,19 @@
             "required": true,
             "name": "transactionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"
+            },
+            "required": false,
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`",
+            "name": "expectedVersion",
+            "in": "query"
           }
         ],
         "responses": {
@@ -15158,7 +15561,7 @@
             }
           },
           "409": {
-            "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`)",
+            "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the transaction changed since `expectedVersion` (STALE_VERSION)",
             "content": {
               "application/json": {
                 "schema": {
@@ -17485,6 +17888,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Assigned changed since `expectedAssigned` (STALE_VERSION)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -18788,6 +19201,264 @@
           },
           "404": {
             "description": "No such budget or override, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/activity": {
+      "get": {
+        "operationId": "listBudgetActivity",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The budget's change history, newest first",
+        "description": "Every insert, update and delete of the budget's data, who made it and when, with the row before and after (EVERYCENT-108). Changes to bookkeeping columns alone aren't listed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only this user's changes; 'none' for changes nobody made"
+            },
+            "required": false,
+            "description": "Only this user's changes; 'none' for changes nobody made",
+            "name": "member",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction')"
+            },
+            "required": false,
+            "description": "Only changes to these tables, comma-separated (e.g. 'transaction,sub_transaction')",
+            "name": "entity",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or cursor (INVALID_CURSOR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/history": {
+      "get": {
+        "operationId": "getTransactionHistory",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "One transaction's change history, oldest first",
+        "description": "Its insert, updates and delete, and those of its split lines (`sub_transaction`), with who made each. Works for a deleted transaction too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/events": {
+      "get": {
+        "operationId": "streamBudgetEvents",
+        "tags": [
+          "Activity"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Live changes to the budget (server-sent events)",
+        "description": "An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

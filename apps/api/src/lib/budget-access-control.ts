@@ -4,7 +4,9 @@ import { defaultStatements } from "better-auth/plugins/organization/access";
 
 /**
  * Budget roles, modelled on YNAB Together: the owner (creator) manages sharing, deletion and fresh
- * start; everyone the budget is shared with can do everything else. The plugin checks
+ * start; everyone the budget is shared with can do everything else, but a viewer (an everycent
+ * extra, EVERYCENT-88) can't change anything (and `viewerGuard` refuses their writes before any
+ * route sees them). The plugin checks
  * `organization` permissions on its own endpoints, so budget-level actions use that resource name.
  */
 export const budgetAc = createAccessControl({
@@ -32,6 +34,7 @@ export const budgetRoles = {
     transaction: ["create", "update", "delete"],
     budget: ["assign"],
   }),
+  viewer: budgetAc.newRole({}),
 } satisfies Record<BudgetRole, unknown>;
 
 export type BudgetPermission = Parameters<(typeof budgetRoles)["owner"]["authorize"]>[0];

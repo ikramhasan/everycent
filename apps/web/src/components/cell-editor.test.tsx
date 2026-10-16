@@ -39,6 +39,9 @@ const txn: Transaction = {
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
+  enteredBy: null,
+  changedBy: null,
+  version: 1,
 };
 
 function renderCell(column: CellColumn, transaction = txn, payees: Payee[] = []) {

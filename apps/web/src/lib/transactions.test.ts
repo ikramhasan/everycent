@@ -114,6 +114,9 @@ const txn: Transaction = {
   subtransactions: [],
   runningBalance: "0",
   matchingLineIds: null,
+  enteredBy: null,
+  changedBy: null,
+  version: 1,
 };
 
 describe("register drafts", () => {
@@ -234,6 +237,8 @@ describe("register drafts", () => {
         transferAccountId: "a2",
         transferTransactionId: "t2",
         transferSide: {
+          id: "side",
+          version: 1,
           memo: "",
           cleared: "uncleared",
           flag: null,
