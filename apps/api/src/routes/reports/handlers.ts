@@ -1,0 +1,113 @@
+import { type FlagColor, transaction } from "@everycent/db/schema";
+import { type BudgetMonth, monthBounds } from "@everycent/engine";
+import type { RouteHandler } from "@hono/zod-openapi";
+import { eq, sql } from "drizzle-orm";
+import { loadBudgetAccess } from "../../lib/budget-access";
+import { AppError } from "../../lib/errors";
+import { serverToday } from "../../lib/ledger";
+import { type ReportFilter, type ReportKind, reportLines, reportSums } from "../../lib/reports";
+import { enterDueScheduled, entryDate } from "../../lib/scheduled";
+import type { AuthedEnv } from "../../middleware/require-auth";
+import type { AppDeps, AppEnv } from "../../types";
+import type { getReportActivity, listReportTransactions } from "./routes";
+
+type Env = AppEnv & AuthedEnv;
+
+interface ReportQuery {
+  from: string;
+  to: string;
+  kind: ReportKind;
+  accountIds?: string[];
+  groupIds?: string[];
+  categoryIds?: string[];
+  payeeIds?: string[];
+  flags?: string[];
+  today?: string;
+}
+
+/**
+ * The filter a report query asks for, from the range's first day up to the user's today (entering
+ * scheduled transactions due by then, as every read with a today does).
+ */
+async function reportFilter(
+  deps: AppDeps,
+  budgetId: string,
+  query: ReportQuery,
+): Promise<ReportFilter> {
+  if (query.from > query.to) throw new AppError(400, "BAD_REQUEST", "`from` is after `to`");
+  const today = query.today ?? serverToday();
+  if (query.today) {
+    await enterDueScheduled(deps.db, deps, budgetId, entryDate(deps, query.today));
+  }
+  const end = monthBounds(query.to as BudgetMonth).end;
+  const none = <T extends string>(values?: T[]) =>
+    values?.map((v) => (v === "none" ? null : v)) as Exclude<T, "none">[] | undefined;
+  return {
+    kind: query.kind,
+    start: monthBounds(query.from as BudgetMonth).start,
+    end: end < today ? end : today,
+    accountIds: query.accountIds,
+    groupIds: query.groupIds,
+    categoryIds: query.categoryIds,
+    payeeIds: none(query.payeeIds),
+    flags: none(query.flags) as ReportFilter["flags"],
+  };
+}
+
+export const getReportActivityHandler: RouteHandler<typeof getReportActivity, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { groupBy = [], ...query } = c.req.valid("query");
+  const { db } = c.var.deps;
+  const { budget } = await loadBudgetAccess(c, budgetId);
+  const filter = await reportFilter(c.var.deps, budgetId, query);
+  const [sums, [first]] = await Promise.all([
+    reportSums(db, budgetId, filter, groupBy),
+    db
+      .select({ month: sql<string | null>`to_char(min(${transaction.date}), 'YYYY-MM')` })
+      .from(transaction)
+      .where(eq(transaction.budgetId, budgetId)),
+  ]);
+  return c.json(
+    {
+      currency: budget.currency,
+      firstMonth: first?.month ?? null,
+      rows: sums.map((s) => ({
+        ...("month" in s.keys && { month: s.keys.month }),
+        ...("group" in s.keys && { groupId: s.keys.group }),
+        ...("category" in s.keys && { categoryId: s.keys.category }),
+        ...("payee" in s.keys && { payeeId: s.keys.payee }),
+        ...("account" in s.keys && { accountId: s.keys.account }),
+        ...("flag" in s.keys && { flag: s.keys.flag as FlagColor | null }),
+        outflow: s.outflow.toString(),
+        inflow: s.inflow.toString(),
+        net: s.net.toString(),
+        count: s.count,
+      })),
+    },
+    200,
+  );
+};
+
+export const listReportTransactionsHandler: RouteHandler<
+  typeof listReportTransactions,
+  Env
+> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { order, limit, ...query } = c.req.valid("query");
+  const { db } = c.var.deps;
+  await loadBudgetAccess(c, budgetId);
+  const filter = await reportFilter(c.var.deps, budgetId, query);
+  const lines = await reportLines(db, budgetId, filter, order);
+  return c.json(
+    {
+      total: lines.reduce((s, l) => s + l.amount, 0n).toString(),
+      count: lines.length,
+      transactions: lines.slice(0, limit).map(({ createdAt: _, ...l }) => ({
+        ...l,
+        amount: l.amount.toString(),
+        nativeAmount: l.nativeAmount.toString(),
+      })),
+    },
+    200,
+  );
+};

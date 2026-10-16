@@ -193,6 +193,30 @@ export {
   type SearchSettings,
   type SearchTerm,
 } from "./register-search";
+export {
+  averageOf,
+  type ComparisonRange,
+  changeOf,
+  comparisonRange,
+  type DelimitedCell,
+  exportDelimiter,
+  type MonthRange,
+  monthsIn,
+  percentOf,
+  plainAmount,
+  presetOf,
+  presetRange,
+  REPORT_COMPARISONS,
+  REPORT_PRESETS,
+  type ReportComparison,
+  type ReportPreset,
+  type SpendingRow,
+  type SpendingSplit,
+  shareLabel,
+  shiftRange,
+  splitSpending,
+  toDelimited,
+} from "./reports";
 export { divideRounded, type RoundingMode } from "./rounding";
 export {
   firstOccurrenceAfter,

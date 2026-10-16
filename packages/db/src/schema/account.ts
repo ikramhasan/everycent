@@ -296,7 +296,8 @@ export const transaction = pgTable(
     uniqueIndex("transaction_transfer_transaction_idx").on(t.transferTransactionId),
     uniqueIndex("transaction_transfer_sub_transaction_idx").on(t.transferSubTransactionId),
     index("transaction_account_date_idx").on(t.accountId, t.date),
-    index("transaction_budget_id_idx").on(t.budgetId),
+    // Reports read a budget's transactions by date range.
+    index("transaction_budget_date_idx").on(t.budgetId, t.date),
     index("transaction_category_id_idx").on(t.categoryId),
     index("transaction_payee_id_idx").on(t.payeeId),
   ],
