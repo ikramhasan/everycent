@@ -26,7 +26,7 @@ import {
 } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
 import {
   availableMark,
@@ -810,6 +810,33 @@ function CategoryRow({
   const selected = selection?.selected.has(category.id) ?? false;
   // YNAB: clicking a name selects that category alone; clicking it again opens its editor.
   const onlySelected = selected && selection?.selected.size === 1;
+  // Set by a click on the row: opens its Assigned amount for typing, as YNAB does.
+  const [editAssigned, setEditAssigned] = useState(false);
+  function selectAndEdit() {
+    selection?.selectOnly(category.id);
+    if (assign) setEditAssigned(true);
+  }
+  /**
+   * A click anywhere on the row selects it alone and starts editing its Assigned amount, as does
+   * checking the first box of a selection. Other controls in the row (drag handle, Activity,
+   * Available) keep their own click, and clicks inside their popovers, which React bubbles here
+   * through the portal, are skipped.
+   */
+  function onRowClick(e: MouseEvent<HTMLDivElement>) {
+    if (!selection || !e.currentTarget.contains(e.target as Node)) return;
+    const target = e.target as Element;
+    if (target.closest("[data-assigned-cell]")) {
+      if (!onlySelected) selection.selectOnly(category.id);
+      return;
+    }
+    if (target.closest("[role=checkbox]")) {
+      // The checkbox has already toggled; this row is now the only one selected when nothing was.
+      if (!selected && selection.selected.size === 0 && assign) setEditAssigned(true);
+      return;
+    }
+    if (target.closest("button, a, input, label")) return;
+    selectAndEdit();
+  }
   const scrollTo = figures?.scrollTo;
   useEffect(() => {
     if (scrollTo?.id !== category.id || scrolledTo.has(scrollTo)) return;
@@ -820,6 +847,8 @@ function CategoryRow({
   }, [scrollTo, category.id]);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a larger mouse target for the name and Assigned buttons
+    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard users reach the same actions through those buttons
     <div
       data-category-row={category.id}
       ref={ref}
@@ -829,6 +858,7 @@ function CategoryRow({
         isDragSource && "opacity-60",
         selected && SELECTED_ROW,
       )}
+      onClick={onRowClick}
     >
       <div className="grid min-w-0 gap-1">
         <div className={NAME_CELL}>
@@ -885,7 +915,7 @@ function CategoryRow({
                   if (!selection || onlySelected) return;
                   // Selecting comes first; Radix skips opening the editor on a prevented click.
                   e.preventDefault();
-                  selection.selectOnly(category.id);
+                  selectAndEdit();
                 }}
               >
                 <span className="truncate">{category.name}</span>
@@ -925,7 +955,7 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          <div className="group/assigned relative min-w-0">
+          <div data-assigned-cell className="group/assigned relative min-w-0">
             {assign ? (
               <AssignedCell
                 categoryId={category.id}
@@ -933,8 +963,11 @@ function CategoryRow({
                 amount={totals.assigned}
                 format={format}
                 actions={assign}
-                startEditing={figures?.editAssigned === category.id}
-                onStartedEditing={figures?.onEditAssignedStarted}
+                startEditing={editAssigned || figures?.editAssigned === category.id}
+                onStartedEditing={() => {
+                  setEditAssigned(false);
+                  figures?.onEditAssignedStarted?.();
+                }}
               />
             ) : (
               <span className={cn(FIGURE, FIGURE_PAD, "block text-sm")}>
