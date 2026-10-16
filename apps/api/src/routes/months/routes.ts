@@ -483,7 +483,9 @@ const ActivityRowSchema = z
         '"Group: Category" (internal categories by their own name); a card\'s transfers show its payment category',
       ),
     memo: z.string(),
-    amount: zMinorUnits.describe("Negative is an outflow"),
+    amount: zMinorUnits.describe("In the budget's currency (the month's); negative is an outflow"),
+    nativeAmount: zMinorUnits.describe("In the account's currency, `currency`"),
+    currency: zCurrencyCode.describe("The account's currency"),
   })
   .openapi("ActivityTransaction");
 

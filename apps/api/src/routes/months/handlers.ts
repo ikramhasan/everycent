@@ -112,8 +112,8 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
     .select({
       categoryId: transaction.categoryId,
       month: monthKey(transaction.date),
-      amount: total(transaction.amount),
-      credit: creditTotal(transaction.amount),
+      amount: total(transaction.baseAmount),
+      credit: creditTotal(transaction.baseAmount),
     })
     .from(transaction)
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
@@ -130,8 +130,8 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
     .select({
       categoryId: subTransaction.categoryId,
       month: monthKey(transaction.date),
-      amount: total(subTransaction.amount),
-      credit: creditTotal(subTransaction.amount),
+      amount: total(subTransaction.baseAmount),
+      credit: creditTotal(subTransaction.baseAmount),
     })
     .from(subTransaction)
     .innerJoin(transaction, eq(transaction.id, subTransaction.transactionId))
@@ -231,7 +231,7 @@ async function addPayments(
     .select({
       accountId: transaction.accountId,
       month: monthKey(transaction.date),
-      amount: total(transaction.amount),
+      amount: total(transaction.baseAmount),
     })
     .from(transaction)
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
@@ -244,7 +244,7 @@ async function addPayments(
       and(
         eq(transaction.budgetId, budgetId),
         inArray(budgetAccount.type, CREDIT_TYPES),
-        gt(transaction.amount, 0n),
+        gt(transaction.baseAmount, 0n),
         lte(transaction.date, cutoff),
         or(inArray(otherAccount.type, CASH_TYPES), inArray(otherLineAccount.type, CASH_TYPES)),
       ),
@@ -285,7 +285,7 @@ async function cardLines(db: Db, budgetId: string, cutoff: string): Promise<Plac
     .select({
       id: transaction.id,
       date: transaction.date,
-      amount: transaction.amount,
+      amount: transaction.baseAmount,
       accountId: transaction.accountId,
       categoryId: transaction.categoryId,
       internalKind: category.internalKind,
@@ -316,9 +316,9 @@ async function cardLines(db: Db, budgetId: string, cutoff: string): Promise<Plac
       id: subTransaction.id,
       transactionId: transaction.id,
       date: transaction.date,
-      transactionAmount: transaction.amount,
+      transactionAmount: transaction.baseAmount,
       lineOrder: subTransaction.sortOrder,
-      amount: subTransaction.amount,
+      amount: subTransaction.baseAmount,
       accountId: transaction.accountId,
       categoryId: subTransaction.categoryId,
       internalKind: category.internalKind,
@@ -639,7 +639,8 @@ async function monthState(
 
   // Each card's payment details: what's owed at the end of the month (up to today) against what's
   // set aside, and how much of the shortfall is this month's credit overspending.
-  const balances = await accountBalances(db, budgetId, cutoff);
+  // In the budget's currency: a foreign card owes what its spending was booked at (Σ base amounts).
+  const balances = await accountBalances(db, budgetId, cutoff, "base");
   // The card's month in its register: what it owed before, and its outflows and inflows since,
   // and whether any of the month's transactions are uncategorized.
   const uncategorizedId = categories.find((c) => c.internalKind === "uncategorized")?.id ?? "";
@@ -647,9 +648,9 @@ async function monthState(
     .select({
       accountId: transaction.accountId,
       uncategorized: sql<number>`count(*) filter (where ${transaction.date} >= ${start} and ${transaction.categoryId} = ${uncategorizedId})`,
-      prior: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} < ${start}), 0)`,
-      outflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} < 0), 0)`,
-      inflows: sql<string>`coalesce(sum(${transaction.amount}) filter (where ${transaction.date} >= ${start} and ${transaction.amount} > 0), 0)`,
+      prior: sql<string>`coalesce(sum(${transaction.baseAmount}) filter (where ${transaction.date} < ${start}), 0)`,
+      outflows: sql<string>`coalesce(sum(${transaction.baseAmount}) filter (where ${transaction.date} >= ${start} and ${transaction.baseAmount} < 0), 0)`,
+      inflows: sql<string>`coalesce(sum(${transaction.baseAmount}) filter (where ${transaction.date} >= ${start} and ${transaction.baseAmount} > 0), 0)`,
     })
     .from(transaction)
     .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
@@ -1010,7 +1011,12 @@ export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = a
   const today = query.today ?? serverToday();
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.today)
-    await enterDueScheduled(c.var.deps.db, budgetId, entryDate(c.var.deps, query.today));
+    await enterDueScheduled(
+      c.var.deps.db,
+      c.var.deps,
+      budgetId,
+      entryDate(c.var.deps, query.today),
+    );
   return c.json(await budgetMonthJson(c.var.deps.db, budget, month, today), 200);
 };
 

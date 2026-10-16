@@ -7,6 +7,7 @@ import {
 } from "@everycent/db/schema";
 import { isOnBudget, usesCategory as usesAccountCategory } from "@everycent/engine";
 import { and, eq } from "drizzle-orm";
+import { syncBases } from "../../lib/base-amount";
 import { AppError } from "../../lib/errors";
 import { type Db, insertTransaction, internalCategoryId, transferPayeeId } from "../../lib/ledger";
 
@@ -159,6 +160,8 @@ export async function insertOtherSide(
     date: side.date,
     amount: -side.amount,
     currency: transferTo.currency,
+    // Set from this side's by `syncBases` below.
+    baseAmount: 0n,
     payeeId: await transferPayeeId(tx, account),
     categoryId: await resolveCategory(
       tx,
@@ -177,6 +180,7 @@ export async function insertOtherSide(
     .update(transaction)
     .set({ transferTransactionId: otherId })
     .where(eq(transaction.id, side.id));
+  await syncBases(tx, side.id);
 }
 
 export async function lockTransaction(tx: Db, budgetId: string, id: string) {

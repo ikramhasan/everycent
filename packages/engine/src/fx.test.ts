@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   convert,
+  convertLines,
   crossRate,
+  impliedRate,
   invertRate,
   normalizeRate,
   parseJsonExact,
@@ -122,5 +124,40 @@ describe("convert", () => {
     for (const rate of ["", "abc", "-1", "0", "0.000", "1e3", "1.", ".5"]) {
       expect(() => convert(money(1n, "USD"), rate, "EUR"), rate).toThrow(RangeError);
     }
+  });
+});
+
+describe("convertLines", () => {
+  it("keeps the lines adding up to the converted parent", () => {
+    // 3 × €0.01 at 1.5: each line is 1.5¢ → 2¢ (half-even), the parent 4.5¢ → 4¢.
+    const result = convertLines(money(-3n, "EUR"), [-1n, -1n, -1n], "1.5", "USD");
+    expect(result.amount).toBe(-4n);
+    expect(result.lines.reduce((a, b) => a + b, 0n)).toBe(-4n);
+    // Each line rounds to −2¢ (−6¢ in all); the +2¢ difference goes to the first line.
+    expect(result.lines).toEqual([0n, -2n, -2n]);
+  });
+
+  it("gives the difference to the largest line, across exponents and mixed signs", () => {
+    // ¥1,001 + ¥-1 at 0.0067 USD: parent ¥1,000 → $6.70; lines $6.71 (6.7067) and −$0.01 (0.0067).
+    const result = convertLines(money(1000n, "JPY"), [1001n, -1n], "0.0067", "USD");
+    expect(result.amount).toBe(670n);
+    expect(result.lines).toEqual([671n, -1n]);
+    // KWD has three decimals: 1.235 KWD + 1.235 KWD at 3.25 → $4.01375 each, $8.0275 total.
+    const kwd = convertLines(money(2470n, "KWD"), [1235n, 1235n], "3.25", "USD");
+    expect(kwd.amount).toBe(803n);
+    expect(kwd.lines.reduce((a, b) => a + b, 0n)).toBe(803n);
+  });
+});
+
+describe("impliedRate", () => {
+  it("is the rate between two amounts in their own exponents", () => {
+    expect(impliedRate(money(-10000n, "JPY"), money(-6700n, "USD"))).toBe("0.0067");
+    expect(impliedRate(money(1000n, "KWD"), money(325n, "USD"))).toBe("3.25");
+    expect(impliedRate(money(300n, "EUR"), money(100n, "USD"))).toBe("0.333333333333");
+  });
+
+  it("is null for zero or opposite signs", () => {
+    expect(impliedRate(money(0n, "EUR"), money(100n, "USD"))).toBeNull();
+    expect(impliedRate(money(-1n, "EUR"), money(1n, "USD"))).toBeNull();
   });
 });

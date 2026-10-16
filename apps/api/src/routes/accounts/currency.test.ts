@@ -1,8 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
+import type { FakeFxProvider } from "../../lib/fx/fake";
 
-const { app, db, close } = createTestApp();
-beforeEach(() => resetDatabase(db));
+const { app, db, close, fxProviders } = createTestApp();
+const fx = fxProviders[0] as FakeFxProvider;
+beforeEach(async () => {
+  await resetDatabase(db);
+  fx.reset()
+    .seed("2026-10-01", "EUR", { USD: "1.1" })
+    .seed("2026-10-01", "JPY", { USD: "0.0067" })
+    .seed("2026-10-01", "KWD", { USD: "3.25" });
+});
 afterAll(close);
 
 type Account = {
@@ -120,15 +128,28 @@ describe("accounts in another currency", () => {
     });
   });
 
-  it("refuses budget accounts in another currency until conversion arrives", async () => {
-    const { createAccount } = await setup();
+  it("adds budget accounts in another currency, their balance converted for the plan", async () => {
+    const { addAccount, register } = await setup();
     for (const type of ["checking", "savings", "cash", "credit_card", "line_of_credit"]) {
-      await expectError(
-        await createAccount({ name: `Euro ${type}`, type, currency: "EUR" }),
-        422,
-        "FOREIGN_ON_BUDGET",
-      );
+      const account = await addAccount({ name: `Euro ${type}`, type, currency: "EUR" });
+      expect(account.currency).toBe("EUR");
     }
+    const euros = await addAccount({
+      name: "Euros",
+      type: "checking",
+      currency: "EUR",
+      balance: "10000",
+    });
+    const [opening] = (await register(euros.id)) as (Txn & {
+      baseAmount: string;
+      fxRate: string;
+    })[];
+    expect(opening).toMatchObject({
+      amount: "10000",
+      currency: "EUR",
+      baseAmount: "11000",
+      fxRate: "1.1",
+    });
   });
 
   it("keeps loans in the budget's currency", async () => {

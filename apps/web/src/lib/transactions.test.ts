@@ -92,6 +92,9 @@ const txn: Transaction = {
   date: "2026-10-01",
   amount: "-123456",
   currency: "USD",
+  baseAmount: "0",
+  fxRate: null,
+  fxRateManual: false,
   payeeId: "p1",
   payeeName: "Market",
   categoryId: null,
@@ -149,6 +152,29 @@ describe("register drafts", () => {
       ok: true,
       body: { payeeName: null, transferAccountId: "a2" },
     });
+  });
+
+  it("sends a typed FX rate, and an emptied one as null (EVERYCENT-54)", () => {
+    const draft: Draft = { ...emptyDraft("a1", "2026-10-01"), outflow: "5", fxRate: " 1.0842 " };
+    expect(createBody(draft, usd)).toMatchObject({ ok: true, body: { fxRate: "1.0842" } });
+    expect(createBody({ ...draft, fxRate: "" }, usd)).toMatchObject({
+      ok: true,
+      body: expect.not.objectContaining({ fxRate: expect.anything() }),
+    });
+    expect(createBody({ ...draft, fxRate: "1,08" }, usd)).toMatchObject({ ok: false });
+    expect(createBody({ ...draft, fxRate: "0" }, usd)).toMatchObject({ ok: false });
+
+    const typed: Transaction = { ...txn, currency: "EUR", fxRate: "1.15", fxRateManual: true };
+    const before = draftFrom(typed, usd);
+    expect(before.fxRate).toBe("1.15");
+    expect(updateBody(typed, before, usd)).toEqual({ ok: true, body: {} });
+    expect(updateBody(typed, { ...before, fxRate: "" }, usd)).toEqual({
+      ok: true,
+      body: { fxRate: null },
+    });
+    // The date's rate isn't shown as typed, so saving doesn't lock it by hand.
+    const looked: Transaction = { ...typed, fxRateManual: false };
+    expect(draftFrom(looked, usd).fxRate).toBe("");
   });
 
   it("explains an amount it can't read", () => {
@@ -410,6 +436,7 @@ describe("splits", () => {
         {
           id: "l1",
           amount: "-8000",
+          baseAmount: "-8000",
           payeeId: null,
           payeeName: null,
           categoryId: "groceries",
@@ -423,6 +450,7 @@ describe("splits", () => {
         {
           id: "l2",
           amount: "-4000",
+          baseAmount: "-4000",
           payeeId: null,
           payeeName: null,
           categoryId: "household",

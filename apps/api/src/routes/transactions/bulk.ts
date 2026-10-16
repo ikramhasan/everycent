@@ -4,6 +4,7 @@ import { usesCategory } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq, exists, inArray, isNull, notInArray, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
@@ -223,13 +224,13 @@ export const bulkUpdateTransactionsHandler: RouteHandler<
         await approve(tx, rows, updatedIds);
         break;
       case "move":
-        updatedIds = await move(tx, budgetId, lockedIds, action.accountId);
+        updatedIds = await move(tx, c.var.deps, budgetId, lockedIds, action.accountId);
         break;
       case "delete":
         updatedIds = await remove(tx, budgetId, lockedIds);
         break;
       case "duplicate": {
-        const { created, copies } = await duplicate(tx, budgetId, lockedIds);
+        const { created, copies } = await duplicate(tx, c.var.deps, budgetId, lockedIds);
         return { updated: created.length, before: [], created, copies };
       }
     }
@@ -311,7 +312,13 @@ async function approve(tx: Db, rows: readonly SelectedRow[], ids: readonly strin
  * Moves each row as a single edit would. Skipped, as YNAB does: rows already in the account,
  * transfers into their own other account, and splits with a transfer line to it.
  */
-async function move(tx: Db, budgetId: string, ids: readonly string[], accountId: string) {
+async function move(
+  tx: Db,
+  fx: FxDeps,
+  budgetId: string,
+  ids: readonly string[],
+  accountId: string,
+) {
   const target = await findAccount(tx, budgetId, accountId);
   assertOpen(target);
   const moved: string[] = [];
@@ -328,7 +335,7 @@ async function move(tx: Db, budgetId: string, ids: readonly string[], accountId:
       if (other?.accountId === target.id) continue;
     }
     if (await hasTransferLineTo(tx, row.id, target.id)) continue;
-    await applyUpdate(tx, budgetId, row.id, { accountId: target.id });
+    await applyUpdate(tx, fx, budgetId, row.id, { accountId: target.id });
     moved.push(id);
   }
   return moved;
@@ -410,7 +417,7 @@ async function remove(tx: Db, budgetId: string, ids: readonly string[]) {
  * takes its other sides along) and, in `copies`, each copy row whose original row was selected:
  * YNAB selects both sides of a transfer's copy when both sides were selected (EVERYCENT-135).
  */
-async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
+async function duplicate(tx: Db, fx: FxDeps, budgetId: string, ids: readonly string[]) {
   const created: string[] = [];
   const copies: string[] = [];
   const made: [Awaited<ReturnType<typeof queryRegisterRows>>[number], string][] = [];
@@ -445,9 +452,11 @@ async function duplicate(tx: Db, budgetId: string, ids: readonly string[]) {
       .where(inArray(budgetAccount.id, accountIds));
     if (accounts.some((a) => a.closed)) continue;
     const split = source.subtransactions.length > 0;
-    const copyId = await insertNewTransaction(tx, budgetId, {
+    const copyId = await insertNewTransaction(tx, fx, budgetId, {
       accountId: source.accountId,
       date: source.date,
+      // A typed rate is copied; otherwise the copy takes the date's rate, as the original did.
+      fxRate: source.fxRateManual ? source.fxRate : undefined,
       amount: source.amount,
       ...(source.transferAccountId
         ? { payeeName: null, transferAccountId: source.transferAccountId }

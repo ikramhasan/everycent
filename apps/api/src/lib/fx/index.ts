@@ -1,11 +1,11 @@
-import { type Database, newId } from "@everycent/db";
+import { newId } from "@everycent/db";
 import { budget, fxRate, fxRateOverride } from "@everycent/db/schema";
 import { type CurrencyCode, crossRate, invertRate, normalizeRate } from "@everycent/engine";
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import type { AppDeps } from "../../types";
 import { shiftDay } from "../dates";
 import { AppError } from "../errors";
-import { serverToday } from "../ledger";
+import { type Db, serverToday } from "../ledger";
 import type { FxProvider, FxRates } from "./providers";
 
 export {
@@ -49,7 +49,7 @@ type FxDeps = Pick<AppDeps, "fxProviders" | "serverDate">;
  * otherwise 422 FX_RATE_UNAVAILABLE.
  */
 export async function resolveRate(
-  db: Database,
+  db: Db,
   deps: FxDeps,
   input: ResolveRateInput,
 ): Promise<ResolvedRate> {
@@ -101,6 +101,34 @@ export async function resolveRate(
   );
 }
 
+/**
+ * The best rate already known for `date`, without asking a provider: the budget's override, the
+ * cached market rate, or the nearest earlier of either; null when there's none. For reads that
+ * project (a schedule's upcoming amount), which shouldn't wait on the network.
+ */
+export async function knownRate(
+  db: Db,
+  input: {
+    budgetId: string;
+    budgetCurrency: CurrencyCode;
+    from: CurrencyCode;
+    to: CurrencyCode;
+    date: string;
+  },
+): Promise<string | null> {
+  const { budgetId, from, to, date } = input;
+  if (from === to) return "1";
+  const foreign = foreignSide(input.budgetCurrency, from, to);
+  if (foreign) {
+    const override = await overrideOn(db, budgetId, foreign, date);
+    if (override) return foreign === from ? override : invertRate(override);
+  }
+  const cached = await cachedMarketRate(db, from, to, date);
+  if (cached) return cached.rate;
+  const earlier = await nearestEarlier(db, budgetId, foreign, from, to, date);
+  return earlier?.rate ?? null;
+}
+
 /** The non-budget currency when exactly one side is the budget's currency (overrides apply). */
 function foreignSide(budgetCurrency: CurrencyCode, from: CurrencyCode, to: CurrencyCode) {
   if (to === budgetCurrency) return from;
@@ -108,7 +136,7 @@ function foreignSide(budgetCurrency: CurrencyCode, from: CurrencyCode, to: Curre
   return null;
 }
 
-async function overrideOn(db: Database, budgetId: string, currency: CurrencyCode, date: string) {
+async function overrideOn(db: Db, budgetId: string, currency: CurrencyCode, date: string) {
   const [row] = await db
     .select({ rate: fxRateOverride.rate })
     .from(fxRateOverride)
@@ -125,7 +153,7 @@ async function overrideOn(db: Database, budgetId: string, currency: CurrencyCode
 
 /** A cached rate on exactly `date`: direct, inverse, or through a pivot cached that day. */
 async function cachedMarketRate(
-  db: Database,
+  db: Db,
   from: CurrencyCode,
   to: CurrencyCode,
   date: string,
@@ -175,7 +203,7 @@ function recentKey(date: string, base: CurrencyCode) {
 
 /** One provider's rates from `base` on `date`, stored in the cache; null when it has none. */
 function fetchOnce(
-  db: Database,
+  db: Db,
   provider: FxProvider,
   date: string,
   base: CurrencyCode,
@@ -236,7 +264,7 @@ function fetchOnce(
 
 /** The most recent cached market rate or override for the pair before `date` (override on a tie). */
 async function nearestEarlier(
-  db: Database,
+  db: Db,
   budgetId: string,
   foreign: CurrencyCode | null,
   from: CurrencyCode,

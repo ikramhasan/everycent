@@ -9,6 +9,9 @@ const transaction: Transaction = {
   date: "2026-10-03",
   amount: "-1200",
   currency: "USD",
+  baseAmount: "0",
+  fxRate: null,
+  fxRateManual: false,
   payeeId: "p1",
   payeeName: "Shop",
   categoryId: null,
@@ -27,6 +30,7 @@ const transaction: Transaction = {
     {
       id: "s1",
       amount: "-700",
+      baseAmount: "-700",
       payeeId: null,
       payeeName: null,
       categoryId: "c1",
@@ -40,6 +44,7 @@ const transaction: Transaction = {
     {
       id: "s2",
       amount: "-500",
+      baseAmount: "-500",
       payeeId: null,
       payeeName: null,
       categoryId: null,

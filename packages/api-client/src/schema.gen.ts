@@ -2230,10 +2230,19 @@ export interface components {
             /** @description Negative is an outflow */
             amount: string;
             /**
-             * @description ISO 4217 currency code
+             * @description The account's currency, which `amount` is in
              * @enum {string}
              */
             currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description The amount in the budget's currency, what the plan counts: `amount` itself in an account in the budget's currency, otherwise converted once at `fxRate` and kept */
+            baseAmount: string;
+            /**
+             * @description 1 `currency` = fxRate budget currency; null in an account in the budget's currency
+             * @example 1.0842
+             */
+            fxRate: string | null;
+            /** @description The rate was typed in; otherwise it's the date's rate, looked up again when the date changes */
+            fxRateManual: boolean;
             payeeId: string | null;
             payeeName: string | null;
             categoryId: string | null;
@@ -2283,6 +2292,8 @@ export interface components {
             id: string;
             /** @description Negative is an outflow */
             amount: string;
+            /** @description In the budget's currency at the split's rate; the lines' add up to the split's */
+            baseAmount: string;
             payeeId: string | null;
             payeeName: string | null;
             categoryId: string | null;
@@ -2409,6 +2420,11 @@ export interface components {
             date: string;
             /** @description Negative is an outflow */
             amount: string;
+            /**
+             * @description In an account in another currency than the budget's: the rate to convert at (1 account currency = fxRate budget currency). Left out, the date's rate
+             * @example 1.0842
+             */
+            fxRate?: string | null;
             /** @default null */
             payeeName: string | null;
             /** @description Make this a transfer to or from that account; leave `payeeName` out */
@@ -2471,6 +2487,11 @@ export interface components {
             date?: string;
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
             amount?: string;
+            /**
+             * @description In an account in another currency: a rate typed by hand, or null to go back to the date's. Left out, the rate stays (a typed one, or the date's unless the date changes)
+             * @example 1.0842
+             */
+            fxRate?: string | null;
             payeeName?: string | null;
             /** @description Make this a transfer to or from that account; leave `payeeName` out */
             transferAccountId?: string;
@@ -3183,8 +3204,15 @@ export interface components {
             /** @description "Group: Category" (internal categories by their own name); a card's transfers show its payment category */
             categoryName: string | null;
             memo: string;
-            /** @description Negative is an outflow */
+            /** @description In the budget's currency (the month's); negative is an outflow */
             amount: string;
+            /** @description In the account's currency, `currency` */
+            nativeAmount: string;
+            /**
+             * @description The account's currency
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
         };
         MoneyMoveList: {
             moves: components["schemas"]["MoneyMove"][];
@@ -5726,7 +5754,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description LOAN_CURRENCY: a loan in another currency than the budget's; FOREIGN_ON_BUDGET: a budget (cash or credit) account in another currency, until currency conversion arrives */
+            /** @description LOAN_CURRENCY: a loan in another currency than the budget's; FX_RATE_UNAVAILABLE: no rate to convert a foreign-currency starting balance */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6623,7 +6651,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet */
+            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6761,7 +6789,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet */
+            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6902,7 +6930,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet */
+            /** @description A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -102,6 +102,9 @@ export function TransactionEditor({
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const account = accounts.find((a) => a.id === draft.accountId);
   const settings = inCurrency(budgetSettings, account?.currency);
+  // A schedule has no rate of its own: it takes the date's when it's entered.
+  const foreign =
+    !scheduled && account !== undefined && account.currency !== budgetSettings.currency;
   const transferTo = accounts.find((a) => a.id === draft.transferAccountId);
   const needsCategory = account ? usesCategory(account.type, transferTo?.type) : true;
   // Money can move to any other open account; a split can't itself be a transfer (its lines can).
@@ -467,6 +470,22 @@ export function TransactionEditor({
               </>
             )}
             {error && <FieldError className="mr-auto">{error}</FieldError>}
+            {foreign && account && (
+              // EVERYCENT-54: what the plan counts is this amount at the rate; left empty, the
+              // date's rate (locked once saved, looked up again only when the date changes).
+              <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                <span aria-hidden>1 {account.currency} =</span>
+                <Input
+                  aria-label={`Rate from ${account.currency} to ${budgetSettings.currency}`}
+                  className="h-7 w-24 tabular-nums"
+                  inputMode="decimal"
+                  placeholder="Date's rate"
+                  value={draft.fxRate ?? ""}
+                  onChange={(e) => set({ fxRate: e.target.value })}
+                />
+                <span aria-hidden>{budgetSettings.currency}</span>
+              </div>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               Cancel
             </Button>

@@ -123,7 +123,7 @@ export const bulkUpdateScheduledTransactionsHandler: RouteHandler<
             .from(scheduledTransaction)
             .where(eq(scheduledTransaction.id, own.id));
           if (!schedule) continue;
-          entered.push(await enterNow(tx, schedule, today));
+          entered.push(await enterNow(tx, c.var.deps, schedule, today));
           break;
         }
         case "duplicate":

@@ -1,3 +1,4 @@
+import { money } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Skeleton } from "@everycent/ui/components/skeleton";
@@ -5,6 +6,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { $api } from "@/lib/api";
+import { useOptionalBudget } from "@/lib/budget-context";
 import { todayIso } from "@/lib/dates";
 
 /** A payment category's card figures for the month (minor units). */
@@ -98,6 +100,14 @@ function ActivityList({
   card?: CardSummary;
 }) {
   const navigate = useNavigate();
+  const budget = useOptionalBudget();
+  // A foreign account's line shows what it was in the account's currency under the budget's.
+  const native = (t: { currency: string; nativeAmount: string }) =>
+    budget && t.currency !== budget.budget.currency
+      ? budget.formatAmount(
+          money(BigInt(t.nativeAmount), t.currency as typeof budget.budget.currency),
+        )
+      : null;
   const query = {
     today: todayIso(),
     ...("categoryId" in target ? { categoryId: target.categoryId } : {}),
@@ -190,6 +200,9 @@ function ActivityList({
                     </td>
                     <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums">
                       {format(t.amount)}
+                      {native(t) && (
+                        <span className="block text-muted-foreground text-xs">{native(t)}</span>
+                      )}
                     </td>
                   </tr>
                 );

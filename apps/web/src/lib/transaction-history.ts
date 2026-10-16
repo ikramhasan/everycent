@@ -43,6 +43,8 @@ export function createBodyFromTransaction(transaction: Transaction): CreateTrans
           })),
         }
       : {}),
+    // A typed rate comes back typed; otherwise the date's rate is the one it had.
+    ...(transaction.fxRateManual && transaction.fxRate ? { fxRate: transaction.fxRate } : {}),
     restore: true,
   };
 }
@@ -63,6 +65,10 @@ export function updateBodyFromTransaction(transaction: Transaction): UpdateTrans
     flag: transaction.flag,
     // Edits approve an unapproved transaction (as in YNAB), so an undo puts its approval back.
     approved: transaction.approved,
+    // The rate as it was: typed, or the date's (null), which the restored date gives back.
+    ...(transaction.currency !== undefined && transaction.fxRate !== null
+      ? { fxRate: transaction.fxRateManual ? transaction.fxRate : null }
+      : {}),
     ...(transaction.subtransactions.length > 0
       ? {
           subtransactions: transaction.subtransactions.map((line) => ({

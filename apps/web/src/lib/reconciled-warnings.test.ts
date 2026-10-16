@@ -9,6 +9,9 @@ const base: Transaction = {
   date: "2026-10-01",
   amount: "-900",
   currency: "USD",
+  baseAmount: "0",
+  fxRate: null,
+  fxRateManual: false,
   payeeId: "p1",
   payeeName: "Shop",
   categoryId: null,
@@ -83,6 +86,7 @@ describe("deleteWarning", () => {
         {
           id: "l1",
           amount: "-900",
+          baseAmount: "-900",
           payeeId: null,
           payeeName: "Transfer : Savings",
           categoryId: null,

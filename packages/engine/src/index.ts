@@ -64,7 +64,9 @@ export {
 } from "./funding";
 export {
   convert,
+  convertLines,
   crossRate,
+  impliedRate,
   invertRate,
   normalizeRate,
   parseJsonExact,

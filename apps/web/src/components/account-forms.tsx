@@ -5,6 +5,7 @@ import {
   accountFamily,
   type CurrencyCode,
   isDebtAccount,
+  isOnBudget,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@everycent/ui/components/field";
@@ -194,12 +195,11 @@ export interface NewAccountValues {
 }
 
 /**
- * Which account types can be in another currency than the budget's: tracking accounts only for
- * now. Loans always use the budget's; budget accounts in other currencies need currency
- * conversion first (EVERYCENT-54), so the API refuses them until then.
+ * Which account types can be in another currency than the budget's: all but loans, whose
+ * interest, escrow and paired category are budget amounts.
  */
 export function allowsOtherCurrency(type: AccountType) {
-  return accountFamily(type) === "tracking";
+  return accountFamily(type) !== "loan";
 }
 
 export function AddAccountForm({
@@ -337,7 +337,9 @@ export function AddAccountForm({
           <FieldLabel htmlFor="account-currency">Currency</FieldLabel>
           <CurrencyPicker id="account-currency" value={picked} onChange={setPicked} />
           <FieldDescription>
-            Amounts in this account are in its own currency and aren't converted.
+            {isOnBudget(type)
+              ? `Amounts are in this currency; the plan counts them in ${settings.currency} at each transaction's rate.`
+              : "Amounts in this account are in its own currency."}
           </FieldDescription>
         </Field>
       )}

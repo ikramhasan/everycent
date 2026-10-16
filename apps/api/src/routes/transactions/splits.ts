@@ -1,6 +1,7 @@
 import { newId } from "@everycent/db";
 import { type ClearedState, subTransaction, transaction } from "@everycent/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
+import { syncBases } from "../../lib/base-amount";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import {
@@ -180,6 +181,8 @@ export async function syncLines(
       sortOrder: index,
       amount: spec.amount,
       currency: account.currency,
+      // Set from the parent's by `syncBases` below.
+      baseAmount: 0n,
       payeeId,
       categoryId,
       memo: spec.memo,
@@ -221,6 +224,7 @@ export async function syncLines(
         date,
         amount: -spec.amount,
         currency: transferTo.currency,
+        baseAmount: 0n,
         payeeId: await transferPayeeId(tx, account),
         categoryId: await resolveCategory(
           tx,
@@ -238,6 +242,7 @@ export async function syncLines(
       });
     }
   }
+  await syncBases(tx, parentId);
 }
 
 /** Removes a split's transfer lines' other sides before the split itself is deleted. */

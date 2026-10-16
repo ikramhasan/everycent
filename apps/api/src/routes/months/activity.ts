@@ -79,7 +79,8 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
   const today = userToday ?? serverToday();
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
-  if (userToday) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, userToday));
+  if (userToday)
+    await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, userToday));
 
   const { ids, cardAccountId, cardCategoryId } = await categoryIds(db, budgetId, query);
   const startingBalance = await internalPayeeId(db, budgetId, "starting_balance");
@@ -103,7 +104,9 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
       payeeName: payee.name,
       categoryId: transaction.categoryId,
       memo: transaction.memo,
-      amount: transaction.amount,
+      amount: transaction.baseAmount,
+      nativeAmount: transaction.amount,
+      currency: transaction.currency,
       createdAt: transaction.createdAt,
     })
     .from(transaction)
@@ -145,7 +148,9 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
       payeeName: sql<string | null>`coalesce(${payee.name}, ${splitPayee.name})`,
       categoryId: subTransaction.categoryId,
       memo: subTransaction.memo,
-      amount: subTransaction.amount,
+      amount: subTransaction.baseAmount,
+      nativeAmount: subTransaction.amount,
+      currency: subTransaction.currency,
       createdAt: transaction.createdAt,
     })
     .from(subTransaction)
@@ -185,6 +190,8 @@ export const listMonthActivityHandler: RouteHandler<typeof listMonthActivity, En
         categoryName: labels.get(r.categoryId ?? cardCategoryId ?? "") ?? null,
         memo: r.memo,
         amount: r.amount.toString(),
+        nativeAmount: r.nativeAmount.toString(),
+        currency: r.currency,
       })),
     },
     200,

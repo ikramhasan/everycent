@@ -1,17 +1,11 @@
-import { RATE_SCALE, zCurrencyCode } from "@everycent/engine";
+import { zCurrencyCode } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
+import { zFxRate } from "../../lib/fx/rate-schema";
 import { requireAuth } from "../../middleware/require-auth";
 
-const zRate = z
-  .string()
-  .regex(
-    new RegExp(`^\\d+(\\.\\d{1,${RATE_SCALE}})?$`),
-    `Expected a decimal rate with at most ${RATE_SCALE} decimals`,
-  )
-  .refine((s) => /[1-9]/.test(s), "The rate must be greater than zero")
-  .openapi({ example: "1.0842" });
+const zRate = zFxRate;
 
 const FxRateSchema = z
   .object({

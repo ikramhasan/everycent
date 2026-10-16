@@ -510,6 +510,7 @@ describe("payment categories and category history", () => {
       accountId: checking.id,
       date: TODAY,
       amount: -120000n,
+      baseAmount: -120000n,
       currency: "USD",
       categoryId: rent?.id,
     });
@@ -558,6 +559,7 @@ describe("payment categories and category history", () => {
       accountId: checking.id,
       date: TODAY,
       amount: -5000n,
+      baseAmount: -5000n,
       currency: "USD",
       categoryId: bills?.categories[2]?.id,
     });

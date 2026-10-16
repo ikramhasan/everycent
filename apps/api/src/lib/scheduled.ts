@@ -10,6 +10,7 @@ import {
 import {
   accountFamily,
   type BudgetMonth,
+  type CurrencyCode,
   firstOccurrenceAfter,
   isOnBudget,
   monthBounds,
@@ -40,8 +41,10 @@ import {
   syncLines,
 } from "../routes/transactions/splits";
 import type { AppDeps } from "../types";
+import { budgetCurrencyOf, type FxDeps, linesToBase, toBase } from "./base-amount";
 import { shiftDay } from "./dates";
 import { AppError } from "./errors";
+import { knownRate } from "./fx";
 import {
   type Db,
   findOrCreatePayee,
@@ -94,6 +97,7 @@ async function transferAccountOf(db: Db, payeeId: string | null) {
  */
 export async function enterOccurrence(
   tx: Db,
+  fx: FxDeps,
   schedule: ScheduleRow,
   date: string,
   approved: boolean,
@@ -111,6 +115,7 @@ export async function enterOccurrence(
     date,
     amount: schedule.amount,
     currency: account.currency,
+    fx,
     payeeId: schedule.payeeId,
     categoryId:
       lines.length > 0
@@ -195,7 +200,7 @@ export function entryDate(deps: Pick<AppDeps, "serverDate">, today: string) {
  * skipped (that request enters them). Schedules in closed accounts wait and catch up on every
  * missed date once the account is reopened, as YNAB does (EVERYCENT-115).
  */
-export async function enterDueScheduled(db: Database, budgetId: string, today: string) {
+export async function enterDueScheduled(db: Database, fx: FxDeps, budgetId: string, today: string) {
   const due = and(
     eq(scheduledTransaction.budgetId, budgetId),
     lte(scheduledTransaction.dateNext, today),
@@ -219,7 +224,7 @@ export async function enterDueScheduled(db: Database, budgetId: string, today: s
     for (const { schedule } of rows) {
       let date: string | null = schedule.dateNext;
       while (date !== null && date <= today) {
-        await enterOccurrence(tx, schedule, date, false);
+        await enterOccurrence(tx, fx, schedule, date, false);
         date = await advance(tx, schedule, date);
       }
     }
@@ -227,8 +232,8 @@ export async function enterDueScheduled(db: Database, budgetId: string, today: s
 }
 
 /** YNAB's Enter Now: the next occurrence, dated `today` and approved; the schedule moves on. */
-export async function enterNow(tx: Db, schedule: ScheduleRow, today: string) {
-  const id = await enterOccurrence(tx, schedule, today, true);
+export async function enterNow(tx: Db, fx: FxDeps, schedule: ScheduleRow, today: string) {
+  const id = await enterOccurrence(tx, fx, schedule, today, true);
   await advance(tx, schedule, schedule.dateNext);
   return id;
 }
@@ -377,14 +382,14 @@ export async function writeSchedule(
  * (monthly from 9/01 added on 10/11: 9/01 entered, next 11/01; checked 2026-10-11). Returns the
  * entered transaction's id, or null if the date is still ahead.
  */
-export async function enterIfPast(tx: Db, id: string, today: string) {
+export async function enterIfPast(tx: Db, fx: FxDeps, id: string, today: string) {
   const [schedule] = await tx
     .select()
     .from(scheduledTransaction)
     .where(eq(scheduledTransaction.id, id))
     .for("update");
   if (!schedule || schedule.dateNext > today) return null;
-  const entered = await enterOccurrence(tx, schedule, schedule.dateNext, false);
+  const entered = await enterOccurrence(tx, fx, schedule, schedule.dateNext, false);
   const next = firstOccurrenceAfter(schedule.frequency, schedule.dateFirst, today);
   if (next === null) {
     await tx.delete(scheduledTransaction).where(eq(scheduledTransaction.id, id));
@@ -681,6 +686,23 @@ export async function upcomingByCategory(
       ),
     );
   if (schedules.length === 0) return upcoming;
+  // A foreign account's schedule counts at the latest rate known for today (EVERYCENT-54); with
+  // none known yet it's left out until one is (any transaction in that currency caches one).
+  const budgetCurrency = await budgetCurrencyOf(db, budgetId);
+  const rates = new Map<CurrencyCode, string | null>();
+  for (const { schedule } of schedules) {
+    if (schedule.currency === budgetCurrency || rates.has(schedule.currency)) continue;
+    rates.set(
+      schedule.currency,
+      await knownRate(db, {
+        budgetId,
+        budgetCurrency,
+        from: schedule.currency,
+        to: budgetCurrency,
+        date: today,
+      }),
+    );
+  }
   const lines = await scheduleLines(
     db,
     schedules.map((r) => r.schedule.id),
@@ -725,22 +747,33 @@ export async function upcomingByCategory(
   for (const row of schedules) {
     const s = row.schedule;
     if (!isOnBudget(row.accountType)) continue;
+    const rate = s.currency === budgetCurrency ? null : (rates.get(s.currency) ?? undefined);
+    if (rate === undefined) continue;
     const own = lines.filter((l) => l.scheduledTransactionId === s.id);
+    const ownBase = linesToBase(
+      s.amount,
+      own.map((l) => l.amount),
+      s.currency,
+      rate,
+      budgetCurrency,
+    );
+    const amount = toBase(s.amount, s.currency, rate, budgetCurrency);
     const flows: { categoryId: string; amount: bigint }[] = [];
     if (own.length > 0) {
-      for (const line of own) {
+      for (const [i, line] of own.entries()) {
+        const lineAmount = ownBase[i] as bigint;
         const flow = line.transferAccountId
-          ? paymentFlow(s.accountId, line.transferAccountId, line.amount)
+          ? paymentFlow(s.accountId, line.transferAccountId, lineAmount)
           : line.categoryId
-            ? { categoryId: line.categoryId, amount: line.amount }
+            ? { categoryId: line.categoryId, amount: lineAmount }
             : null;
         if (flow) flows.push(flow);
       }
     } else if (row.transferAccountId && !s.categoryId) {
-      const flow = paymentFlow(s.accountId, row.transferAccountId, s.amount);
+      const flow = paymentFlow(s.accountId, row.transferAccountId, amount);
       if (flow) flows.push(flow);
     } else if (s.categoryId) {
-      flows.push({ categoryId: s.categoryId, amount: s.amount });
+      flows.push({ categoryId: s.categoryId, amount });
     }
     const relevant = flows.filter((f) => counted.has(f.categoryId));
     if (relevant.length === 0) continue;

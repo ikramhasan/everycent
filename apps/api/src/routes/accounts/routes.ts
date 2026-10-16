@@ -175,8 +175,8 @@ export const createAccount = createRoute({
     ),
     404: notFound,
     422: jsonError(
-      "LOAN_CURRENCY: a loan in another currency than the budget's; FOREIGN_ON_BUDGET: a " +
-        "budget (cash or credit) account in another currency, until currency conversion arrives",
+      "LOAN_CURRENCY: a loan in another currency than the budget's; FX_RATE_UNAVAILABLE: no " +
+        "rate to convert a foreign-currency starting balance",
     ),
   },
 });

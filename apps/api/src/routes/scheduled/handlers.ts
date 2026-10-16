@@ -62,7 +62,7 @@ export const listScheduledTransactionsHandler: RouteHandler<
   const { accountId, q, from, to, today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
+  await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, today));
   const terms = q ? parseSearch(q, budget, today) : [];
   const rows = await scheduledRows(db, budgetId, accountId);
   const inRange = rows.filter((r) => (!from || r.dateNext >= from) && (!to || r.dateNext <= to));
@@ -137,7 +137,7 @@ export const createScheduledTransactionHandler: RouteHandler<
       },
       from,
     );
-    return { id, entered: await enterIfPast(tx, id, entryDate(c.var.deps, today)) };
+    return { id, entered: await enterIfPast(tx, c.var.deps, id, entryDate(c.var.deps, today)) };
   });
   return c.json(
     {
@@ -226,7 +226,9 @@ export const updateScheduledTransactionHandler: RouteHandler<
     );
     // Only a new date enters what's past (YNAB's rule for saving a past date); other edits leave
     // the schedule's occurrences alone, as for those waiting in a closed account.
-    return body.date !== undefined ? enterIfPast(tx, id, entryDate(c.var.deps, today)) : null;
+    return body.date !== undefined
+      ? enterIfPast(tx, c.var.deps, id, entryDate(c.var.deps, today))
+      : null;
   });
   return c.json(
     {
@@ -262,7 +264,7 @@ export const enterScheduledTransactionHandler: RouteHandler<
   const { transactionId, accountId } = await db.transaction(async (tx) => {
     const { schedule } = await lockSchedule(tx, budgetId, id);
     return {
-      transactionId: await enterNow(tx, schedule, today),
+      transactionId: await enterNow(tx, c.var.deps, schedule, today),
       accountId: schedule.accountId,
     };
   });

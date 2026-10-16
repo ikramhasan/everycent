@@ -147,6 +147,11 @@ export interface Draft {
   flag: FlagColor | null;
   /** A split's lines (the category is then unused); null when it isn't split. */
   lines: LineDraft[] | null;
+  /**
+   * In an account in another currency than the budget's: a typed rate ("1 account currency =
+   * rate budget currency"); empty for the date's rate.
+   */
+  fxRate?: string;
 }
 
 /** One line of a split, as typed. */
@@ -227,6 +232,7 @@ export function draftFrom(t: Transaction, settings: MoneySettings): Draft {
     flag: t.flag,
     lines:
       t.subtransactions.length > 0 ? t.subtransactions.map((l) => lineFrom(l, settings)) : null,
+    fxRate: t.fxRateManual && t.fxRate ? t.fxRate : "",
   };
 }
 
@@ -387,10 +393,24 @@ function amountAndLines(
   return { ok: true, body: { amount: split.total, lines } };
 }
 
+const RATE = /^\d+(\.\d{1,12})?$/;
+
+/** A typed FX rate: null when left empty (the date's rate), or an error message. */
+function typedRate(draft: Draft): Result<string | null> {
+  const rate = draft.fxRate?.trim() ?? "";
+  if (rate === "") return { ok: true, body: null };
+  if (!RATE.test(rate) || !/[1-9]/.test(rate)) {
+    return { ok: false, error: "Enter the rate as a number above zero, like 1.0842." };
+  }
+  return { ok: true, body: rate };
+}
+
 export function createBody(input: Draft, settings: MoneySettings): Result<CreateBody> {
   const draft = collapseSplit(input);
   const result = amountAndLines(draft, settings);
   if (!result.ok) return result;
+  const rate = typedRate(draft);
+  if (!rate.ok) return rate;
   const { amount, lines } = result.body;
   return {
     ok: true,
@@ -406,6 +426,7 @@ export function createBody(input: Draft, settings: MoneySettings): Result<Create
       cleared: draft.cleared,
       flag: draft.flag,
       ...(lines ? { subtransactions: lines } : {}),
+      ...(rate.body ? { fxRate: rate.body } : {}),
     },
   };
 }
@@ -423,8 +444,12 @@ export function updateBody(
   const result = amountAndLines(draft, settings);
   if (!result.ok) return result;
   const { amount, lines } = result.body;
+  const rate = typedRate(draft);
+  if (!rate.ok) return rate;
   const before = draftFrom(original, settings);
   const body: UpdateBody = {};
+  // Emptied, it goes back to the date's rate.
+  if ((draft.fxRate?.trim() ?? "") !== (before.fxRate ?? "")) body.fxRate = rate.body;
   if (draft.accountId !== before.accountId) body.accountId = draft.accountId;
   if (draft.date !== before.date) body.date = draft.date;
   if (amount.toString() !== original.amount) body.amount = amount.toString();

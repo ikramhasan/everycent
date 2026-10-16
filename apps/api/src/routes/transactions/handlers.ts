@@ -6,6 +6,7 @@ import {
 } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
+import { type FxDeps, rebase, syncBases } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
@@ -70,7 +71,8 @@ export const listTransactionsHandler: RouteHandler<typeof listTransactions, Env>
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   // The first page enters what's come due, so the register is current.
-  if (today && !cursor) await enterDueScheduled(db, budgetId, entryDate(c.var.deps, today));
+  if (today && !cursor)
+    await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, today));
   const account = filter.accountId ? await findAccount(db, budgetId, filter.accountId) : null;
   const page = await queryRegister(
     db,
@@ -92,7 +94,7 @@ export const createTransactionHandler: RouteHandler<typeof createTransaction, En
   // back as it was, so one dated ahead (older data, or the server's UTC + 1) isn't refused, as an
   // edit that keeps its date isn't.
   if (!body.restore) assertNotFuture(body.date, latestTransactionDate(c.var.deps, today));
-  const id = await db.transaction((tx) => insertNewTransaction(tx, budgetId, body));
+  const id = await db.transaction((tx) => insertNewTransaction(tx, c.var.deps, budgetId, body));
   return c.json(await transactionJson(db, budgetId, body.accountId, id), 201);
 };
 
@@ -117,10 +119,12 @@ export interface CreateBody {
    * Undo restores a transfer into an account closed from elsewhere (2026-10-14).
    */
   restore?: boolean;
+  /** In a foreign-currency account: the rate typed by hand (otherwise the date's). */
+  fxRate?: string | null;
 }
 
 /** A new transaction (with its transfer's other side and its split's lines); returns its id. */
-export async function insertNewTransaction(tx: Db, budgetId: string, body: CreateBody) {
+export async function insertNewTransaction(tx: Db, fx: FxDeps, budgetId: string, body: CreateBody) {
   assertOnePayee(body);
   const account = await findAccount(tx, budgetId, body.accountId);
   if (!body.restore) assertOpen(account);
@@ -146,6 +150,8 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
     date: body.date,
     amount,
     currency: account.currency,
+    fx,
+    rate: body.fxRate,
     payeeId: transferTo
       ? await transferPayeeId(tx, transferTo)
       : body.payeeName
@@ -175,6 +181,7 @@ export async function insertNewTransaction(tx: Db, budgetId: string, body: Creat
       body.transferSide ?? {},
     );
   }
+  await syncBases(tx, id);
   return id;
 }
 
@@ -187,7 +194,7 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   assertOnePayee(body);
   const latest = latestTransactionDate(c.var.deps, today);
   const accountId = await db.transaction((tx) =>
-    applyUpdate(tx, budgetId, transactionId, withApproval(body), latest),
+    applyUpdate(tx, c.var.deps, budgetId, transactionId, withApproval(body), latest),
   );
   return c.json(await transactionJson(db, budgetId, accountId, transactionId), 200);
 };
@@ -217,11 +224,17 @@ export interface UpdateBody {
   subtransactions?: LineInput[];
   /** A transfer's other side follows a change (YNAB approves both sides together). */
   approved?: boolean;
+  /**
+   * In a foreign-currency account: a rate typed by hand, or null to go back to the date's rate.
+   * Left out, the rate stays (see `rebase`).
+   */
+  fxRate?: string | null;
 }
 
 /** One transaction's edit (as `updateTransaction` describes it); returns its account. */
 export async function applyUpdate(
   tx: Db,
+  fx: FxDeps,
   budgetId: string,
   transactionId: string,
   body: UpdateBody,
@@ -296,6 +309,12 @@ export async function applyUpdate(
     categoryId = await resolveCategory(tx, budgetId, account, transferTo, keep);
   }
 
+  const base = await rebase(tx, fx, existing, {
+    currency: account.currency,
+    date: body.date ?? existing.date,
+    amount,
+    rate: body.fxRate,
+  });
   await tx
     .update(transaction)
     .set({
@@ -303,6 +322,7 @@ export async function applyUpdate(
       currency: account.currency,
       date: body.date,
       amount,
+      ...base,
       payeeId: transferTo
         ? await transferPayeeId(tx, transferTo)
         : body.payeeName === undefined
@@ -372,6 +392,7 @@ export async function applyUpdate(
       transferTo,
     );
   }
+  await syncBases(tx, transactionId);
   return account.id;
 }
 

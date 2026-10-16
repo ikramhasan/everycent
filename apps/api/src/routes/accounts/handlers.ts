@@ -12,12 +12,15 @@ import {
 import {
   accountFamily,
   hasPaymentCategory,
+  impliedRate,
   isOnBudget,
   type LoanTerms,
+  money,
   rateThousandths,
 } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, asc, eq, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import { budgetCurrencyOf, type FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import {
@@ -258,22 +261,6 @@ function assertAccountCurrency(
       `Loan accounts use the budget's currency (${budgetCurrency})`,
     );
   }
-  assertForeignOffBudget(type);
-}
-
-/**
- * Until currency conversion lands (EVERYCENT-54), a foreign-currency account can't feed the
- * budget's math, so it must be a tracking account. Delete this guard with that ticket.
- */
-function assertForeignOffBudget(type: AccountRow["type"]) {
-  if (isOnBudget(type)) {
-    throw new AppError(
-      422,
-      "FOREIGN_ON_BUDGET",
-      "Budget accounts in another currency arrive with currency conversion; " +
-        "add it as a tracking account (asset or liability) for now",
-    );
-  }
 }
 
 const hasEscrow = (type: AccountRow["type"]) => type === "mortgage";
@@ -287,7 +274,12 @@ export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async
   const today = query.today ?? serverToday();
   await loadBudgetAccess(c, budgetId);
   if (query.today)
-    await enterDueScheduled(c.var.deps.db, budgetId, entryDate(c.var.deps, query.today));
+    await enterDueScheduled(
+      c.var.deps.db,
+      c.var.deps,
+      budgetId,
+      entryDate(c.var.deps, query.today),
+    );
   return c.json({ accounts: await listAccountJson(c.var.deps.db, budgetId, today) }, 200);
 };
 
@@ -305,6 +297,7 @@ type NewAccount = {
 /** Adds an account at the end of the sidebar with its Starting Balance; returns its id. */
 async function insertAccount(
   tx: Db,
+  fx: FxDeps,
   budgetId: string,
   currency: AccountRow["currency"],
   body: NewAccount,
@@ -344,6 +337,7 @@ async function insertAccount(
     amount: BigInt(body.balance),
     currency,
     date: body.date,
+    fx,
   });
   return accountId;
 }
@@ -360,7 +354,9 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   if (body.pairedCategoryId !== undefined && accountFamily(body.type) !== "loan") {
     throw new AppError(400, "BAD_REQUEST", "Only loan accounts are paired with a category");
   }
-  const accountId = await db.transaction((tx) => insertAccount(tx, budgetId, currency, body));
+  const accountId = await db.transaction((tx) =>
+    insertAccount(tx, c.var.deps, budgetId, currency, body),
+  );
   return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
 };
 
@@ -415,12 +411,12 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
       .where(eq(payee.transferAccountId, original.id));
 
     // The loan keeps the original's currency (the budget's: loans can't be in another one).
-    const loanId = await insertAccount(tx, budgetId, original.currency, body);
+    const loanId = await insertAccount(tx, c.var.deps, budgetId, original.currency, body);
 
     const working =
       (await accountBalances(tx, budgetId, body.date)).get(original.id)?.working ?? 0n;
     if (working !== 0n) {
-      await insertAdjustment(tx, original, {
+      await insertAdjustment(tx, c.var.deps, original, {
         date: body.date,
         amount: -working,
         kind: "manual_balance_adjustment",
@@ -553,7 +549,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       if (difference !== 0n) {
         // YNAB's Edit Account (2026-10-11, "Onboarding Check"): a cleared Manual Balance
         // Adjustment with no memo, from Ready to Assign on budget accounts, cards included.
-        await insertAdjustment(tx, account, {
+        await insertAdjustment(tx, c.var.deps, account, {
           date,
           amount: difference,
           kind: "manual_balance_adjustment",
@@ -569,6 +565,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
 async function insertAdjustment(
   tx: Db,
+  fx: FxDeps,
   account: AccountRow,
   input: {
     date: string;
@@ -584,6 +581,7 @@ async function insertAdjustment(
     date: input.date,
     amount: input.amount,
     currency: account.currency,
+    fx,
     payeeId: await internalPayeeId(tx, account.budgetId, input.kind),
     memo: input.memo,
     categoryId: isOnBudget(account.type)
@@ -665,7 +663,7 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
     if (difference !== 0n) {
       // YNAB (2026-10-11, "Onboarding Check"): dated today, reconciled, Inflow: Ready to Assign
       // on budget accounts (a card's too), none on tracking accounts.
-      await insertAdjustment(tx, account, {
+      await insertAdjustment(tx, c.var.deps, account, {
         date,
         amount: difference,
         kind: "reconciliation_balance_adjustment",
@@ -774,13 +772,23 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
     const account = await findAccount(tx, budgetId, accountId);
     if (account.closed) return;
     const working = (await accountBalances(tx, budgetId, date)).get(accountId)?.working ?? 0n;
-    if (working !== 0n) {
+    // In the budget's currency the account then holds nothing either: a foreign account's
+    // adjustment takes out what its transactions were booked at, not today's value.
+    const baseWorking =
+      (await accountBalances(tx, budgetId, date, "base")).get(accountId)?.working ?? 0n;
+    if (working !== 0n || baseWorking !== 0n) {
+      const budgetCurrency = await budgetCurrencyOf(tx, budgetId);
       await insertTransaction(tx, {
         budgetId,
         accountId,
         date,
         amount: -working,
         currency: account.currency,
+        baseAmount: -baseWorking,
+        fxRate:
+          account.currency === budgetCurrency
+            ? null
+            : impliedRate(money(-working, account.currency), money(-baseWorking, budgetCurrency)),
         payeeId: await internalPayeeId(tx, budgetId, "manual_balance_adjustment"),
         memo: "Closed Account",
         categoryId: isOnBudget(account.type)

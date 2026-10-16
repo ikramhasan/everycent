@@ -26,13 +26,13 @@ describe("AddAccountForm", () => {
     });
   });
 
-  it("offers a currency for tracking accounts only, reading the balance in it", async () => {
+  it("offers a currency for every account but loans, reading the balance in it", async () => {
     // cmdk scrolls the picked currency into view, which jsdom doesn't implement.
     Element.prototype.scrollIntoView = vi.fn();
     const onSubmit = vi.fn().mockResolvedValue(null);
     render(<AddAccountForm settings={usd} onSubmit={onSubmit} />);
-    // Budget accounts and loans use the budget's currency for now.
-    expect(screen.queryByLabelText("Currency")).not.toBeInTheDocument();
+    // Budget accounts take one (EVERYCENT-54); loans use the budget's currency.
+    expect(screen.getByLabelText("Currency")).toHaveTextContent("USD");
     await userEvent.selectOptions(screen.getByLabelText("Account type"), "mortgage");
     expect(screen.queryByLabelText("Currency")).not.toBeInTheDocument();
 

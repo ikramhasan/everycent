@@ -47,7 +47,7 @@ export const budgetAccount = pgTable(
      * the account clears it.
      */
     starredSortOrder: integer(),
-    /** Currency of every amount in this account. For now always the budget's (see Design notes). */
+    /** Currency of every native amount in this account; loans are always in the budget's. */
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
     /** Loan accounts: annual interest rate in percent, e.g. "6.125". */
     interestRate: numeric({ precision: 6, scale: 3 }),
@@ -239,9 +239,19 @@ export const transaction = pgTable(
       .references(() => budgetAccount.id, { onDelete: "cascade" }),
     /** Calendar date, YYYY-MM-DD. */
     date: date({ mode: "string" }).notNull(),
-    /** Minor units; negative is an outflow. */
+    /** Minor units of `currency` (the account's); negative is an outflow. */
     amount: bigint({ mode: "bigint" }).notNull(),
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    /**
+     * `amount` in the budget's currency: what the budget's math uses. Equal to `amount` in an
+     * account in the budget's currency; otherwise converted once at `fxRate` and kept (a rate
+     * lock: later rate changes don't move it). A revaluation has `amount` 0 and only this.
+     */
+    baseAmount: bigint({ mode: "bigint" }).notNull(),
+    /** "1 `currency` = fxRate budget currency"; null in an account in the budget's currency. */
+    fxRate: numeric({ precision: 30, scale: 12 }),
+    /** The rate was typed by hand, so a date or account change doesn't look it up again. */
+    fxRateManual: boolean().notNull().default(false),
     payeeId: text().references(() => payee.id, { onDelete: "set null" }),
     /**
      * Null for off-budget accounts, credit-card starting debt and transfers between two budget
@@ -300,6 +310,11 @@ export const subTransaction = pgTable(
     amount: bigint({ mode: "bigint" }).notNull(),
     /** Always the parent transaction's currency. */
     currency: char({ length: 3 }).$type<CurrencyCode>().notNull(),
+    /**
+     * `amount` in the budget's currency at the parent's rate; the lines' base amounts always add
+     * up to the parent's (`convertLines`).
+     */
+    baseAmount: bigint({ mode: "bigint" }).notNull(),
     payeeId: text().references(() => payee.id, { onDelete: "set null" }),
     /** Same rules as a transaction's category (no action: see `transaction.categoryId`). */
     categoryId: text().references(() => category.id),

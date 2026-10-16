@@ -118,3 +118,42 @@ export function parseJsonRates(
   }
   return { date: typeof record.date === "string" ? record.date : null, rates };
 }
+
+/**
+ * Converts a split's lines with the parent's rate so they still add up: the parent converts as a
+ * whole (`convert`), each line on its own, and the rounding difference (at most half a minor unit
+ * per line) goes to the largest line (the first of equals), so no money is created or lost.
+ */
+export function convertLines(
+  parent: Money,
+  lines: readonly bigint[],
+  rate: string,
+  target: CurrencyCode,
+): { amount: bigint; lines: bigint[] } {
+  const amount = convert(parent, rate, target).amount;
+  const converted = lines.map((line) => convert(money(line, parent.currency), rate, target).amount);
+  const difference = amount - converted.reduce((a, b) => a + b, 0n);
+  if (difference !== 0n && converted.length > 0) {
+    const abs = (n: bigint) => (n < 0n ? -n : n);
+    let largest = 0;
+    for (let i = 1; i < lines.length; i++) {
+      if (abs(lines[i] as bigint) > abs(lines[largest] as bigint)) largest = i;
+    }
+    converted[largest] = (converted[largest] as bigint) + difference;
+  }
+  return { amount, lines: converted };
+}
+
+/**
+ * The rate that turns `native` into `base` ("1 native unit = rate base units"), rounded half-even
+ * to `RATE_SCALE` decimals; null when either side is zero or their signs differ.
+ */
+export function impliedRate(native: Money, base: Money): string | null {
+  if (native.amount === 0n || base.amount === 0n) return null;
+  if (native.amount < 0n !== base.amount < 0n) return null;
+  const abs = (n: bigint) => (n < 0n ? -n : n);
+  const numerator =
+    abs(base.amount) * 10n ** BigInt(RATE_SCALE + currencyExponent(native.currency));
+  const denominator = abs(native.amount) * 10n ** BigInt(currencyExponent(base.currency));
+  return scaledToRate(divideRounded(numerator, denominator, "half-even"));
+}

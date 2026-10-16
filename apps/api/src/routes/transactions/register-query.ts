@@ -12,6 +12,7 @@ import {
 import {
   ACCOUNT_TYPES,
   isOnBudget,
+  normalizeRate,
   parseSearch,
   type SearchSettings,
   type SearchTerm,
@@ -98,6 +99,9 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         date: transaction.date,
         amount: transaction.amount,
         currency: transaction.currency,
+        baseAmount: transaction.baseAmount,
+        fxRate: transaction.fxRate,
+        fxRateManual: transaction.fxRateManual,
         payeeId: transaction.payeeId,
         payeeName: sql<string | null>`${payee.name}`.as("payee_name"),
         categoryId: transaction.categoryId,
@@ -433,6 +437,7 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       id: subTransaction.id,
       transactionId: subTransaction.transactionId,
       amount: subTransaction.amount,
+      baseAmount: subTransaction.baseAmount,
       payeeId: subTransaction.payeeId,
       payeeName: payee.name,
       categoryId: subTransaction.categoryId,
@@ -522,6 +527,9 @@ function columns(r: Register) {
     date: r.date,
     amount: r.amount,
     currency: r.currency,
+    baseAmount: r.baseAmount,
+    fxRate: r.fxRate,
+    fxRateManual: r.fxRateManual,
     payeeId: r.payeeId,
     payeeName: r.payeeName,
     categoryId: r.categoryId,
@@ -563,11 +571,17 @@ async function toJson(
   return rows.map(({ createdAt: _, ...row }) => ({
     ...row,
     amount: row.amount.toString(),
+    baseAmount: row.baseAmount.toString(),
+    fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
     transferSide:
       row.transferTransactionId && !row.transferFromSplit
         ? (sides.get(row.transferTransactionId) ?? null)
         : null,
-    subtransactions: (lines.get(row.id) ?? []).map((l) => ({ ...l, amount: l.amount.toString() })),
+    subtransactions: (lines.get(row.id) ?? []).map((l) => ({
+      ...l,
+      amount: l.amount.toString(),
+      baseAmount: l.baseAmount.toString(),
+    })),
     matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
     // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
     runningBalance: BigInt(row.runningBalance).toString(),

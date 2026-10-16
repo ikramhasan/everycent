@@ -3,6 +3,7 @@ import { zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
+import { zFxRate } from "../../lib/fx/rate-schema";
 import { requireAuth } from "../../middleware/require-auth";
 import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
@@ -56,6 +57,9 @@ const SubTransactionSchema = z
   .object({
     id: z.string(),
     amount: zMinorUnits.describe("Negative is an outflow"),
+    baseAmount: zMinorUnits.describe(
+      "In the budget's currency at the split's rate; the lines' add up to the split's",
+    ),
     payeeId: z.string().nullable(),
     payeeName: z.string().nullable(),
     categoryId: z.string().nullable(),
@@ -78,7 +82,21 @@ export const TransactionSchema = z
     accountName: z.string(),
     date: IsoDate,
     amount: zMinorUnits.describe("Negative is an outflow"),
-    currency: zCurrencyCode,
+    currency: zCurrencyCode.describe("The account's currency, which `amount` is in"),
+    baseAmount: zMinorUnits.describe(
+      "The amount in the budget's currency, what the plan counts: `amount` itself in an account " +
+        "in the budget's currency, otherwise converted once at `fxRate` and kept",
+    ),
+    fxRate: zFxRate
+      .nullable()
+      .describe(
+        "1 `currency` = fxRate budget currency; null in an account in the budget's currency",
+      ),
+    fxRateManual: z
+      .boolean()
+      .describe(
+        "The rate was typed in; otherwise it's the date's rate, looked up again when the date changes",
+      ),
     payeeId: z.string().nullable(),
     payeeName: z.string().nullable(),
     categoryId: z.string().nullable(),
@@ -178,7 +196,8 @@ const forbidden = jsonError(
 );
 const crossCurrency = jsonError(
   "A transfer between accounts in different currencies (`CROSS_CURRENCY_TRANSFER`), or a move " +
-    "into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet",
+    "into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no " +
+    "rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate`",
 );
 const locked = jsonError(
   "A split's transfer side, edited from the split (`TRANSFER_IN_SPLIT`); or a new cleared state " +
@@ -302,6 +321,13 @@ export const createTransaction = createRoute({
           accountId: z.string(),
           date: IsoDate,
           amount: zMinorUnits.describe("Negative is an outflow"),
+          fxRate: zFxRate
+            .nullable()
+            .optional()
+            .describe(
+              "In an account in another currency than the budget's: the rate to convert at " +
+                "(1 account currency = fxRate budget currency). Left out, the date's rate",
+            ),
           payeeName: PayeeName.nullable().default(null),
           transferAccountId: TransferAccountId.optional(),
           categoryId: z.string().nullable(),
@@ -368,6 +394,14 @@ export const updateTransaction = createRoute({
           accountId: z.string().optional(),
           date: IsoDate.optional(),
           amount: zMinorUnits.optional(),
+          fxRate: zFxRate
+            .nullable()
+            .optional()
+            .describe(
+              "In an account in another currency: a rate typed by hand, or null to go back to " +
+                "the date's. Left out, the rate stays (a typed one, or the date's unless the " +
+                "date changes)",
+            ),
           payeeName: PayeeName.nullable().optional(),
           transferAccountId: TransferAccountId.optional(),
           categoryId: z.string().nullable().optional(),

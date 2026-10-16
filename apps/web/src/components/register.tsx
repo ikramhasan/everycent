@@ -373,6 +373,26 @@ export function Register({
   /** The budget's number format with account `id`'s currency, for its amounts. */
   const settingsOf = (id: string | undefined) =>
     inCurrency(budget, id ? accountById.get(id)?.currency : undefined);
+  /**
+   * A foreign-currency amount with what the plan counts under it, in the budget's currency
+   * (EVERYCENT-54), and its rate on hover.
+   */
+  const withBase = (
+    native: string,
+    t: { currency: string; baseAmount: string; fxRate: string | null },
+  ) => {
+    if (t.currency === budget.currency) return native;
+    const base = BigInt(t.baseAmount);
+    return (
+      <span
+        className="inline-flex flex-col items-end leading-tight"
+        title={t.fxRate ? `1 ${t.currency} = ${t.fxRate} ${budget.currency}` : undefined}
+      >
+        <span>{native}</span>
+        <span className="text-muted-foreground text-xs">{show(base < 0n ? -base : base)}</span>
+      </span>
+    );
+  };
   /** The currency of the register's own account (the budget's for all accounts). */
   const registerSettings = settingsOf(accountId);
   /** A new transaction in `id`, starting cleared in a cash account (YNAB). */
@@ -1379,9 +1399,9 @@ export function Register({
       case "memo":
         return t.memo;
       case "outflow":
-        return amount < 0n ? show(-amount, t.currency) : "";
+        return amount < 0n ? withBase(show(-amount, t.currency), t) : "";
       case "inflow":
-        return amount > 0n ? show(amount, t.currency) : "";
+        return amount > 0n ? withBase(show(amount, t.currency), t) : "";
       case "balance": {
         const balance = BigInt(t.runningBalance);
         return (
