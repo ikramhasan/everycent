@@ -75,6 +75,8 @@ export async function assertTransactionVersions(
  * Each transaction's version now, and its transfer's other side's (a write to one side can
  * change the other). Read before a write and after it, a client learns which version steps
  * were its own (undo follows only those, so a partner's change in between makes it stale).
+ * Locks them (the row, then its other side, the order an update takes them), so no other
+ * writer's step can fall between the read and this request's write.
  */
 export async function transactionVersions(
   db: Db,
@@ -88,7 +90,9 @@ export async function transactionVersions(
       otherSide: transaction.transferTransactionId,
     })
     .from(transaction)
-    .where(inArray(transaction.id, [...ids]));
+    .where(inArray(transaction.id, [...ids]))
+    .orderBy(transaction.id)
+    .for("update");
   const versions: Record<string, number> = Object.fromEntries(rows.map((r) => [r.id, r.version]));
   const sides = rows.flatMap((r) =>
     r.otherSide && !(r.otherSide in versions) ? [r.otherSide] : [],
@@ -97,7 +101,9 @@ export async function transactionVersions(
     const others = await db
       .select({ id: transaction.id, version: transaction.version })
       .from(transaction)
-      .where(inArray(transaction.id, sides));
+      .where(inArray(transaction.id, sides))
+      .orderBy(transaction.id)
+      .for("update");
     for (const o of others) versions[o.id] = o.version;
   }
   return versions;

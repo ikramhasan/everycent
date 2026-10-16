@@ -1,3 +1,4 @@
+import { createDb } from "@everycent/db";
 import { auditEvent, monthNote, transaction } from "@everycent/db/schema";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import {
   resetDatabase,
   shareBudget,
   signUp,
+  testEnv,
 } from "../../../test/helpers";
 import { AppError } from "../../lib/errors";
 import { requireAuth } from "../../middleware/require-auth";
@@ -321,6 +323,44 @@ describe("undo conflicts between partners (EVERYCENT-36)", () => {
       owner.cookie,
     );
     expect(deleted.status).toBe(204);
+  });
+
+  it("reads previousVersions under the row lock, after a partner's save it waited on", async () => {
+    const { owner, base, account } = await setup();
+    const row = await json<Txn>(
+      await send("POST", `${base}/transactions`, owner.cookie, {
+        accountId: account.id,
+        date: TODAY,
+        amount: "-100",
+        payeeName: "Shop",
+        categoryId: null,
+      }),
+    );
+    // A partner's write holds the row on its own connection while the owner's edit arrives.
+    const other = createDb(testEnv().DATABASE_URL, { max: 1 });
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    let locked: () => void = () => {};
+    const isLocked = new Promise<void>((r) => {
+      locked = r;
+    });
+    const partner = other.db.transaction(async (tx) => {
+      await tx.update(transaction).set({ memo: "partner" }).where(eq(transaction.id, row.id));
+      locked();
+      await held;
+    });
+    await isLocked;
+    const edit = send("PATCH", `${base}/transactions/${row.id}`, owner.cookie, { flag: "red" });
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await partner;
+    await other.close();
+    const saved = await json<Txn & { previousVersions: Record<string, number> }>(await edit);
+    // The step this edit reports starts after the partner's, so it never covers it.
+    expect(saved.previousVersions[row.id]).toBe(row.version + 1);
+    expect(saved.version).toBe(row.version + 2);
   });
 
   it("names the partner when the user's own edits sit on top of their change", async () => {
