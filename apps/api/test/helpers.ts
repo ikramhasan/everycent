@@ -13,14 +13,16 @@ import {
 import { FakeFxProvider } from "../src/lib/fx/fake";
 import { loadRootEnv } from "../src/load-env";
 import type { AppDeps } from "../src/types";
+import { workerDatabaseUrl } from "./worker-db";
 
 export function testEnv(): Env {
   loadRootEnv();
   const url = process.env.TEST_DATABASE_URL;
   if (!url) throw new Error("TEST_DATABASE_URL is not set (see .env.example)");
+  const worker = Number(process.env.VITEST_POOL_ID);
   return parseEnv({
     NODE_ENV: "test",
-    DATABASE_URL: url,
+    DATABASE_URL: worker ? workerDatabaseUrl(url, worker) : url,
     BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-chars-long",
     BETTER_AUTH_URL: "http://localhost:3000",
     WEB_ORIGIN: "http://localhost:5173",
@@ -92,15 +94,20 @@ export async function signIn(app: App, email: string, password: string): Promise
     .join("; ");
 }
 
-/** Empties every table in the public schema (future tables included automatically). */
+/**
+ * Empties every table in the public schema (future tables included automatically). One TRUNCATE
+ * over all tables: a statement per table costs ~10x as much (each one locks and swaps files alone).
+ */
 export async function resetDatabase(db: Database): Promise<void> {
   await db.execute(sql`
     DO $$
-    DECLARE r record;
+    DECLARE tables text;
     BEGIN
-      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
-        EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
-      END LOOP;
+      SELECT string_agg(quote_ident(tablename), ', ') INTO tables
+        FROM pg_tables WHERE schemaname = 'public';
+      IF tables IS NOT NULL THEN
+        EXECUTE 'TRUNCATE TABLE ' || tables || ' CASCADE';
+      END IF;
     END $$;
   `);
 }
