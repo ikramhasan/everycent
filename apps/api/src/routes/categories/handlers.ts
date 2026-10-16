@@ -280,6 +280,20 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
   }
   const existing = await findTarget(db, categoryId);
   await checkDebtTarget(db, categoryId, body.cadence, existing);
+  // A target can be in its own currency, converted at today's rate in the month's math. Pay Off by
+  // Date has no amount (it pays off what the card owes) and a Monthly Debt Payment follows the
+  // loan's minimum payment, both in the budget's currency.
+  const currency = body.currency ?? budget.currency;
+  if (
+    currency !== budget.currency &&
+    (body.cadence === "payoff_by_date" || body.cadence === "debt_monthly")
+  ) {
+    throw new AppError(
+      422,
+      "TARGET_CURRENCY",
+      "Pay Off Balance by Date and Monthly Debt Payment targets stay in the budget's currency",
+    );
+  }
   const start = `${body.month}-01`;
   const repeat = body.cadence === "custom" ? body.repeat : null;
   const dueDate =
@@ -305,7 +319,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
           : body.behavior,
     // Pay Off by Date pays off what the card owes, so it has no amount of its own (YNAB's API: 0).
     amount: body.cadence === "payoff_by_date" ? 0n : BigInt(body.amount),
-    currency: budget.currency,
+    currency,
     dueDay:
       body.cadence === "weekly" || body.cadence === "monthly" || body.cadence === "debt_monthly"
         ? body.dueDay
@@ -323,6 +337,7 @@ export const setCategoryTargetHandler: RouteHandler<typeof setCategoryTarget, En
     existing.cadence === values.cadence &&
     existing.behavior === values.behavior &&
     existing.amount === values.amount &&
+    existing.currency === values.currency &&
     existing.dueDate === values.dueDate &&
     existing.repeatEvery === values.repeatEvery &&
     existing.repeatUnit === values.repeatUnit;
@@ -364,7 +379,7 @@ export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTa
   const { budgetId, categoryId } = c.req.valid("param");
   const { target: snapshot } = c.req.valid("json");
   const { db } = c.var.deps;
-  const { budget } = await loadBudgetAccess(c, budgetId, { category: ["update"] });
+  await loadBudgetAccess(c, budgetId, { category: ["update"] });
   const row = await findCategory(db, budgetId, categoryId);
   if (!snapshot) {
     await db.delete(categoryTarget).where(eq(categoryTarget.categoryId, categoryId));
@@ -383,7 +398,7 @@ export const restoreCategoryTargetHandler: RouteHandler<typeof restoreCategoryTa
     cadence: snapshot.cadence,
     behavior: snapshot.behavior,
     amount: BigInt(snapshot.amount),
-    currency: budget.currency,
+    currency: snapshot.currency,
     dueDay: snapshot.dueDay,
     dueDate: snapshot.dueDate,
     repeatEvery: snapshot.repeatEvery,

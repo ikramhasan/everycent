@@ -25,6 +25,7 @@ export function toTargetJson(t: TargetRow) {
     cadence: t.cadence,
     behavior: t.behavior,
     amount: t.amount.toString(),
+    currency: t.currency,
     dueDay: t.dueDay,
     dueDate: t.dueDate,
     repeatEvery: t.repeatEvery,

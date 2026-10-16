@@ -179,6 +179,26 @@ const MonthCategorySchema = Totals.extend({
   categoryId: z.string(),
   payment: PaymentSchema,
   target: TargetNeedSchema,
+  targetConversion: z
+    .object({
+      currency: zCurrencyCode.describe("The target's own currency"),
+      amount: zMinorUnits.describe("The target's amount, in its own currency's minor units"),
+      amountInBase: zMinorUnits.describe(
+        "The amount in the budget's currency at `rate`, rounded up: what the target math uses",
+      ),
+      rate: z.string().describe("Today's rate: 1 target currency = rate budget currency"),
+    })
+    .nullable()
+    .describe(
+      "A target in another currency than the budget's, converted at the user's today's rate; " +
+        "null for a target in the budget's currency (or none). `target` is in the budget's currency",
+    ),
+  targetRateMissing: z
+    .boolean()
+    .describe(
+      "The category's target is in another currency and no rate to the budget's is known: its " +
+        "need is unknown, so `target` is null and Underfunded leaves it out",
+    ),
   autoAssign: AutoAssignSchema,
   bar: ProgressBarSchema,
   underfundedParts: z

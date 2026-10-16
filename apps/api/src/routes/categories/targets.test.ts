@@ -101,6 +101,7 @@ describe("category targets", () => {
       cadence: "monthly",
       behavior: "set_aside",
       amount: "10000",
+      currency: "USD",
       dueDay: 15,
       dueDate: null,
       repeatEvery: null,

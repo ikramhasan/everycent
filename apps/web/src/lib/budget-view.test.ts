@@ -29,6 +29,8 @@ const cat = (categoryId: string, assigned: string, activity: string, available: 
   autoAssign: NO_AUTO_ASSIGN,
   bar: null,
   underfundedParts: [],
+  targetConversion: null,
+  targetRateMissing: false,
   upcoming: null,
 });
 

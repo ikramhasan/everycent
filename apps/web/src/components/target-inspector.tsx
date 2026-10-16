@@ -1,4 +1,4 @@
-import { type DateFormat, targetPercent } from "@everycent/engine";
+import { type CurrencyCode, type DateFormat, targetPercent } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
@@ -27,10 +27,28 @@ import {
   targetMessage,
   WEEKDAY_OPTIONS,
 } from "@/lib/targets";
+import { CurrencyPicker } from "./currency-picker";
 import { DebtTargetEditor } from "./debt-target-editor";
 import { DateField } from "./register-fields";
 
 type Format = (minorUnits: string) => string;
+/** Formatting, parsing and input text for amounts in one currency. */
+export interface MoneyIO {
+  format: Format;
+  parse: (text: string) => bigint | string;
+  toInput: (amount: string) => string;
+}
+/**
+ * A target in its own currency (EVERYCENT-58): the budget's currency, `moneyIn` for amounts in any
+ * currency, and this month's conversion of the target (null when it's in the budget's currency).
+ * `rateMissing`: no rate is known, so the target's need is unknown.
+ */
+export interface TargetCurrency {
+  budgetCurrency: CurrencyCode;
+  moneyIn: (currency: CurrencyCode) => MoneyIO;
+  conversion: { amountInBase: string; rate: string } | null;
+  rateMissing: boolean;
+}
 /** The four tabs of the target form for spending categories. */
 type Cadence = Exclude<
   CategoryTarget["cadence"],
@@ -87,6 +105,7 @@ export function TargetSection({
   snoozeLocked = false,
   payment,
   debt,
+  currency,
 }: {
   name: string;
   target: CategoryTarget | null;
@@ -124,8 +143,15 @@ export function TargetSection({
    * form, with the loan's plan (null while it loads).
    */
   debt?: { plan: LoanPlan | null; unpairedCategoryId?: string };
+  /** Spending targets can be in their own currency; without this, the budget's only. */
+  currency?: TargetCurrency;
 }) {
   const [editing, setEditing] = useState(false);
+  // The target's own amounts read in its currency; what it needs (converted) in the budget's.
+  const targetFormat =
+    target && currency && target.currency !== currency.budgetCurrency
+      ? currency.moneyIn(target.currency).format
+      : format;
   const title = debt ? "Debt Payment Target" : "Target";
   if (editing && debt) {
     return (
@@ -180,6 +206,7 @@ export function TargetSection({
         format={format}
         parse={parse}
         toInput={toInput}
+        currency={currency}
         dateFormat={dateFormat}
         onCancel={() => setEditing(false)}
         onSave={async (input) => {
@@ -193,6 +220,21 @@ export function TargetSection({
             : undefined
         }
       />
+    );
+  }
+  if (target && currency?.rateMissing) {
+    // Without a rate to the budget's currency, what the target needs is unknown (EVERYCENT-58).
+    return (
+      <Section title={title}>
+        <p className="font-medium text-sm">{targetHeading(target, targetFormat(target.amount))}</p>
+        <p className="text-muted-foreground text-sm">
+          No {target.currency} to {currency.budgetCurrency} exchange rate is available yet, so this
+          target can't say what it needs. It's left out of Underfunded until there is one.
+        </p>
+        <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+          Edit Target
+        </Button>
+      </Section>
     );
   }
   if (!target || !need) {
@@ -214,17 +256,26 @@ export function TargetSection({
   const message = targetMessage(target, need, format, payment?.month);
   const met = BigInt(need.funded) >= BigInt(need.needed);
   const kind = paymentTargetKind(target);
-  const headingAmount = format(
+  const headingAmount = (target.cadence === "payoff_by_date" ? format : targetFormat)(
     target.cadence === "payoff_by_date"
       ? payoffAmount(need, payment?.paymentsMade ?? "0")
       : target.amount,
   );
+  const converted = currency?.conversion;
   return (
     <Section title={title}>
       {kind && <p className="font-medium text-sm">{kind}</p>}
       <div className="grid gap-0.5">
         <p className="font-medium text-sm">{targetHeading(target, headingAmount)}</p>
         <p className="text-muted-foreground text-xs">{targetDueLine(target, need)}</p>
+        {converted && (
+          <p
+            className="text-muted-foreground text-xs"
+            title={`1 ${target.currency} = ${converted.rate} ${currency?.budgetCurrency}`}
+          >
+            ≈ {format(converted.amountInBase)} at today's rate
+          </p>
+        )}
       </div>
       {met ? (
         <MetRing />
@@ -393,9 +444,10 @@ function firstOfNextMonth() {
 /** YNAB's target form: Weekly, Monthly, Yearly or Custom, with each tab's own fields. */
 function TargetEditor({
   target,
-  format,
-  parse,
-  toInput,
+  format: budgetFormat,
+  parse: budgetParse,
+  toInput: budgetToInput,
+  currency: currencies,
   dateFormat,
   onSave,
   onCancel,
@@ -405,12 +457,21 @@ function TargetEditor({
   format: Format;
   parse: (text: string) => bigint | string;
   toInput: (amount: string) => string;
+  currency?: TargetCurrency;
   dateFormat: DateFormat;
   onSave: (input: TargetInput) => Promise<void>;
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
   const nextMonth = firstOfNextMonth();
+  // The target's currency (the budget's by default); its amount is typed in it.
+  const [currency, setCurrency] = useState<CurrencyCode | null>(
+    currencies ? (target?.currency ?? currencies.budgetCurrency) : null,
+  );
+  const { format, parse, toInput } =
+    currencies && currency
+      ? currencies.moneyIn(currency)
+      : { format: budgetFormat, parse: budgetParse, toInput: budgetToInput };
   const [cadence, setCadence] = useState<Cadence>(
     target && !isPaymentTarget(target) ? (target.cadence as Cadence) : "monthly",
   );
@@ -471,7 +532,7 @@ function TargetEditor({
     setError(null);
     setBusy(true);
     try {
-      await onSave(input(parsed.toString()));
+      await onSave({ ...input(parsed.toString()), ...(currency && { currency }) });
     } finally {
       setBusy(false);
     }
@@ -524,6 +585,17 @@ function TargetEditor({
           />
           {error && <FieldError>{error}</FieldError>}
         </Field>
+        {currencies && currency && (
+          <Field>
+            <FieldLabel htmlFor="target-currency">Currency</FieldLabel>
+            <CurrencyPicker id="target-currency" value={currency} onChange={setCurrency} />
+            {currency !== currencies.budgetCurrency && (
+              <p className="text-muted-foreground text-xs">
+                Needs are converted into {currencies.budgetCurrency} at today's rate.
+              </p>
+            )}
+          </Field>
+        )}
         {cadence === "weekly" && (
           <Field>
             <FieldLabel htmlFor="target-weekday">Every</FieldLabel>

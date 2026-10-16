@@ -25,6 +25,8 @@ const categories = [
     },
     bar: null,
     underfundedParts: [],
+    targetConversion: null,
+    targetRateMissing: false,
     upcoming: null,
   },
   {
@@ -41,6 +43,8 @@ const categories = [
     autoAssign: { ...NO_AUTO_ASSIGN, assignedLastMonth: "0" },
     bar: null,
     underfundedParts: [],
+    targetConversion: null,
+    targetRateMissing: false,
     upcoming: null,
   },
 ];
@@ -135,6 +139,8 @@ describe("AutoAssignPanel", () => {
       categoryId,
       autoAssign: { ...NO_AUTO_ASSIGN, underfunded: amount },
       underfundedParts: [{ amount, step, date: "" }],
+      targetConversion: null,
+      targetRateMissing: false,
       ...extra,
     });
     const visa = short("visa", "100", 5, {

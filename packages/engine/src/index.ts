@@ -216,6 +216,7 @@ export {
   type TargetCadence,
   type TargetNeed,
   type TargetRepeatUnit,
+  targetInBase,
   targetNeed,
   targetPercent,
   weekdaysIn,
