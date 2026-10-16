@@ -704,7 +704,9 @@ function Balance({
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd
         className={cn(
-          strong ? "font-semibold text-lg" : "text-base",
+          // One line height (/7) for every figure, so the larger Working Balance doesn't lift its
+          // label above the others.
+          strong ? "font-semibold text-lg/7" : "text-base/7",
           negative && "text-destructive",
         )}
       >

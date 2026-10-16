@@ -65,8 +65,8 @@ export function BalanceHistory({
   const byMonth = new Map(history.map((h) => [h.month, h.balance]));
 
   return (
-    <Collapsible open={open} onOpenChange={toggle} className="rounded-lg border">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-2 text-left font-medium text-sm hover:bg-muted/50">
+    <Collapsible open={open} onOpenChange={toggle} className="overflow-hidden rounded-lg border">
+      <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-2 text-left font-medium text-sm transition-colors duration-150 hover:bg-muted/50">
         <ChevronRight
           aria-hidden
           className="size-4 transition-transform data-[open]:rotate-90"
