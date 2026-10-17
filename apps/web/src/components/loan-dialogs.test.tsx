@@ -110,6 +110,11 @@ describe("Loan credit and charge dates (YNAB, 2026-10-16)", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("greys Save out for a balance adjustment dated after today (EVERYCENT-183)", () => {
+    renderActivity("adjustment", tomorrow);
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("keeps Save for today", () => {
     renderActivity("charge", today);
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();

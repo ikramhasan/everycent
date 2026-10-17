@@ -409,9 +409,9 @@ export function LoanActivityDialog({
       info={copy.info}
       error={error}
       pending={pending}
-      // YNAB (2026-10-16): Record Credit or Refund, Record New Charge and Edit Credit or Refund
-      // grey Save out for a date after today. (Not checked for balance adjustments.)
-      saveDisabled={kind !== "adjustment" && date > todayIso()}
+      // YNAB greys Save out for a date after today: Record Credit or Refund, Record New Charge,
+      // Edit Credit or Refund (2026-10-16) and Edit Balance Adjustment (2026-10-17).
+      saveDisabled={date > todayIso()}
       onDelete={onDelete && (() => void run(onDelete))}
       deleteLabel={copy.remove}
       onSubmit={() => {
