@@ -723,6 +723,14 @@ describe("CategoryList keys (YNAB, 2026-10-18)", () => {
     expect(selectedNow()).toBe("");
   });
 
+  it("clears the selection on Cmd/Ctrl+Down, leaving the groups as they are", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Rent" }));
+    await user.keyboard("{Escape}{Control>}{ArrowDown}{/Control}");
+    expect(selectedNow()).toBe("");
+    expect(screen.getByRole("button", { name: "Rent" })).toBeInTheDocument();
+  });
+
   it("selects every category with Cmd/Ctrl+A", async () => {
     const { user } = setup();
     await user.keyboard("{Control>}a{/Control}");

@@ -294,8 +294,13 @@ export function CategoryList({
         onCollapsedChange?.(up ? new Set(layout.groupOrder) : new Set());
         return;
       }
-      // With categories selected, Up folds their groups and clears the selection.
-      if (!up) return;
+      // With categories selected, Up folds their groups and Down leaves them open; both clear the
+      // selection (YNAB, 2026-10-18).
+      leaveAssigned();
+      if (!up) {
+        selection.setAll([]);
+        return;
+      }
       const next = new Set(collapsed);
       for (const id of selection.selected) {
         const g = groupOf(id);
