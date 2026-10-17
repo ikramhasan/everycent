@@ -108,7 +108,8 @@ behaviour you haven't confirmed.
   Test files run in parallel: the global setup migrates `TEST_DATABASE_URL` and copies it to one
   database per worker (`<name>_w1`, `_w2`, …). `API_TEST_WORKERS` sets the count (default
   cores − 1; turbo passes it through).
-  CI (`.github/workflows/check.yml`) runs `pnpm check` on every PR.
+  CI (`.github/workflows/check.yml`) runs `pnpm check` and the image check on each
+  push to main, not on PRs; Railway deploys only once it passes. Run `pnpm check` locally before a PR.
 - shadcn components: `pnpm dlx shadcn@latest add <name> -c apps/web` (lands in `packages/ui`).
 - Web imports: app code via `@/…`, shared UI via `@everycent/ui/components/<name>`.
 
