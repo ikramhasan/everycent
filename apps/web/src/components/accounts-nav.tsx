@@ -167,7 +167,11 @@ function AccountSection({
             <ChevronRight className="transition-transform group-data-[state=open]/collapsible:rotate-90" />
             <span className="uppercase tracking-wide">{section.title}</span>
             {section.id !== "closed" && (
-              <span className="ml-auto tabular-nums" title={hint ?? undefined}>
+              // Under 220px of sidebar the balances make way for the names, as YNAB's do.
+              <span
+                className="ml-auto tabular-nums [[data-sidebar-narrow]_&]:hidden"
+                title={hint ?? undefined}
+              >
                 {section.converted && <span aria-hidden>≈</span>}
                 {format(section.total, section.currency)}
                 {/* The `*` marks accounts left out for want of a rate. */}
@@ -251,7 +255,12 @@ function AccountItem({
         </Link>
       </SidebarMenuButton>
       {/* `!` beats the sidebar's active-item colour so money owed always reads red, as in YNAB. */}
-      <SidebarMenuBadge className={cn("tabular-nums", working < 0n && "text-destructive!")}>
+      <SidebarMenuBadge
+        className={cn(
+          "tabular-nums [[data-sidebar-narrow]_&]:hidden",
+          working < 0n && "text-destructive!",
+        )}
+      >
         {format(working, account.currency)}
       </SidebarMenuBadge>
     </SidebarMenuItem>

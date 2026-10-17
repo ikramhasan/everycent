@@ -1,5 +1,6 @@
 import { targetPercent } from "@everycent/engine";
 import { useCallback, useState } from "react";
+import { useProgressBarsSetting } from "./display-options";
 import type { BudgetMonthData, MonthTotals } from "./months";
 import type { TargetNeed } from "./targets";
 
@@ -298,29 +299,10 @@ export function useBudgetFilter(budgetId: string) {
   return { filter, setFilter: update };
 }
 
-const PROGRESS_BARS_KEY = "everycent:progress-bars";
-
-/**
- * YNAB's Progress Bars On/Off, kept in this browser (support.ynab.com: they "reset when cookies or
- * local storage are cleared"). On unless turned off.
- */
+/** YNAB's Progress Bars On/Off (Display Options), kept in this browser. On unless turned off. */
 export function useProgressBars() {
-  const [on, setOn] = useState(() => {
-    try {
-      return localStorage.getItem(PROGRESS_BARS_KEY) !== "off";
-    } catch {
-      return true;
-    }
-  });
-  const update = useCallback((next: boolean) => {
-    setOn(next);
-    try {
-      localStorage.setItem(PROGRESS_BARS_KEY, next ? "on" : "off");
-    } catch {
-      // Storage can be unavailable (private windows); the setting still works for this visit.
-    }
-  }, []);
-  return { progressBars: on, setProgressBars: update };
+  const [progressBars, setProgressBars] = useProgressBarsSetting();
+  return { progressBars, setProgressBars };
 }
 
 /**

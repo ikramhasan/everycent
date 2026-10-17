@@ -1,5 +1,9 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/components/tooltip";
 import { cn } from "@everycent/ui/lib/utils";
+import { $api } from "@/lib/api";
+import { useOptionalBudget } from "@/lib/budget-context";
+import { useDifferentiateWithoutColor } from "@/lib/display-options";
+import { useOptionalQueryClient } from "@/lib/query-client";
 
 /**
  * YNAB's six member avatar colours (avatar-one … avatar-six, checked 2026-10-16 on a shared plan,
@@ -14,6 +18,79 @@ const AVATAR_COLORS: Record<number, string> = {
   5: "bg-[#FBE48E] text-black",
   6: "bg-[#FAADA5] text-black",
 };
+
+/**
+ * With Differentiate Without Color, YNAB tells apart members whose names start with the same
+ * character (exactly, so "i" and "I" differ): the first in member order gets no pattern, the next
+ * pattern 1, then 2 … 5 (seen 2026-10-17, EVERYCENT-202). Members are in the API's order, the
+ * owner first and then by when they joined. Returns 0 for no pattern.
+ */
+export function avatarPattern(
+  members: readonly { userId: string; name: string }[],
+  userId: string,
+): number {
+  const member = members.find((m) => m.userId === userId);
+  if (!member) return 0;
+  const initial = member.name.trim().charAt(0);
+  const same = members.filter((m) => m.name.trim().charAt(0) === initial);
+  return Math.min(same.indexOf(member), 5);
+}
+
+/**
+ * YNAB's five avatar patterns (/images/avatar/pattern-one … five.svg): black at 15% over the
+ * colour. One is the left half, two opposite quarters, three diagonal stripes, four the bottom
+ * half, five a checker grid.
+ */
+function AvatarPattern({ pattern }: { pattern: number }) {
+  if (pattern < 1) return null;
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 40 40"
+      className="pointer-events-none absolute inset-0 size-full fill-black/15"
+      data-pattern={pattern}
+    >
+      {pattern === 1 && <rect width="20" height="40" />}
+      {pattern === 2 && (
+        <>
+          <rect width="20" height="20" />
+          <rect x="20" y="20" width="20" height="20" />
+        </>
+      )}
+      {pattern === 3 && (
+        <path d="M0 8 8 0h8L0 16zM0 24 24 0h8L0 32zM0 40 40 0v8L8 40zM16 40l24-24v8L24 40zM32 40l8-8v8z" />
+      )}
+      {pattern === 4 && <rect y="20" width="40" height="20" />}
+      {pattern === 5 && (
+        <>
+          {[0, 1, 2, 3].flatMap((row) =>
+            [0, 1, 2, 3]
+              .filter((col) => (row + col) % 2 === 0)
+              .map((col) => (
+                <rect key={`${row}-${col}`} x={col * 10} y={row * 10} width="10" height="10" />
+              )),
+          )}
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** The pattern for this member, when Differentiate Without Color is on. */
+function usePattern(userId: string | null, active: boolean) {
+  const [strong] = useDifferentiateWithoutColor();
+  const budgetId = useOptionalBudget()?.budget.id ?? "";
+  const { client, present } = useOptionalQueryClient();
+  const on = strong && active && userId !== null && budgetId !== "" && present;
+  const members = $api.useQuery(
+    "get",
+    "/v1/budgets/{budgetId}/members",
+    { params: { path: { budgetId } } },
+    { enabled: on },
+    client,
+  );
+  return on && userId ? avatarPattern(members.data?.members ?? [], userId) : 0;
+}
 
 /** An avatar's tooltip, as YNAB words it: "Pat", "Pat (you)", "Pat (removed)", "Inactive Member". */
 export function memberTooltip(
@@ -54,6 +131,8 @@ export function MemberAvatar({
 }) {
   const tooltip = `${tooltipPrefix}${memberTooltip(userId, userName, avatarColor, currentUserId)}${tooltipSuffix}`;
   const colors = (avatarColor && AVATAR_COLORS[avatarColor]) || "bg-[#DBD7CC] text-[#696763]";
+  // Only current members have a colour, and so a pattern.
+  const pattern = usePattern(userId, Boolean(avatarColor));
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -61,12 +140,13 @@ export function MemberAvatar({
           role="img"
           aria-label={tooltip}
           className={cn(
-            "inline-flex size-6 shrink-0 select-none items-center justify-center rounded-full font-bold text-xs uppercase",
+            "relative inline-flex size-6 shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-bold text-xs uppercase",
             colors,
             className,
           )}
         >
-          {userId && userName ? userName.trim().charAt(0) : ""}
+          <AvatarPattern pattern={pattern} />
+          <span className="relative">{userId && userName ? userName.trim().charAt(0) : ""}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>

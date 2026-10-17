@@ -40,7 +40,7 @@ import {
   UserCog,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
@@ -79,6 +79,8 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
 
   const { theme, setTheme } = useTheme();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
+  const [resizing, setResizing] = useState(false);
   // The top bar's header slot, where each page puts its title and actions.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
@@ -96,11 +98,22 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
     .toUpperCase();
 
   return (
-    // Narrower than the kit's 16rem, leaving the page more room (YNAB's is narrow too).
-    <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": `${sidebarWidth}px`,
+          // YNAB's collapsed sidebar is a 56px rail of icons.
+          "--sidebar-width-icon": "3.5rem",
+        } as React.CSSProperties
+      }
+      data-sidebar-narrow={sidebarWidth < SIDEBAR.narrow || undefined}
+      data-sidebar-resizing={resizing || undefined}
+      className="data-[sidebar-resizing]:[&_[data-slot=sidebar-container]]:transition-none data-[sidebar-resizing]:[&_[data-slot=sidebar-gap]]:transition-none"
+    >
       <GlobalShortcuts onHelp={() => setHelpOpen(true)} />
       <KeyboardShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <Sidebar>
+      <Sidebar collapsible="icon">
+        <SidebarResizer width={sidebarWidth} onWidth={setSidebarWidth} onResizing={setResizing} />
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -118,7 +131,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
               {budgetId ? (
                 <>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip="Budget">
                       <Link
                         to="/budgets/$budgetId"
                         params={{ budgetId }}
@@ -133,7 +146,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip="Reports">
                       {/* Between Plan and All Accounts, where YNAB has Reflect. */}
                       <Link
                         to="/budgets/$budgetId/reports"
@@ -146,7 +159,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip="All Accounts">
                       <Link
                         to="/budgets/$budgetId/accounts"
                         params={{ budgetId }}
@@ -159,7 +172,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip="Activity">
                       <Link
                         to="/budgets/$budgetId/activity"
                         params={{ budgetId }}
@@ -171,7 +184,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip="Budget settings">
                       <Link
                         to="/budgets/$budgetId/settings"
                         params={{ budgetId }}
@@ -185,7 +198,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                 </>
               ) : (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip="All budgets">
                     <Link to="/budgets" activeProps={{ "data-active": true }}>
                       <LayoutGrid />
                       <span>All budgets</span>
@@ -195,7 +208,12 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
               )}
             </SidebarMenu>
           </SidebarGroup>
-          {budgetId && currentBudget.data && <AccountsNav budget={currentBudget.data} />}
+          {budgetId && currentBudget.data && (
+            // The icon rail leaves the accounts out; widening the sidebar brings them back.
+            <div className="group-data-[collapsible=icon]:hidden">
+              <AccountsNav budget={currentBudget.data} />
+            </div>
+          )}
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
@@ -303,4 +321,106 @@ function GlobalShortcuts({ onHelp }: { onHelp: () => void }) {
   useShortcut("help", onHelp);
   useShortcut("sidebar", toggleSidebar);
   return null;
+}
+
+/** The left sidebar's width: YNAB's limits (client code, 2026-10-18), our own starting width. */
+const SIDEBAR = {
+  /** Narrower than the kit's 16rem, leaving the page more room. */
+  default: 224,
+  /** Under this a drag folds it to the icon rail, as YNAB's does. */
+  rail: 150,
+  /** Under this the account balances hide. */
+  narrow: 220,
+  max: 600,
+};
+const SIDEBAR_WIDTH_KEY = "everycent:sidebar-width";
+
+/** The width last dragged to, kept in this browser as YNAB keeps it. */
+function useSidebarWidth() {
+  const [width, setWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+      return saved >= SIDEBAR.rail && saved <= SIDEBAR.max ? saved : SIDEBAR.default;
+    } catch {
+      return SIDEBAR.default;
+    }
+  });
+  const save = useCallback((next: number) => {
+    setWidth(next);
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
+    } catch {
+      // Storage can be unavailable (private windows); the width still holds for this visit.
+    }
+  }, []);
+  return [width, save] as const;
+}
+
+/**
+ * The sidebar's right edge, dragged to resize it as YNAB's is: 150–600px, and narrower than that
+ * folds it to the icon rail (dragging out again opens it). Arrow keys move it 16px.
+ * Hand-rolled: shadcn's Sidebar is a fixed panel sized by a CSS variable, which a panel library
+ * (they lay out both sides in one group) can't drive.
+ */
+function SidebarResizer({
+  width,
+  onWidth,
+  onResizing,
+}: {
+  width: number;
+  onWidth: (width: number) => void;
+  onResizing: (resizing: boolean) => void;
+}) {
+  const { open, setOpen, isMobile } = useSidebar();
+  // The width a drag started from: folding to the rail keeps it, to reopen at.
+  const startWidth = useRef(width);
+  if (isMobile) return null;
+
+  function moveTo(x: number) {
+    if (x < SIDEBAR.rail) {
+      setOpen(false);
+      onWidth(startWidth.current);
+      return;
+    }
+    if (!open) setOpen(true);
+    onWidth(Math.min(SIDEBAR.max, Math.round(x)));
+  }
+
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable splitter has no element of its own
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the sidebar"
+      aria-valuemin={SIDEBAR.rail}
+      aria-valuemax={SIDEBAR.max}
+      aria-valuenow={open ? width : 0}
+      tabIndex={0}
+      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-ew-resize outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-sidebar-border focus-visible:after:bg-ring"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        startWidth.current = open ? width : SIDEBAR.default;
+        onResizing(true);
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) moveTo(e.clientX);
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        onResizing(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        // From the rail, Right opens it at the width it had.
+        if (!open) {
+          if (e.key === "ArrowRight") setOpen(true);
+          return;
+        }
+        startWidth.current = width;
+        moveTo(width + (e.key === "ArrowRight" ? 16 : -16));
+      }}
+    />
+  );
 }

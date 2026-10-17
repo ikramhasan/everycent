@@ -38,4 +38,7 @@ function ResizableHandle({
   );
 }
 
-export { ResizableHandle, ResizablePanel, ResizablePanelGroup };
+// everycent: re-exported so apps save layouts without depending on the library themselves.
+const { useDefaultLayout } = ResizablePrimitive;
+
+export { ResizableHandle, ResizablePanel, ResizablePanelGroup, useDefaultLayout };
