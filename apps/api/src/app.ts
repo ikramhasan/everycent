@@ -7,6 +7,7 @@ import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
+import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
@@ -65,6 +66,7 @@ export function createApp(deps: AppDeps) {
 
   app.route("/v1", healthRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", backupsRouter);
   app.route("/v1", budgetsRouter);
   app.route("/v1", membersRouter);
   app.route("/v1", categoriesRouter);

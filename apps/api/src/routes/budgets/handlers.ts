@@ -19,7 +19,7 @@ import type {
 
 type Env = AppEnv & AuthedEnv;
 
-function toBudgetJson({ budget: b, role, lastUsedAt }: BudgetAccess) {
+export function toBudgetJson({ budget: b, role, lastUsedAt }: BudgetAccess) {
   return {
     id: b.id,
     name: b.name,

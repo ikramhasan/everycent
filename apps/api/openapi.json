@@ -601,25 +601,3362 @@
           "password"
         ]
       },
-      "BudgetList": {
+      "BudgetBackup": {
         "type": "object",
         "properties": {
-          "budgets": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "everycent-backup"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "AED",
+                  "AFN",
+                  "ALL",
+                  "AMD",
+                  "ANG",
+                  "AOA",
+                  "ARS",
+                  "AUD",
+                  "AWG",
+                  "AZN",
+                  "BAM",
+                  "BBD",
+                  "BDT",
+                  "BGN",
+                  "BHD",
+                  "BIF",
+                  "BMD",
+                  "BND",
+                  "BOB",
+                  "BRL",
+                  "BSD",
+                  "BTN",
+                  "BWP",
+                  "BYN",
+                  "BZD",
+                  "CAD",
+                  "CDF",
+                  "CHF",
+                  "CLP",
+                  "CNY",
+                  "COP",
+                  "CRC",
+                  "CUP",
+                  "CVE",
+                  "CZK",
+                  "DJF",
+                  "DKK",
+                  "DOP",
+                  "DZD",
+                  "EGP",
+                  "ERN",
+                  "ETB",
+                  "EUR",
+                  "FJD",
+                  "FKP",
+                  "GBP",
+                  "GEL",
+                  "GHS",
+                  "GIP",
+                  "GMD",
+                  "GNF",
+                  "GTQ",
+                  "GYD",
+                  "HKD",
+                  "HNL",
+                  "HTG",
+                  "HUF",
+                  "IDR",
+                  "ILS",
+                  "INR",
+                  "IQD",
+                  "IRR",
+                  "ISK",
+                  "JMD",
+                  "JOD",
+                  "JPY",
+                  "KES",
+                  "KGS",
+                  "KHR",
+                  "KMF",
+                  "KPW",
+                  "KRW",
+                  "KWD",
+                  "KYD",
+                  "KZT",
+                  "LAK",
+                  "LBP",
+                  "LKR",
+                  "LRD",
+                  "LSL",
+                  "LYD",
+                  "MAD",
+                  "MDL",
+                  "MGA",
+                  "MKD",
+                  "MMK",
+                  "MNT",
+                  "MOP",
+                  "MRU",
+                  "MUR",
+                  "MVR",
+                  "MWK",
+                  "MXN",
+                  "MYR",
+                  "MZN",
+                  "NAD",
+                  "NGN",
+                  "NIO",
+                  "NOK",
+                  "NPR",
+                  "NZD",
+                  "OMR",
+                  "PAB",
+                  "PEN",
+                  "PGK",
+                  "PHP",
+                  "PKR",
+                  "PLN",
+                  "PYG",
+                  "QAR",
+                  "RON",
+                  "RSD",
+                  "RUB",
+                  "RWF",
+                  "SAR",
+                  "SBD",
+                  "SCR",
+                  "SDG",
+                  "SEK",
+                  "SGD",
+                  "SHP",
+                  "SLE",
+                  "SOS",
+                  "SRD",
+                  "SSP",
+                  "STN",
+                  "SVC",
+                  "SYP",
+                  "SZL",
+                  "THB",
+                  "TJS",
+                  "TMT",
+                  "TND",
+                  "TOP",
+                  "TRY",
+                  "TTD",
+                  "TWD",
+                  "TZS",
+                  "UAH",
+                  "UGX",
+                  "USD",
+                  "UYU",
+                  "UZS",
+                  "VED",
+                  "VES",
+                  "VND",
+                  "VUV",
+                  "WST",
+                  "XAF",
+                  "XCD",
+                  "XCG",
+                  "XOF",
+                  "XPF",
+                  "YER",
+                  "ZAR",
+                  "ZMW",
+                  "ZWG"
+                ],
+                "description": "ISO 4217 currency code"
+              },
+              "numberFormat": {
+                "type": "string",
+                "enum": [
+                  "comma_dot",
+                  "dot_comma",
+                  "space_comma",
+                  "space_dot",
+                  "apostrophe_dot",
+                  "indian"
+                ]
+              },
+              "currencySymbolPosition": {
+                "type": "string",
+                "enum": [
+                  "before",
+                  "after",
+                  "none"
+                ]
+              },
+              "dateFormat": {
+                "type": "string",
+                "enum": [
+                  "MM/DD/YYYY",
+                  "DD/MM/YYYY",
+                  "YYYY-MM-DD",
+                  "DD.MM.YYYY",
+                  "YYYY/MM/DD",
+                  "DD-MM-YYYY"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expectedIncome": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "expectedIncomeCurrency": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "AED",
+                  "AFN",
+                  "ALL",
+                  "AMD",
+                  "ANG",
+                  "AOA",
+                  "ARS",
+                  "AUD",
+                  "AWG",
+                  "AZN",
+                  "BAM",
+                  "BBD",
+                  "BDT",
+                  "BGN",
+                  "BHD",
+                  "BIF",
+                  "BMD",
+                  "BND",
+                  "BOB",
+                  "BRL",
+                  "BSD",
+                  "BTN",
+                  "BWP",
+                  "BYN",
+                  "BZD",
+                  "CAD",
+                  "CDF",
+                  "CHF",
+                  "CLP",
+                  "CNY",
+                  "COP",
+                  "CRC",
+                  "CUP",
+                  "CVE",
+                  "CZK",
+                  "DJF",
+                  "DKK",
+                  "DOP",
+                  "DZD",
+                  "EGP",
+                  "ERN",
+                  "ETB",
+                  "EUR",
+                  "FJD",
+                  "FKP",
+                  "GBP",
+                  "GEL",
+                  "GHS",
+                  "GIP",
+                  "GMD",
+                  "GNF",
+                  "GTQ",
+                  "GYD",
+                  "HKD",
+                  "HNL",
+                  "HTG",
+                  "HUF",
+                  "IDR",
+                  "ILS",
+                  "INR",
+                  "IQD",
+                  "IRR",
+                  "ISK",
+                  "JMD",
+                  "JOD",
+                  "JPY",
+                  "KES",
+                  "KGS",
+                  "KHR",
+                  "KMF",
+                  "KPW",
+                  "KRW",
+                  "KWD",
+                  "KYD",
+                  "KZT",
+                  "LAK",
+                  "LBP",
+                  "LKR",
+                  "LRD",
+                  "LSL",
+                  "LYD",
+                  "MAD",
+                  "MDL",
+                  "MGA",
+                  "MKD",
+                  "MMK",
+                  "MNT",
+                  "MOP",
+                  "MRU",
+                  "MUR",
+                  "MVR",
+                  "MWK",
+                  "MXN",
+                  "MYR",
+                  "MZN",
+                  "NAD",
+                  "NGN",
+                  "NIO",
+                  "NOK",
+                  "NPR",
+                  "NZD",
+                  "OMR",
+                  "PAB",
+                  "PEN",
+                  "PGK",
+                  "PHP",
+                  "PKR",
+                  "PLN",
+                  "PYG",
+                  "QAR",
+                  "RON",
+                  "RSD",
+                  "RUB",
+                  "RWF",
+                  "SAR",
+                  "SBD",
+                  "SCR",
+                  "SDG",
+                  "SEK",
+                  "SGD",
+                  "SHP",
+                  "SLE",
+                  "SOS",
+                  "SRD",
+                  "SSP",
+                  "STN",
+                  "SVC",
+                  "SYP",
+                  "SZL",
+                  "THB",
+                  "TJS",
+                  "TMT",
+                  "TND",
+                  "TOP",
+                  "TRY",
+                  "TTD",
+                  "TWD",
+                  "TZS",
+                  "UAH",
+                  "UGX",
+                  "USD",
+                  "UYU",
+                  "UZS",
+                  "VED",
+                  "VES",
+                  "VND",
+                  "VUV",
+                  "WST",
+                  "XAF",
+                  "XCD",
+                  "XCG",
+                  "XOF",
+                  "XPF",
+                  "YER",
+                  "ZAR",
+                  "ZMW",
+                  "ZWG",
+                  null
+                ],
+                "description": "ISO 4217 currency code"
+              },
+              "loanSimulatorBannerDismissed": {
+                "type": "boolean"
+              },
+              "viewOrder": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "currency",
+              "numberFormat",
+              "currencySymbolPosition",
+              "dateFormat",
+              "createdAt",
+              "expectedIncome",
+              "expectedIncomeCurrency",
+              "loanSimulatorBannerDismissed",
+              "viewOrder"
+            ]
+          },
+          "categoryGroups": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Budget"
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "sortOrder": {
+                  "type": "integer"
+                },
+                "hidden": {
+                  "type": "boolean"
+                },
+                "internal": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "credit_card_payments",
+                    null
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "sortOrder",
+                "hidden",
+                "internal",
+                "kind"
+              ]
             }
           },
-          "lastUsedBudgetId": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "groupId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "sortOrder": {
+                  "type": "integer"
+                },
+                "hidden": {
+                  "type": "boolean"
+                },
+                "internalKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "ready_to_assign",
+                    "uncategorized",
+                    null
+                  ]
+                },
+                "linkedAccountId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "groupId",
+                "name",
+                "note",
+                "sortOrder",
+                "hidden",
+                "internalKind",
+                "linkedAccountId"
+              ]
+            }
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "checking",
+                    "savings",
+                    "cash",
+                    "credit_card",
+                    "line_of_credit",
+                    "mortgage",
+                    "auto_loan",
+                    "student_loan",
+                    "personal_loan",
+                    "medical_debt",
+                    "other_debt",
+                    "asset",
+                    "liability"
+                  ]
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "sortOrder": {
+                  "type": "integer"
+                },
+                "closed": {
+                  "type": "boolean"
+                },
+                "starredSortOrder": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "interestRate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d+(\\.\\d+)?$"
+                },
+                "minimumPayment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "escrowAmount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "lastReconciledAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "pairedCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "paidOffBannerDismissed": {
+                  "type": "boolean"
+                },
+                "migratedToAccountId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "note",
+                "sortOrder",
+                "closed",
+                "starredSortOrder",
+                "currency",
+                "interestRate",
+                "minimumPayment",
+                "escrowAmount",
+                "lastReconciledAt",
+                "pairedCategoryId",
+                "paidOffBannerDismissed",
+                "migratedToAccountId"
+              ]
+            }
+          },
+          "loanTerms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "accountId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "interestRate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d+(\\.\\d+)?$"
+                },
+                "minimumPayment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "escrowAmount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "month",
+                "interestRate",
+                "minimumPayment",
+                "escrowAmount",
+                "currency"
+              ]
+            }
+          },
+          "loanCharges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "accountId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "interest",
+                    "escrow"
+                  ]
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "edited",
+                    "reconciled"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "month",
+                "kind",
+                "amount",
+                "currency",
+                "status"
+              ]
+            }
+          },
+          "payees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "internalKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "starting_balance",
+                    "manual_balance_adjustment",
+                    "reconciliation_balance_adjustment",
+                    "fx_revaluation",
+                    null
+                  ]
+                },
+                "transferAccountId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "hidden": {
+                  "type": "boolean"
+                },
+                "categorization": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "always",
+                    "never"
+                  ]
+                },
+                "defaultCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "carriedCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "internalKind",
+                "transferAccountId",
+                "hidden",
+                "categorization",
+                "defaultCategoryId",
+                "carriedCategoryId"
+              ]
+            }
+          },
+          "payeeRules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "payeeId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "contains",
+                    "is"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "payeeId",
+                "operator",
+                "text",
+                "position",
+                "createdAt"
+              ]
+            }
+          },
+          "flagNames": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "red",
+                    "orange",
+                    "yellow",
+                    "green",
+                    "blue",
+                    "purple"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "color",
+                "name"
+              ]
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "categoryId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                }
+              },
+              "required": [
+                "categoryId",
+                "month",
+                "amount",
+                "currency"
+              ]
+            }
+          },
+          "moneyMoves": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fromCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "toCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "fromCategoryName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "toCategoryName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "deletion": {
+                  "type": "boolean"
+                },
+                "autoAssignBatchId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "autoAssignMethod": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "underfunded",
+                    "assignedLastMonth",
+                    "spentLastMonth",
+                    "averageAssigned",
+                    "averageSpent",
+                    "reduceOverfunding",
+                    "resetAvailable",
+                    "resetAssigned",
+                    null
+                  ]
+                },
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "fromCategoryId",
+                "toCategoryId",
+                "fromCategoryName",
+                "toCategoryName",
+                "deletion",
+                "autoAssignBatchId",
+                "autoAssignMethod",
+                "month",
+                "amount",
+                "currency",
+                "createdAt"
+              ]
+            }
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "categoryId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "cadence": {
+                  "type": "string",
+                  "enum": [
+                    "weekly",
+                    "monthly",
+                    "yearly",
+                    "custom",
+                    "payment_monthly",
+                    "payoff_by_date",
+                    "debt_monthly"
+                  ]
+                },
+                "behavior": {
+                  "type": "string",
+                  "enum": [
+                    "set_aside",
+                    "refill",
+                    "balance"
+                  ]
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "dueDay": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "dueDate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "repeatEvery": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "repeatUnit": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "month",
+                    "year",
+                    null
+                  ]
+                },
+                "startMonth": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "startDay": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "snoozedMonth": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                }
+              },
+              "required": [
+                "categoryId",
+                "cadence",
+                "behavior",
+                "amount",
+                "currency",
+                "dueDay",
+                "dueDate",
+                "repeatEvery",
+                "repeatUnit",
+                "startMonth",
+                "startDay",
+                "snoozedMonth"
+              ]
+            }
+          },
+          "monthNotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-01$"
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 10000
+                }
+              },
+              "required": [
+                "month",
+                "note"
+              ]
+            }
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "categoryIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "categoryIds"
+              ]
+            }
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "accountId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "baseAmount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "fxRate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d+(\\.\\d+)?$"
+                },
+                "fxRateManual": {
+                  "type": "boolean"
+                },
+                "payeeId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "categoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "memo": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "cleared": {
+                  "type": "string",
+                  "enum": [
+                    "uncleared",
+                    "cleared",
+                    "reconciled"
+                  ]
+                },
+                "flag": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "red",
+                    "orange",
+                    "yellow",
+                    "green",
+                    "blue",
+                    "purple",
+                    null
+                  ]
+                },
+                "approved": {
+                  "type": "boolean"
+                },
+                "transferTransactionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "transferSubTransactionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "date",
+                "amount",
+                "currency",
+                "baseAmount",
+                "fxRate",
+                "fxRateManual",
+                "payeeId",
+                "categoryId",
+                "memo",
+                "cleared",
+                "flag",
+                "approved",
+                "transferTransactionId",
+                "transferSubTransactionId"
+              ]
+            }
+          },
+          "subTransactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "transactionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "sortOrder": {
+                  "type": "integer"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "baseAmount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "payeeId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "categoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "memo": {
+                  "type": "string",
+                  "maxLength": 10000
+                }
+              },
+              "required": [
+                "id",
+                "transactionId",
+                "sortOrder",
+                "amount",
+                "currency",
+                "baseAmount",
+                "payeeId",
+                "categoryId",
+                "memo"
+              ]
+            }
+          },
+          "scheduledTransactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "accountId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "frequency": {
+                  "type": "string",
+                  "enum": [
+                    "never",
+                    "daily",
+                    "weekly",
+                    "everyOtherWeek",
+                    "twiceAMonth",
+                    "every4Weeks",
+                    "monthly",
+                    "everyOtherMonth",
+                    "every3Months",
+                    "every4Months",
+                    "twiceAYear",
+                    "yearly",
+                    "everyOtherYear"
+                  ]
+                },
+                "dateFirst": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "dateNext": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "payeeId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "categoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "memo": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "flag": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "red",
+                    "orange",
+                    "yellow",
+                    "green",
+                    "blue",
+                    "purple",
+                    null
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "frequency",
+                "dateFirst",
+                "dateNext",
+                "amount",
+                "currency",
+                "payeeId",
+                "categoryId",
+                "memo",
+                "flag"
+              ]
+            }
+          },
+          "scheduledSubTransactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduledTransactionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "sortOrder": {
+                  "type": "integer"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "payeeId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "categoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "memo": {
+                  "type": "string",
+                  "maxLength": 10000
+                }
+              },
+              "required": [
+                "scheduledTransactionId",
+                "sortOrder",
+                "amount",
+                "currency",
+                "payeeId",
+                "categoryId",
+                "memo"
+              ]
+            }
+          },
+          "fxRateOverrides": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BGN",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VED",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ],
+                  "description": "ISO 4217 currency code"
+                },
+                "rate": {
+                  "type": "string",
+                  "pattern": "^\\d+(\\.\\d+)?$"
+                }
+              },
+              "required": [
+                "date",
+                "currency",
+                "rate"
+              ]
+            }
           }
         },
         "required": [
-          "budgets",
-          "lastUsedBudgetId"
+          "format",
+          "version",
+          "exportedAt",
+          "budget",
+          "categoryGroups",
+          "categories",
+          "accounts",
+          "loanTerms",
+          "loanCharges",
+          "payees",
+          "payeeRules",
+          "flagNames",
+          "assignments",
+          "moneyMoves",
+          "targets",
+          "monthNotes",
+          "views",
+          "transactions",
+          "subTransactions",
+          "scheduledTransactions",
+          "scheduledSubTransactions",
+          "fxRateOverrides"
+        ]
+      },
+      "ImportedBackup": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "How many rows of each backup section were imported"
+          }
+        },
+        "required": [
+          "budget",
+          "counts"
         ]
       },
       "Budget": {
@@ -873,6 +4210,27 @@
           "lastUsedAt",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "BudgetList": {
+        "type": "object",
+        "properties": {
+          "budgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Budget"
+            }
+          },
+          "lastUsedBudgetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "budgets",
+          "lastUsedBudgetId"
         ]
       },
       "CreateBudget": {
@@ -12042,6 +15400,154 @@
           },
           "429": {
             "description": "Too many attempts (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/backup": {
+      "get": {
+        "operationId": "exportBackup",
+        "tags": [
+          "Export"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The whole budget as everycent's versioned JSON backup (streamed)",
+        "description": "An everycent extra (EVERYCENT-71). Every table that belongs to the budget, in the `BudgetBackup` layout: ids are only references inside the file, money is an integer string of minor units next to its currency. Members, invitations and the change history aren't included. Import it with `importBackup`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The backup",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetBackup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/import": {
+      "post": {
+        "operationId": "importBackup",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Restore a backup as a new budget, owned by the caller",
+        "description": "Every row gets a new id and every reference is remapped, so the same backup can be imported again (another copy) and the original budget is untouched. The budget is named `name`, or the backup's name. The whole import succeeds or nothing is kept.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "The new budget's name"
+            },
+            "required": false,
+            "description": "The new budget's name",
+            "name": "name",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetBackup"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new budget and what it holds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedBackup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a backup that doesn't hold together (INVALID_BACKUP: e.g. a row that refers to a missing account)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
             "content": {
               "application/json": {
                 "schema": {

@@ -40,6 +40,7 @@ const OUTSIDE = [
   /^\/v1\/me(\/|$)/,
   /^\/v1\/budgets\/?$/,
   /^\/v1\/budgets\/[^/]+\/fresh-start$/,
+  /^\/v1\/budgets\/import(\/|$)/,
 ] as const;
 /**
  * POSTs that only read, with a body too big for a query string, and stream their answer after the

@@ -53,6 +53,18 @@ export async function exportPlan(budget: ExportBudget, now = new Date()) {
   saveBlob(new Blob([zip], { type: "application/zip" }), names.zip);
 }
 
+/** everycent's backup of the whole budget (EVERYCENT-71), named by the server. */
+export async function downloadBackup(budget: { id: string; name: string }) {
+  const { response } = await apiClient.GET("/v1/budgets/{budgetId}/backup", {
+    params: { path: { budgetId: budget.id } },
+    parseAs: "stream",
+  });
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
+  const name = encoded ? decodeURIComponent(encoded) : `${budget.name}.everycent.json`;
+  saveBlob(new Blob([await bytes(response)], { type: "application/json" }), name);
+}
+
 /** YNAB's "Export # Transactions": the selected transactions as one file. */
 export async function exportSelected(budget: ExportBudget, selection: Selection, now = new Date()) {
   const { response } = await apiClient.POST("/v1/budgets/{budgetId}/export/transactions", {
