@@ -183,7 +183,10 @@ function FileImportIntro({
         </div>
         <div className="flex gap-3 rounded-md bg-muted p-3 text-sm">
           <Info className="mt-0.5 size-4 shrink-0" />
-          <p>Worried about duplicates? Transactions you've already imported are skipped.</p>
+          <p>
+            Worried about duplicates? Transactions entered by you will match automatically, and ones
+            you've already imported are skipped.
+          </p>
         </div>
         <DialogFooter className="items-center sm:justify-between">
           <Label className="font-normal">
@@ -339,7 +342,7 @@ function CsvImportDialog({
         },
       });
       await refreshAfterImport(queryClient, budget.id);
-      setResult(resultMessage(rows.length, done.imported));
+      setResult(resultMessage(rows.length, done.imported, done.matched));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     }
@@ -614,7 +617,7 @@ function StatementImportDialog({
         },
       });
       await refreshAfterImport(queryClient, budget.id);
-      setResult(resultMessage(rows.length, done.imported));
+      setResult(resultMessage(rows.length, done.imported, done.matched));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     }
@@ -816,16 +819,21 @@ function laterOf(a: string | null, b: string | null) {
   return a > b ? a : b;
 }
 
-/** YNAB's result dialogs (2026-10-17). */
-export function resultMessage(sent: number, imported: number): Result {
+/**
+ * YNAB's result dialogs (2026-10-17): "Import Matched" when nothing new came in, otherwise "Import
+ * Successful", with how many entered transactions were matched (EVERYCENT-68).
+ */
+export function resultMessage(sent: number, imported: number, matched = 0): Result {
   if (imported === 0 && sent > 0) {
     return {
       title: "Import Matched",
       message: `${sent} ${sent === 1 ? "transaction has" : "transactions have"} been successfully imported. All transactions were matched to already entered or imported transactions, so there's nothing else for you to do!`,
     };
   }
-  return {
-    title: "Import Successful",
-    message: `${imported} ${imported === 1 ? "transaction has" : "transactions have"} been successfully imported.`,
-  };
+  const base = `${imported} ${imported === 1 ? "transaction has" : "transactions have"} been successfully imported.`;
+  const extra =
+    matched === 0
+      ? ""
+      : ` ${matched} previously imported ${matched === 1 ? "transaction has" : "transactions have"} been matched.`;
+  return { title: "Import Successful", message: base + extra };
 }

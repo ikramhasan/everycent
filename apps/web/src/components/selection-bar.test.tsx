@@ -180,3 +180,22 @@ describe("groupOptions", () => {
     ]);
   });
 });
+
+describe("Match and Unmatch (EVERYCENT-68)", () => {
+  it("offers Match only when the register says the pair can match", async () => {
+    const onMatch = vi.fn();
+    const { unmount } = bar(summary({ unapproved: 1 }), { onMatch });
+    await userEvent.click(screen.getByRole("button", { name: "Match" }));
+    expect(onMatch).toHaveBeenCalled();
+    unmount();
+    bar(summary({ unapproved: 1 }));
+    expect(screen.queryByRole("button", { name: "Match" })).not.toBeInTheDocument();
+  });
+
+  it("offers Unmatch for matched transactions", async () => {
+    const onUnmatch = vi.fn();
+    bar(summary({ count: 1, cleared: 1 }), { onUnmatch });
+    await userEvent.click(screen.getByRole("button", { name: "Unmatch" }));
+    expect(onUnmatch).toHaveBeenCalled();
+  });
+});

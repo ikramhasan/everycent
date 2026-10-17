@@ -47,13 +47,14 @@ describe("search suggestions", () => {
   });
 
   it("lists every option of a label typed", () => {
-    // YNAB's order (2026-10-16); its "Is: Matched" comes before Approved (not built).
-    expect(terms("is:").slice(0, 9)).toEqual([
+    // YNAB's order (2026-10-16).
+    expect(terms("is:").slice(0, 10)).toEqual([
       "Is: Uncleared",
       "Is: Cleared",
       "Is: Reconciled",
       "Is: Unreconciled",
       "Is: Cleared or Reconciled",
+      "Is: Matched",
       "Is: Approved",
       "Is: Unapproved",
       "Is: Needs Category",

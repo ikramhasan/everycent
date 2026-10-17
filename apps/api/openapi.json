@@ -4447,6 +4447,46 @@
             "type": "boolean",
             "description": "Left Uncategorized (YNAB's \"This needs a category\" icon); transfers within the budget, tracking accounts and splits have no category (a split's lines have their own `needsCategory`)"
           },
+          "imported": {
+            "type": "boolean",
+            "description": "From a file import (or matched to one, EVERYCENT-66/68)"
+          },
+          "importedPayee": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imported: the payee as the file named it, before renaming rules"
+          },
+          "matched": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|-?[1-9]\\d*)$",
+                "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
+              },
+              "payee": {
+                "type": "string"
+              },
+              "memo": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "date",
+              "amount",
+              "payee",
+              "memo"
+            ],
+            "description": "Matched to an import (YNAB's Matched Transactions): the imported side"
+          },
           "transferAccountId": {
             "type": [
               "string",
@@ -4531,6 +4571,9 @@
           "flag",
           "approved",
           "needsCategory",
+          "imported",
+          "importedPayee",
+          "matched",
           "transferAccountId",
           "transferTransactionId",
           "transferFromSplit",
@@ -7611,7 +7654,12 @@
         "type": "object",
         "properties": {
           "imported": {
-            "type": "integer"
+            "type": "integer",
+            "description": "New transactions"
+          },
+          "matched": {
+            "type": "integer",
+            "description": "Rows matched to entered transactions (same amount, within 10 days)"
           },
           "duplicates": {
             "type": "integer",
@@ -7623,12 +7671,21 @@
               "type": "string"
             },
             "description": "The new transactions, in the file's order"
+          },
+          "matchedIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The entered transactions that were matched"
           }
         },
         "required": [
           "imported",
+          "matched",
           "duplicates",
-          "transactionIds"
+          "transactionIds",
+          "matchedIds"
         ]
       },
       "ImportTransactions": {
@@ -7800,6 +7857,54 @@
         },
         "required": [
           "transactions"
+        ]
+      },
+      "MatchResult": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "transactionId"
+        ]
+      },
+      "MatchTransactions": {
+        "type": "object",
+        "properties": {
+          "transactionIds": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "One imported (not yet matched) and one entered transaction"
+          }
+        },
+        "required": [
+          "transactionIds"
+        ]
+      },
+      "UnmatchResult": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "description": "The entered transaction, as before the match"
+          },
+          "importedTransactionId": {
+            "type": "string",
+            "description": "The imported one again: cleared, unapproved, Uncategorized"
+          }
+        },
+        "required": [
+          "transactionId",
+          "importedTransactionId"
         ]
       },
       "BudgetViewList": {
@@ -19209,6 +19314,177 @@
           },
           "404": {
             "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/match": {
+      "post": {
+        "operationId": "matchTransactions",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Match an imported transaction to an entered one (YNAB's Match)",
+        "description": "The two become one: the entered transaction keeps its date, payee, memo and category, takes the imported amount, and is cleared and approved. Unmatch splits them again.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchTransactions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not one imported and one entered transaction in one account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch": {
+      "post": {
+        "operationId": "unmatchTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Split a matched transaction back into the entered and the imported one",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unmatched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnmatchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The transaction isn't matched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or transaction, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

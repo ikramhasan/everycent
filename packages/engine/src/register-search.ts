@@ -35,7 +35,7 @@ export const IS_STATES = [
   "reconciled",
   "unreconciled",
   "cleared_or_reconciled",
-  // YNAB lists "Matched" here (EVERYCENT-68, not built).
+  "matched",
   "approved",
   "unapproved",
   "needs_category",
@@ -50,6 +50,7 @@ export const IS_LABELS: Record<IsState, string> = {
   reconciled: "Reconciled",
   unreconciled: "Unreconciled",
   cleared_or_reconciled: "Cleared or Reconciled",
+  matched: "Matched",
   approved: "Approved",
   unapproved: "Unapproved",
   needs_category: "Needs Category",

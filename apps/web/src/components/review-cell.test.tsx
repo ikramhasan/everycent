@@ -53,3 +53,39 @@ describe("ReviewBanner", () => {
     expect(REVIEW_SEARCH).toBe("Is: Unapproved or Needs Category, ");
   });
 });
+
+describe("matched transactions (EVERYCENT-68)", () => {
+  it("shows both sides behind the link icon and unmatches", async () => {
+    const onUnmatch = vi.fn();
+    render(
+      <ReviewCell
+        approved
+        needsCategory={false}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        match={{
+          rows: [
+            { date: "10/10/2026", payee: "Mine A", memo: "mine A", amount: "-$20.00" },
+            { date: "10/13/2026", payee: "BANK A", memo: "bank A", amount: "-$20.00" },
+          ],
+          onUnmatch,
+        }}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "This transaction has a matched transaction" }),
+    );
+    expect(await screen.findByText("Matched Transactions")).toBeInTheDocument();
+    expect(screen.getByText("BANK A")).toBeInTheDocument();
+    expect(screen.getByText("Mine A")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Unmatch" }));
+    expect(onUnmatch).toHaveBeenCalled();
+  });
+
+  it("shows nothing for a plain approved transaction", () => {
+    const { container } = render(
+      <ReviewCell approved needsCategory={false} onApprove={vi.fn()} onReject={vi.fn()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});

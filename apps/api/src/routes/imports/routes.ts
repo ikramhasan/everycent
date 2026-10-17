@@ -64,12 +64,17 @@ const ImportBodySchema = z
 
 const ImportResultSchema = z
   .object({
-    imported: z.number().int(),
+    imported: z.number().int().describe("New transactions"),
+    matched: z
+      .number()
+      .int()
+      .describe("Rows matched to entered transactions (same amount, within 10 days)"),
     duplicates: z
       .number()
       .int()
       .describe("Rows skipped because the account already took them in (same import id)"),
     transactionIds: z.array(z.string()).describe("The new transactions, in the file's order"),
+    matchedIds: z.array(z.string()).describe("The entered transactions that were matched"),
   })
   .openapi("ImportResult");
 
@@ -127,5 +132,93 @@ export const importTransactions = createRoute({
       "The caller's role can't add transactions, or the account's email address isn't confirmed",
     ),
     404: notFound,
+  },
+});
+
+const BudgetParams = z.object({
+  budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
+});
+
+export const matchTransactions = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/match",
+  operationId: "matchTransactions",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Match an imported transaction to an entered one (YNAB's Match)",
+  description:
+    "The two become one: the entered transaction keeps its date, payee, memo and category, " +
+    "takes the imported amount, and is cleared and approved. Unmatch splits them again.",
+  request: {
+    params: BudgetParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              transactionIds: z
+                .tuple([z.string(), z.string()])
+                .describe("One imported (not yet matched) and one entered transaction"),
+            })
+            .openapi("MatchTransactions"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Matched",
+      content: {
+        "application/json": {
+          schema: z.object({ transactionId: z.string() }).openapi("MatchResult"),
+        },
+      },
+    },
+    400: jsonError("Not one imported and one entered transaction in one account"),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't change transactions, or the account's email address isn't confirmed",
+    ),
+    404: jsonError("No such budget, or the caller isn't a member"),
+  },
+});
+
+export const unmatchTransaction = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/{transactionId}/unmatch",
+  operationId: "unmatchTransaction",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Split a matched transaction back into the entered and the imported one",
+  request: {
+    params: BudgetParams.extend({
+      transactionId: z.string().openapi({ param: { name: "transactionId", in: "path" } }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Unmatched",
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              transactionId: z.string().describe("The entered transaction, as before the match"),
+              importedTransactionId: z
+                .string()
+                .describe("The imported one again: cleared, unapproved, Uncategorized"),
+            })
+            .openapi("UnmatchResult"),
+        },
+      },
+    },
+    400: jsonError("The transaction isn't matched"),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't change transactions, or the account's email address isn't confirmed",
+    ),
+    404: jsonError("No such budget or transaction, or the caller isn't a member"),
   },
 });

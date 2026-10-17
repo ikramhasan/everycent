@@ -1278,6 +1278,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/transactions/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match an imported transaction to an entered one (YNAB's Match)
+         * @description The two become one: the entered transaction keeps its date, payee, memo and category, takes the imported amount, and is cleared and approved. Unmatch splits them again.
+         */
+        post: operations["matchTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split a matched transaction back into the entered and the imported one */
+        post: operations["unmatchTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/views": {
         parameters: {
             query?: never;
@@ -2583,6 +2620,18 @@ export interface components {
             approved: boolean;
             /** @description Left Uncategorized (YNAB's "This needs a category" icon); transfers within the budget, tracking accounts and splits have no category (a split's lines have their own `needsCategory`) */
             needsCategory: boolean;
+            /** @description From a file import (or matched to one, EVERYCENT-66/68) */
+            imported: boolean;
+            /** @description Imported: the payee as the file named it, before renaming rules */
+            importedPayee: string | null;
+            /** @description Matched to an import (YNAB's Matched Transactions): the imported side */
+            matched: {
+                date: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                amount: string;
+                payee: string;
+                memo: string;
+            } | null;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
             /** @description Transfers: the matching transaction in the other account (the split, for a split's transfer line) */
@@ -3307,11 +3356,16 @@ export interface components {
             swapInflowOutflow: boolean;
         } | null;
         ImportResult: {
+            /** @description New transactions */
             imported: number;
+            /** @description Rows matched to entered transactions (same amount, within 10 days) */
+            matched: number;
             /** @description Rows skipped because the account already took them in (same import id) */
             duplicates: number;
             /** @description The new transactions, in the file's order */
             transactionIds: string[];
+            /** @description The entered transactions that were matched */
+            matchedIds: string[];
         };
         ImportTransactions: {
             transactions: {
@@ -3349,6 +3403,22 @@ export interface components {
                 swapPayeeMemo: boolean;
                 swapInflowOutflow: boolean;
             } | null;
+        };
+        MatchResult: {
+            transactionId: string;
+        };
+        MatchTransactions: {
+            /** @description One imported (not yet matched) and one entered transaction */
+            transactionIds: [
+                string,
+                string
+            ];
+        };
+        UnmatchResult: {
+            /** @description The entered transaction, as before the match */
+            transactionId: string;
+            /** @description The imported one again: cleared, unapproved, Uncategorized */
+            importedTransactionId: string;
         };
         BudgetViewList: {
             /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
@@ -9085,6 +9155,127 @@ export interface operations {
                 };
             };
             /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    matchTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchTransactions"];
+            };
+        };
+        responses: {
+            /** @description Matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchResult"];
+                };
+            };
+            /** @description Not one imported and one entered transaction in one account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unmatchTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unmatched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmatchResult"];
+                };
+            };
+            /** @description The transaction isn't matched */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or transaction, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

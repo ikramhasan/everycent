@@ -64,5 +64,9 @@ describe("file import (EVERYCENT-66)", () => {
     });
     expect(resultMessage(4, 0).title).toBe("Import Matched");
     expect(resultMessage(1, 1).message).toBe("1 transaction has been successfully imported.");
+    // EVERYCENT-68, as YNAB words it.
+    expect(resultMessage(3, 2, 1).message).toBe(
+      "2 transactions have been successfully imported. 1 previously imported transaction has been matched.",
+    );
   });
 });

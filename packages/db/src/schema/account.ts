@@ -306,6 +306,11 @@ export const transaction = pgTable(
      */
     importId: text(),
     importedPayee: text(),
+    /**
+     * A matched transaction (EVERYCENT-68): the imported row folded into this one, and what this
+     * one was before, so Unmatch can split them again as YNAB does.
+     */
+    matchedImport: jsonb().$type<MatchedImport>(),
     ...timestamps,
   },
   (t) => [
@@ -430,6 +435,20 @@ export interface CsvImportSettings {
   noHeaderRow: boolean;
   swapInflowOutflow: boolean;
   dateFormat: CsvDateFormat | null;
+}
+
+/** The imported side of a match, and the entered transaction's state before it. */
+export interface MatchedImport {
+  date: string;
+  /** Minor units, as a string. */
+  amount: string;
+  payee: string;
+  memo: string;
+  importId: string;
+  importedPayee: string | null;
+  previousAmount: string;
+  previousCleared: ClearedState;
+  previousApproved: boolean;
 }
 
 /** What an OFX/QFX or QIF import remembers for an account. */

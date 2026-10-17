@@ -118,6 +118,9 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         cleared: transaction.cleared,
         flag: transaction.flag,
         approved: transaction.approved,
+        importId: transaction.importId,
+        importedPayee: transaction.importedPayee,
+        matchedImport: transaction.matchedImport,
         // YNAB's "This needs a category": left Uncategorized (see `needsCategorySql`).
         needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`.as(
           "needs_category",
@@ -222,6 +225,8 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
           return sql`${r.cleared} <> 'reconciled'`;
         case "cleared_or_reconciled":
           return sql`${r.cleared} in ('cleared', 'reconciled')`;
+        case "matched":
+          return sql`${r.matchedImport} is not null`;
         case "approved":
           return sql`${r.approved}`;
         case "unapproved":
@@ -631,6 +636,9 @@ function columns(r: Register) {
     flag: r.flag,
     approved: r.approved,
     needsCategory: r.needsCategory,
+    importId: r.importId,
+    importedPayee: r.importedPayee,
+    matchedImport: r.matchedImport,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,
@@ -670,27 +678,46 @@ async function toJson(
     budgetId,
     rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
   );
-  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, changed, ...row }) => ({
-    ...row,
-    enteredBy: member(createdByUserId),
-    // Only once someone changed it after entering it.
-    changedBy: changed ? member(updatedByUserId) : null,
-    amount: row.amount.toString(),
-    baseAmount: row.baseAmount.toString(),
-    fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
-    transferSide:
-      row.transferTransactionId && !row.transferFromSplit
-        ? (sides.get(row.transferTransactionId) ?? null)
+  return rows.map(
+    ({
+      createdAt: _,
+      createdByUserId,
+      updatedByUserId,
+      changed,
+      importId,
+      matchedImport,
+      ...row
+    }) => ({
+      ...row,
+      imported: importId !== null,
+      matched: matchedImport
+        ? {
+            date: matchedImport.date,
+            amount: matchedImport.amount,
+            payee: matchedImport.payee,
+            memo: matchedImport.memo,
+          }
         : null,
-    subtransactions: (lines.get(row.id) ?? []).map((l) => ({
-      ...l,
-      amount: l.amount.toString(),
-      baseAmount: l.baseAmount.toString(),
-    })),
-    matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
-    // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
-    runningBalance: BigInt(row.runningBalance).toString(),
-  }));
+      enteredBy: member(createdByUserId),
+      // Only once someone changed it after entering it.
+      changedBy: changed ? member(updatedByUserId) : null,
+      amount: row.amount.toString(),
+      baseAmount: row.baseAmount.toString(),
+      fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
+      transferSide:
+        row.transferTransactionId && !row.transferFromSplit
+          ? (sides.get(row.transferTransactionId) ?? null)
+          : null,
+      subtransactions: (lines.get(row.id) ?? []).map((l) => ({
+        ...l,
+        amount: l.amount.toString(),
+        baseAmount: l.baseAmount.toString(),
+      })),
+      matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
+      // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
+      runningBalance: BigInt(row.runningBalance).toString(),
+    }),
+  );
 }
 
 /** The query for one page (one row more than the limit, to know if there's another page). */

@@ -221,3 +221,183 @@ describe("file import (EVERYCENT-66)", () => {
     ).toBe(404);
   });
 });
+
+describe("matching imports (EVERYCENT-68)", () => {
+  type Row = Txn & {
+    imported: boolean;
+    importedPayee: string | null;
+    matched: { date: string; amount: string; payee: string; memo: string } | null;
+  };
+  async function entered(s: Awaited<ReturnType<typeof setup>>, input: Record<string, unknown>) {
+    const res = await send("POST", `${s.base}/transactions`, s.owner.cookie, {
+      accountId: s.checking.id,
+      categoryId: s.groceries.id,
+      flag: null,
+      cleared: "uncleared",
+      ...input,
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    return json<Row>(res);
+  }
+  const list = async (s: Awaited<ReturnType<typeof setup>>, q = "") =>
+    (
+      await json<{ transactions: Row[] }>(
+        await send(
+          "GET",
+          `${s.base}/transactions?accountId=${s.checking.id}&limit=500&q=${encodeURIComponent(q)}`,
+          s.owner.cookie,
+        ),
+      )
+    ).transactions.filter((t) => t.payeeName !== "Starting Balance");
+
+  it("matches an entered transaction of the same amount within ten days, as YNAB does", async () => {
+    const s = await setup();
+    const a = await entered(s, {
+      date: "2026-10-10",
+      amount: "-2000",
+      payeeName: "Mine A",
+      memo: "mine A",
+    });
+    await entered(s, { date: "2026-10-02", amount: "-3000", payeeName: "Mine Far", memo: "far" });
+    await entered(s, { date: "2026-10-12", amount: "-4000", payeeName: "Mine C", memo: "mine C" });
+    const result = await s.importFile([
+      { date: "2026-10-13", amount: "-2000", payee: "BANK A", memo: "bank A" },
+      { date: "2026-10-14", amount: "-3000", payee: "BANK FAR", memo: "bank far" },
+      { date: "2026-10-12", amount: "-4100", payee: "BANK C", memo: "bank C" },
+    ]);
+    expect(result).toMatchObject({ imported: 2, matched: 1, matchedIds: [a.id] });
+    const rows = await list(s);
+    const matched = rows.find((t) => t.id === a.id);
+    // The entered details stay; it's cleared, approved and imported, with the bank side kept.
+    expect(matched).toMatchObject({
+      date: "2026-10-10",
+      amount: "-2000",
+      payeeName: "Mine A",
+      memo: "mine A",
+      categoryId: s.groceries.id,
+      cleared: "cleared",
+      approved: true,
+      imported: true,
+      importedPayee: "BANK A",
+      matched: { date: "2026-10-13", amount: "-2000", payee: "BANK A", memo: "bank A" },
+    });
+    expect(rows.map((t) => t.payeeName).sort()).toEqual([
+      "BANK C",
+      "BANK FAR",
+      "Mine A",
+      "Mine C",
+      "Mine Far",
+    ]);
+    // No payee is made for the matched row.
+    const payees = await json<{ payees: { name: string }[] }>(
+      await send("GET", `${s.base}/payees`, s.owner.cookie),
+    );
+    expect(payees.payees.map((p) => p.name)).not.toContain("BANK A");
+    expect((await list(s, "Is: Matched")).map((t) => t.id)).toEqual([a.id]);
+  });
+
+  it("picks the nearest date, and matches each entered transaction once", async () => {
+    const s = await setup();
+    await entered(s, { date: "2026-10-01", amount: "-500", payeeName: "Early", memo: "" });
+    const near = await entered(s, {
+      date: "2026-10-09",
+      amount: "-500",
+      payeeName: "Near",
+      memo: "",
+    });
+    const result = await s.importFile([
+      { date: "2026-10-10", amount: "-500", payee: "X", memo: "" },
+      { date: "2026-10-10", amount: "-500", payee: "Y", memo: "" },
+      { date: "2026-10-10", amount: "-500", payee: "Z", memo: "" },
+    ]);
+    expect(result.matched).toBe(2);
+    expect(result.matchedIds[0]).toBe(near.id);
+    expect(result.imported).toBe(1);
+  });
+
+  it("doesn't match reconciled or already imported transactions", async () => {
+    const s = await setup();
+    await entered(s, {
+      date: "2026-10-10",
+      amount: "-700",
+      payeeName: "Done",
+      memo: "",
+      cleared: "reconciled",
+    });
+    await s.importFile([{ date: "2026-10-11", amount: "-800", payee: "Imp", memo: "" }]);
+    const result = await s.importFile([
+      { date: "2026-10-10", amount: "-700", payee: "R", memo: "" },
+      { date: "2026-10-12", amount: "-800", payee: "Imp2", memo: "" },
+    ]);
+    expect(result).toMatchObject({ matched: 0, imported: 2 });
+  });
+
+  it("matches and unmatches by hand, restoring both sides", async () => {
+    const s = await setup();
+    const c = await entered(s, {
+      date: "2026-10-12",
+      amount: "-4000",
+      payeeName: "Mine C",
+      memo: "mine C",
+    });
+    const imported = (
+      await s.importFile([{ date: "2026-10-01", amount: "-4100", payee: "BANK C", memo: "bank C" }])
+    ).transactionIds[0];
+    const match = await send("POST", `${s.base}/transactions/match`, s.owner.cookie, {
+      transactionIds: [imported, c.id],
+    });
+    expect(match.status, await match.clone().text()).toBe(200);
+    let rows = await list(s);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: c.id,
+      date: "2026-10-12",
+      amount: "-4100",
+      payeeName: "Mine C",
+      memo: "mine C",
+      cleared: "cleared",
+      approved: true,
+      matched: { date: "2026-10-01", amount: "-4100", payee: "BANK C", memo: "bank C" },
+    });
+    // The balance follows the bank's amount.
+    const accounts = await json<{ accounts: { id: string; balances: { working: string } }[] }>(
+      await send("GET", `${s.base}/accounts`, s.owner.cookie),
+    );
+    expect(accounts.accounts.find((a) => a.id === s.checking.id)?.balances.working).toBe("-4100");
+
+    const unmatch = await send("POST", `${s.base}/transactions/${c.id}/unmatch`, s.owner.cookie);
+    expect(unmatch.status, await unmatch.clone().text()).toBe(200);
+    rows = await list(s);
+    expect(rows.find((t) => t.id === c.id)).toMatchObject({
+      amount: "-4000",
+      cleared: "uncleared",
+      approved: true,
+      imported: false,
+      matched: null,
+    });
+    expect(rows.find((t) => t.id !== c.id)).toMatchObject({
+      date: "2026-10-01",
+      amount: "-4100",
+      payeeName: "BANK C",
+      memo: "bank C",
+      cleared: "cleared",
+      approved: false,
+      categoryName: "Uncategorized",
+      imported: true,
+    });
+    // Unmatching again, or matching two entered transactions, is refused.
+    expect(
+      (await send("POST", `${s.base}/transactions/${c.id}/unmatch`, s.owner.cookie)).status,
+    ).toBe(400);
+    const other = await entered(s, {
+      date: "2026-10-12",
+      amount: "-1",
+      payeeName: "Two",
+      memo: "",
+    });
+    const twoEntered = await send("POST", `${s.base}/transactions/match`, s.owner.cookie, {
+      transactionIds: [other.id, c.id],
+    });
+    expect(twoEntered.status).toBe(400);
+  });
+});

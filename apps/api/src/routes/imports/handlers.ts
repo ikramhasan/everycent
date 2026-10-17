@@ -3,11 +3,21 @@ import type { RouteHandler } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
-import { importCutoff, importTransactions as importRows } from "../../lib/file-import";
+import {
+  importCutoff,
+  importTransactions as importRows,
+  matchTransactions as matchRows,
+  unmatchTransaction as unmatchRow,
+} from "../../lib/file-import";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { assertOpen, findAccount } from "../transactions/rules";
-import type { getImportContext, importTransactions } from "./routes";
+import type {
+  getImportContext,
+  importTransactions,
+  matchTransactions,
+  unmatchTransaction,
+} from "./routes";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -62,9 +72,30 @@ export const importTransactionsHandler: RouteHandler<typeof importTransactions, 
   return c.json(
     {
       imported: result.transactionIds.length,
+      matched: result.matchedIds.length,
       duplicates: result.duplicates,
       transactionIds: result.transactionIds,
+      matchedIds: result.matchedIds,
     },
     200,
   );
+};
+
+export const matchTransactionsHandler: RouteHandler<typeof matchTransactions, Env> = async (c) => {
+  const { budgetId } = c.req.valid("param");
+  const { transactionIds } = c.req.valid("json");
+  await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  const transactionId = await c.var.deps.db.transaction((tx) =>
+    matchRows(tx, budgetId, transactionIds),
+  );
+  return c.json({ transactionId }, 200);
+};
+
+export const unmatchTransactionHandler: RouteHandler<typeof unmatchTransaction, Env> = async (
+  c,
+) => {
+  const { budgetId, transactionId } = c.req.valid("param");
+  await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  const result = await c.var.deps.db.transaction((tx) => unmatchRow(tx, budgetId, transactionId));
+  return c.json(result, 200);
 };

@@ -135,6 +135,20 @@ export const TransactionSchema = z
           "budget, tracking accounts and splits have no category (a split's lines have their " +
           "own `needsCategory`)",
       ),
+    imported: z.boolean().describe("From a file import (or matched to one, EVERYCENT-66/68)"),
+    importedPayee: z
+      .string()
+      .nullable()
+      .describe("Imported: the payee as the file named it, before renaming rules"),
+    matched: z
+      .object({
+        date: z.string(),
+        amount: zMinorUnits,
+        payee: z.string(),
+        memo: z.string(),
+      })
+      .nullable()
+      .describe("Matched to an import (YNAB's Matched Transactions): the imported side"),
     transferAccountId: z
       .string()
       .nullable()

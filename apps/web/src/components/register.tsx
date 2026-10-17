@@ -323,7 +323,7 @@ export function Register({
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
   // YNAB hides its info column when no row in view needs approval or a category.
-  const reviewing = useMemo(() => loaded.some((t) => !t.approved || t.needsCategory), [loaded]);
+  const needsReview = useMemo(() => loaded.some((t) => !t.approved || t.needsCategory), [loaded]);
   // Rows read in the running balance's order only when the date comes first.
   const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
@@ -340,6 +340,11 @@ export function Register({
     onSuccess: (row) => history.noteSave(row.previousVersions, versionsOf(row)),
   });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
+  const matchTx = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/match");
+  const unmatchTx = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch",
+  );
   const [adding, setAdding] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
   const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
@@ -351,6 +356,11 @@ export function Register({
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const session = useQuery(sessionQueryOptions);
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  // The row whose Matched Transactions popover is open (EVERYCENT-68).
+  const [matchFor, setMatchFor] = useState<string | null>(null);
+  // The info column also shows while a matched row is edited: its link icon (EVERYCENT-68).
+  const reviewing =
+    needsReview || loaded.some((t) => t.matched && (t.id === editing?.id || t.id === matchFor));
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(NOTHING);
@@ -589,6 +599,86 @@ export function Register({
   function clearSelection() {
     setSelection(NOTHING);
     setScheduledSelection(NO_ROWS);
+  }
+  /**
+   * YNAB's Match (2026-10-17, EVERYCENT-68): one imported transaction that isn't matched yet and
+   * one entered transaction in the same account. Null when the selection isn't such a pair.
+   */
+  const pickedRows =
+    selection.mode === "some" && scheduledSelection.size === 0
+      ? loaded.filter((t) => selection.ids.has(t.id))
+      : [];
+  const allPickedLoaded = selection.mode === "some" && pickedRows.length === selection.ids.size;
+  const matchPair = (() => {
+    if (!allPickedLoaded || pickedRows.length !== 2) return null;
+    const imported = pickedRows.find((t) => t.imported && !t.matched);
+    const entered = pickedRows.find((t) => !t.imported && !t.matched);
+    if (!imported || !entered || imported.accountId !== entered.accountId) return null;
+    if (entered.cleared === "reconciled") return null;
+    return { imported, entered };
+  })();
+  const unmatchable =
+    allPickedLoaded && pickedRows.length > 0 && pickedRows.every((t) => t.matched !== null);
+
+  async function runMatch(importedId: string, enteredId: string) {
+    await matchTx.mutateAsync({
+      params: { path: { budgetId: budget.id } },
+      body: { transactionIds: [importedId, enteredId] },
+    });
+  }
+  async function runUnmatch(id: string) {
+    const done = await unmatchTx.mutateAsync({
+      params: { path: { budgetId: budget.id, transactionId: id } },
+    });
+    return done.importedTransactionId;
+  }
+
+  async function matchSelected() {
+    if (!matchPair) return;
+    const enteredId = matchPair.entered.id;
+    let importedId = matchPair.imported.id;
+    try {
+      await runMatch(importedId, enteredId);
+      history.record({
+        label: "matched transactions",
+        undo: async () => {
+          importedId = await runUnmatch(enteredId);
+          await refresh();
+        },
+        redo: async () => {
+          await runMatch(importedId, enteredId);
+          await refresh();
+        },
+      });
+      clearSelection();
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't match these transactions");
+    }
+  }
+
+  async function unmatchRows(ids: readonly string[]) {
+    const pairs: { enteredId: string; importedId: string }[] = [];
+    try {
+      for (const id of ids) pairs.push({ enteredId: id, importedId: await runUnmatch(id) });
+      history.record({
+        label: ids.length === 1 ? "unmatched transaction" : "unmatched transactions",
+        undo: async () => {
+          for (const p of pairs) await runMatch(p.importedId, p.enteredId);
+          await refresh();
+        },
+        redo: async () => {
+          for (const p of pairs) p.importedId = await runUnmatch(p.enteredId);
+          await refresh();
+        },
+      });
+      clearSelection();
+      setEditing(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't unmatch");
+      await refresh();
+    }
   }
 
   /** Bulk actions; deleting reconciled transactions (or their transfers) asks first. */
@@ -1441,6 +1531,31 @@ export function Register({
                 ? () => setEditing({ id: t.id, column: "category" })
                 : undefined
             }
+            match={
+              t.matched && (editing?.id === t.id || matchFor === t.id)
+                ? {
+                    onHold: (held) => setMatchFor(held ? t.id : null),
+                    rows: [
+                      {
+                        date: formatDate(t.date),
+                        payee: t.payeeName ?? "",
+                        memo: t.memo,
+                        amount: show(BigInt(t.amount), t.currency),
+                      },
+                      {
+                        date: formatDate(t.matched.date),
+                        payee: t.matched.payee,
+                        memo: t.matched.memo,
+                        amount: show(BigInt(t.matched.amount), t.currency),
+                      },
+                    ],
+                    onUnmatch: () => {
+                      setMatchFor(null);
+                      void unmatchRows([t.id]);
+                    },
+                  }
+                : undefined
+            }
           />
         );
       case "flag":
@@ -1726,6 +1841,8 @@ export function Register({
           moveTargets={openAccounts.filter((a) => a.id !== accountId)}
           pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
+          onMatch={matchPair ? () => void matchSelected() : undefined}
+          onUnmatch={unmatchable ? () => void unmatchRows(pickedRows.map((t) => t.id)) : undefined}
           scheduledCount={scheduledSelection.size}
           scheduledSplits={scheduledSplits(
             scheduledRows.filter((row) => scheduledSelection.has(row.id)),
