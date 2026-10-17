@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
+import { isAboutCategory, templateCategoryNote } from "../../lib/category-template-notes";
 import { CATEGORY_TEMPLATES } from "../../lib/category-templates";
 
 const { app, db, close } = createTestApp();
@@ -132,6 +133,41 @@ describe("category templates", () => {
     ]);
   });
 
+  it("imports our note on each About This Template category (EVERYCENT-178)", async () => {
+    const { importTemplate, groups } = await setup();
+    await importTemplate("kid", allIds("kid"));
+    const notes = (await groups()).flatMap((g) =>
+      g.categories.map((c) => [c.name, (c as Category & { note: string }).note] as const),
+    );
+    const about = notes.find(([name]) => name === "📋 About This Template");
+    expect(about?.[1]).toBe(templateCategoryNote("kid", "📋 About This Template"));
+    expect(about?.[1]).toMatch(/spend, some to save and some to give/);
+    // The other categories have no note of ours.
+    expect(notes.filter(([name]) => name !== "📋 About This Template" && name.length > 0)).toEqual(
+      expect.arrayContaining([["🍭 Spend", ""]]),
+    );
+
+    // Importing again skips it: nothing new, nothing rewritten.
+    const again = await json<ImportResult>(await importTemplate("kid", allIds("kid")));
+    expect(again.added).toBe(0);
+  });
+
+  it("has a note for every About This Template category in the gallery", () => {
+    const missing = CATEGORY_TEMPLATES.flatMap((t) =>
+      t.groups.flatMap((g) =>
+        g.categories
+          .filter((c) => isAboutCategory(c.name) && !templateCategoryNote(t.id, c.name))
+          .map((c) => `${t.id}: ${c.name}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+    const abouts = CATEGORY_TEMPLATES.filter((t) =>
+      t.groups.some((g) => g.categories.some((c) => c.name.includes("About This Template"))),
+    );
+    // Both spellings YNAB uses ("📋 About…", "📋About…") are recognised.
+    expect(abouts).toHaveLength(29);
+  });
+
   it("fills an existing group's missing categories at its top and skips the rest", async () => {
     const { cookie, base, importTemplate, groups } = await setup();
     await importTemplate("moving", allIds("moving"));
@@ -174,6 +210,33 @@ describe("category templates", () => {
     const helpers = after.find((g) => g.name === "Helpers & Hospitality");
     expect(helpers?.categories.map((c) => c.name)).toContain("🍕 pizza & drinks");
     expect(helpers?.categories).toHaveLength(3);
+  });
+
+  it("counts hidden groups and categories as already there (EVERYCENT-177)", async () => {
+    const { cookie, base, importTemplate, groups } = await setup();
+    await importTemplate("moving", allIds("moving"));
+    const unexpected = (await groups()).find((g) => g.name === "Unexpected");
+    const supplies = (await groups()).find((g) => g.name === "Supplies & Services");
+    const truck = supplies?.categories.find((c) => c.name === "🚚 Moving Truck");
+    const settle = unexpected?.categories.find((c) => c.name === "🔑 Settling in Fund");
+    if (!unexpected || !truck || !settle) throw new Error("import missing");
+    // As in YNAB's check (2026-10-17): hide a group and a category, take one away from the group.
+    await send("PATCH", `${base}/category-groups/${unexpected.id}`, cookie, { hidden: true });
+    await send("PATCH", `${base}/categories/${truck.id}`, cookie, { hidden: true });
+    await send("PATCH", `${base}/categories/${settle.id}`, cookie, { name: "x settle" });
+
+    const body = await json<ImportResult>(await importTemplate("moving", allIds("moving")));
+    expect(body.added).toBe(1);
+    const after = body.categories.groups as (Group & { hidden: boolean })[];
+    // The hidden group is filled (and stays hidden); the hidden category isn't added again.
+    expect(after.filter((g) => g.name === "Unexpected")).toHaveLength(1);
+    const filled = after.find((g) => g.name === "Unexpected");
+    expect(filled?.hidden).toBe(true);
+    expect(filled?.categories[0]?.name).toBe("🔑 Settling in Fund");
+    const trucks = after
+      .find((g) => g.name === "Supplies & Services")
+      ?.categories.filter((c) => c.name === "🚚 Moving Truck");
+    expect(trucks?.map((c) => c.id)).toEqual([truck.id]);
   });
 
   it("puts several missing categories at the top in the template's order", async () => {

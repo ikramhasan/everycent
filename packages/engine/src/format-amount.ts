@@ -36,8 +36,14 @@ export function currencySymbol(currency: CurrencyCode): string {
 }
 
 /** Formats with the budget's settings using exact string operations; never goes through a float. */
-export function formatAmount(m: Money, settings: BudgetFormatSettings): string {
-  const spec = NUMBER_FORMAT_SPECS[settings.numberFormat];
+export function formatAmount(
+  m: Money,
+  settings: BudgetFormatSettings,
+  options: { grouping?: boolean } = {},
+): string {
+  const base = NUMBER_FORMAT_SPECS[settings.numberFormat];
+  // YNAB's file exports write amounts without group separators (EVERYCENT-70).
+  const spec = options.grouping === false ? { ...base, group: "" } : base;
   const exponent = currencyExponent(m.currency);
   const negative = m.amount < 0n;
   const digits = (negative ? -m.amount : m.amount).toString().padStart(exponent + 1, "0");

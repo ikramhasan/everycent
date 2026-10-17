@@ -63,6 +63,14 @@ async function categorizeAs(group: string, category: string) {
 }
 
 describe("SelectionBar", () => {
+  it("offers YNAB's Export # Transactions in More", async () => {
+    const onExport = vi.fn();
+    bar(summary({ count: 2 }), { onExport });
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Export 2 Transactions" }));
+    expect(onExport).toHaveBeenCalledOnce();
+  });
+
   it("offers Approve and Reject with unapproved rows, Flag and Clear moving into More", async () => {
     const { onAction } = bar(summary({ unapproved: 1, uncleared: 2 }));
     expect(screen.queryByRole("button", { name: /Flag/ })).toBeNull();
@@ -178,5 +186,24 @@ describe("groupOptions", () => {
       ["Bills", ["rent", "power"]],
       ["Needs", ["food"]],
     ]);
+  });
+});
+
+describe("Match and Unmatch (EVERYCENT-68)", () => {
+  it("offers Match only when the register says the pair can match", async () => {
+    const onMatch = vi.fn();
+    const { unmount } = bar(summary({ unapproved: 1 }), { onMatch });
+    await userEvent.click(screen.getByRole("button", { name: "Match" }));
+    expect(onMatch).toHaveBeenCalled();
+    unmount();
+    bar(summary({ unapproved: 1 }));
+    expect(screen.queryByRole("button", { name: "Match" })).not.toBeInTheDocument();
+  });
+
+  it("offers Unmatch for matched transactions", async () => {
+    const onUnmatch = vi.fn();
+    bar(summary({ count: 1, cleared: 1 }), { onUnmatch });
+    await userEvent.click(screen.getByRole("button", { name: "Unmatch" }));
+    expect(onUnmatch).toHaveBeenCalled();
   });
 });

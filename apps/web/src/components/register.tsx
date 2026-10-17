@@ -76,6 +76,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
+import { exportSelected } from "@/lib/exports";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
@@ -137,6 +138,7 @@ import {
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
+import { FileImportButton } from "./file-import";
 import { FlagMenu } from "./flag-menu";
 import { MemberAvatar } from "./member-avatar";
 import {
@@ -322,7 +324,7 @@ export function Register({
   );
   const someHidden = transactions.data?.pages[0]?.someHidden ?? false;
   // YNAB hides its info column when no row in view needs approval or a category.
-  const reviewing = useMemo(() => loaded.some((t) => !t.approved || t.needsCategory), [loaded]);
+  const needsReview = useMemo(() => loaded.some((t) => !t.approved || t.needsCategory), [loaded]);
   // Rows read in the running balance's order only when the date comes first.
   const dateOrder = view.sort[0]?.column === "date";
   const accounts = useQuery(accountsQueryOptions(budget.id));
@@ -339,6 +341,15 @@ export function Register({
     onSuccess: (row) => history.noteSave(row.previousVersions, versionsOf(row)),
   });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
+  const matchTx = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/match");
+  const dontRenameTx = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename",
+  );
+  const unmatchTx = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch",
+  );
   const [adding, setAdding] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
   const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
@@ -350,6 +361,11 @@ export function Register({
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const session = useQuery(sessionQueryOptions);
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  // The row whose Matched Transactions popover is open (EVERYCENT-68).
+  const [matchFor, setMatchFor] = useState<string | null>(null);
+  // The info column also shows while a matched row is edited: its link icon (EVERYCENT-68).
+  const reviewing =
+    needsReview || loaded.some((t) => t.matched && (t.id === editing?.id || t.id === matchFor));
   const [editingSplit, setEditingSplit] = useState<EditingSplit | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(NOTHING);
@@ -517,6 +533,15 @@ export function Register({
   const focused = useRef<string | null>(null);
   useEffect(() => {
     if (!focusId || focused.current === focusId) return;
+    // A scheduled row (from an Activity popover's upcoming list) is selected, as YNAB does
+    // (2026-10-17, EVERYCENT-176); it's at the top, so there's nothing to load. Until the
+    // scheduled rows are in, the id could be either.
+    if (scheduled.isPending) return;
+    if (scheduledRows.some((row) => row.id === focusId)) {
+      focused.current = focusId;
+      setScheduledSelection(new Set([focusId]));
+      return;
+    }
     const index = flat.findIndex((r) => r.key === focusId);
     if (index === -1) {
       // The other side of a transfer may be further back; load pages until it shows up.
@@ -528,7 +553,16 @@ export function Register({
     setHighlightId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => clearTimeout(timer);
-  }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [
+    focusId,
+    flat,
+    virtualizer,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scheduledRows,
+    scheduled.isPending,
+  ]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
   // The selection's filter is the register's, without the sort, and with the list's today so a
   // year-less `Income:` matches the same rows.
@@ -588,6 +622,102 @@ export function Register({
   function clearSelection() {
     setSelection(NOTHING);
     setScheduledSelection(NO_ROWS);
+  }
+  /**
+   * YNAB's Match (2026-10-17, EVERYCENT-68): one imported transaction that isn't matched yet and
+   * one entered transaction in the same account. Null when the selection isn't such a pair.
+   */
+  const pickedRows =
+    selection.mode === "some" && scheduledSelection.size === 0
+      ? loaded.filter((t) => selection.ids.has(t.id))
+      : [];
+  const allPickedLoaded = selection.mode === "some" && pickedRows.length === selection.ids.size;
+  const matchPair = (() => {
+    if (!allPickedLoaded || pickedRows.length !== 2) return null;
+    const imported = pickedRows.find((t) => t.imported && !t.matched);
+    const entered = pickedRows.find((t) => !t.imported && !t.matched);
+    if (!imported || !entered || imported.accountId !== entered.accountId) return null;
+    if (entered.cleared === "reconciled") return null;
+    return { imported, entered };
+  })();
+  const unmatchable =
+    allPickedLoaded && pickedRows.length > 0 && pickedRows.every((t) => t.matched !== null);
+
+  async function runMatch(importedId: string, enteredId: string) {
+    await matchTx.mutateAsync({
+      params: { path: { budgetId: budget.id } },
+      body: { transactionIds: [importedId, enteredId] },
+    });
+  }
+  async function runUnmatch(id: string) {
+    const done = await unmatchTx.mutateAsync({
+      params: { path: { budgetId: budget.id, transactionId: id } },
+    });
+    return done.importedTransactionId;
+  }
+
+  /**
+   * Bank Import Details' "Don't Rename as …" (EVERYCENT-174): back to the imported payee, and
+   * the payee's rule for that name goes.
+   */
+  async function dontRename(t: Transaction) {
+    try {
+      await dontRenameTx.mutateAsync({
+        params: { path: { budgetId: budget.id, transactionId: t.id } },
+      });
+      setEditing(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't rename it back");
+    }
+  }
+
+  async function matchSelected() {
+    if (!matchPair) return;
+    const enteredId = matchPair.entered.id;
+    let importedId = matchPair.imported.id;
+    try {
+      await runMatch(importedId, enteredId);
+      history.record({
+        label: "matched transactions",
+        undo: async () => {
+          importedId = await runUnmatch(enteredId);
+          await refresh();
+        },
+        redo: async () => {
+          await runMatch(importedId, enteredId);
+          await refresh();
+        },
+      });
+      clearSelection();
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't match these transactions");
+    }
+  }
+
+  async function unmatchRows(ids: readonly string[]) {
+    const pairs: { enteredId: string; importedId: string }[] = [];
+    try {
+      for (const id of ids) pairs.push({ enteredId: id, importedId: await runUnmatch(id) });
+      history.record({
+        label: ids.length === 1 ? "unmatched transaction" : "unmatched transactions",
+        undo: async () => {
+          for (const p of pairs) await runMatch(p.importedId, p.enteredId);
+          await refresh();
+        },
+        redo: async () => {
+          for (const p of pairs) p.importedId = await runUnmatch(p.enteredId);
+          await refresh();
+        },
+      });
+      clearSelection();
+      setEditing(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't unmatch");
+      await refresh();
+    }
   }
 
   /** Bulk actions; deleting reconciled transactions (or their transfers) asks first. */
@@ -1440,6 +1570,31 @@ export function Register({
                 ? () => setEditing({ id: t.id, column: "category" })
                 : undefined
             }
+            match={
+              t.matched && (editing?.id === t.id || matchFor === t.id)
+                ? {
+                    onHold: (held) => setMatchFor(held ? t.id : null),
+                    rows: [
+                      {
+                        date: formatDate(t.date),
+                        payee: t.payeeName ?? "",
+                        memo: t.memo,
+                        amount: show(BigInt(t.amount), t.currency),
+                      },
+                      {
+                        date: formatDate(t.matched.date),
+                        payee: t.matched.payee,
+                        memo: t.matched.memo,
+                        amount: show(BigInt(t.matched.amount), t.currency),
+                      },
+                    ],
+                    onUnmatch: () => {
+                      setMatchFor(null);
+                      void unmatchRows([t.id]);
+                    },
+                  }
+                : undefined
+            }
           />
         );
       case "flag":
@@ -1646,9 +1801,8 @@ export function Register({
       case "category": {
         const type = accountById.get(t.accountId)?.type ?? "checking";
         const to = line.transferAccountId ? accountById.get(line.transferAccountId)?.type : null;
-        return usesCategory(type, to)
-          ? line.categoryName
-          : transferCategory(t.accountId, line.transferAccountId);
+        if (!usesCategory(type, to)) return transferCategory(t.accountId, line.transferAccountId);
+        return line.needsCategory ? <NeedsCategoryPill /> : line.categoryName;
       }
       case "memo":
         return line.memo;
@@ -1679,6 +1833,7 @@ export function Register({
             <CreditCard /> Record Payment
           </Button>
         )}
+        {!readOnly && canAdd && <FileImportButton accountId={accountId} />}
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
@@ -1725,11 +1880,18 @@ export function Register({
           moveTargets={openAccounts.filter((a) => a.id !== accountId)}
           pending={bulk.isPending || scheduledBulk.isPending}
           onAction={requestBulk}
+          onMatch={matchPair ? () => void matchSelected() : undefined}
+          onUnmatch={unmatchable ? () => void unmatchRows(pickedRows.map((t) => t.id)) : undefined}
           scheduledCount={scheduledSelection.size}
           scheduledSplits={scheduledSplits(
             scheduledRows.filter((row) => scheduledSelection.has(row.id)),
           )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
+          onExport={() => {
+            exportSelected(budget, selectionBody(selection, selectionFilter)).catch(() =>
+              toast.error("Couldn't export the selected transactions."),
+            );
+          }}
         />
       )}
 
@@ -2035,6 +2197,7 @@ export function Register({
                               void commitCell(t, editing.column, value, exit, transferAccountId)
                             }
                             onCancel={() => setEditing(null)}
+                            onDontRename={() => void dontRename(t)}
                           />
                         </TableCell>
                       );

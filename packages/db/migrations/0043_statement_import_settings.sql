@@ -1,0 +1,1 @@
+ALTER TABLE "budget_account" ADD COLUMN "statement_import_settings" jsonb;

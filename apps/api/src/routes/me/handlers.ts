@@ -15,6 +15,7 @@ import { APIError } from "better-auth/api";
 import Bowser from "bowser";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { pauseAudit } from "../../lib/audit-context";
+import { deleteBudgetTransactions } from "../../lib/delete-budget";
 import { AppError } from "../../lib/errors";
 import { consumePasswordCheck } from "../../lib/throttle";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -205,11 +206,18 @@ export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => 
   await db.transaction(async (tx) => {
     // YNAB: "any budgets that you owned will be unshared and deleted. Any budgets that were
     // shared with you will no longer be shared." Deleting a budget cascades to everything in it.
-    const owned = tx
+    const owned = await tx
       .select({ id: budgetMember.budgetId })
       .from(budgetMember)
       .where(and(eq(budgetMember.userId, me.id), eq(budgetMember.role, "owner")));
-    await tx.delete(budget).where(inArray(budget.id, owned));
+    // Split lines would block the cascade to the categories (EVERYCENT-207).
+    for (const { id } of owned) await deleteBudgetTransactions(tx, id);
+    await tx.delete(budget).where(
+      inArray(
+        budget.id,
+        owned.map((o) => o.id),
+      ),
+    );
     // Reset-password tokens are stored with the user's id as their value.
     await tx.delete(verification).where(eq(verification.value, me.id));
     // Memberships, sessions, logins, options and two-step verification cascade from the user.

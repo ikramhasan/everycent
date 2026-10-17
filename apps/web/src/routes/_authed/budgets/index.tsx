@@ -9,6 +9,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { currencyName } from "@/components/currency-picker";
+import { ImportBudgetMenu } from "@/components/import-budget";
 import { PageHeader } from "@/components/page-header";
 import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
@@ -29,11 +30,14 @@ function AllBudgetsPage() {
       <PageHeader
         title="All budgets"
         actions={
-          <Button size="sm" asChild>
-            <Link to="/budgets/new" search={{ template }}>
-              <Plus /> New budget
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ImportBudgetMenu />
+            <Button size="sm" asChild>
+              <Link to="/budgets/new" search={{ template }}>
+                <Plus /> New budget
+              </Link>
+            </Button>
+          </div>
         }
       />
       {template && (

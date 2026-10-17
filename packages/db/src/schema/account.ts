@@ -1,5 +1,6 @@
 import {
   ACCOUNT_TYPES,
+  type CsvDateFormat,
   type CurrencyCode,
   LOAN_CHARGE_KINDS,
   LOAN_CHARGE_STATUSES,
@@ -16,8 +17,10 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -67,6 +70,13 @@ export const budgetAccount = pgTable(
      * `loan_payoff_celebration_completed_for_account_ids`, per loan, checked 2026-10-14).
      */
     paidOffBannerDismissed: boolean().notNull().default(false),
+    /**
+     * The CSV import's "Remember setting for this account" (EVERYCENT-66): the column mapping,
+     * options and date format, for files with these column names.
+     */
+    csvImportSettings: jsonb().$type<CsvImportSettings>(),
+    /** The same for OFX/QFX and QIF files (EVERYCENT-67): their three options. */
+    statementImportSettings: jsonb().$type<StatementImportSettings>(),
     /**
      * A tracking liability updated to a loan account (YNAB's "Update to a Loan Account"): the new
      * loan. The original stays closed with its history, which the loan's page shows.
@@ -162,6 +172,14 @@ export const payee = pgTable(
      * (which leaves the transactions behind). The history's two-of-three rule builds on it.
      */
     carriedCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * The auto-categorization default as stored state: YNAB updates it when one of the payee's
+     * transactions is added or edited and leaves it alone on a delete (EVERYCENT-182). Only read
+     * once `autoCategorySaved`; until a payee's first add or edit after this column arrived, the
+     * default is replayed from its history (with `carriedCategoryId`), as before.
+     */
+    autoCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    autoCategorySaved: boolean().notNull().default(false),
     ...timestamps,
   },
   (t) => [
@@ -290,6 +308,17 @@ export const transaction = pgTable(
     updatedByUserId: text(),
     /** Bumped by the trigger on every real change: undo sends it to detect a partner's edit. */
     version: integer().notNull().default(1),
+    /**
+     * From a file import (EVERYCENT-66): its import id (`EC:<amount>:<date>:<n>`) and the payee as
+     * the file named it, before renaming rules.
+     */
+    importId: text(),
+    importedPayee: text(),
+    /**
+     * A matched transaction (EVERYCENT-68): the imported row folded into this one, and what this
+     * one was before, so Unmatch can split them again as YNAB does.
+     */
+    matchedImport: jsonb().$type<MatchedImport>(),
     ...timestamps,
   },
   (t) => [
@@ -398,4 +427,58 @@ export const scheduledSubTransaction = pgTable(
     index("scheduled_sub_transaction_parent_idx").on(t.scheduledTransactionId),
     index("scheduled_sub_transaction_category_id_idx").on(t.categoryId),
   ],
+);
+
+/** What a file import remembers for an account (`budgetAccount.csvImportSettings`). */
+export interface CsvImportSettings {
+  /** The column names it was set for (lowercased header, or A, B, C… without one). */
+  columns: string[];
+  mapping: {
+    date: number | null;
+    payee: number | null;
+    memo: number | null;
+    outflow: number | null;
+    inflow: number | null;
+  };
+  noHeaderRow: boolean;
+  swapInflowOutflow: boolean;
+  dateFormat: CsvDateFormat | null;
+}
+
+/** The imported side of a match, and the entered transaction's state before it. */
+export interface MatchedImport {
+  date: string;
+  /** Minor units, as a string. */
+  amount: string;
+  payee: string;
+  memo: string;
+  importId: string;
+  importedPayee: string | null;
+  previousAmount: string;
+  previousCleared: ClearedState;
+  previousApproved: boolean;
+}
+
+/** What an OFX/QFX or QIF import remembers for an account. */
+export interface StatementImportSettings {
+  importMemos: boolean;
+  swapPayeeMemo: boolean;
+  swapInflowOutflow: boolean;
+}
+
+/**
+ * Every import id an account has taken in (EVERYCENT-66/67). A file row with one of these is
+ * skipped, so re-importing a file adds nothing, and a deleted imported transaction never comes
+ * back.
+ */
+export const accountImportId = pgTable(
+  "account_import_id",
+  {
+    accountId: text()
+      .notNull()
+      .references(() => budgetAccount.id, { onDelete: "cascade" }),
+    importId: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.importId] })],
 );

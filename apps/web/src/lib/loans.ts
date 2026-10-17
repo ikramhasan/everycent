@@ -15,6 +15,7 @@ export type LoanActivity = components["schemas"]["LoanActivity"];
 export type LoanMonthData = LoanActivity["months"][number];
 export type LoanChargeData = components["schemas"]["LoanCharge"];
 export type LoanLineData = LoanMonthData["transactions"][number];
+export type LoanUpcoming = LoanActivity["upcoming"][number];
 
 /**
  * A loan's months up to the user's today (interest and escrow are worked out per month). Keyed

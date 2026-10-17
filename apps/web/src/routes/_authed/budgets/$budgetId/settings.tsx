@@ -19,6 +19,7 @@ import {
 } from "@everycent/ui/components/card";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { BudgetMembers } from "@/components/budget-members";
@@ -30,6 +31,7 @@ import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, budgetQueryOptions, invalidateBudgets } from "@/lib/budgets";
 import { todayIso } from "@/lib/dates";
+import { downloadBackup } from "@/lib/exports";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/settings")({
   component: BudgetSettingsPage,
@@ -142,6 +144,26 @@ function BudgetSettingsPage() {
       <fieldset disabled={readOnly} className="contents">
         <ExchangeRates budget={budget} />
       </fieldset>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Backup</CardTitle>
+          <CardDescription>
+            Download this whole budget as a file: accounts, categories, transactions, targets,
+            scheduled transactions and settings. Restore it from All budgets as a new budget.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadBackup(budget).catch(() => toast.error("Couldn't download the backup."))
+            }
+          >
+            <FileDown /> Download backup
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* An archived budget can start fresh again, as in YNAB. */}
       {budget.role === "owner" && (

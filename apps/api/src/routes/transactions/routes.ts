@@ -76,6 +76,12 @@ const SubTransactionSchema = z
     payeeName: z.string().nullable(),
     categoryId: z.string().nullable(),
     categoryName: z.string().nullable(),
+    needsCategory: z
+      .boolean()
+      .describe(
+        'Left Uncategorized (YNAB\'s "This needs a category" on the line); the split then ' +
+          "counts as needing a category in the review banner and search",
+      ),
     memo: z.string(),
     transferAccountId: z.string().nullable().describe("Transfer lines: the other account"),
     transferTransactionId: z
@@ -125,9 +131,24 @@ export const TransactionSchema = z
     needsCategory: z
       .boolean()
       .describe(
-        'Left Uncategorized (YNAB\'s "This needs a category"); transfers within the budget, ' +
-          "tracking accounts and splits have no category and never need one",
+        'Left Uncategorized (YNAB\'s "This needs a category" icon); transfers within the ' +
+          "budget, tracking accounts and splits have no category (a split's lines have their " +
+          "own `needsCategory`)",
       ),
+    imported: z.boolean().describe("From a file import (or matched to one, EVERYCENT-66/68)"),
+    importedPayee: z
+      .string()
+      .nullable()
+      .describe("Imported: the payee as the file named it, before renaming rules"),
+    matched: z
+      .object({
+        date: z.string(),
+        amount: zMinorUnits,
+        payee: z.string(),
+        memo: z.string(),
+      })
+      .nullable()
+      .describe("Matched to an import (YNAB's Matched Transactions): the imported side"),
     transferAccountId: z
       .string()
       .nullable()
@@ -591,7 +612,7 @@ const RegisterFilterSchema = z
   .describe("The same filter as the register's query parameters")
   .openapi("RegisterFilter");
 
-const SelectionSchema = z
+export const SelectionSchema = z
   .union([
     z.strictObject({
       ids: z.array(z.string()).min(1).max(1000).describe("Transactions ticked one by one"),

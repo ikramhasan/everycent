@@ -118,6 +118,9 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         cleared: transaction.cleared,
         flag: transaction.flag,
         approved: transaction.approved,
+        importId: transaction.importId,
+        importedPayee: transaction.importedPayee,
+        matchedImport: transaction.matchedImport,
         // YNAB's "This needs a category": left Uncategorized (see `needsCategorySql`).
         needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`.as(
           "needs_category",
@@ -182,6 +185,8 @@ interface Unit {
   isSplit: SQL;
   /** In Ready to Assign (YNAB's `Income:`). */
   income: SQL;
+  /** Left Uncategorized (YNAB's `Is: Needs Category`). */
+  needsCategory: SQL;
 }
 
 function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string): SQL {
@@ -220,14 +225,16 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
           return sql`${r.cleared} <> 'reconciled'`;
         case "cleared_or_reconciled":
           return sql`${r.cleared} in ('cleared', 'reconciled')`;
+        case "matched":
+          return sql`${r.matchedImport} is not null`;
         case "approved":
           return sql`${r.approved}`;
         case "unapproved":
           return sql`not ${r.approved}`;
         case "needs_category":
-          return sql`${r.needsCategory}`;
+          return unit.needsCategory;
         case "unapproved_or_needs_category":
-          return sql`(not ${r.approved} or ${r.needsCategory})`;
+          return sql`(not ${r.approved} or ${unit.needsCategory})`;
       }
       break;
     case "amount": {
@@ -266,6 +273,7 @@ function parentUnit(r: Register): Unit {
     amount: sql`${r.amount}`,
     isSplit: sql`exists (select 1 from ${subTransaction} where ${subTransaction.transactionId} = ${r.id})`,
     income: sql`${r.income}`,
+    needsCategory: sql`${r.needsCategory}`,
   };
 }
 
@@ -278,6 +286,9 @@ function lineUnit(r: Register): Unit {
     amount: sql`st.amount`,
     isSplit: sql`false`,
     income: sql`coalesce(sc.internal_kind = 'ready_to_assign', false)`,
+    // An approved split with an uncategorized line still needs a category in YNAB, and its
+    // search shows only that line (2026-10-17, EVERYCENT-179).
+    needsCategory: sql`coalesce(sc.internal_kind = 'uncategorized', false)`,
   };
 }
 
@@ -485,6 +496,7 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       payeeName: payee.name,
       categoryId: subTransaction.categoryId,
       categoryName: category.name,
+      needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`,
       memo: subTransaction.memo,
       transferAccountId: payee.transferAccountId,
       transferTransactionId: other.id,
@@ -624,6 +636,9 @@ function columns(r: Register) {
     flag: r.flag,
     approved: r.approved,
     needsCategory: r.needsCategory,
+    importId: r.importId,
+    importedPayee: r.importedPayee,
+    matchedImport: r.matchedImport,
     transferAccountId: r.transferAccountId,
     transferTransactionId: r.transferTransactionId,
     transferFromSplit: r.transferFromSplit,
@@ -663,27 +678,46 @@ async function toJson(
     budgetId,
     rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
   );
-  return rows.map(({ createdAt: _, createdByUserId, updatedByUserId, changed, ...row }) => ({
-    ...row,
-    enteredBy: member(createdByUserId),
-    // Only once someone changed it after entering it.
-    changedBy: changed ? member(updatedByUserId) : null,
-    amount: row.amount.toString(),
-    baseAmount: row.baseAmount.toString(),
-    fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
-    transferSide:
-      row.transferTransactionId && !row.transferFromSplit
-        ? (sides.get(row.transferTransactionId) ?? null)
+  return rows.map(
+    ({
+      createdAt: _,
+      createdByUserId,
+      updatedByUserId,
+      changed,
+      importId,
+      matchedImport,
+      ...row
+    }) => ({
+      ...row,
+      imported: importId !== null,
+      matched: matchedImport
+        ? {
+            date: matchedImport.date,
+            amount: matchedImport.amount,
+            payee: matchedImport.payee,
+            memo: matchedImport.memo,
+          }
         : null,
-    subtransactions: (lines.get(row.id) ?? []).map((l) => ({
-      ...l,
-      amount: l.amount.toString(),
-      baseAmount: l.baseAmount.toString(),
-    })),
-    matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
-    // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
-    runningBalance: BigInt(row.runningBalance).toString(),
-  }));
+      enteredBy: member(createdByUserId),
+      // Only once someone changed it after entering it.
+      changedBy: changed ? member(updatedByUserId) : null,
+      amount: row.amount.toString(),
+      baseAmount: row.baseAmount.toString(),
+      fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),
+      transferSide:
+        row.transferTransactionId && !row.transferFromSplit
+          ? (sides.get(row.transferTransactionId) ?? null)
+          : null,
+      subtransactions: (lines.get(row.id) ?? []).map((l) => ({
+        ...l,
+        amount: l.amount.toString(),
+        baseAmount: l.baseAmount.toString(),
+      })),
+      matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
+      // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
+      runningBalance: BigInt(row.runningBalance).toString(),
+    }),
+  );
 }
 
 /** The query for one page (one row more than the limit, to know if there's another page). */

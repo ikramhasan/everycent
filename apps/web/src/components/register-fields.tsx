@@ -11,6 +11,7 @@ import {
   Autocomplete,
   AutocompleteCollection,
   AutocompleteContent,
+  AutocompleteEmpty,
   AutocompleteGroup,
   AutocompleteGroupLabel,
   AutocompleteInput,
@@ -39,7 +40,17 @@ import {
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
-import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
+import { cn } from "@everycent/ui/lib/utils";
+import {
+  ArrowLeftRight,
+  CalendarDays,
+  Check,
+  ExternalLink,
+  Info,
+  Plus,
+  Split,
+  X,
+} from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import {
@@ -189,10 +200,12 @@ export function DateField({
 }
 
 type PayeeItem = {
+  /** Unique in the list: the copy under "Selected" has its own. */
   id: string;
   label: string;
-  kind: "payee" | "transfer" | "create";
+  kind: "payee" | "transfer";
   /** Transfers: the other account. */
+  accountId?: string;
   accountName?: string;
   /** Transfers: what the list shows (YNAB's wording, or just the account's name). */
   text?: string;
@@ -209,10 +222,9 @@ function matches(item: PayeeItem, text: string) {
   );
 }
 
-interface PayeeGroup {
-  value: string;
-  items: PayeeItem[];
-}
+/** The copy of the field's payee listed under "Selected". */
+const SELECTED = "selected:";
+const asSelected = (item: PayeeItem): PayeeItem => ({ ...item, id: `${SELECTED}${item.id}` });
 
 /** An account a transfer can go to. */
 export interface TransferTarget {
@@ -234,8 +246,9 @@ export interface PayeeChoice {
  * Payee name with suggestions, plus YNAB's "Payments and Transfers" for each account money can
  * move to, worded by `own` and the amount's direction (`transferChoiceLabel`: "Payment from F
  * Cash", "Transfer to Savings", "To/From X"); "Transfer : <account>" without `own`. Typing a new
- * name is fine (it's created on save); YNAB also lists "Create payee" so it's clear that's what
- * will happen.
+ * name is fine (it's created on save); YNAB also lists "Create … Payee" at the top so it's clear
+ * that's what will happen, while the first existing match stays the highlighted one (2026-10-16).
+ * That entry is a button above the list rather than an item, so autocomplete never lands on it.
  */
 export function PayeeField({
   label = "Payee",
@@ -245,7 +258,9 @@ export function PayeeField({
   payees,
   transfers,
   own,
+  transferAccountId = null,
   autoFocus,
+  importDetails,
 }: {
   /** Accessible name (split lines say which line). */
   label?: string;
@@ -257,10 +272,15 @@ export function PayeeField({
   transfers: readonly TransferTarget[];
   /** The account being edited and which way its amount goes. */
   own?: { type: AccountType; direction: TransferDirection };
+  /** The account the field's transfer goes to, to tell two accounts with one name apart. */
+  transferAccountId?: string | null;
   autoFocus?: boolean;
+  /** An imported transaction's Bank Import Details (EVERYCENT-155), behind the Selected payee. */
+  importDetails?: ImportDetails;
 }) {
   const trimmed = value.trim();
   const managePayees = useManagePayees();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Hidden payees aren't suggested, but typing one's exact name still uses it (YNAB).
   const hiddenMatch = payees.some(
     (p) => p.hidden && p.name.toLowerCase() === trimmed.toLowerCase(),
@@ -269,7 +289,7 @@ export function PayeeField({
   // typing replaces it; the list narrows once something is typed.
   const [open, setOpen] = useState(Boolean(autoFocus));
   const [typed, setTyped] = useState(false);
-  const groups = useMemo<PayeeGroup[]>(() => {
+  const { groups, create } = useMemo(() => {
     const known: PayeeItem[] = payees
       .filter((p) => !p.hidden)
       .map((p) => ({ id: p.id, label: p.name, kind: "payee" }));
@@ -282,23 +302,28 @@ export function PayeeField({
         id: `transfer:${a.id}`,
         label: worded ?? transferLabel(a.name),
         kind: "transfer",
+        accountId: a.id,
         accountName: a.name,
         text: worded ?? a.name,
       };
     });
-    const exact = [...known, ...toAccounts].some((p) => matches(p, trimmed));
-    // YNAB (2026-10-16): the whole list starts with "Payments and Transfers", then "Saved
-    // Payees"; once something is typed, saved payees come first. "Create payee" stays last here
-    // (YNAB puts it on top), so autocomplete still picks an existing payee first.
+    const chosen =
+      (transferAccountId && toAccounts.find((p) => p.accountId === transferAccountId)) ||
+      [...known, ...toAccounts].find((p) => matches(p, trimmed));
+    // YNAB (2026-10-16): the whole list starts with "Selected" (the payee in the field, ticked),
+    // then "Payments and Transfers", then "Saved Payees"; once something is typed, saved payees
+    // come first.
     const saved = { value: "Saved Payees", items: known };
     const moves = { value: "Payments and Transfers", items: toAccounts };
-    return [
-      ...(typed ? [saved, moves] : [moves, saved]),
-      ...(trimmed && !exact && !hiddenMatch
-        ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
-        : []),
-    ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, own, trimmed, hiddenMatch, typed]);
+    const selected = chosen && !typed ? [{ value: "Selected", items: [asSelected(chosen)] }] : [];
+    return {
+      groups: [...selected, ...(typed ? [saved, moves] : [moves, saved])].filter(
+        (g) => g.items.length > 0,
+      ),
+      // A name no payee has yet: YNAB offers to create it at the top of the list.
+      create: trimmed && !chosen && !hiddenMatch ? trimmed : null,
+    };
+  }, [payees, transfers, own, trimmed, hiddenMatch, typed, transferAccountId]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
@@ -308,8 +333,8 @@ export function PayeeField({
       picked && picked.label === text
         ? picked
         : groups.flatMap((g) => g.items).find((p) => matches(p, text.trim()));
-    if (item?.kind === "transfer") {
-      return { name: item.label, transferAccountId: item.id.slice("transfer:".length) };
+    if (item?.kind === "transfer" && item.accountId) {
+      return { name: item.label, transferAccountId: item.accountId };
     }
     return { name: text, transferAccountId: null, payee: payees.find((p) => p.name === text) };
   }
@@ -344,56 +369,192 @@ export function PayeeField({
         showTrigger={false}
         autoFocus={autoFocus}
         onFocus={(e) => {
+          // Coming back to the field shows the whole list again, Selected first.
+          setTyped(false);
           setOpen(true);
           e.currentTarget.select();
         }}
         className="h-8 w-full"
       />
-      <AutocompleteContent className="min-w-64">
-        <AutocompleteList>
-          {(group: PayeeGroup) => (
-            <AutocompleteGroup key={group.value} items={group.items}>
-              {group.value && <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>}
-              <AutocompleteCollection>
-                {(item: PayeeItem) => (
-                  <AutocompleteItem key={item.id} value={item}>
-                    {item.kind === "create" ? (
-                      <>
-                        <Plus className="size-4" /> Create payee “{item.label}”
-                      </>
-                    ) : item.kind === "transfer" ? (
-                      <>
-                        <ArrowLeftRight className="size-4 text-muted-foreground" />
-                        {item.text}
-                      </>
-                    ) : (
-                      item.label
+      <AutocompleteContent
+        className={cn("min-w-64", detailsOpen && importDetails && "sm:min-w-[36rem]")}
+      >
+        <div className="flex flex-col gap-0 sm:flex-row">
+          <div className="min-w-64 flex-1">
+            {create && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary text-sm hover:bg-accent"
+                // Keep focus in the field: the row goes on with the new name.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange({ name: create, transferAccountId: null });
+                  setOpen(false);
+                }}
+              >
+                <Plus className="size-4 shrink-0" />
+                <span className="truncate">Create “{create}” Payee</span>
+              </button>
+            )}
+            {create && (
+              <AutocompleteEmpty>“{create}” will be created as a payee.</AutocompleteEmpty>
+            )}
+            <AutocompleteList>
+              {(group: { value: string; items: PayeeItem[] }) => (
+                <AutocompleteGroup key={group.value} items={group.items}>
+                  {group.value && <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>}
+                  <AutocompleteCollection>
+                    {(item: PayeeItem) => (
+                      <AutocompleteItem key={item.id} value={item}>
+                        {item.id.startsWith(SELECTED) && (
+                          <Check aria-hidden className="size-4 text-muted-foreground" />
+                        )}
+                        {item.kind === "transfer" ? (
+                          <>
+                            <ArrowLeftRight className="size-4 text-muted-foreground" />
+                            {item.text}
+                          </>
+                        ) : (
+                          item.label
+                        )}
+                        {importDetails && item.id.startsWith(SELECTED) && (
+                          <button
+                            type="button"
+                            aria-label="Bank Import Details"
+                            aria-expanded={detailsOpen}
+                            className="ml-auto rounded-full text-muted-foreground hover:text-foreground"
+                            // Not the item: keep the field's focus and its payee.
+                            onMouseDown={(e) => e.preventDefault()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDetailsOpen((o) => !o);
+                            }}
+                          >
+                            <Info className="size-4" />
+                          </button>
+                        )}
+                      </AutocompleteItem>
                     )}
-                  </AutocompleteItem>
-                )}
-              </AutocompleteCollection>
-            </AutocompleteGroup>
+                  </AutocompleteCollection>
+                </AutocompleteGroup>
+              )}
+            </AutocompleteList>
+            {hiddenMatch && (
+              <p className="px-2 py-1.5 text-muted-foreground text-xs">
+                1 matching payee is hidden
+              </p>
+            )}
+            {managePayees && (
+              <button
+                type="button"
+                className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
+                // Keep focus in the field until the dialog takes it.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setOpen(false);
+                  managePayees();
+                }}
+              >
+                Manage Payees
+              </button>
+            )}
+          </div>
+          {detailsOpen && importDetails && (
+            <BankImportDetails details={importDetails} onClose={() => setDetailsOpen(false)} />
           )}
-        </AutocompleteList>
-        {hiddenMatch && (
-          <p className="px-2 py-1.5 text-muted-foreground text-xs">1 matching payee is hidden</p>
-        )}
-        {managePayees && (
-          <button
-            type="button"
-            className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
-            // Keep focus in the field until the dialog takes it.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              setOpen(false);
-              managePayees();
-            }}
-          >
-            Manage Payees
-          </button>
-        )}
+        </div>
       </AutocompleteContent>
     </Autocomplete>
+  );
+}
+
+/** What Bank Import Details shows for an imported transaction. */
+export interface ImportDetails {
+  /** The payee as the bank sent it. */
+  statement: string;
+  /** As it was imported: everycent doesn't clean names up (EVERYCENT-206), so the same text. */
+  imported: string;
+  /** The payee a renaming rule (or an edit) moved it to, when it isn't the imported name. */
+  renamedTo: string | null;
+  orderLink: { label: string; url: string } | null;
+  onDontRename?: () => void;
+}
+
+/**
+ * YNAB's Bank Import Details (2026-10-17): the payee as it appears on the statement and as it was
+ * imported, each with Copy, "Don't Rename as …" when it was renamed, and a store's order history.
+ */
+function BankImportDetails({ details, onClose }: { details: ImportDetails; onClose: () => void }) {
+  const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
+  const card = "grid gap-1 rounded-md border bg-background p-2.5";
+  return (
+    <section
+      aria-label="Bank Import Details"
+      className="grid content-start gap-2 border-t bg-muted/40 p-2.5 text-sm sm:w-72 sm:border-t-0 sm:border-l"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="flex items-center justify-between">
+        <p className="font-medium">Bank Import Details</p>
+        <button
+          type="button"
+          aria-label="Close Bank Import Details"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className={card}>
+        <p className="font-medium text-xs">As it appears on your statement</p>
+        <p className="break-words">{details.statement}</p>
+        <button
+          type="button"
+          className="justify-self-start text-primary text-xs hover:underline"
+          onClick={() => copy(details.statement)}
+        >
+          Copy
+        </button>
+      </div>
+      <div className={card}>
+        <p className="font-medium text-xs">As everycent imported it</p>
+        <p className="break-words">{details.imported}</p>
+        <button
+          type="button"
+          className="justify-self-start text-primary text-xs hover:underline"
+          onClick={() => copy(details.imported)}
+        >
+          Copy
+        </button>
+        {details.renamedTo && details.onDontRename && (
+          <button
+            type="button"
+            className="justify-self-start text-left text-primary text-xs hover:underline"
+            onClick={details.onDontRename}
+          >
+            Don't Rename as {details.renamedTo}
+          </button>
+        )}
+      </div>
+      {details.orderLink && (
+        <>
+          <p className="font-medium text-xs">Additional Information</p>
+          <div className={card}>
+            <a
+              href={details.orderLink.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              {details.orderLink.label}
+              <ExternalLink className="size-3.5" />
+            </a>
+            <p className="text-muted-foreground text-xs">External link</p>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -416,9 +577,9 @@ const SHORTCUT = "__shortcut:";
 const shortcut = (option: CategoryOption) => ({ ...option, id: `${SHORTCUT}${option.id}` });
 
 /**
- * YNAB's sections above the groups once a known payee is picked: "Selected" (the category in the
- * field) and "Suggested" (the payee's other recent categories). They make way for the matches as
- * soon as something is typed.
+ * YNAB's sections above the groups: "Selected" (the category in the field, with or without a
+ * payee) and, once a known payee is picked, "Suggested" (the payee's other recent categories).
+ * They make way for the matches as soon as something is typed (2026-10-16 and 2026-10-17).
  */
 function shortcutGroups(
   categories: readonly CategoryOption[],
@@ -439,8 +600,9 @@ function shortcutGroups(
  * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
  * list ends with YNAB's "Split", to spread the transaction across several categories; with
  * `onPaymentTransfer`, with its "Payment/Transfer" (before Split, in cash and card registers alike;
- * 2026-10-16), which goes to the payee list to pick an account. With `suggestedIds` (a payee's
- * recent categories), it starts with YNAB's "Selected" and "Suggested".
+ * 2026-10-16), which goes to the payee list to pick an account. With `shortcuts` (the register's
+ * category fields, split lines included), it starts with YNAB's "Selected", then "Suggested" from
+ * `suggestedIds` (a payee's recent categories).
  */
 export function CategoryField({
   label = "Category",
@@ -452,6 +614,7 @@ export function CategoryField({
   autoFocus,
   placeholder = "Uncategorized",
   describe,
+  shortcuts = false,
   suggestedIds,
 }: {
   label?: string;
@@ -464,6 +627,8 @@ export function CategoryField({
   placeholder?: string;
   /** Extra text at the end of an option, e.g. what's available in it. */
   describe?: (option: CategoryOption) => ReactNode;
+  /** List the chosen category under "Selected" (and the suggestions under "Suggested"). */
+  shortcuts?: boolean;
   /** The payee's recent categories, most recent first (see `payeeSuggestions`). */
   suggestedIds?: readonly string[];
 }) {
@@ -477,14 +642,14 @@ export function CategoryField({
       ([group, items]): CategoryGroupItems => ({ value: group, items }),
     );
     const actions = [...(onPaymentTransfer ? [PAYMENT_TRANSFER] : []), ...(onSplit ? [SPLIT] : [])];
-    const shortcuts =
-      suggestedIds && !typing ? shortcutGroups(categories, selected, suggestedIds) : [];
-    return [...shortcuts, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
-  }, [categories, onSplit, onPaymentTransfer, suggestedIds, typing, selected]);
+    const top =
+      shortcuts && !typing ? shortcutGroups(categories, selected, suggestedIds ?? []) : [];
+    return [...top, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
+  }, [categories, onSplit, onPaymentTransfer, shortcuts, suggestedIds, typing, selected]);
   // With the shortcuts, the "Selected" entry is the one ticked, so the list opens at the top.
   const shown = useMemo(
-    () => (selected && suggestedIds ? shortcut(selected) : selected),
-    [selected, suggestedIds],
+    () => (selected && shortcuts ? shortcut(selected) : selected),
+    [selected, shortcuts],
   );
   const [open, setOpen] = useState(Boolean(autoFocus));
 
@@ -503,7 +668,8 @@ export function CategoryField({
         } else onChange(option?.id.replace(SHORTCUT, "") ?? null);
       }}
       itemToStringLabel={categoryLabel}
-      isItemEqualToValue={(a, b) => a.id === b.id}
+      // The Selected copy and the category in its group are both ticked (YNAB, 2026-10-16).
+      isItemEqualToValue={(a, b) => a.id.replace(SHORTCUT, "") === b.id.replace(SHORTCUT, "")}
       autoHighlight
     >
       <ComboboxInput

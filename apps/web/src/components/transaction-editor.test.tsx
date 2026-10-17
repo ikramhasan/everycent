@@ -143,6 +143,58 @@ describe("TransactionEditor", () => {
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Groceries"]);
   });
 
+  it("lists the selected category without a payee too (YNAB, 2026-10-17)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("Category"));
+    // Nothing chosen yet: no sections.
+    expect(within(screen.getByRole("listbox")).getAllByRole("group")[0]).toHaveTextContent(
+      /^Inflow/,
+    );
+    await user.click(screen.getByRole("option", { name: "Rent" }));
+    await user.click(screen.getByLabelText("Category"));
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Rent \(Bills\)$/);
+    expect(groups[1]).toHaveTextContent(/^Inflow/);
+    // Ticked in both places (YNAB, EVERYCENT-181).
+    expect(screen.getByRole("option", { name: "Rent (Bills)" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: "Rent" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: "Groceries" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("suggests a split line's categories from its own payee only (YNAB, 2026-10-17)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Market");
+    await user.keyboard("{Enter}");
+    await user.type(screen.getByLabelText("Outflow"), "20");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+
+    // Line 1 has no payee of its own: Selected only, nothing from the transaction's payee.
+    await user.click(screen.getByLabelText("Category, line 1"));
+    await user.click(screen.getByRole("option", { name: "Rent" }));
+    await user.click(screen.getByLabelText("Category, line 1"));
+    let groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Rent \(Bills\)$/);
+    expect(groups[1]).toHaveTextContent(/^Inflow/);
+    await user.keyboard("{Escape}");
+
+    // Line 2 with the payee Market: its recent categories.
+    await user.type(screen.getByLabelText("Payee, line 2"), "Market");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByLabelText("Category, line 2"));
+    groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Groceries \(Everyday\)$/);
+    expect(groups[1]).toHaveTextContent(/^Suggested\s*Rent \(Bills\)$/);
+  });
+
   it("offers Save and add another on a new row, and Enter does it (YNAB)", async () => {
     const { onSave, onSaveAndAddAnother } = renderEditor("checking", { another: true });
     const user = userEvent.setup();
@@ -199,9 +251,37 @@ describe("TransactionEditor", () => {
     const { onSave } = renderEditor();
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Payee"), "Bakery");
-    expect(screen.getByRole("option", { name: /Create payee “Bakery”/ })).toBeInTheDocument();
-    await user.keyboard("{Enter}{Enter}");
+    // YNAB (2026-10-17): with no match, Create on top and a line saying what will happen.
+    expect(screen.getByRole("button", { name: "Create “Bakery” Payee" })).toBeInTheDocument();
+    expect(screen.getByText("“Bakery” will be created as a payee.")).toBeInTheDocument();
+    await user.keyboard("{Enter}");
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Bakery" }));
+  });
+
+  it("lists the chosen payee under Selected when the field is opened again (YNAB)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Market");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByLabelText("Payee"));
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^SelectedMarket$/);
+    expect(groups[1]).toHaveTextContent(/^Payments and Transfers/);
+    expect(groups[2]).toHaveTextContent(/^Saved PayeesMarket$/);
+  });
+
+  it("creates the typed payee from the button even when a payee matches", async () => {
+    const { onSave } = renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Mar");
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Market"]);
+    await user.click(screen.getByRole("button", { name: "Create “Mar” Payee" }));
+    expect(screen.getByLabelText("Payee")).toHaveValue("Mar");
+    // A new payee has no category to fill in.
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Mar" }));
   });
 
   it("closes an open list on Esc before cancelling the row", async () => {

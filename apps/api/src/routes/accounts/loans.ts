@@ -1,5 +1,11 @@
 import { budgetAccount, budget as budgetTable, transaction } from "@everycent/db/schema";
-import { accountFamily, isOnBudget, monthEndBalances, monthOf } from "@everycent/engine";
+import {
+  accountFamily,
+  isOnBudget,
+  monthEndBalances,
+  monthOf,
+  occurrencesBetween,
+} from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -13,7 +19,7 @@ import {
   transferPayeeId,
 } from "../../lib/ledger";
 import { type LoanState, loanStates, setLoanCharge } from "../../lib/loans";
-import { writeSchedule } from "../../lib/scheduled";
+import { scheduledRows, writeSchedule } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { assertSameCurrency, insertOtherSide } from "../transactions/rules";
@@ -74,6 +80,51 @@ function bannersJson(budget: { loanSimulatorBannerDismissed: boolean }, account:
   };
 }
 
+/**
+ * The loan's scheduled payments still to come this month, as YNAB's Payments row lists them
+ * ("2 Upcoming Transactions for $50.00"; checked 2026-10-17, EVERYCENT-176): every occurrence
+ * dated after today in today's month (a weekly one twice), none from later months, newest first.
+ * A payment is a transfer into the loan, as for entered ones. Each is shown as entered, from the
+ * schedule's own account and payee.
+ */
+async function upcomingPayments(db: Db, loan: AccountRow, today: string) {
+  const month = monthOf(today);
+  const rows = (await scheduledRows(db, loan.budgetId, loan.id)).filter(
+    (r) => r.transferAccountId !== null && BigInt(r.amount) > 0n,
+  );
+  const names = new Map(
+    (
+      await db
+        .select({ id: budgetAccount.id, name: budgetAccount.name })
+        .from(budgetAccount)
+        .where(eq(budgetAccount.budgetId, loan.budgetId))
+    ).map((a) => [a.id, a.name]),
+  );
+  const out = [];
+  for (const r of rows) {
+    const paying = r.transferAccountId as string;
+    // The loan's row is the schedule itself only when it was entered in the loan.
+    const own = r.kind === "schedule";
+    const dates = occurrencesBetween(r, today, `${month}-31`).filter((d) => monthOf(d) === month);
+    for (const date of dates) {
+      out.push({
+        scheduleId: r.scheduledTransactionId,
+        date,
+        accountId: own ? loan.id : paying,
+        accountName: own ? loan.name : (names.get(paying) ?? ""),
+        payeeName: own ? (r.payeeName ?? "") : `Transfer : ${loan.name}`,
+        memo: r.memo,
+        amount: r.amount,
+        payingAccountId: paying,
+        payingRowId: own ? `${r.scheduledTransactionId}~${paying}` : r.scheduledTransactionId,
+      });
+    }
+  }
+  return out.sort(
+    (a, b) => b.date.localeCompare(a.date) || a.scheduleId.localeCompare(b.scheduleId),
+  );
+}
+
 async function loanActivity(
   db: Db,
   budget: { loanSimulatorBannerDismissed: boolean },
@@ -82,6 +133,7 @@ async function loanActivity(
 ) {
   return {
     ...activityJson(await loanState(db, account, today)),
+    upcoming: await upcomingPayments(db, account, today),
     banners: bannersJson(budget, account),
     originalHistory: await originalHistory(db, account),
   };

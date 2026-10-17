@@ -295,6 +295,41 @@
       "when": 1792179687361,
       "tag": "0041_huge_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792201894555,
+      "tag": "0042_file_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792203139726,
+      "tag": "0043_statement_import_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792204451213,
+      "tag": "0044_matched_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792206556824,
+      "tag": "0045_budget_import_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792206597468,
+      "tag": "0046_payee_auto_category",
+      "breakpoints": true
     }
   ]
 }

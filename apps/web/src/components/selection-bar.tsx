@@ -40,11 +40,14 @@ import {
   CircleCheck,
   CircleX,
   Copy,
+  FileDown,
+  Link2,
   MoreHorizontal,
   NotebookPen,
   Repeat,
   Tag,
   Trash2,
+  Unlink,
   X,
 } from "lucide-react";
 import { useId, useRef, useState } from "react";
@@ -93,6 +96,9 @@ export function SelectionBar({
   scheduledCount = 0,
   scheduledSplits = NO_SPLITS,
   onMakeRepeating,
+  onMatch,
+  onUnmatch,
+  onExport,
 }: {
   /** The selected transactions' summary; undefined while it loads. */
   summary: Summary | undefined;
@@ -114,6 +120,12 @@ export function SelectionBar({
   scheduledSplits?: { splits: number; splitsWithTransfers: number };
   /** Set when exactly one plain transaction is selected. */
   onMakeRepeating?: () => void;
+  /** Set when the selection is one imported and one entered transaction (YNAB's Match). */
+  onMatch?: () => void;
+  /** Set when every selected transaction is matched (YNAB's Unmatch). */
+  onUnmatch?: () => void;
+  /** YNAB's "Export # Transactions": downloads the selected transactions. */
+  onExport?: () => void;
 }) {
   const [flagOpen, setFlagOpen] = useState(false);
   const [unsplitFor, setUnsplitFor] = useState<string | null>(null);
@@ -291,6 +303,18 @@ export function SelectionBar({
             <CircleCheck /> Clear
           </Button>
         )}
+        {onMatch && (
+          // YNAB (2026-10-17, EVERYCENT-68): "… · Categorize · Match · More".
+          <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={onMatch}>
+            <Link2 /> Match
+          </Button>
+        )}
+        {onUnmatch && (
+          // YNAB: "1 Transaction · Categorize · Flag · Unmatch · More".
+          <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={onUnmatch}>
+            <Unlink /> Unmatch
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="sm" disabled={pending || !s}>
@@ -349,6 +373,11 @@ export function SelectionBar({
             >
               <NotebookPen /> Memo…
             </DropdownMenuItem>
+            {onExport && s && s.count > 0 && (
+              <DropdownMenuItem onSelect={onExport}>
+                <FileDown /> Export {plural(s.count, "Transaction")}
+              </DropdownMenuItem>
+            )}
             {moveTargets.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

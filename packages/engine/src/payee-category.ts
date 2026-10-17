@@ -32,6 +32,26 @@ export function payeeAutoCategory(
   return current;
 }
 
+/**
+ * The default after a transaction of the payee is added or edited. YNAB keeps the default as
+ * stored state rather than replaying the history (checked 2026-10-17, EVERYCENT-182): each add or
+ * edit looks at the payee's last three categorized transactions by date, switches to a category
+ * two of them agree on, and otherwise keeps the default (or, with none yet, takes `written`, the
+ * category just saved). Deleting a transaction leaves the default alone.
+ */
+export function nextPayeeAutoCategory(
+  current: string | null,
+  /** The categories of the payee's last three whole, categorized transactions, newest first. */
+  lastThree: readonly string[],
+  /** The category the add or edit saved, or null (a split, uncategorized). */
+  written: string | null,
+): string | null {
+  const window = lastThree.slice(0, 3);
+  const agreed = window.find((id, j) => window.indexOf(id) !== j);
+  if (agreed !== undefined) return agreed;
+  return current ?? written;
+}
+
 /** The category a new transaction for the payee starts with, by its Categorization setting. */
 export function payeePrefillCategory(payee: {
   categorization: PayeeCategorization;

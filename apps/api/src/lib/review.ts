@@ -16,6 +16,19 @@ export function needsCategorySql(categoryId: SQL | typeof transaction.categoryId
 }
 
 /**
+ * A split with a line left Uncategorized: YNAB counts it in the review banner and `Is: Needs
+ * Category` even once approved, though the split's row has no icon (2026-10-17, EVERYCENT-179).
+ */
+export function splitNeedsCategorySql(transactionId: SQL | typeof transaction.id): SQL {
+  return sql`exists (
+    select 1 from ${subTransaction} review_line
+    join ${category} review_line_category on review_line_category.id = review_line.category_id
+    where review_line.transaction_id = ${transactionId}
+      and review_line_category.internal_kind = 'uncategorized'
+  )`;
+}
+
+/**
  * How many transactions in each account are unapproved or need a category: YNAB's "N new
  * transactions to approve or categorize" and the dot by the account in the sidebar.
  */
@@ -26,7 +39,11 @@ export async function transactionsToReview(db: Db, budgetId: string) {
     .where(
       and(
         eq(transaction.budgetId, budgetId),
-        or(eq(transaction.approved, false), needsCategorySql(transaction.categoryId)),
+        or(
+          eq(transaction.approved, false),
+          needsCategorySql(transaction.categoryId),
+          splitNeedsCategorySql(transaction.id),
+        ),
       ),
     )
     .groupBy(transaction.accountId);

@@ -9,6 +9,7 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
 import { Eye } from "lucide-react";
+import { FileDropImport } from "@/components/file-import";
 import { ManagePayeesProvider } from "@/components/manage-payees";
 import { apiBaseUrl } from "@/lib/api";
 import { BudgetProvider } from "@/lib/budget-context";
@@ -51,6 +52,7 @@ function BudgetLayout() {
             </p>
           )}
           <Outlet />
+          {budget.role !== "viewer" && <FileDropImport />}
         </ManagePayeesProvider>
       </UndoProvider>
     </BudgetProvider>

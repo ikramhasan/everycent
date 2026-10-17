@@ -12,7 +12,9 @@ import { type FxDeps, oppositeSides, rebase, syncBases } from "../../lib/base-am
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
+import { rememberRename } from "../../lib/file-import";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { notePayeeCategorizations } from "../../lib/payee-categories";
 import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
@@ -446,6 +448,13 @@ export async function applyUpdate(
           amount,
           rate: body.fxRate,
         });
+  const payeeId = transferTo
+    ? await transferPayeeId(tx, transferTo)
+    : body.payeeName === undefined
+      ? undefined
+      : body.payeeName === null
+        ? null
+        : await findOrCreatePayee(tx, budgetId, body.payeeName);
   await tx
     .update(transaction)
     .set({
@@ -454,13 +463,7 @@ export async function applyUpdate(
       date: body.date,
       amount,
       ...base,
-      payeeId: transferTo
-        ? await transferPayeeId(tx, transferTo)
-        : body.payeeName === undefined
-          ? undefined
-          : body.payeeName === null
-            ? null
-            : await findOrCreatePayee(tx, budgetId, body.payeeName),
+      payeeId,
       categoryId,
       memo: body.memo,
       cleared: body.cleared,
@@ -469,6 +472,17 @@ export async function applyUpdate(
       transferTransactionId: transferTo ? undefined : null,
     })
     .where(eq(transaction.id, transactionId));
+  // YNAB (2026-10-17, EVERYCENT-174): moving an imported transaction to another payee makes a
+  // renaming rule, so the next import of that name lands on it.
+  if (
+    payeeId &&
+    !transferTo &&
+    payeeId !== existing.payeeId &&
+    existing.importedPayee &&
+    !existing.matchedImport
+  ) {
+    await rememberRename(tx, budgetId, payeeId, existing.importedPayee);
+  }
   if (body.approved !== undefined && body.approved !== existing.approved) {
     // The other sides follow, a split's transfer lines' counterparts included.
     await setApproval(tx, [transactionId], body.approved);
@@ -541,6 +555,8 @@ export async function applyUpdate(
     );
   }
   await syncBases(tx, transactionId);
+  // An edit updates the payee's auto-categorization default (EVERYCENT-182).
+  await notePayeeCategorizations(tx, budgetId, [transactionId]);
   return account.id;
 }
 

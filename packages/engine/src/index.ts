@@ -46,6 +46,22 @@ export {
   MoneyParseError,
   UnknownCurrencyError,
 } from "./errors";
+export {
+  CSV_DATE_FORMATS,
+  type CsvDateFormat,
+  type CsvMapping,
+  type CsvOptions,
+  type CsvRowError,
+  csvColumnNames,
+  csvRows,
+  guessCsvMapping,
+  type ImportRow,
+  importIds,
+  parseCsvText,
+  parseImportAmount,
+  parseImportDate,
+  possibleDateFormats,
+} from "./file-import";
 export { currencySymbol, formatAmount, parseAmount } from "./format-amount";
 export { formatDate } from "./format-date";
 export {
@@ -192,6 +208,7 @@ export {
   toDecimalString,
 } from "./parse-format";
 export {
+  nextPayeeAutoCategory,
   PAYEE_CATEGORIZATIONS,
   PAYEE_SUGGESTION_LIMIT,
   type PayeeCategorization,
@@ -210,6 +227,26 @@ export {
   payeeRuleMatches,
   zPayeeRuleOperator,
 } from "./payee-rules";
+export {
+  EXPORT_BOM,
+  EXPORT_NEWLINE,
+  type ExportCategory,
+  exportCategoryColumns,
+  exportCleared,
+  exportDateStamp,
+  exportFlag,
+  exportMonthLabel,
+  exportQuote,
+  exportSanitize,
+  exportSeparator,
+  exportSplitMemo,
+  exportText,
+  PLAN_EXPORT_HEADER,
+  planExportNames,
+  REGISTER_EXPORT_FX_HEADER,
+  REGISTER_EXPORT_HEADER,
+  selectedExportName,
+} from "./plan-export";
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,
@@ -269,6 +306,16 @@ export {
   topSpenders,
   trendMonths,
 } from "./spending-trends";
+export {
+  applyStatementOptions,
+  ofxRows,
+  qifRows,
+  readOfx,
+  readQif,
+  type Statement,
+  type StatementEntry,
+  type StatementOptions,
+} from "./statement-import";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,

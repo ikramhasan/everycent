@@ -27,6 +27,7 @@ const ALLOWED = new Set([
   "POST /v1/budgets/{budgetId}/leave",
   "POST /v1/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
   "POST /v1/budgets/{budgetId}/transactions/selection",
+  "POST /v1/budgets/{budgetId}/export/transactions",
 ]);
 
 describe("viewer role (EVERYCENT-88)", () => {
