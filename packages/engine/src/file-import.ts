@@ -91,6 +91,9 @@ export function parseImportAmount(
   currency: CurrencyCode,
   numberFormat: NumberFormat,
 ): bigint | null {
+  // Accounting-style "(12.00)" isn't confirmed in YNAB: rather than read it as +12.00, it's left
+  // unreadable, so the row is reported instead of imported with the wrong sign.
+  if (/\(.*\d.*\)/.test(value)) return null;
   const text = value.replace(/[^\d.,'’+-]/g, "");
   if (!/\d/.test(text)) return null;
   // A sign after the number ("12.00-") is a sign too.

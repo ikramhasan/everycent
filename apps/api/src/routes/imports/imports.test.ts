@@ -300,6 +300,10 @@ describe("matching imports (EVERYCENT-68)", () => {
     );
     expect(payees.payees.map((p) => p.name)).not.toContain("BANK A");
     expect((await list(s, "Is: Matched")).map((t) => t.id)).toEqual([a.id]);
+    // A match keeps the entered payee: there's nothing to rename back.
+    expect(
+      (await send("POST", `${s.base}/transactions/${a.id}/dont-rename`, s.owner.cookie)).status,
+    ).toBe(400);
   });
 
   it("picks the nearest date, and matches each entered transaction once", async () => {

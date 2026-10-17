@@ -209,7 +209,8 @@ export function CellEditor({
 
 /** An imported transaction's Bank Import Details (EVERYCENT-155); none for entered ones. */
 function importDetails(t: Transaction, onDontRename: () => void): ImportDetails | undefined {
-  if (!t.imported || !t.importedPayee) return undefined;
+  // A matched transaction keeps the payee that was entered: nothing was renamed.
+  if (!t.imported || !t.importedPayee || t.matched) return undefined;
   const renamed =
     t.payeeName && t.payeeName.toLowerCase() !== t.importedPayee.toLowerCase() ? t.payeeName : null;
   return {

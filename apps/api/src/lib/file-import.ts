@@ -124,6 +124,8 @@ export async function importTransactions(
           categorization: payee.categorization,
           defaultCategoryId: payee.defaultCategoryId,
           carriedCategoryId: payee.carriedCategoryId,
+          autoCategoryId: payee.autoCategoryId,
+          autoCategorySaved: payee.autoCategorySaved,
         })
         .from(payee)
         .where(inArray(payee.id, known))
@@ -417,7 +419,9 @@ export async function dontRename(tx: Db, budgetId: string, transactionId: string
     .where(and(eq(transaction.budgetId, budgetId), eq(transaction.id, transactionId)));
   if (!row) throw new AppError(404, "NOT_FOUND", "No such transaction");
   const name = row.importedPayee?.trim();
-  if (!name) throw new AppError(400, "NOT_IMPORTED", "This transaction wasn't imported");
+  if (!name || row.matchedImport) {
+    throw new AppError(400, "NOT_IMPORTED", "This transaction wasn't imported (or is matched)");
+  }
   if (row.payeeId) {
     await tx
       .delete(payeeRule)

@@ -368,7 +368,16 @@ function CsvImportDialog({
               {rows.length} {rows.length === 1 ? "Transaction" : "Transactions"} from{" "}
               <strong>{file.name}</strong> will be imported into
             </p>
-            <AccountSelect accounts={open} value={accountId} onChange={setAccountId} />
+            <AccountSelect
+              accounts={open}
+              value={accountId}
+              onChange={(id) => {
+                // Another account brings its own remembered settings and start date.
+                setAccountId(id);
+                setSetup(null);
+                setIncludeEarly(false);
+              }}
+            />
           </div>
           {file.kind === "csv" ? (
             <div className="grid gap-2">
@@ -411,6 +420,8 @@ function CsvImportDialog({
               </div>
               {dateUnclear && (
                 <DateFormatPrompt
+                  // A new set of choices starts the select over.
+                  key={`${firstDate}|${candidates.join(",")}`}
                   fileName={file.name}
                   first={firstDate}
                   candidates={candidates}
@@ -664,6 +675,7 @@ function StatementImportDialog({
             )}
             {dateUnclear && statement && (
               <DateFormatPrompt
+                key={qifCandidates.join(",")}
                 fileName={file.name}
                 first={statement.entries[0]?.date ?? ""}
                 candidates={qifCandidates}

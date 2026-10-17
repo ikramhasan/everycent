@@ -84,6 +84,7 @@ describe("CSV import (EVERYCENT-66)", () => {
     expect(parseImportAmount("0.001", "USD", "comma_dot")).toBeNull();
     expect(parseImportAmount("", "USD", "comma_dot")).toBeNull();
     expect(parseImportAmount("n/a", "USD", "comma_dot")).toBeNull();
+    expect(parseImportAmount("(45.10)", "USD", "comma_dot")).toBeNull();
   });
 
   const table = parseCsvText(
