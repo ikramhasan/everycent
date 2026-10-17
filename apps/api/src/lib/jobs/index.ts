@@ -2,6 +2,7 @@ import { sql } from "@everycent/db";
 import { fromDrizzle, type JobOptions, PgBoss } from "pg-boss";
 import type { AppDeps } from "../../types";
 import type { Db } from "../ledger";
+import { log } from "../log";
 import { type JobData, QUEUES, type QueueName, SCHEDULES } from "./queues";
 
 export { type JobData, QUEUES, type QueueName } from "./queues";
@@ -48,12 +49,20 @@ export class Jobs {
       schedule: worker,
       instanceName: worker ? "worker" : "api",
     });
-    this.#boss.on("error", (error) => console.error("[jobs]", error));
+    this.#boss.on("error", (error) => log.error("Job queue error", {}, error));
   }
 
   /** Connects (retrying while the database comes up). Sending starts it if nobody has. */
   async start(): Promise<void> {
-    this.#started ??= this.#boss.start({ attempts: 5 });
+    this.#started ??= this.#boss.start({ attempts: 5 }).then(async () => {
+      const found = new Set((await this.#boss.getQueues(Object.keys(QUEUES))).map((q) => q.name));
+      const missing = Object.keys(QUEUES).filter((name) => !found.has(name));
+      if (missing.length > 0) {
+        throw new Error(
+          `Job queues missing (${missing.join(", ")}): run the migrate step first (pnpm db:migrate; in the image, node dist/migrate.mjs)`,
+        );
+      }
+    });
     await this.#started;
   }
 

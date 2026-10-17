@@ -7,6 +7,7 @@ import { createEmailSender } from "./lib/email/sender";
 import { defaultFxProviders } from "./lib/fx/providers";
 import { Jobs } from "./lib/jobs";
 import { jobHandlers } from "./lib/jobs/handlers";
+import { observeJobs } from "./telemetry";
 import type { AppDeps } from "./types";
 
 /**
@@ -27,7 +28,10 @@ export async function createRuntime(env: Env, { worker }: { worker: boolean }) {
     changes: new ChangeBus(listen),
     fxProviders: defaultFxProviders(),
   };
-  if (worker) await jobs.work(jobHandlers, deps);
+  if (worker) {
+    await jobs.work(jobHandlers, deps);
+    observeJobs(jobs);
+  }
   return {
     deps,
     /** Stops taking jobs, lets running ones finish, then closes the database. */

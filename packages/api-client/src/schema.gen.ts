@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report an error from the web app
+         * @description Logs an uncaught error from the browser with the API's own logs (and OpenTelemetry, when configured). No session needed: errors before sign-in count too. Limited per client.
+         */
+        post: operations["reportClientError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1924,6 +1944,11 @@ export interface components {
                 message: string;
                 details?: unknown;
             };
+        };
+        ClientError: {
+            message: string;
+            stack?: string;
+            path?: string;
         };
         User: {
             id: string;
@@ -4727,6 +4752,37 @@ export interface operations {
             };
             /** @description The database is unreachable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    reportClientError: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ClientError"];
+            };
+        };
+        responses: {
+            /** @description Logged (or dropped past the limit) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The report isn't valid */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

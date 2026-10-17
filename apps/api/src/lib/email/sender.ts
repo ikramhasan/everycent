@@ -4,6 +4,7 @@ import { throttle } from "@everycent/db/schema";
 import { RateLimiterDrizzle, RateLimiterRes } from "rate-limiter-flexible";
 import { Resend } from "resend";
 import type { Env } from "../../env";
+import { log } from "../log";
 
 export type EmailKind =
   | "verify-email"
@@ -92,7 +93,7 @@ export class ThrottledEmailSender implements EmailSender {
       await this.#limiter.consume(`${message.kind}:${address}`);
     } catch (e) {
       if (!(e instanceof RateLimiterRes)) throw e;
-      console.warn(`[email] dropped a ${message.kind} email: hourly limit for one address reached`);
+      log.warn("Email dropped: hourly limit for one address reached", { kind: message.kind });
       return;
     }
     await this.#inner.send(message);

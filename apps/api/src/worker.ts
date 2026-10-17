@@ -1,6 +1,8 @@
 import { parseEnv } from "./env";
+import { log } from "./lib/log";
 import { loadRootEnv } from "./load-env";
 import { createRuntime } from "./runtime";
+import { startTelemetry } from "./telemetry";
 
 /**
  * Runs background jobs without serving HTTP, for deployments that set `JOBS_MODE=api` on the API
@@ -8,12 +10,14 @@ import { createRuntime } from "./runtime";
  */
 if (process.env.NODE_ENV !== "production") loadRootEnv();
 
+const telemetry = startTelemetry("everycent-worker");
 const runtime = await createRuntime(parseEnv(), { worker: true });
-console.log("everycent worker running");
+log.info("everycent worker running");
 
 async function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down`);
+  log.info("Shutting down", { signal });
   await runtime.close();
+  await telemetry.shutdown();
   process.exit(0);
 }
 process.on("SIGINT", () => void shutdown("SIGINT"));

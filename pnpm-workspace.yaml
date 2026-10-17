@@ -4,6 +4,8 @@ packages:
 
 allowBuilds:
   esbuild: true
+  # OpenTelemetry's gRPC exporters pull it in; its postinstall isn't needed.
+  protobufjs: false
 
 catalog:
   "@base-ui/react": ^1.8.0
@@ -12,8 +14,12 @@ catalog:
   "@dnd-kit/helpers": ^0.5.0
   "@dnd-kit/react": ^0.5.0
   "@hono/node-server": ^2.1.1
+  "@hono/otel": ^1.2.0
   "@hono/zod-openapi": ^1.6.3
   "@scalar/hono-api-reference": ^0.12.6
+  "@opentelemetry/api": ^1.9.1
+  "@opentelemetry/api-logs": ^0.223.0
+  "@opentelemetry/sdk-node": ^0.223.0
   "@shadcn/react": ^0.3.1
   "@tailwindcss/vite": ^4.3.3
   "@tanstack/react-query": ^5.104.0

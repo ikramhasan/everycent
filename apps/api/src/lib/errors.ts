@@ -1,8 +1,10 @@
 import { z } from "@hono/zod-openapi";
+import { trace } from "@opentelemetry/api";
 import { APIError } from "better-auth/api";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { log } from "./log";
 
 export const ErrorSchema = z
   .object({
@@ -62,7 +64,8 @@ export function onError(err: Error, c: Context) {
     const code = STATUS_CODES[err.status] ?? "HTTP_ERROR";
     return c.json(errorBody(code, err.message || "Request failed"), err.status);
   }
-  console.error(`[${c.get("requestId") ?? "-"}] Unhandled error`, err);
+  trace.getActiveSpan()?.recordException(err as Error);
+  log.error("Unhandled error", { requestId: c.get("requestId") ?? null }, err);
   return c.json(errorBody("INTERNAL_ERROR", "Something went wrong"), 500);
 }
 

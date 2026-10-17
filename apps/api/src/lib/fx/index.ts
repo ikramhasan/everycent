@@ -17,6 +17,8 @@ export {
   type FxRates,
 } from "./providers";
 
+import { log } from "../log";
+
 export type FxRateSourceKind = "identity" | "override" | "market";
 
 export interface ResolvedRate {
@@ -246,7 +248,7 @@ function fetchOnce(
     try {
       fetched = await provider.fetchRates(date, base, []);
     } catch (error) {
-      console.warn(`FX provider ${provider.name} failed for ${base} on ${date}:`, error);
+      log.warn("FX provider failed", { provider: provider.name, base, date }, error);
       failures.set(key, Date.now());
       return null;
     }

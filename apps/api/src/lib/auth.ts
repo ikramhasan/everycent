@@ -10,6 +10,7 @@ import { budgetAc, budgetRoles } from "./budget-access-control";
 import { deleteBudgetTransactions } from "./delete-budget";
 import type { EmailMessage, EmailSender } from "./email/sender";
 import { emails } from "./email/templates";
+import { log } from "./log";
 import { seedInternalCategories } from "./starter-categories";
 import { tryPasswordCheck } from "./throttle";
 
@@ -65,7 +66,7 @@ async function addressTakenByOther(db: Database, from: string, to: string) {
 export function createAuth(db: Database, env: Env, email: EmailSender, options: AuthOptions = {}) {
   const web = env.WEB_ORIGIN;
   const logFailure = (message: EmailMessage, e: unknown) =>
-    console.error(`[email] failed to send a ${message.kind} email`, e);
+    log.error("Email not queued", { kind: message.kind }, e);
   /**
    * Hands the email on (in the app, `QueuedEmailSender`: queued for the worker, which retries) without
    * holding up the response, so an endpoint answers in the same time whether or not it sent

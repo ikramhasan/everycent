@@ -126,7 +126,13 @@ describe("register search, filters, sort and paging", () => {
       } while (cursor);
       return seen;
     };
-    for (const query of [{}, { sort: "payee:asc" }, { sort: "outflow:desc" }, { q: "odd" }]) {
+    const queries: Record<string, string>[] = [
+      {},
+      { sort: "payee:asc" },
+      { sort: "outflow:desc" },
+      { q: "odd" },
+    ];
+    for (const query of queries) {
       const rows = await pages(query);
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows)

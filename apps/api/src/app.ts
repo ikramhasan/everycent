@@ -1,3 +1,4 @@
+import { httpInstrumentationMiddleware } from "@hono/otel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { requestId } from "hono/request-id";
@@ -5,12 +6,14 @@ import { secureHeaders } from "hono/secure-headers";
 import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
+import { requestLog } from "./middleware/request-log";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
 import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
+import { clientErrorsRouter } from "./routes/client-errors";
 import { eventsRouter } from "./routes/events";
 import { exportsRouter } from "./routes/exports";
 import { flagsRouter } from "./routes/flags";
@@ -32,7 +35,11 @@ export function createApp(deps: AppDeps) {
   const app = createRouter();
 
   app.use("*", requestId());
-  if (deps.env.NODE_ENV !== "test") app.use("*", logger());
+  // Traces and request metrics; no-ops unless telemetry is configured (`telemetry.ts`).
+  app.use("*", httpInstrumentationMiddleware({ serviceName: "everycent-api" }));
+  // Production logs one JSON line per request; development keeps Hono's readable lines.
+  if (deps.env.NODE_ENV === "production") app.use("*", requestLog);
+  else if (deps.env.NODE_ENV !== "test") app.use("*", logger());
   app.use("*", secureHeaders());
   app.use("*", cors({ origin: deps.env.WEB_ORIGIN, credentials: true }));
   app.use("*", async (c, next) => {
@@ -67,6 +74,7 @@ export function createApp(deps: AppDeps) {
   app.on(["GET", "POST"], "/api/auth/*", (c) => c.var.deps.auth.handler(c.req.raw));
 
   app.route("/v1", healthRouter);
+  app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
   app.route("/v1", ynabImportRouter);
   app.route("/v1", backupsRouter);

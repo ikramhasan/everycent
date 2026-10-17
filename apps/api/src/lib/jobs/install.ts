@@ -1,4 +1,5 @@
 import { PgBoss } from "pg-boss";
+import { log } from "../log";
 import { JOBS_SCHEMA } from "./index";
 import { QUEUES, type QueueName } from "./queues";
 
@@ -17,7 +18,7 @@ export async function installJobs(url: string): Promise<void> {
     schedule: false,
     registerInstance: false,
   });
-  boss.on("error", (error) => console.error("[jobs]", error));
+  boss.on("error", (error) => log.error("Job queue error", {}, error));
   await boss.start();
   try {
     for (const [name, options] of Object.entries(QUEUES) as [QueueName, object][]) {

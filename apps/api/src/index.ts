@@ -1,23 +1,27 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { parseEnv } from "./env";
+import { log } from "./lib/log";
 import { loadRootEnv } from "./load-env";
 import { createRuntime } from "./runtime";
+import { startTelemetry } from "./telemetry";
 
 if (process.env.NODE_ENV !== "production") loadRootEnv();
 
 const env = parseEnv();
+const telemetry = startTelemetry("everycent-api");
 const runtime = await createRuntime(env, { worker: env.JOBS_MODE === "all" });
 const app = createApp(runtime.deps);
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`everycent API on http://localhost:${info.port} — docs at /docs`);
+  log.info(`everycent API on http://localhost:${info.port} — docs at /docs`, { port: info.port });
 });
 
 function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down`);
+  log.info("Shutting down", { signal });
   server.close(async () => {
     await runtime.close();
+    await telemetry.shutdown();
     process.exit(0);
   });
 }
