@@ -23,6 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { AppError } from "../../lib/errors";
 import { type Db, serverToday } from "../../lib/ledger";
 import { memberRefs } from "../../lib/member-colors";
+import { attachmentJson, attachmentsFor } from "./attachments";
 
 export type { SearchSettings };
 
@@ -697,6 +698,14 @@ async function toJson(
     budgetId,
     rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
   );
+  // A transfer's sides share one; a split line's transfer is a transaction of its own.
+  const attachments = await attachmentsFor(
+    db,
+    rows.map((r) => ({
+      id: r.id,
+      transferPairId: r.transferFromSplit ? null : r.transferTransactionId,
+    })),
+  );
   return rows.map(
     ({
       createdAt: _,
@@ -717,6 +726,7 @@ async function toJson(
             memo: matchedImport.memo,
           }
         : null,
+      attachment: ((a) => (a ? attachmentJson(a) : null))(attachments.get(row.id)),
       enteredBy: member(createdByUserId),
       // Only once someone changed it after entering it.
       changedBy: changed ? member(updatedByUserId) : null,

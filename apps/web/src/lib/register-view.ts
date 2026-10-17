@@ -15,6 +15,8 @@ export interface RegisterView {
   /** Account registers only; All Accounts has no running balance. */
   showRunningBalance: boolean;
   showFlags: boolean;
+  /** YNAB's "Show Images": the attachment column, on by default. */
+  showAttachments: boolean;
   /** Who entered each transaction (EVERYCENT-89; an everycent extra, off by default). */
   showEnteredBy: boolean;
   /** The Scheduled Transactions section folded away (YNAB remembers it per register). */
@@ -48,6 +50,7 @@ export const DEFAULT_VIEW: RegisterView = {
   showReconciled: false,
   showRunningBalance: false,
   showFlags: true,
+  showAttachments: true,
   showEnteredBy: false,
   scheduledCollapsed: false,
   sort: [...DEFAULT_SORT],

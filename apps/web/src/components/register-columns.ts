@@ -4,6 +4,7 @@ export type ColumnId =
   | "select"
   | "review"
   | "flag"
+  | "attachment"
   | "account"
   | "date"
   | "payee"
@@ -35,6 +36,7 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
   select: { header: "Select", width: "2.25rem", align: "center", srOnly: true },
   review: { header: "Approval", width: "2.25rem", align: "center", srOnly: true },
   flag: { header: "Flag", width: "2.5rem", align: "center", srOnly: true },
+  attachment: { header: "Attachment", width: "2.75rem", align: "center", srOnly: true },
   account: { header: "Account", width: "8rem" },
   // Room for the date editor: the date plus its calendar button.
   date: { header: "Date", width: "8.75rem" },
@@ -60,6 +62,8 @@ export function registerColumns(allAccounts: boolean): ColumnId[] {
     // YNAB's info column; the register shows it only while a row needs approval or a category.
     "review",
     "flag",
+    // YNAB's photo column, right after the flag (EVERYCENT-31; photos and PDFs here).
+    "attachment",
     ...(allAccounts ? (["account"] as const) : []),
     "date",
     "payee",

@@ -30,6 +30,7 @@ describe("GET /v1/health", () => {
       auth: createAuth(broken.db, env, email),
       changes: new ChangeBus(broken.listen),
       fxProviders: [],
+      storage: null,
     }).request("/v1/health");
     spy.mockRestore();
     await broken.close();

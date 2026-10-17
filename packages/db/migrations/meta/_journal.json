@@ -337,6 +337,13 @@
       "when": 1792265285160,
       "tag": "0047_invitation_reminded_at",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792278340888,
+      "tag": "0048_transaction_attachment",
+      "breakpoints": true
     }
   ]
 }

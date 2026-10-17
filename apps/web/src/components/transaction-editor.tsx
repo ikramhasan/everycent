@@ -22,7 +22,7 @@ import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/nativ
 import { TableCell, TableRow } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useState } from "react";
 import type { Account } from "@/lib/accounts";
 import type { Flag } from "@/lib/flags";
 import { inCurrency, type MoneySettings, parseMoneyInput } from "@/lib/money-input";
@@ -97,6 +97,7 @@ export function TransactionEditor({
   onSave,
   onSaveAndAddAnother,
   onCancel,
+  attachment,
 }: {
   initial: Draft;
   columns: readonly ColumnId[];
@@ -131,6 +132,8 @@ export function TransactionEditor({
   /** A new row's "Save and add another" (also its Enter); the next row keeps the date. */
   onSaveAndAddAnother?: (draft: Draft) => void;
   onCancel: () => void;
+  /** An existing transaction's attachment cell, shown as it is while the row is edited. */
+  attachment?: ReactNode;
 }) {
   const [draft, setDraft] = useState(initial);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -211,6 +214,8 @@ export function TransactionEditor({
     switch (column) {
       case "select":
         return null;
+      case "attachment":
+        return attachment ?? null;
       case "flag":
         return (
           <FlagMenu
@@ -675,7 +680,8 @@ export function TransactionEditor({
             style={pinned(columns, column)?.style}
             className={cn(
               "px-1.5",
-              (column === "cleared" || column === "flag") && "text-center",
+              (column === "cleared" || column === "flag" || column === "attachment") &&
+                "text-center",
               pinned(columns, column) && [pinned(columns, column)?.className, PINNED_BG.editor],
             )}
           >

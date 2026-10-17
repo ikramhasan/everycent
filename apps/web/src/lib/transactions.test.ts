@@ -118,6 +118,7 @@ const txn: Transaction = {
   runningBalance: "0",
   matchingLineIds: null,
   enteredBy: null,
+  attachment: null,
   changedBy: null,
   version: 1,
 };

@@ -8430,6 +8430,9 @@
           "transferSide": {
             "$ref": "#/components/schemas/TransferSide"
           },
+          "attachment": {
+            "$ref": "#/components/schemas/Attachment"
+          },
           "subtransactions": {
             "type": "array",
             "items": {
@@ -8497,6 +8500,7 @@
           "transferFromSplit",
           "transferReconciled",
           "transferSide",
+          "attachment",
           "subtransactions",
           "runningBalance",
           "matchingLineIds",
@@ -8735,6 +8739,56 @@
           "currency"
         ],
         "description": "Transfers: the other side's own state (null when the other side is a split's line, or for other transactions)"
+      },
+      "Attachment": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string",
+            "description": "The transaction it was added on: a transfer's two sides share one attachment"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "As uploaded"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/avif",
+              "image/gif",
+              "image/svg+xml",
+              "image/heic",
+              "image/heif",
+              "application/pdf"
+            ],
+            "description": "Read from the file's contents"
+          },
+          "byteSize": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "transactionId",
+          "fileName",
+          "contentType",
+          "byteSize",
+          "createdAt"
+        ],
+        "description": "Its photo or PDF (YNAB's transaction photo), shared by a transfer's two sides; a split has one for the whole split"
       },
       "SubTransaction": {
         "type": "object",
@@ -21901,6 +21955,318 @@
           },
           "409": {
             "description": "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the transaction changed since `expectedVersion` (STALE_VERSION)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/attachment": {
+      "post": {
+        "operationId": "uploadAttachment",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Attach a photo or PDF to a transaction",
+        "description": "One per transaction, as YNAB's transaction photo: delete it before adding another (`ATTACHMENT_EXISTS`). A transfer's two sides share it. The type is read from the file (image/jpeg, image/png, image/webp, image/avif, image/gif, image/svg+xml, image/heic, image/heif, application/pdf); at most 15 MB.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Attached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attachment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file, or an empty one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, account or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It already has an attachment, or its transfer's other side has (`ATTACHMENT_EXISTS`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bigger than 15 MB (`FILE_TOO_LARGE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not an image or PDF an attachment can be (`UNSUPPORTED_FILE_TYPE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Attachments are turned off on this server: it has no object storage (`ATTACHMENTS_DISABLED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getAttachment",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open or download a transaction's attachment",
+        "description": "Redirects to a short-lived link to the file in object storage, or (storage on the API's own disk) sends the file. Either side of a transfer gives the shared attachment.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "`true`: saved as a download (its file name) rather than shown"
+            },
+            "required": false,
+            "description": "`true`: saved as a download (its file name) rather than shown",
+            "name": "download",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Any value, such as the attachment's id, to tell its versions apart in a cache"
+            },
+            "required": false,
+            "description": "Any value, such as the attachment's id, to tell its versions apart in a cache",
+            "name": "v",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Where to fetch the file (valid for a few minutes)"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such transaction, it has no attachment, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Attachments are turned off on this server: it has no object storage (`ATTACHMENTS_DISABLED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAttachment",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a transaction's attachment",
+        "description": "From both sides of a transfer. Its file is deleted from storage soon after.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such transaction, it has no attachment, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

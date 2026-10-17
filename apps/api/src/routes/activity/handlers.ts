@@ -1,5 +1,5 @@
 import { sql } from "@everycent/db";
-import { auditEvent, user } from "@everycent/db/schema";
+import { auditEvent, transaction, user } from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { and, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -123,12 +123,24 @@ export const transactionHistoryHandler: Handler<typeof transactionHistory> = asy
   const { budgetId, transactionId } = c.req.valid("param");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
+  // A transfer's attachment is shared by its two sides, so either side's history shows it.
+  const [pair] = await db
+    .select({ id: transaction.transferTransactionId })
+    .from(transaction)
+    .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)));
+  const attachmentOwners = pair?.id ? [transactionId, pair.id] : [transactionId];
   const rows = await events(
     db,
     budgetId,
     sql`((${auditEvent.tableName} = 'transaction' and ${auditEvent.rowId} = ${transactionId})
       or (${auditEvent.tableName} = 'sub_transaction'
-        and coalesce(${auditEvent.after}, ${auditEvent.before})->>'transaction_id' = ${transactionId}))`,
+        and coalesce(${auditEvent.after}, ${auditEvent.before})->>'transaction_id' = ${transactionId})
+      or (${auditEvent.tableName} = 'transaction_attachment'
+        and coalesce(${auditEvent.after}, ${auditEvent.before})->>'transaction_id'
+          in (${sql.join(
+            attachmentOwners.map((id) => sql`${id}`),
+            sql`, `,
+          )})))`,
     "asc",
   );
   return c.json({ events: rows.map((r) => r.event) }, 200);

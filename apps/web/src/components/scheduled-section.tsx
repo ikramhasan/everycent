@@ -38,6 +38,7 @@ import { type CategoryOption, type Draft, movableAccounts, type Payee } from "@/
 import { useUndo } from "@/lib/undo";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, PINNED_BG, pinned } from "./register-columns";
+import { ScheduledAttachmentCell } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 
 /**
@@ -287,6 +288,8 @@ export function ScheduledSection({
             }}
           />
         );
+      case "attachment":
+        return <ScheduledAttachmentCell />;
       case "flag":
         return row.kind === "splitTransfer" || viewer ? null : (
           <FlagMenu

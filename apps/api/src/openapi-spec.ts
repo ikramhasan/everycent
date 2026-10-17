@@ -34,6 +34,7 @@ export function generateOpenApiDocument() {
       auth: createAuth(db, env, email),
       changes: new ChangeBus(listen),
       fxProviders: [],
+      storage: null,
     }),
   );
 }

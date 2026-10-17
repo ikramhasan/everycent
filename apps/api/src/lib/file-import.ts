@@ -10,6 +10,7 @@ import {
 } from "@everycent/db/schema";
 import { type ImportRow, importIds, isOnBudget, matchPayeeRule } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, max, min, ne } from "drizzle-orm";
+import { keepAttachment } from "../routes/transactions/attachments";
 import {
   type AccountRow,
   assertOpen,
@@ -331,6 +332,8 @@ export async function matchTransactions(tx: Db, budgetId: string, ids: readonly 
   const [named] = source.payeeId
     ? await tx.select({ name: payee.name }).from(payee).where(eq(payee.id, source.payeeId))
     : [];
+  // An attachment added to the imported row comes along, unless the entered one has its own.
+  await keepAttachment(tx, source.id, target.id);
   await tx.delete(transaction).where(eq(transaction.id, source.id));
   await foldImport(tx, target, {
     date: source.date,

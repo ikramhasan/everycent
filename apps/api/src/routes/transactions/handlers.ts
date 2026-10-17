@@ -21,6 +21,7 @@ import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import { assertTransactionVersions, transactionVersions } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
+import { keepAttachment } from "./attachments";
 import { parseSort, queryRegister, queryRegisterRow } from "./register-query";
 import type {
   createTransaction,
@@ -497,6 +498,8 @@ export async function applyUpdate(
   }
 
   if (other && !transferTo) {
+    // The transfer's attachment stays with this side.
+    await keepAttachment(tx, other.id, transactionId);
     await tx.delete(transaction).where(eq(transaction.id, other.id));
   } else if (other && transferTo) {
     // Between currencies the other side keeps its own amount (EVERYCENT-55) unless it's given,

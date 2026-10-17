@@ -30,7 +30,8 @@ import { z } from "@hono/zod-openapi";
  * id. Money is an integer string of minor units next to its currency, never a number.
  *
  * Not in a backup: the budget's members and invitations (people belong to an instance), its change
- * history, and the shared market FX rate cache (the budget's own rate overrides are in).
+ * history, the shared market FX rate cache (the budget's own rate overrides are in), and
+ * transaction attachments (files in object storage, not JSON; EVERYCENT-31).
  */
 export const BACKUP_FORMAT = "everycent-backup";
 export const BACKUP_VERSION = 1;

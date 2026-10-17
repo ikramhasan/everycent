@@ -45,8 +45,32 @@ const EnvSchema = z
      * image sets it. Unset, the API serves only the API (development runs Vite).
      */
     WEB_DIST_DIR: optional(z.string().min(1)),
+    /**
+     * Transaction attachments go to an S3-compatible bucket when S3_BUCKET and its keys are set
+     * (Railway Buckets: reference the bucket's BUCKET, ENDPOINT, REGION, ACCESS_KEY_ID and
+     * SECRET_ACCESS_KEY). S3_ENDPOINT is unset for AWS itself.
+     */
+    S3_BUCKET: optional(z.string().min(1)),
+    S3_ENDPOINT: optional(z.url()),
+    S3_REGION: optional(z.string().min(1)).transform((v) => v ?? "auto"),
+    S3_ACCESS_KEY_ID: optional(z.string().min(1)),
+    S3_SECRET_ACCESS_KEY: optional(z.string().min(1)),
+    /** Path-style bucket URLs (older Railway buckets, MinIO). */
+    S3_FORCE_PATH_STYLE: optional(z.enum(["true", "false"])).transform((v) => v === "true"),
+    /**
+     * Without a bucket, attachments are files under this directory (development defaults to
+     * `.storage`). Production with neither turns attachments off.
+     */
+    STORAGE_DIR: optional(z.string().min(1)),
   })
   .superRefine((env, ctx) => {
+    const s3 = ["S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
+    if (s3.some((key) => env[key])) {
+      for (const key of s3) {
+        if (!env[key])
+          ctx.addIssue({ code: "custom", path: [key], message: "required with S3_BUCKET" });
+      }
+    }
     if (env.NODE_ENV !== "production") return;
     for (const key of ["RESEND_API_KEY", "FROM_EMAIL"] as const) {
       if (!env[key])

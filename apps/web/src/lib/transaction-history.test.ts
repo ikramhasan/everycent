@@ -64,6 +64,7 @@ const transaction: Transaction = {
   runningBalance: "10000",
   matchingLineIds: null,
   enteredBy: null,
+  attachment: null,
   changedBy: null,
   version: 1,
 };
