@@ -39,10 +39,7 @@ export function BudgetSwitcher({
             <ChevronsUpDown className="ml-auto size-4" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
-        >
+        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
           <DropdownMenuLabel className="text-muted-foreground text-xs">Budgets</DropdownMenuLabel>
           {budgets.map((b) => (
             <DropdownMenuItem key={b.id} asChild>

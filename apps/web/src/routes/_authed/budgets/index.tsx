@@ -24,7 +24,8 @@ function AllBudgetsPage() {
   const { template } = Route.useSearch();
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6">
+    // The page edge and width match the other pages.
+    <div className="mx-auto grid w-full max-w-6xl content-start gap-6">
       <PageHeader
         title="All budgets"
         actions={
@@ -60,10 +61,13 @@ function AllBudgetsPage() {
            * first (the API's order). Archived budgets are among them, their names stamped
            * "(Archived on …)" (YNAB, 2026-10-15).
            */}
-          <BudgetGrid
-            budgets={budgets.data.budgets.filter((b) => b.role === "owner")}
-            template={template}
-          />
+          <section className="grid gap-3">
+            <h2 className="font-medium text-muted-foreground text-sm">Your budgets</h2>
+            <BudgetGrid
+              budgets={budgets.data.budgets.filter((b) => b.role === "owner")}
+              template={template}
+            />
+          </section>
           <section className="grid gap-3">
             <h2 className="font-medium text-muted-foreground text-sm">Budgets shared with you</h2>
             {budgets.data.budgets.some((b) => b.role !== "owner") ? (
@@ -85,7 +89,8 @@ function AllBudgetsPage() {
 
 function BudgetGrid({ budgets, template }: { budgets: Budget[]; template?: string }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    // As many cards per row as fit, at least 18rem each.
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
       {budgets.map((b) => (
         <Link
           key={b.id}
@@ -95,7 +100,7 @@ function BudgetGrid({ budgets, template }: { budgets: Budget[]; template?: strin
           preload={false}
           className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full transition-colors hover:bg-muted/50">
+          <Card className="h-full transition-colors duration-150 hover:bg-muted/50">
             <CardHeader>
               <CardTitle className="truncate">{b.name}</CardTitle>
               <CardDescription>
