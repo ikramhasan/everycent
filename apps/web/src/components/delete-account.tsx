@@ -29,7 +29,8 @@ import { refreshSession } from "@/lib/session";
 export function DeleteAccountCard() {
   const [open, setOpen] = useState(false);
   return (
-    <Card className="border-destructive/40">
+    // Card draws its edge with a ring, so the warning colour goes on the ring.
+    <Card className="ring-destructive/40">
       <CardHeader>
         <CardTitle>Delete Account</CardTitle>
         <CardDescription>

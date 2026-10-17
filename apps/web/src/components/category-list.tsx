@@ -25,8 +25,8 @@ import {
   PopoverTrigger,
 } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { ChevronDown, ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
 import {
   availableMark,
@@ -134,17 +134,32 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
  * Every row shares one grid so the figures line up whatever a name's length. Like YNAB, a list
  * narrower than the columns scrolls sideways instead of squeezing them (mobile gets its own pass).
  */
-const ROW = "grid grid-cols-[minmax(10rem,1fr)_7rem_7rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
+// Assigned and Activity fit "-$10,000.00"; Available keeps room for its pill and icon.
+const ROW =
+  "grid grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
+/**
+ * The inset of a figure's text from its column's right edge. The Assigned input, the Activity
+ * button and the Available pill all pad their text by this much, so plain figures (headers, group
+ * totals, read-only cells) take the same padding to line up with them.
+ */
+const FIGURE_PAD = "px-2";
 /** Lets a name button shrink and truncate (shadcn's Button doesn't shrink by default). */
 const NAME_BUTTON = "min-w-0 shrink justify-start";
 const SELECTED_ROW = "bg-primary/5";
 /**
- * Every row starts with the same three slots, each the width of an icon button, so the controls
- * and names line up: collapse (groups), checkbox, drag handle. Rows without one get a spacer.
+ * Every row starts with the same two slots, each the width of an icon button, so the controls and
+ * names line up: a group's collapse button (a category's drag handle), then the checkbox. Rows
+ * without one get a spacer. A group's drag handle follows its name.
  */
 const SLOT = "flex size-6 shrink-0 items-center justify-center";
+/**
+ * Drag handles show on the row's hover or keyboard focus (always on touch screens, which can't
+ * hover), so they don't cost a column of their own.
+ */
+const HOVER_REVEAL =
+  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
@@ -159,7 +174,6 @@ export function CategoryList({
   figures,
   collapsed = NO_GROUPS,
   onCollapsedChange,
-  toolbar,
   addGroupDisabled = false,
 }: {
   data: CategoryListData;
@@ -167,9 +181,7 @@ export function CategoryList({
   figures?: CategoryFigures;
   collapsed?: ReadonlySet<string>;
   onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
-  /** More buttons next to "Category Group" (e.g. Recent Moves). */
-  toolbar?: ReactNode;
-  /** Greys out "Category Group" (YNAB does in a custom view). */
+  /** Greys out the header's "Add a category group" button (YNAB does in a custom view). */
   addGroupDisabled?: boolean;
 }) {
   // A viewer (EVERYCENT-88) can't add, rename, hide, delete or reorder.
@@ -280,22 +292,6 @@ export function CategoryList({
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {!readOnly && (
-          <NamePopover
-            title="New category group"
-            submitLabel="Add"
-            onSubmit={({ name }) => actions.createGroup(name)}
-            trigger={
-              <Button variant="outline" size="sm" disabled={addGroupDisabled}>
-                <Plus /> Category Group
-              </Button>
-            }
-          />
-        )}
-        {toolbar}
-      </div>
-
       <div className="overflow-x-auto rounded-lg border">
         <div className="min-w-fit">
           <div
@@ -313,7 +309,12 @@ export function CategoryList({
                   onCollapsedChange?.(allCollapsed ? new Set() : new Set(layout.groupOrder))
                 }
               >
-                {allCollapsed ? <ChevronRight /> : <ChevronDown />}
+                <ChevronRight
+                  className={cn(
+                    "transition-transform duration-150 ease-out-quint motion-reduce:transition-none",
+                    !allCollapsed && "rotate-90",
+                  )}
+                />
               </Button>
               {selection && (
                 <span className={SLOT}>
@@ -324,14 +325,33 @@ export function CategoryList({
                   />
                 </span>
               )}
-              <Spacer />
               <span className="truncate px-2">Category</span>
+              {/* A new group is added from the column it belongs to. */}
+              {!readOnly && (
+                <NamePopover
+                  title="New category group"
+                  submitLabel="Add"
+                  onSubmit={({ name }) => actions.createGroup(name)}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Add a category group"
+                      title="Add a category group"
+                      disabled={addGroupDisabled}
+                      className="-ml-1 text-muted-foreground"
+                    >
+                      <Plus />
+                    </Button>
+                  }
+                />
+              )}
             </div>
             {figures && (
               <>
-                <span className={FIGURE}>Assigned</span>
-                <span className={FIGURE}>Activity</span>
-                <span className={FIGURE}>Available</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Assigned</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Activity</span>
+                <span className={cn(FIGURE, FIGURE_PAD)}>Available</span>
               </>
             )}
           </div>
@@ -352,7 +372,6 @@ export function CategoryList({
                     selection={selection}
                   />
                 )}
-                <Spacer />
                 {selection ? (
                   <Button
                     variant="ghost"
@@ -367,7 +386,7 @@ export function CategoryList({
                 )}
               </div>
               {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
-              <span className={FIGURE}>–</span>
+              <span className={cn(FIGURE, FIGURE_PAD)}>–</span>
               <span className={cn(FIGURE, "text-sm")}>
                 <Activity
                   figures={figures}
@@ -653,7 +672,7 @@ function GroupSection({
       aria-label={group.name}
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
-      <div className={cn(ROW, "group/header bg-muted/60")}>
+      <div className={cn(ROW, "group/row bg-muted/60")}>
         <div className={NAME_CELL}>
           <Button
             variant="ghost"
@@ -662,7 +681,12 @@ function GroupSection({
             aria-expanded={!collapsed}
             onClick={onToggle}
           >
-            {collapsed ? <ChevronRight /> : <ChevronDown />}
+            <ChevronRight
+              className={cn(
+                "transition-transform duration-150 ease-out-quint motion-reduce:transition-none",
+                !collapsed && "rotate-90",
+              )}
+            />
           </Button>
           {onToggleSelection && (
             <span className={SLOT}>
@@ -673,13 +697,9 @@ function GroupSection({
               />
             </span>
           )}
-          {managed || !reorderable ? (
-            <Spacer />
-          ) : (
-            <DragHandle ref={handleRef} label={`Reorder ${group.name}`} />
-          )}
           {managed ? (
-            <span className="truncate px-1 font-semibold text-sm">{group.name}</span>
+            // px-2 like the name buttons, so every group name starts at the same x.
+            <span className="truncate px-2 font-semibold text-sm">{group.name}</span>
           ) : (
             <>
               <NamePopover
@@ -737,6 +757,13 @@ function GroupSection({
                       <Plus />
                     </Button>
                   }
+                />
+              )}
+              {reorderable && (
+                <DragHandle
+                  ref={handleRef}
+                  label={`Reorder ${group.name}`}
+                  className={HOVER_REVEAL}
                 />
               )}
             </>
@@ -804,6 +831,33 @@ function CategoryRow({
   const selected = selection?.selected.has(category.id) ?? false;
   // YNAB: clicking a name selects that category alone; clicking it again opens its editor.
   const onlySelected = selected && selection?.selected.size === 1;
+  // Set by a click on the row: opens its Assigned amount for typing, as YNAB does.
+  const [editAssigned, setEditAssigned] = useState(false);
+  function selectAndEdit() {
+    selection?.selectOnly(category.id);
+    if (assign) setEditAssigned(true);
+  }
+  /**
+   * A click anywhere on the row selects it alone and starts editing its Assigned amount, as does
+   * checking the first box of a selection. Other controls in the row (drag handle, Activity,
+   * Available) keep their own click, and clicks inside their popovers, which React bubbles here
+   * through the portal, are skipped.
+   */
+  function onRowClick(e: MouseEvent<HTMLDivElement>) {
+    if (!selection || !e.currentTarget.contains(e.target as Node)) return;
+    const target = e.target as Element;
+    if (target.closest("[data-assigned-cell]")) {
+      if (!onlySelected) selection.selectOnly(category.id);
+      return;
+    }
+    if (target.closest("[role=checkbox]")) {
+      // The checkbox has already toggled; this row is now the only one selected when nothing was.
+      if (!selected && selection.selected.size === 0 && assign) setEditAssigned(true);
+      return;
+    }
+    if (target.closest("button, a, input, label")) return;
+    selectAndEdit();
+  }
   const scrollTo = figures?.scrollTo;
   useEffect(() => {
     if (scrollTo?.id !== category.id || scrolledTo.has(scrollTo)) return;
@@ -814,25 +868,33 @@ function CategoryRow({
   }, [scrollTo, category.id]);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a larger mouse target for the name and Assigned buttons
+    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard users reach the same actions through those buttons
     <div
       data-category-row={category.id}
       ref={ref}
       className={cn(
         ROW,
-        "border-t first:border-t-0",
+        // The whole row selects on click, so it lights up on hover; selection wins over hover.
+        "group/row border-t transition-colors duration-100 first:border-t-0",
         isDragSource && "opacity-60",
-        selected && SELECTED_ROW,
+        selected ? SELECTED_ROW : "hover:bg-muted/40",
       )}
+      onClick={onRowClick}
     >
       <div className="grid min-w-0 gap-1">
         <div className={NAME_CELL}>
-          <Spacer />
-          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
+          {/* The handle takes the slot a group's chevron uses, shown when the row is hovered. */}
           {reorderable ? (
-            <DragHandle ref={handleRef} label={`Reorder ${category.name}`} />
+            <DragHandle
+              ref={handleRef}
+              label={`Reorder ${category.name}`}
+              className={HOVER_REVEAL}
+            />
           ) : (
             <Spacer />
           )}
+          {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
           <NamePopover
             title="Category name"
             withNote
@@ -879,7 +941,7 @@ function CategoryRow({
                   if (!selection || onlySelected) return;
                   // Selecting comes first; Radix skips opening the editor on a prevented click.
                   e.preventDefault();
-                  selection.selectOnly(category.id);
+                  selectAndEdit();
                 }}
               >
                 <span className="truncate">{category.name}</span>
@@ -913,13 +975,13 @@ function CategoryRow({
             ))}
         </div>
         {totals?.bar && figures?.progressBars !== false && (
-          // Lined up with the name, past the three slots and the name button's padding.
-          <ProgressBar bar={totals.bar} className="mr-1 ml-[5.75rem]" />
+          // Lined up with the name, past the two slots and the name button's padding.
+          <ProgressBar bar={totals.bar} className="mr-1 ml-16" />
         )}
       </div>
       {totals && format && (
         <>
-          <div className="group/assigned relative min-w-0">
+          <div data-assigned-cell className="group/assigned relative min-w-0">
             {assign ? (
               <AssignedCell
                 categoryId={category.id}
@@ -927,11 +989,16 @@ function CategoryRow({
                 amount={totals.assigned}
                 format={format}
                 actions={assign}
-                startEditing={figures?.editAssigned === category.id}
-                onStartedEditing={figures?.onEditAssignedStarted}
+                startEditing={editAssigned || figures?.editAssigned === category.id}
+                onStartedEditing={() => {
+                  setEditAssigned(false);
+                  figures?.onEditAssignedStarted?.();
+                }}
               />
             ) : (
-              <span className={cn(FIGURE, "block text-sm")}>{format(totals.assigned)}</span>
+              <span className={cn(FIGURE, FIGURE_PAD, "block text-sm")}>
+                {format(totals.assigned)}
+              </span>
             )}
             {figures?.moves?.withMoves.has(category.id) && (
               // Just past the amount, in the gap before Activity's right-aligned figure.
@@ -1027,11 +1094,15 @@ function TotalCells({
 }) {
   return (
     <>
-      <span className={cn(FIGURE, "font-medium text-sm")}>{format(totals.assigned)}</span>
-      <span className={cn(FIGURE, "font-medium text-sm")}>
-        {activity ?? format(totals.activity)}
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+        {format(totals.assigned)}
       </span>
-      <span className={cn(FIGURE, "pr-2 font-medium text-sm")}>{format(totals.available)}</span>
+      <span className={cn(FIGURE, "font-medium text-sm")}>
+        {activity ?? <span className={FIGURE_PAD}>{format(totals.activity)}</span>}
+      </span>
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+        {format(totals.available)}
+      </span>
     </>
   );
 }
@@ -1051,9 +1122,10 @@ function Activity({
   /** A payment category's card figures: the popover adds YNAB's card summary. */
   card?: CardSummary | null;
 }) {
-  if (!figures.activity) return <>{figures.format(amount)}</>;
+  if (!figures.activity) return <span className={FIGURE_PAD}>{figures.format(amount)}</span>;
   return (
     <ActivityButton
+      className={FIGURE_PAD}
       budgetId={figures.activity.budgetId}
       month={figures.month.month}
       target={target}
@@ -1091,14 +1163,25 @@ function Spacer() {
   return <span className={SLOT} aria-hidden />;
 }
 
-function DragHandle({ ref, label }: { ref: (el: Element | null) => void; label: string }) {
+function DragHandle({
+  ref,
+  label,
+  className,
+}: {
+  ref: (el: Element | null) => void;
+  label: string;
+  className?: string;
+}) {
   return (
     <Button
       ref={ref}
       variant="ghost"
       size="icon-xs"
       aria-label={label}
-      className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+      className={cn(
+        "cursor-grab touch-none text-muted-foreground active:cursor-grabbing",
+        className,
+      )}
     >
       <GripVertical />
     </Button>
@@ -1144,7 +1227,6 @@ function HiddenRow({
       <div className={NAME_CELL}>
         <Spacer />
         {withCheckboxes && <Spacer />}
-        <Spacer />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="xs" className={cn(NAME_BUTTON, "font-semibold text-sm")}>

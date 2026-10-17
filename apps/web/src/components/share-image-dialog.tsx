@@ -10,15 +10,19 @@ import { Label } from "@everycent/ui/components/label";
 import { Switch } from "@everycent/ui/components/switch";
 import { cn } from "@everycent/ui/lib/utils";
 import { domToPng } from "modern-screenshot";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
-/** YNAB's share formats (2026-10-13, the same on Net Worth 2026-10-17), with aspect ratios. */
+/**
+ * YNAB's share formats (2026-10-13, the same on Net Worth 2026-10-17). Each card is laid out at a
+ * fixed size in CSS pixels, so its content fits the same way whatever room the preview has, then
+ * exported at `out` pixels wide.
+ */
 const FORMATS = [
-  { id: "portrait", label: "Portrait (4:5)", aspect: "aspect-[4/5]", width: 1080 },
-  { id: "story", label: "Vertical Story (9:16)", aspect: "aspect-[9/16]", width: 1080 },
-  { id: "landscape", label: "Landscape (16:9)", aspect: "aspect-video", width: 1920 },
-  { id: "square", label: "Square (1:1)", aspect: "aspect-square", width: 1080 },
+  { id: "portrait", label: "Portrait (4:5)", width: 400, height: 500, out: 1080 },
+  { id: "story", label: "Vertical Story (9:16)", width: 360, height: 640, out: 1080 },
+  { id: "landscape", label: "Landscape (16:9)", width: 640, height: 360, out: 1920 },
+  { id: "square", label: "Square (1:1)", width: 400, height: 400, out: 1080 },
 ] as const;
 type Format = (typeof FORMATS)[number]["id"];
 
@@ -40,7 +44,8 @@ export function ShareImageDialog({
   tagline: string;
   /** The picture's name, without ".png". */
   fileName: string;
-  children: (options: { showAmounts: boolean }) => ReactNode;
+  /** `layout`: "row" on a wide card (figures beside the chart), "column" otherwise. */
+  children: (options: { showAmounts: boolean; layout: "row" | "column" }) => ReactNode;
 }) {
   const [format, setFormat] = useState<Format>("portrait");
   const [showTagline, setShowTagline] = useState(true);
@@ -48,13 +53,28 @@ export function ShareImageDialog({
   const [busy, setBusy] = useState(false);
   const card = useRef<HTMLDivElement>(null);
   const chosen = FORMATS.find((f) => f.id === format) ?? FORMATS[0];
+  const layout = chosen.width > chosen.height ? "row" : "column";
+  // The preview shows the card scaled down to fit its frame; the download is drawn unscaled.
+  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
+  const frameRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setFrame({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  const scale = frame ? Math.min(frame.width / chosen.width, frame.height / chosen.height, 1) : 0.5;
 
   async function download() {
     if (!card.current) return;
     setBusy(true);
     try {
-      const scale = chosen.width / card.current.offsetWidth;
-      const url = await domToPng(card.current, { scale });
+      const url = await domToPng(card.current, {
+        width: chosen.width,
+        height: chosen.height,
+        scale: chosen.out / chosen.width,
+      });
       const link = document.createElement("a");
       link.href = url;
       link.download = `${fileName}.png`;
@@ -106,24 +126,38 @@ export function ShareImageDialog({
           </div>
           <div className="grid content-start gap-2">
             <p className="font-semibold text-sm">Preview</p>
-            <div className="flex justify-center rounded-lg bg-muted/60 p-4">
-              <div
-                ref={card}
-                className={cn(
-                  "relative flex w-full flex-col justify-center gap-4 overflow-hidden bg-primary p-6 text-primary-foreground",
-                  chosen.aspect,
-                  format === "landscape"
-                    ? "max-w-xl"
-                    : format === "story"
-                      ? "max-w-60"
-                      : "max-w-sm",
-                )}
-              >
-                {showTagline && <p className="text-center font-semibold text-lg">{tagline}</p>}
-                <div className="grid gap-2 rounded-lg bg-background p-4 text-foreground">
-                  {children({ showAmounts })}
+            <div
+              ref={frameRef}
+              className="flex h-[22.5rem] items-center justify-center rounded-lg bg-muted/60 p-4"
+            >
+              <div style={{ width: chosen.width * scale, height: chosen.height * scale }}>
+                <div
+                  style={{
+                    width: chosen.width,
+                    height: chosen.height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <div
+                    ref={card}
+                    style={{ width: chosen.width, height: chosen.height }}
+                    className="flex flex-col gap-3 overflow-hidden bg-primary p-4 text-primary-foreground"
+                  >
+                    {showTagline && (
+                      <p className="text-balance text-center font-semibold text-lg">{tagline}</p>
+                    )}
+                    <div
+                      className={cn(
+                        "flex min-h-0 flex-1 gap-3 rounded-lg bg-background p-4 text-foreground",
+                        layout === "row" ? "flex-row" : "flex-col",
+                      )}
+                    >
+                      {children({ showAmounts, layout })}
+                    </div>
+                    <p className="text-center font-bold text-lg tracking-tight">everycent</p>
+                  </div>
                 </div>
-                <p className="text-center font-bold text-lg tracking-tight">everycent</p>
               </div>
             </div>
           </div>

@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { NameCard, OptionsCard } from "@/components/account-options";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { PageHeader } from "@/components/page-header";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -41,8 +42,9 @@ export const Route = createFileRoute("/_authed/account")({
 function AccountPage() {
   const { session } = Route.useRouteContext();
   return (
-    <div className="mx-auto grid max-w-2xl gap-6">
-      <h1 className="font-semibold text-2xl tracking-tight">Account settings</h1>
+    // The page edge matches the other pages; the settings keep a readable column.
+    <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
+      <PageHeader title="Account settings" />
       <NameCard name={session.user.name} />
       <EmailCard email={session.user.email} />
       <PasswordCard />
@@ -213,6 +215,9 @@ function PasswordCard() {
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
+/** How many devices the list shows before "Show all". */
+const DEVICES_SHOWN = 5;
+
 function DevicesCard() {
   const queryClient = useQueryClient();
   const sessions = $api.useQuery("get", "/v1/me/sessions");
@@ -220,6 +225,9 @@ function DevicesCard() {
   const revokeOthers = $api.useMutation("delete", "/v1/me/sessions");
   const list = sessions.data?.sessions ?? [];
   const others = list.filter((s) => !s.current);
+  // This device and the latest few; the rest behind "Show all", so a long history stays short.
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? list : list.slice(0, DEVICES_SHOWN);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["get", "/v1/me/sessions"] });
@@ -260,8 +268,9 @@ function DevicesCard() {
         ) : sessions.isError ? (
           <FieldError>Couldn't load your devices.</FieldError>
         ) : (
-          <ItemGroup className="gap-2">
-            {list.map((s) => {
+          // One bordered list with dividers, like the register and Activity, not a stack of cards.
+          <ItemGroup className="gap-0 rounded-lg border">
+            {shown.map((s) => {
               const Icon =
                 s.deviceType === "mobile"
                   ? Smartphone
@@ -270,7 +279,12 @@ function DevicesCard() {
                     : Monitor;
               const name = [s.browser, s.os].filter(Boolean).join(" on ") || "Unknown device";
               return (
-                <Item key={s.id} variant="outline" size="sm">
+                <Item
+                  key={s.id}
+                  size="sm"
+                  // Dividers between rows: Item's own (transparent) border would hide divide-y's.
+                  className="rounded-none border-0 border-border border-t first:border-t-0"
+                >
                   <ItemMedia variant="icon">
                     <Icon />
                   </ItemMedia>
@@ -305,12 +319,19 @@ function DevicesCard() {
             })}
           </ItemGroup>
         )}
-        {others.length > 0 && (
-          <div>
-            <Button variant="outline" onClick={signOutOthers} disabled={revokeOthers.isPending}>
-              {revokeOthers.isPending && <Spinner />}
-              Sign out all other devices
-            </Button>
+        {(others.length > 0 || list.length > DEVICES_SHOWN) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {list.length > DEVICES_SHOWN && (
+              <Button variant="ghost" size="sm" onClick={() => setShowAll(!showAll)}>
+                {showAll ? "Show fewer" : `Show all ${list.length}`}
+              </Button>
+            )}
+            {others.length > 0 && (
+              <Button variant="outline" onClick={signOutOthers} disabled={revokeOthers.isPending}>
+                {revokeOthers.isPending && <Spinner />}
+                Sign out all other devices
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

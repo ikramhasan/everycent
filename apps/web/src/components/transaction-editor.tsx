@@ -43,7 +43,7 @@ import {
   withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
-import type { ColumnId } from "./register-columns";
+import { type ColumnId, PINNED_BG, pinned, pinnedColumns, pinnedWidth } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 
 /**
@@ -447,7 +447,12 @@ export function TransactionEditor({
         {columns.map((column) => (
           <TableCell
             key={column}
-            className={cn("px-1.5", (column === "cleared" || column === "flag") && "text-center")}
+            style={pinned(columns, column)?.style}
+            className={cn(
+              "px-1.5",
+              (column === "cleared" || column === "flag") && "text-center",
+              pinned(columns, column) && [pinned(columns, column)?.className, PINNED_BG.editor],
+            )}
           >
             {cell(column)}
           </TableCell>
@@ -461,21 +466,32 @@ export function TransactionEditor({
           onKeyDown={handleKeyDown}
         >
           {columns.map((column) => (
-            <TableCell key={column} className="px-1.5 py-1">
+            <TableCell
+              key={column}
+              style={pinned(columns, column)?.style}
+              className={cn(
+                "px-1.5 py-1",
+                pinned(columns, column) && [pinned(columns, column)?.className, PINNED_BG.editor],
+              )}
+            >
               {lineCell(line, index, column)}
             </TableCell>
           ))}
         </TableRow>
       ))}
       <TableRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
-        <TableCell colSpan={columns.length} className="px-1.5 pt-0">
+        <TableCell colSpan={columns.length - pinnedColumns(columns).length} className="px-1.5 pt-0">
           {/*
            * EVERYCENT-194: the register's table can be wider than its scrolling container, so a
            * footer as wide as the row ran past the visible edge. It takes the container's visible
            * width (`100cqw`: the register's container is a query container), sticks to its left
-           * edge while scrolling sideways, and wraps within it.
+           * edge while scrolling sideways, and wraps within it. It stops short of the pinned columns
+           * (Cleared, Actions), which keep their own cells in this row.
            */}
-          <div className="sticky left-1.5 flex w-[calc(100cqw-0.75rem)] max-w-full flex-wrap items-center justify-end gap-2 whitespace-normal">
+          <div
+            className="sticky left-1.5 flex max-w-full flex-wrap items-center justify-end gap-2 whitespace-normal"
+            style={{ width: `calc(100cqw - 0.75rem - ${pinnedWidth(columns)})` }}
+          >
             {lines && (
               <>
                 <Button
@@ -612,6 +628,13 @@ export function TransactionEditor({
             </AlertDialogContent>
           </AlertDialog>
         </TableCell>
+        {pinnedColumns(columns).map((column) => (
+          <TableCell
+            key={column}
+            style={pinned(columns, column)?.style}
+            className={cn(pinned(columns, column)?.className, PINNED_BG.editor)}
+          />
+        ))}
       </TableRow>
     </>
   );

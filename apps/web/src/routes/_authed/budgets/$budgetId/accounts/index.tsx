@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
+import { PageHeader } from "@/components/page-header";
 import { Register } from "@/components/register";
 import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
 import { accountsQueryOptions } from "@/lib/accounts";
@@ -27,7 +28,7 @@ function AllAccountsPage() {
   return (
     <div className="grid gap-6">
       <ReviewBanner count={toReview} onView={() => onSearchChange({ q: REVIEW_SEARCH })} />
-      <h1 className="font-semibold text-2xl tracking-tight">All Accounts</h1>
+      <PageHeader title="All Accounts" />
       <Register search={search} onSearchChange={onSearchChange} />
     </div>
   );

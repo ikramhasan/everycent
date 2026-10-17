@@ -33,6 +33,7 @@ import {
 } from "@/components/card-payment";
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
+import { PageHeader } from "@/components/page-header";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
 import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
@@ -542,10 +543,10 @@ function AccountPage() {
   return (
     <div className="grid gap-6">
       <ReviewBanner count={account.toReview} onView={() => onSearchChange({ q: REVIEW_SEARCH })} />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
+      <PageHeader
+        title={account.name}
+        meta={
+          <>
             {!readOnly && (
               <StarButton
                 budgetId={budget.id}
@@ -554,54 +555,56 @@ function AccountPage() {
               />
             )}
             {account.closed && <Badge variant="secondary">Closed</Badge>}
-          </div>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
-            <span>
-              {ACCOUNT_TYPE_LABELS[account.type]}
-              {isOnBudget(account.type) ? "" : " · off budget"}
-            </span>
-            {reconcilable && (
-              <span className="inline-flex items-center gap-1">
-                <Lock className="size-3.5" aria-hidden />
-                {reconciledLabel(account.lastReconciledAt)}
+            <span className="hidden min-w-0 items-center gap-x-3 truncate text-muted-foreground text-sm md:inline-flex">
+              <span>
+                {ACCOUNT_TYPE_LABELS[account.type]}
+                {isOnBudget(account.type) ? "" : " · off budget"}
               </span>
+              {reconcilable && (
+                <span className="inline-flex items-center gap-1">
+                  <Lock className="size-3.5" aria-hidden />
+                  {reconciledLabel(account.lastReconciledAt)}
+                </span>
+              )}
+            </span>
+          </>
+        }
+        actions={
+          <>
+            {account.migratedToAccountId && (
+              <Button variant="link" size="sm" asChild>
+                <Link
+                  to="/budgets/$budgetId/accounts/$accountId"
+                  params={{ budgetId: budget.id, accountId: account.migratedToAccountId }}
+                >
+                  Go to Loan Account
+                </Link>
+              </Button>
             )}
-          </p>
-          {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {account.migratedToAccountId && (
-            <Button variant="link" size="sm" asChild>
-              <Link
-                to="/budgets/$budgetId/accounts/$accountId"
-                params={{ budgetId: budget.id, accountId: account.migratedToAccountId }}
-              >
-                Go to Loan Account
-              </Link>
-            </Button>
-          )}
-          {!readOnly && (
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Pencil /> Edit account
-            </Button>
-          )}
-          {reconcilable && !readOnly && (
-            <ReconcilePopover
-              account={account}
-              settings={accountSettings}
-              open={reconcileOpen}
-              onOpenChange={setReconcileOpen}
-              show={show}
-              pending={reconcile.isPending}
-              onConfirm={() => void finishReconciling(BigInt(account.balances.cleared))}
-              onStart={(balance) => {
-                setReconcileOpen(false);
-                setReconcilingTo(balance);
-              }}
-            />
-          )}
-        </div>
-      </div>
+            {!readOnly && (
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil /> Edit account
+              </Button>
+            )}
+            {reconcilable && !readOnly && (
+              <ReconcilePopover
+                account={account}
+                settings={accountSettings}
+                open={reconcileOpen}
+                onOpenChange={setReconcileOpen}
+                show={show}
+                pending={reconcile.isPending}
+                onConfirm={() => void finishReconciling(BigInt(account.balances.cleared))}
+                onStart={(balance) => {
+                  setReconcileOpen(false);
+                  setReconcilingTo(balance);
+                }}
+              />
+            )}
+          </>
+        }
+      />
+      {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
 
       <dl className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-lg border px-4 py-3 tabular-nums">
         <Balance label="Cleared Balance" value={show(account.balances.cleared)} />
@@ -704,7 +707,9 @@ function Balance({
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd
         className={cn(
-          strong ? "font-semibold text-lg" : "text-base",
+          // One line height (/7) for every figure, so the larger Working Balance doesn't lift its
+          // label above the others.
+          strong ? "font-semibold text-lg/7" : "text-base/7",
           negative && "text-destructive",
         )}
       >

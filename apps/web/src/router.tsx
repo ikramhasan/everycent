@@ -11,6 +11,8 @@ export function createAppRouter(queryClient: QueryClient) {
     // Let TanStack Query own caching; the router always asks it.
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
+    // The app shell's ScrollArea viewport scrolls the page, not the window.
+    scrollToTopSelectors: ["#app-scroll"],
     defaultNotFoundComponent: NotFound,
   });
 }

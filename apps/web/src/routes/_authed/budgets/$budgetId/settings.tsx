@@ -25,6 +25,7 @@ import { BudgetMembers } from "@/components/budget-members";
 import { ExchangeRates } from "@/components/exchange-rates";
 import { FreshStartDialog } from "@/components/fresh-start-dialog";
 import { useManagePayees } from "@/components/manage-payees";
+import { PageHeader } from "@/components/page-header";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, budgetQueryOptions, invalidateBudgets } from "@/lib/budgets";
@@ -92,10 +93,15 @@ function BudgetSettingsPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-2xl gap-6">
-      <h1 className="font-semibold text-2xl tracking-tight">Budget settings</h1>
+    // The page edge matches the other pages; the settings keep a readable column.
+    <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
+      <PageHeader title="Budget settings" />
       {/* A viewer (EVERYCENT-88) sees the settings but can't change them. */}
       <Card>
+        <CardHeader>
+          <CardTitle>General</CardTitle>
+          <CardDescription>The budget's name, and how it shows amounts and dates.</CardDescription>
+        </CardHeader>
         <CardContent>
           <fieldset disabled={readOnly} className="contents">
             <BudgetForm
@@ -155,7 +161,8 @@ function BudgetSettingsPage() {
       )}
 
       {budget.role === "owner" && (
-        <Card className="border-destructive/40">
+        // Card draws its edge with a ring, so the warning colour goes on the ring.
+        <Card className="ring-destructive/40">
           <CardHeader>
             <CardTitle>Delete budget</CardTitle>
             <CardDescription>

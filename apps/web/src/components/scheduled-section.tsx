@@ -37,7 +37,7 @@ import {
 import { type CategoryOption, type Draft, movableAccounts, type Payee } from "@/lib/transactions";
 import { useUndo } from "@/lib/undo";
 import { FlagMenu } from "./flag-menu";
-import { COLUMN_SPECS, type ColumnId, isEditable } from "./register-columns";
+import { COLUMN_SPECS, type ColumnId, isEditable, PINNED_BG, pinned } from "./register-columns";
 import { TransactionEditor } from "./transaction-editor";
 
 /**
@@ -431,11 +431,14 @@ export function ScheduledSection({
               {columns.map((id) => {
                 const spec = COLUMN_SPECS[id];
                 const editable = !readOnly && !viewer && isEditable(id);
+                const pin = pinned(columns, id);
                 return (
                   <TableCell
                     key={id}
+                    style={pin?.style}
                     className={cn(
                       "truncate",
+                      pin && [pin.className, PINNED_BG.scheduled],
                       spec.align === "right" && "text-right tabular-nums",
                       spec.align === "center" && "py-1 text-center",
                       id === "flag" && "px-1",
@@ -479,8 +482,13 @@ export function ScheduledSection({
                   {columns.map((id) => (
                     <TableCell
                       key={id}
+                      style={pinned(columns, id)?.style}
                       className={cn(
                         "truncate py-1.5",
+                        pinned(columns, id) && [
+                          pinned(columns, id)?.className,
+                          PINNED_BG.scheduled,
+                        ],
                         COLUMN_SPECS[id].align === "right" && "text-right tabular-nums",
                         isEditable(id) && "cursor-text",
                       )}

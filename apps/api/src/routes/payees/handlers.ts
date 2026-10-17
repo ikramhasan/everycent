@@ -252,12 +252,13 @@ async function readPayee(db: Db, budgetId: string, id: string) {
 
 export const listPayeesHandler: RouteHandler<typeof listPayees, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
+  const { include } = c.req.valid("query");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId);
   const rows = await db
     .select(payeeColumns())
     .from(payee)
-    .where(peoplesPayee(budgetId))
+    .where(include === "all" ? eq(payee.budgetId, budgetId) : peoplesPayee(budgetId))
     .orderBy(asc(sql`lower(${payee.name})`), asc(payee.id));
   return c.json({ payees: await withCategories(db, budgetId, rows) }, 200);
 };

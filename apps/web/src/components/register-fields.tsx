@@ -55,11 +55,13 @@ import { useManagePayees } from "./manage-payees";
 /**
  * True when a key belongs to a field's open suggestion list rather than to the row: Esc closes
  * the list, and Enter picks the highlighted item. With nothing highlighted, Enter saves what's in
- * the field. (Base UI handles the key first, but the attributes still read as they were while
- * the event bubbles.)
+ * the field. Tab is never the list's: it moves to the next cell (a payee or category field opens
+ * its list on focus, so the list is nearly always open). (Base UI handles the key first, but the
+ * attributes still read as they were while the event bubbles.)
  */
 export function listOwnsKey(event: { key: string; target: EventTarget | null }) {
   const { target } = event;
+  if (event.key === "Tab") return false;
   if (!(target instanceof HTMLElement) || target.getAttribute("aria-expanded") !== "true") {
     return false;
   }

@@ -66,7 +66,8 @@ function ReportsHome() {
         <>
           <section
             aria-label="Key numbers"
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+            // As many tiles per row as fit, sharing the full width (between two and five show).
+            className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3"
           >
             <KeyTile
               budgetId={budget.id}

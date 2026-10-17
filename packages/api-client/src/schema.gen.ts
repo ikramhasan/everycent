@@ -937,7 +937,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The budget's payees, by name (built-in and transfer ones left out) */
+        /** The budget's payees, by name (built-in and transfer ones left out unless asked for) */
         get: operations["listPayees"];
         put?: never;
         post?: never;
@@ -7676,7 +7676,10 @@ export interface operations {
     };
     listPayees: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description "all" adds the transfer payees ("Transfer : <account>") and built-in ones like "Starting Balance", for naming every payee an id points at (the Activity feed) */
+                include?: "all";
+            };
             header?: never;
             path: {
                 budgetId: string;

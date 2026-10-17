@@ -64,7 +64,8 @@ export function KeyTile({
       to={target.to}
       params={{ budgetId }}
       search={target.search ?? {}}
-      className="grid gap-1 rounded-lg border p-4 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      // content-start: a tile with fewer lines keeps its number level with its neighbours'.
+      className="grid content-start gap-1 rounded-lg border p-4 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="text-muted-foreground text-sm">{label}</span>
       <span className="font-semibold text-2xl tabular-nums">{value}</span>
@@ -74,14 +75,14 @@ export function KeyTile({
       {change && !change.neutral && (
         <span
           className={cn(
-            "flex items-center gap-1 text-xs tabular-nums",
+            "flex items-start gap-1 text-xs tabular-nums",
             change.good ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400",
           )}
         >
           {change.up ? (
-            <ArrowUp aria-label="Up" className="size-3" />
+            <ArrowUp aria-label="Up" className="mt-0.5 size-3 shrink-0" />
           ) : (
-            <ArrowDown aria-label="Down" className="size-3" />
+            <ArrowDown aria-label="Down" className="mt-0.5 size-3 shrink-0" />
           )}
           {change.text}
         </span>

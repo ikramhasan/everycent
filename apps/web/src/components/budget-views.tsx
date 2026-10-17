@@ -21,12 +21,12 @@ import {
 import { Input } from "@everycent/ui/components/input";
 import { Label } from "@everycent/ui/components/label";
 import { cn } from "@everycent/ui/lib/utils";
-import { GripVertical, ListFilter, ListPlus, Pencil, PlusCircle, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, ListPlus, Pencil, PlusCircle, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { type CustomView, MAX_CUSTOM_VIEWS, type ViewActions } from "@/lib/budget-views";
 import { apiErrorMessage } from "@/lib/budgets";
 import type { CategoryList } from "@/lib/categories";
-import type { OverflowView } from "./budget-filter-bar";
+import { type OverflowView, TAB } from "./budget-filter-bar";
 
 const PRESET_LABELS: Record<string, string> = {
   underfunded: "Underfunded",
@@ -64,8 +64,16 @@ export function ViewsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Views Menu">
-          <ListFilter />
+        {/* A text tab like the views beside it: the views that didn't fit, Manage Views, New View. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            TAB,
+            "gap-1 aria-expanded:bg-transparent aria-expanded:text-foreground dark:hover:bg-transparent",
+          )}
+        >
+          More <ChevronDown className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">

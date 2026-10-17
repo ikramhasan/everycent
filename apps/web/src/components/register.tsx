@@ -25,6 +25,7 @@ import {
   EmptyTitle,
 } from "@everycent/ui/components/empty";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
+import { ScrollArea } from "@everycent/ui/components/scroll-area";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import {
   Table,
@@ -138,7 +139,14 @@ import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FlagMenu } from "./flag-menu";
 import { MemberAvatar } from "./member-avatar";
-import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
+import {
+  COLUMN_SPECS,
+  type ColumnId,
+  isEditable,
+  PINNED_BG,
+  pinned,
+  registerColumns,
+} from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
@@ -180,6 +188,8 @@ const NO_SUMMARY = {
   deletable: 0,
 };
 const ROW_HEIGHT = 41;
+/** The least the Memo column gets; it takes whatever width the fixed columns leave beyond that. */
+const MEMO_MIN_WIDTH = "9rem";
 
 interface EditingCell {
   id: string;
@@ -1180,6 +1190,31 @@ export function Register({
     }
   }
 
+  /**
+   * Tab off the row's last editable cell (Shift+Tab off its first) goes on to the row's next control
+   * (the Cleared button; the flag going back), as the browser would have: the closing editor took
+   * the focus with it, which otherwise lands on the page and costs an extra Tab.
+   */
+  function focusPast(id: string, cell: CellColumn, exit: "next" | "previous") {
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`tr[data-transaction-id="${id}"]`);
+      if (!row) return;
+      const at = columnIds.indexOf(cell);
+      const cells = [...row.children];
+      const beyond = exit === "next" ? cells.slice(at + 1) : cells.slice(0, at).reverse();
+      for (const td of beyond) {
+        const controls = [
+          ...td.querySelectorAll<HTMLElement>("button, input, select, a[href], [tabindex]"),
+        ].filter((el) => el.tabIndex >= 0 && !el.hasAttribute("disabled"));
+        const target = exit === "next" ? controls[0] : controls.at(-1);
+        if (target) {
+          target.focus();
+          return;
+        }
+      }
+    });
+  }
+
   async function commitCell(
     t: Transaction,
     cell: CellColumn,
@@ -1204,6 +1239,7 @@ export function Register({
     const order = editableColumns(t);
     const next = order[order.indexOf(cell) + (exit === "next" ? 1 : -1)];
     setEditing(exit !== "stay" && next ? { id: t.id, column: next } : null);
+    if (exit !== "stay" && !next) focusPast(t.id, cell, exit);
     if (Object.keys(result.body).length === 0) return;
     const save = async () => {
       try {
@@ -1742,266 +1778,302 @@ export function Register({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Table
-        containerRef={scrollRef}
+      {/* An overlay scrollbar inside the rounded border, instead of a native one that takes a strip
+          beside the header and squares off its corner. */}
+      <ScrollArea
+        viewportRef={scrollRef}
         // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
-        containerClassName="@container max-h-[70vh] overflow-auto rounded-lg border"
-        className="min-w-[74rem] table-fixed"
+        viewportClassName="@container max-h-[70vh]"
+        scrollbars="both"
+        className="rounded-lg border"
       >
-        <colgroup>
-          {columnIds.map((id) => (
-            <col key={id} style={{ width: COLUMN_SPECS[id].width }} />
-          ))}
-        </colgroup>
-        <TableHeader className="sticky top-0 z-10">
-          {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id} className="hover:bg-transparent">
-              {group.headers.map((header) => {
-                const id = header.column.id as ColumnId;
-                const spec = COLUMN_SPECS[id];
-                const sortBy = SORTABLE[id];
-                // The arrow shows on the first sort field; the rest break its ties.
-                const active = sortBy !== undefined && sortBy === sort;
-                const HeaderIcon = id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
-                return (
-                  <TableHead
-                    key={header.id}
-                    aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
-                    className={cn(
-                      "bg-muted text-muted-foreground text-xs uppercase",
-                      spec.align === "right" && "text-right",
-                    )}
-                  >
-                    {id === "select" ? (
-                      <Checkbox
-                        aria-label={
-                          selection.mode === "all" ? "Unselect all" : "Select all matching"
-                        }
-                        checked={
-                          selection.mode === "all"
-                            ? selection.except.size === 0 || "indeterminate"
-                            : (selection.ids.size > 0 || scheduledSelection.size > 0) &&
-                              "indeterminate"
-                        }
-                        disabled={loaded.length === 0 && scheduledRows.length === 0}
-                        onCheckedChange={() => {
-                          // Select all takes the scheduled rows along, as YNAB's does.
-                          if (selection.mode === "all") return clearSelection();
-                          setSelection({ mode: "all", except: new Set() });
-                          setScheduledSelection(new Set(scheduledRows.map((row) => row.id)));
-                        }}
-                      />
-                    ) : id === "balance" ? (
-                      <BalanceHeader
-                        sorted={!dateOrder}
-                        onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
-                      />
-                    ) : sortBy ? (
-                      <button
-                        type="button"
-                        className={cn(
-                          "inline-flex items-center gap-1 uppercase hover:text-foreground",
-                          active && "text-foreground",
-                        )}
-                        onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
-                      >
-                        {HeaderIcon ? (
-                          <>
-                            <HeaderIcon className="size-3.5" aria-hidden />
-                            <span className="sr-only">{spec.header}</span>
-                          </>
-                        ) : (
-                          spec.header
-                        )}
-                        {active &&
-                          (dir === "asc" ? (
-                            <ArrowUp className="size-3" aria-hidden />
+        <Table
+          containerClassName="overflow-visible"
+          className="table-fixed"
+          // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
+          // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
+          style={{
+            minWidth: `calc(${MEMO_MIN_WIDTH}${columnIds
+              .map((id) => COLUMN_SPECS[id].width)
+              .filter(Boolean)
+              .map((w) => ` + ${w}`)
+              .join("")})`,
+          }}
+        >
+          <colgroup>
+            {columnIds.map((id) => (
+              <col key={id} style={{ width: COLUMN_SPECS[id].width }} />
+            ))}
+          </colgroup>
+          <TableHeader className="sticky top-0 z-10">
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id} className="hover:bg-transparent">
+                {group.headers.map((header) => {
+                  const id = header.column.id as ColumnId;
+                  const spec = COLUMN_SPECS[id];
+                  const sortBy = SORTABLE[id];
+                  // The arrow shows on the first sort field; the rest break its ties.
+                  const active = sortBy !== undefined && sortBy === sort;
+                  const HeaderIcon =
+                    id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
+                  const pin = pinned(columnIds, id);
+                  return (
+                    <TableHead
+                      key={header.id}
+                      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
+                      style={pin?.style}
+                      className={cn(
+                        "bg-muted text-muted-foreground text-xs uppercase",
+                        pin && [pin.className, PINNED_BG.head],
+                        spec.align === "right" && "text-right",
+                        // Centred like the column's cells (the flag and cleared icons).
+                        spec.align === "center" && "text-center",
+                      )}
+                    >
+                      {id === "select" ? (
+                        <Checkbox
+                          aria-label={
+                            selection.mode === "all" ? "Unselect all" : "Select all matching"
+                          }
+                          checked={
+                            selection.mode === "all"
+                              ? selection.except.size === 0 || "indeterminate"
+                              : (selection.ids.size > 0 || scheduledSelection.size > 0) &&
+                                "indeterminate"
+                          }
+                          disabled={loaded.length === 0 && scheduledRows.length === 0}
+                          onCheckedChange={() => {
+                            // Select all takes the scheduled rows along, as YNAB's does.
+                            if (selection.mode === "all") return clearSelection();
+                            setSelection({ mode: "all", except: new Set() });
+                            setScheduledSelection(new Set(scheduledRows.map((row) => row.id)));
+                          }}
+                        />
+                      ) : id === "balance" ? (
+                        <BalanceHeader
+                          sorted={!dateOrder}
+                          onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
+                        />
+                      ) : sortBy ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "inline-flex items-center gap-1 uppercase hover:text-foreground",
+                            active && "text-foreground",
+                          )}
+                          onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
+                        >
+                          {HeaderIcon ? (
+                            <>
+                              <HeaderIcon className="size-3.5" aria-hidden />
+                              <span className="sr-only">{spec.header}</span>
+                            </>
                           ) : (
-                            <ArrowDown className="size-3" aria-hidden />
-                          ))}
-                      </button>
-                    ) : (
-                      <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
-                    )}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody ref={measureScheduled}>
-          {adding && defaultAccountId && (
-            <TransactionEditor
-              transferCategory={transferCategory}
-              key={addingKey}
-              initial={addingDraft ?? newDraft(defaultAccountId, today)}
-              openDatePicker={addingPicker}
-              repeat
+                            spec.header
+                          )}
+                          {active &&
+                            (dir === "asc" ? (
+                              <ArrowUp className="size-3" aria-hidden />
+                            ) : (
+                              <ArrowDown className="size-3" aria-hidden />
+                            ))}
+                        </button>
+                      ) : (
+                        <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
+                      )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody ref={measureScheduled}>
+            {adding && defaultAccountId && (
+              <TransactionEditor
+                transferCategory={transferCategory}
+                key={addingKey}
+                initial={addingDraft ?? newDraft(defaultAccountId, today)}
+                openDatePicker={addingPicker}
+                repeat
+                columns={columnIds}
+                accounts={openAccounts}
+                payees={payeeList}
+                categories={options}
+                dateFormat={budget.dateFormat}
+                settings={budget}
+                flags={flags}
+                onRenameFlags={renameFlags}
+                pending={create.isPending || createScheduled.isPending}
+                error={newError}
+                onSave={(draft) => void saveNew(draft)}
+                onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
+                onCancel={() => setAdding(false)}
+              />
+            )}
+            <ScheduledSection
+              rows={scheduledRows}
+              selected={scheduledSelection}
+              onSelect={toggleScheduled}
               columns={columnIds}
-              accounts={openAccounts}
+              collapsed={view.scheduledCollapsed}
+              onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
+              accounts={accountList}
               payees={payeeList}
               categories={options}
-              dateFormat={budget.dateFormat}
-              settings={budget}
               flags={flags}
               onRenameFlags={renameFlags}
-              pending={create.isPending || createScheduled.isPending}
-              error={newError}
-              onSave={(draft) => void saveNew(draft)}
-              onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
-              onCancel={() => setAdding(false)}
+              today={today}
+              onChanged={refresh}
             />
-          )}
-          <ScheduledSection
-            rows={scheduledRows}
-            selected={scheduledSelection}
-            onSelect={toggleScheduled}
-            columns={columnIds}
-            collapsed={view.scheduledCollapsed}
-            onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
-            accounts={accountList}
-            payees={payeeList}
-            categories={options}
-            flags={flags}
-            onRenameFlags={renameFlags}
-            today={today}
-            onChanged={refresh}
-          />
-        </TableBody>
-        <TableBody>
-          {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
-          {items.map((item) => {
-            const row = flat[item.index];
-            if (!row) return null;
-            const t = row.t;
-            const future = t.date > today;
-            if (editingSplit?.id === t.id) {
-              if (row.kind === "line") return null;
-              return (
-                <TransactionEditor
-                  transferCategory={transferCategory}
-                  key={t.id}
-                  initial={editingSplit.draft}
-                  label="Edit transaction"
-                  columns={columnIds}
-                  accounts={editorAccounts(accountList, t.accountId)}
-                  accountChoices={movableAccounts(accountList, t)}
-                  payees={payeeList}
-                  categories={options}
-                  dateFormat={budget.dateFormat}
-                  settings={budget}
-                  flags={flags}
-                  onRenameFlags={renameFlags}
-                  pending={update.isPending}
-                  error={splitError}
-                  onSave={(draft) => void saveSplit(t, draft)}
-                  onCancel={() => setEditingSplit(null)}
-                />
-              );
-            }
-            if (row.kind === "line") {
+          </TableBody>
+          <TableBody>
+            {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
+            {items.map((item) => {
+              const row = flat[item.index];
+              if (!row) return null;
+              const t = row.t;
+              const future = t.date > today;
+              if (editingSplit?.id === t.id) {
+                if (row.kind === "line") return null;
+                return (
+                  <TransactionEditor
+                    transferCategory={transferCategory}
+                    key={t.id}
+                    initial={editingSplit.draft}
+                    label="Edit transaction"
+                    columns={columnIds}
+                    accounts={editorAccounts(accountList, t.accountId)}
+                    accountChoices={movableAccounts(accountList, t)}
+                    payees={payeeList}
+                    categories={options}
+                    dateFormat={budget.dateFormat}
+                    settings={budget}
+                    flags={flags}
+                    onRenameFlags={renameFlags}
+                    pending={update.isPending}
+                    error={splitError}
+                    onSave={(draft) => void saveSplit(t, draft)}
+                    onCancel={() => setEditingSplit(null)}
+                  />
+                );
+              }
+              if (row.kind === "line") {
+                return (
+                  <TableRow
+                    key={row.key}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
+                    aria-label={`Split line of ${t.payeeName ?? "transaction"}`}
+                    className={cn("text-muted-foreground text-xs", future && "italic")}
+                  >
+                    {columnIds.map((id) => {
+                      const spec = COLUMN_SPECS[id];
+                      const pin = pinned(columnIds, id);
+                      return (
+                        <TableCell
+                          key={id}
+                          style={pin?.style}
+                          className={cn(
+                            "truncate py-1.5",
+                            pin && [pin.className, PINNED_BG.row],
+                            spec.align === "right" && "text-right tabular-nums",
+                            isEditable(id) && !readOnly && "cursor-text",
+                          )}
+                          onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
+                        >
+                          {lineDisplay(t, row.line, id)}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              }
+              const editable = editableColumns(t);
               return (
                 <TableRow
-                  key={row.key}
+                  key={t.id}
                   data-index={item.index}
                   ref={virtualizer.measureElement}
-                  aria-label={`Split line of ${t.payeeName ?? "transaction"}`}
-                  className={cn("text-muted-foreground text-xs", future && "italic")}
+                  data-transaction-id={t.id}
+                  data-highlighted={highlightId === t.id || undefined}
+                  data-state={isSelected(selection, t.id) ? "selected" : undefined}
+                  // One height for every row, so an icon or an open editor doesn't grow it.
+                  style={{ height: ROW_HEIGHT }}
+                  className={cn(
+                    // A quick hover; a row jumped to glows, then fades out.
+                    "duration-100 data-highlighted:animate-[row-highlight_2.5s_ease-out]",
+                    future && "text-muted-foreground italic",
+                    // YNAB sets unapproved rows in bold.
+                    !t.approved && "font-semibold",
+                  )}
+                  title={future ? "Upcoming: not in the balance until its date" : undefined}
                 >
                   {columnIds.map((id) => {
                     const spec = COLUMN_SPECS[id];
+                    const pin = pinned(columnIds, id);
+                    if (editing?.id === t.id && editing.column === id) {
+                      return (
+                        <TableCell key={id} className="px-1.5 py-1">
+                          <CellEditor
+                            transaction={t}
+                            column={editing.column}
+                            settings={inCurrency(budget, t.currency)}
+                            dateFormat={budget.dateFormat}
+                            accounts={movableAccounts(accountList, t)}
+                            payees={payeeList}
+                            transfers={transferTargets(t)}
+                            categories={options}
+                            onSplit={
+                              !t.transferFromSplit && !t.transferAccountId
+                                ? () => openSplit(t, true)
+                                : undefined
+                            }
+                            onMakeRepeating={
+                              t.transferFromSplit ? undefined : () => makeRepeating(t)
+                            }
+                            onCommit={(value, exit, transferAccountId) =>
+                              void commitCell(t, editing.column, value, exit, transferAccountId)
+                            }
+                            onCancel={() => setEditing(null)}
+                          />
+                        </TableCell>
+                      );
+                    }
+                    const canEdit = (editable as ColumnId[]).includes(id);
                     return (
                       <TableCell
                         key={id}
+                        style={pin?.style}
                         className={cn(
-                          "truncate py-1.5",
+                          "truncate",
+                          pin && [pin.className, PINNED_BG.row],
                           spec.align === "right" && "text-right tabular-nums",
-                          isEditable(id) && !readOnly && "cursor-text",
+                          spec.align === "center" && "py-1 text-center",
+                          id === "flag" && "px-1",
+                          id === "actions" && "py-1",
+                          (id === "category" || id === "memo") && "text-muted-foreground",
+                          canEdit && "cursor-text",
                         )}
-                        onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
+                        onClick={
+                          canEdit
+                            ? () =>
+                                t.subtransactions.length > 0
+                                  ? openSplit(t)
+                                  : setEditing({ id: t.id, column: id as CellColumn })
+                            : undefined
+                        }
                       >
-                        {lineDisplay(t, row.line, id)}
+                        {display(t, id)}
                       </TableCell>
                     );
                   })}
                 </TableRow>
               );
-            }
-            const editable = editableColumns(t);
-            return (
-              <TableRow
-                key={t.id}
-                data-index={item.index}
-                ref={virtualizer.measureElement}
-                data-highlighted={highlightId === t.id || undefined}
-                className={cn(
-                  "transition-colors duration-700 data-highlighted:bg-primary/10",
-                  future && "text-muted-foreground italic",
-                  // YNAB sets unapproved rows in bold.
-                  !t.approved && "font-semibold",
-                )}
-                title={future ? "Upcoming: not in the balance until its date" : undefined}
-              >
-                {columnIds.map((id) => {
-                  const spec = COLUMN_SPECS[id];
-                  if (editing?.id === t.id && editing.column === id) {
-                    return (
-                      <TableCell key={id} className="px-1.5 py-1">
-                        <CellEditor
-                          transaction={t}
-                          column={editing.column}
-                          settings={inCurrency(budget, t.currency)}
-                          dateFormat={budget.dateFormat}
-                          accounts={movableAccounts(accountList, t)}
-                          payees={payeeList}
-                          transfers={transferTargets(t)}
-                          categories={options}
-                          onSplit={
-                            !t.transferFromSplit && !t.transferAccountId
-                              ? () => openSplit(t, true)
-                              : undefined
-                          }
-                          onMakeRepeating={t.transferFromSplit ? undefined : () => makeRepeating(t)}
-                          onCommit={(value, exit, transferAccountId) =>
-                            void commitCell(t, editing.column, value, exit, transferAccountId)
-                          }
-                          onCancel={() => setEditing(null)}
-                        />
-                      </TableCell>
-                    );
-                  }
-                  const canEdit = (editable as ColumnId[]).includes(id);
-                  return (
-                    <TableCell
-                      key={id}
-                      className={cn(
-                        "truncate",
-                        spec.align === "right" && "text-right tabular-nums",
-                        spec.align === "center" && "py-1 text-center",
-                        id === "flag" && "px-1",
-                        id === "actions" && "py-1",
-                        (id === "category" || id === "memo") && "text-muted-foreground",
-                        canEdit && "cursor-text",
-                      )}
-                      onClick={
-                        canEdit
-                          ? () =>
-                              t.subtransactions.length > 0
-                                ? openSplit(t)
-                                : setEditing({ id: t.id, column: id as CellColumn })
-                          : undefined
-                      }
-                    >
-                      {display(t, id)}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            );
-          })}
-          {paddingBottom > 0 && <tr aria-hidden style={{ height: paddingBottom }} />}
-        </TableBody>
-      </Table>
+            })}
+            {paddingBottom > 0 && <tr aria-hidden style={{ height: paddingBottom }} />}
+          </TableBody>
+        </Table>
+      </ScrollArea>
 
       {isFetchingNextPage && (
         <p className="text-muted-foreground text-xs" aria-live="polite">

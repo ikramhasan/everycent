@@ -152,7 +152,7 @@ export function ReadyToAssignBanner({
     <output
       aria-live="polite"
       className={cn(
-        "flex min-w-56 items-center justify-between gap-3 rounded-lg px-4 py-2",
+        "flex min-w-56 flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-2 transition-colors duration-200 ease-out-quint",
         sign > 0 && "bg-green-200 text-green-950 dark:bg-green-900/60 dark:text-green-50",
         sign === 0 && "bg-muted text-muted-foreground",
         sign < 0 && "bg-red-200 text-red-950 dark:bg-red-900/60 dark:text-red-50",

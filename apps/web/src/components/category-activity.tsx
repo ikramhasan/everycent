@@ -55,7 +55,7 @@ export function ActivityButton({
           type="button"
           aria-label={`Activity of ${name}: ${format(amount)}`}
           className={cn(
-            "max-w-full truncate rounded-md px-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "max-w-full truncate rounded-md hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             className,
           )}
         >

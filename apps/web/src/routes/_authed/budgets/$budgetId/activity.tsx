@@ -6,6 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { format as formatDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { ActivityList } from "@/components/activity-list";
+import { PageHeader } from "@/components/page-header";
 import { ACTIVITY_ENTITIES, type ActivityEvent, activityQueryPrefix } from "@/lib/activity";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -52,13 +53,16 @@ function ActivityPage() {
   }, [activity.data]);
 
   return (
-    <main className="mx-auto grid w-full max-w-3xl gap-4 p-4 md:p-6">
-      <header className="grid gap-1">
-        <h1 className="font-semibold text-2xl">Activity</h1>
-        <p className="text-muted-foreground text-sm">
-          Every change to {budget.name}, who made it and when.
-        </p>
-      </header>
+    // The app shell pads the page; the page width matches the others, the feed stays readable.
+    <main className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,48rem)] content-start gap-4">
+      <PageHeader
+        title="Activity"
+        meta={
+          <span className="hidden truncate text-muted-foreground text-sm md:inline">
+            Every change to {budget.name}, who made it and when.
+          </span>
+        }
+      />
       <div className="flex flex-wrap gap-2">
         <NativeSelect
           size="sm"

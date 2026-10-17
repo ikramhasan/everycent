@@ -1,5 +1,21 @@
 @import "@everycent/ui/globals.css";
 
+/* A register row jumped to (a transfer's other side): holds the highlight, then fades it out. */
+@keyframes row-highlight {
+  0%,
+  60% {
+    background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  }
+}
+
+/* The same glow on the register's pinned cells, mixed onto the background so it stays opaque. */
+@keyframes row-highlight-pinned {
+  0%,
+  60% {
+    background-color: color-mix(in oklab, var(--primary) 10%, var(--background));
+  }
+}
+
 /*
  * Progress bar colours, YNAB's own (its `--budgetBar*` variables on :root and body.theme-dark, read
  * from app.ynab.com on 2026-10-12): the empty track and its border, then the available (funded,

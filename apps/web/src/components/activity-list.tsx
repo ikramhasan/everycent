@@ -6,7 +6,6 @@ import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { sessionQueryOptions } from "@/lib/session";
-import { payeesQueryOptions } from "@/lib/transactions";
 import { MemberAvatar } from "./member-avatar";
 
 /** Names for an event's ids, from the budget's accounts, categories, payees and members. */
@@ -14,7 +13,10 @@ export function useActivityLookups(): ActivityLookups {
   const { budget, formatAmount, formatDate } = useBudget();
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
-  const payees = useQuery(payeesQueryOptions(budget.id));
+  // Every payee, transfer and built-in ones too, so a transfer reads "Transfer : Savings".
+  const payees = $api.useQuery("get", "/v1/budgets/{budgetId}/payees", {
+    params: { path: { budgetId: budget.id }, query: { include: "all" } },
+  });
   const members = $api.useQuery("get", "/v1/budgets/{budgetId}/members", {
     params: { path: { budgetId: budget.id } },
   });
@@ -55,11 +57,12 @@ export function ActivityList({
     return <p className="py-6 text-center text-muted-foreground text-sm">No changes yet.</p>;
   }
   return (
-    <ol className="grid gap-2">
+    // One bordered list with dividers, like the register and category list, not a stack of cards.
+    <ol className="divide-y rounded-lg border">
       {events.map((event) => {
         const line = describeEvent(event, lookups);
         return (
-          <li key={event.id} className="flex gap-3 rounded-md border bg-card p-3 text-sm">
+          <li key={event.id} className="flex gap-3 px-4 py-3 text-sm">
             <MemberAvatar
               userId={event.actor?.userId ?? null}
               userName={event.actor ? actorName(event) : null}

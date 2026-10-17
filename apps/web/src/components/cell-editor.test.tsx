@@ -95,6 +95,21 @@ describe("CellEditor", () => {
     expect(onCommit).toHaveBeenCalledWith("rent", "stay", null);
   });
 
+  it("moves on with Tab from a payee while its list is open", async () => {
+    const payee = renderCell("payee");
+    const user = userEvent.setup();
+    expect(screen.getByLabelText("Payee")).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{Tab}");
+    expect(payee.onCommit).toHaveBeenCalledWith("Market", "next", null);
+  });
+
+  it("moves on with Tab from a category while its list is open", async () => {
+    const category = renderCell("category", { ...txn, categoryId: "rent", categoryName: "Rent" });
+    const user = userEvent.setup();
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(category.onCommit).toHaveBeenCalledWith("rent", "previous", null);
+  });
+
   it("picks a transfer from the payee list", async () => {
     const { onCommit } = renderCell("payee");
     const user = userEvent.setup();

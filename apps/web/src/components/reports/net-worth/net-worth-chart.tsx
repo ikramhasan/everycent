@@ -31,12 +31,15 @@ export function NetWorthChart({
   showAmounts = true,
   onSelectMonth,
   className,
+  fill = false,
 }: {
   months: readonly NetWorthMonth[];
   currency: CurrencyCode;
   showAmounts?: boolean;
   onSelectMonth?: (month: string) => void;
   className?: string;
+  /** Takes the height left in a flex column (the share picture) instead of a fixed one. */
+  fill?: boolean;
 }) {
   const format = useAmountFormat(currency);
   const data = months.map((m) => ({
@@ -47,8 +50,11 @@ export function NetWorthChart({
   }));
   const byMonth = new Map(months.map((m) => [m.month, m]));
   return (
-    <div className="grid gap-2">
-      <ChartContainer config={config} className={cn("aspect-auto h-72 w-full", className)}>
+    <div className={cn("grid gap-2", fill && "flex min-h-0 flex-1 flex-col")}>
+      <ChartContainer
+        config={config}
+        className={cn("aspect-auto h-72 w-full", fill && "h-auto min-h-0 flex-1", className)}
+      >
         <ComposedChart
           data={data}
           stackOffset="sign"

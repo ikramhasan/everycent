@@ -1,15 +1,17 @@
 import { addMonths, type BudgetMonth, type CurrencyCode, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Skeleton } from "@everycent/ui/components/skeleton";
+import { cn } from "@everycent/ui/lib/utils";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { LayoutTemplate, Pencil, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
+import { BudgetOptionsMenu } from "@/components/budget-options-menu";
 import { type ViewDialog, ViewDialogs, ViewsMenu } from "@/components/budget-views";
 import {
   CategoryInspector,
@@ -29,7 +31,7 @@ import {
   AvailablePill,
   FixThisButton,
 } from "@/components/move-money";
-import { ProgressBarsToggle } from "@/components/progress-bars-toggle";
+import { PageHeader } from "@/components/page-header";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
 import { type MoneyIO, TargetSection } from "@/components/target-inspector";
@@ -80,6 +82,9 @@ import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
 import { useViewportWidth } from "@/lib/use-viewport-width";
+
+/** The category list and the inspector; the header shares them so Ready to Assign fills the inspector's width. */
+const COLUMNS = "lg:grid-cols-[minmax(0,1fr)_16rem]";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
   // The month on screen, YYYY-MM; the current month when absent.
@@ -578,7 +583,8 @@ function BudgetPage() {
     );
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
+    // No max width: the category list is dense, so it takes the room a wide screen gives it.
+    <div className="grid gap-4">
       <TemplateGallery
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
@@ -601,9 +607,9 @@ function BudgetPage() {
           if (await templates.importTemplate(importing.id, categoryIds)) setTemplate(undefined);
         }}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className={cn("flex flex-wrap items-center justify-between gap-4 lg:grid", COLUMNS)}>
         <div className="grid gap-1">
-          <h1 className="truncate font-semibold text-muted-foreground text-sm">{budget.name}</h1>
+          <PageHeader title={budget.name} />
           <MonthNav
             month={month}
             current={today}
@@ -672,42 +678,78 @@ function BudgetPage() {
           <AddAccountDialog budget={budget} open={addingAccount} onOpenChange={setAddingAccount} />
         </div>
       )}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className={cn("grid items-start gap-4", COLUMNS)}>
         {categories.isPending ? (
           <Skeleton className="h-64" />
         ) : categories.isError ? (
           <p className="text-muted-foreground">Couldn't load categories.</p>
         ) : (
           <div className="grid gap-3">
-            {listFigures && (
-              <BudgetFilterBar
-                filter={customView ? filter : preset}
-                overspent={overspentCount(listFigures.month, visible)}
-                onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
-                onChange={setFilter}
-                order={views.data?.order}
-                custom={views.data?.views}
-                viewportWidth={viewportWidth}
-                menu={(overflow) =>
-                  views.data && (
-                    <ViewsMenu
-                      full={views.data.views.length >= MAX_CUSTOM_VIEWS}
-                      overflow={overflow}
-                      onPick={setFilter}
-                      onManage={() => setViewDialog({ kind: "manage" })}
-                      onNew={() =>
-                        setViewDialog({
-                          kind: "edit",
-                          view: null,
-                          // Categories selected on the budget start checked (YNAB, 2026-10-14).
-                          preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
-                        })
-                      }
-                    />
-                  )
-                }
-              />
-            )}
+            {/*
+             * One bar over the list: the views as text tabs on the left, the list's tools as icons
+             * on the right. The divider is an inset shadow the selected tab's underline paints over.
+             */}
+            <div className="flex flex-wrap items-end gap-x-2 gap-y-1 shadow-[inset_0_-1px_0_var(--border)]">
+              {listFigures && (
+                <BudgetFilterBar
+                  filter={customView ? filter : preset}
+                  overspent={overspentCount(listFigures.month, visible)}
+                  onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
+                  onChange={setFilter}
+                  order={views.data?.order}
+                  custom={views.data?.views}
+                  viewportWidth={viewportWidth}
+                  menu={(overflow) =>
+                    views.data && (
+                      <ViewsMenu
+                        full={views.data.views.length >= MAX_CUSTOM_VIEWS}
+                        overflow={overflow}
+                        onPick={setFilter}
+                        onManage={() => setViewDialog({ kind: "manage" })}
+                        onNew={() =>
+                          setViewDialog({
+                            kind: "edit",
+                            view: null,
+                            // Categories selected on the budget start checked (YNAB, 2026-10-14).
+                            preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
+                          })
+                        }
+                      />
+                    )
+                  }
+                />
+              )}
+              <div className="ml-auto flex items-center gap-1 pb-1">
+                {customView && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setViewDialog({ kind: "edit", view: customView })}
+                  >
+                    <Pencil /> Edit View
+                  </Button>
+                )}
+                {listFigures && (
+                  <RecentMoves
+                    budgetId={budget.id}
+                    categories={categories.data}
+                    format={listFigures.format}
+                    formatDate={formatDate}
+                    onOpenCategory={(categoryId, m) =>
+                      void navigate({
+                        search: { month: m === today ? undefined : m, category: categoryId },
+                      })
+                    }
+                  />
+                )}
+                {!readOnly && <UndoRedoButtons />}
+                <BudgetOptionsMenu
+                  onTemplates={readOnly ? undefined : () => setGalleryOpen(true)}
+                  progressBars={progressBars}
+                  onProgressBarsChange={setProgressBars}
+                />
+              </div>
+            </div>
             {views.data && (
               <ViewDialogs
                 dialog={viewDialog}
@@ -733,46 +775,6 @@ function BudgetPage() {
               collapsed={collapsed}
               onCollapsedChange={setCollapsed}
               addGroupDisabled={Boolean(customView)}
-              toolbar={
-                <div className="flex flex-1 items-center gap-1">
-                  {!readOnly && <UndoRedoButtons />}
-                  {listFigures && (
-                    <RecentMoves
-                      budgetId={budget.id}
-                      categories={categories.data}
-                      format={listFigures.format}
-                      formatDate={formatDate}
-                      onOpenCategory={(categoryId, m) =>
-                        void navigate({
-                          search: { month: m === today ? undefined : m, category: categoryId },
-                        })
-                      }
-                    />
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    hidden={readOnly}
-                    onClick={() => setGalleryOpen(true)}
-                  >
-                    <LayoutTemplate /> Templates
-                  </Button>
-                  {customView && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setViewDialog({ kind: "edit", view: customView })}
-                    >
-                      <Pencil /> Edit View
-                    </Button>
-                  )}
-                  <ProgressBarsToggle
-                    on={progressBars}
-                    onChange={setProgressBars}
-                    className="ml-auto"
-                  />
-                </div>
-              }
             />
           </div>
         )}

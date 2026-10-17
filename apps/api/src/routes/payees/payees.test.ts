@@ -92,6 +92,20 @@ describe("payees", () => {
     ]);
   });
 
+  it("adds the transfer and built-in payees when asked for all of them", async () => {
+    const { base, owner, savings, spend } = await setup();
+    await spend("Grocer");
+    await spend(null, { transferAccountId: savings.id, payeeName: undefined });
+    const all = await json<{ payees: Payee[] }>(
+      await send("GET", `${base}/payees?include=all`, owner.cookie),
+    );
+    const names = all.payees.map((p) => p.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["Grocer", "Transfer : Checking", "Transfer : Savings"]),
+    );
+    expect(names).toContain("Starting Balance");
+  });
+
   it("lists everything using some payees, newest first, scheduled included", async () => {
     const { base, owner, spend, byName, account } = await setup();
     await spend("Gym", { date: "2026-09-01", memo: "x-old" });

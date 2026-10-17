@@ -65,6 +65,7 @@ import {
 } from "./loan-dialogs";
 import { LoanBanners, LoanProgressCard } from "./loan-progress";
 import { AvailablePill } from "./move-money";
+import { PageHeader } from "./page-header";
 import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
 import { ShareProgressDialog } from "./share-progress";
@@ -251,61 +252,65 @@ export function LoanPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate font-semibold text-2xl tracking-tight">{account.name}</h1>
+      <PageHeader
+        title={account.name}
+        meta={
+          <>
             {account.closed && <Badge variant="secondary">Closed</Badge>}
-          </div>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
-            <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
-            <span className="inline-flex items-center gap-1">
-              <Lock className="size-3.5" aria-hidden />
-              {updatedLabel(account.lastReconciledAt)}
+            <span className="hidden min-w-0 items-center gap-x-3 truncate text-muted-foreground text-sm md:inline-flex">
+              <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
+              <span className="inline-flex items-center gap-1">
+                <Lock className="size-3.5" aria-hidden />
+                {updatedLabel(account.lastReconciledAt)}
+              </span>
             </span>
-          </p>
-          {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
-        </div>
-        <div className="flex flex-wrap gap-2" hidden={readOnly}>
-          <Button variant="outline" size="sm" onClick={onEdit} aria-label="Edit account">
-            <Pencil />
-          </Button>
-          {!account.closed && (
+          </>
+        }
+        actions={
+          !readOnly && (
             <>
-              <Button variant="outline" size="sm" onClick={() => setOpen({ kind: "update" })}>
-                Update Balance
+              <Button variant="outline" size="sm" onClick={onEdit} aria-label="Edit account">
+                <Pencil />
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm">Add Activity</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <MenuItem
-                    title="Add Payment"
-                    hint="For payments to reduce your balance"
-                    onSelect={() => setOpen({ kind: "payment" })}
-                  />
-                  <MenuItem
-                    title="Add Credit"
-                    hint="For credits or refunds to your account"
-                    onSelect={() => setOpen({ kind: "activity", activity: "credit" })}
-                  />
-                  <MenuItem
-                    title="Add Fee or Charge"
-                    hint="For late fees, annual fees, or withdrawals"
-                    onSelect={() => setOpen({ kind: "activity", activity: "charge" })}
-                  />
-                  <MenuItem
-                    title="Add Interest"
-                    hint="For recording known interest accrual"
-                    onSelect={() => setOpen({ kind: "interest" })}
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!account.closed && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setOpen({ kind: "update" })}>
+                    Update Balance
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm">Add Activity</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <MenuItem
+                        title="Add Payment"
+                        hint="For payments to reduce your balance"
+                        onSelect={() => setOpen({ kind: "payment" })}
+                      />
+                      <MenuItem
+                        title="Add Credit"
+                        hint="For credits or refunds to your account"
+                        onSelect={() => setOpen({ kind: "activity", activity: "credit" })}
+                      />
+                      <MenuItem
+                        title="Add Fee or Charge"
+                        hint="For late fees, annual fees, or withdrawals"
+                        onSelect={() => setOpen({ kind: "activity", activity: "charge" })}
+                      />
+                      <MenuItem
+                        title="Add Interest"
+                        hint="For recording known interest accrual"
+                        onSelect={() => setOpen({ kind: "interest" })}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
+      {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
 
       <dl className="flex flex-wrap gap-x-8 gap-y-3 rounded-lg border px-4 py-3 tabular-nums">
         <Figure label="Remaining Balance" value={format(owed)} />

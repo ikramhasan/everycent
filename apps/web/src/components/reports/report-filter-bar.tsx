@@ -186,6 +186,8 @@ export function ReportFilterBar({
       {show.includes("compare") && (
         <NativeSelect
           aria-label="Compare with"
+          // As wide as the chosen option, like the filter buttons beside it, not the longest one.
+          style={{ fieldSizing: "content" }}
           value={search.compare ?? ""}
           onChange={(e) =>
             update({ compare: (e.target.value || undefined) as ReportComparison | undefined })

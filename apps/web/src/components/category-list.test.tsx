@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { BudgetProvider } from "@/lib/budget-context";
 import type { Budget } from "@/lib/budgets";
@@ -305,7 +306,7 @@ describe("CategoryList", () => {
 
   it("adds a category group", async () => {
     const actions = renderList();
-    await userEvent.click(screen.getByRole("button", { name: "Category Group" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a category group" }));
     await userEvent.type(screen.getByLabelText("New category group"), "Kids");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(actions.createGroup).toHaveBeenCalledWith("Kids");
@@ -524,7 +525,7 @@ describe("CategoryList", () => {
         />,
       );
       expect(screen.getByText("There are no categories selected for Bills.")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Category Group" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Add a category group" })).toBeDisabled();
       await userEvent.click(screen.getByRole("button", { name: "Edit View" }));
       expect(onEdit).toHaveBeenCalled();
       await userEvent.click(screen.getByRole("button", { name: "View All" }));
@@ -559,6 +560,67 @@ describe("CategoryList", () => {
       expect(screen.queryByRole("region", { name: "Bills" })).not.toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "View All" }));
       expect(onViewAll).toHaveBeenCalled();
+    });
+  });
+
+  describe("clicking a row", () => {
+    function SelectableList({ initial = ["c1"] }: { initial?: string[] }) {
+      const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(initial));
+      return (
+        <CategoryList
+          data={data}
+          actions={makeActions()}
+          figures={{
+            month,
+            currentMonth: "2026-10",
+            format: (a) => `A${a}`,
+            assign: { parse: () => 0n, toInput: (a) => a, assign: vi.fn() },
+            selection: {
+              selected,
+              toggle: (id) =>
+                setSelected((s) => {
+                  const next = new Set(s);
+                  if (!next.delete(id)) next.add(id);
+                  return next;
+                }),
+              selectOnly: (id) => setSelected(new Set([id])),
+              setAll: (ids) => setSelected(new Set(ids)),
+            },
+          }}
+        />
+      );
+    }
+    const row = (id: string) =>
+      document.querySelector(`[data-category-row="${id}"]`) as HTMLElement;
+
+    it("selects it alone and starts editing its Assigned amount", async () => {
+      render(<SelectableList />);
+      await userEvent.click(row("c2"));
+      expect(screen.getByRole("checkbox", { name: "Select Electric" })).toBeChecked();
+      expect(screen.getByRole("checkbox", { name: "Select Rent" })).not.toBeChecked();
+      expect(screen.getByLabelText("Assigned to Electric")).toHaveFocus();
+    });
+
+    it("does the same from the category's name", async () => {
+      render(<SelectableList />);
+      await userEvent.click(screen.getByRole("button", { name: "Electric" }));
+      expect(screen.getByRole("checkbox", { name: "Select Electric" })).toBeChecked();
+      expect(screen.getByLabelText("Assigned to Electric")).toHaveFocus();
+    });
+
+    it("starts editing when its checkbox begins a selection", async () => {
+      render(<SelectableList initial={[]} />);
+      await userEvent.click(screen.getByRole("checkbox", { name: "Select Electric" }));
+      expect(screen.getByRole("checkbox", { name: "Select Electric" })).toBeChecked();
+      expect(screen.getByLabelText("Assigned to Electric")).toHaveFocus();
+    });
+
+    it("leaves the checkbox adding to the selection", async () => {
+      render(<SelectableList />);
+      await userEvent.click(screen.getByRole("checkbox", { name: "Select Electric" }));
+      expect(screen.getByRole("checkbox", { name: "Select Rent" })).toBeChecked();
+      expect(screen.getByRole("checkbox", { name: "Select Electric" })).toBeChecked();
+      expect(screen.queryByRole("textbox", { name: "Assigned to Electric" })).toBeNull();
     });
   });
 });

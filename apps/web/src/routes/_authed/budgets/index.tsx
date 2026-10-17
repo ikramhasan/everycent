@@ -9,6 +9,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { currencyName } from "@/components/currency-picker";
+import { PageHeader } from "@/components/page-header";
 import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/")({
@@ -23,15 +24,18 @@ function AllBudgetsPage() {
   const { template } = Route.useSearch();
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-semibold text-2xl tracking-tight">All budgets</h1>
-        <Button asChild>
-          <Link to="/budgets/new" search={{ template }}>
-            <Plus /> New budget
-          </Link>
-        </Button>
-      </div>
+    // The page edge and width match the other pages.
+    <div className="mx-auto grid w-full max-w-6xl content-start gap-6">
+      <PageHeader
+        title="All budgets"
+        actions={
+          <Button size="sm" asChild>
+            <Link to="/budgets/new" search={{ template }}>
+              <Plus /> New budget
+            </Link>
+          </Button>
+        }
+      />
       {template && (
         <p className="text-muted-foreground text-sm">
           Open a budget, or create a new one, to import the category template into it.
@@ -57,10 +61,13 @@ function AllBudgetsPage() {
            * first (the API's order). Archived budgets are among them, their names stamped
            * "(Archived on …)" (YNAB, 2026-10-15).
            */}
-          <BudgetGrid
-            budgets={budgets.data.budgets.filter((b) => b.role === "owner")}
-            template={template}
-          />
+          <section className="grid gap-3">
+            <h2 className="font-medium text-muted-foreground text-sm">Your budgets</h2>
+            <BudgetGrid
+              budgets={budgets.data.budgets.filter((b) => b.role === "owner")}
+              template={template}
+            />
+          </section>
           <section className="grid gap-3">
             <h2 className="font-medium text-muted-foreground text-sm">Budgets shared with you</h2>
             {budgets.data.budgets.some((b) => b.role !== "owner") ? (
@@ -82,7 +89,8 @@ function AllBudgetsPage() {
 
 function BudgetGrid({ budgets, template }: { budgets: Budget[]; template?: string }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    // As many cards per row as fit, at least 18rem each.
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
       {budgets.map((b) => (
         <Link
           key={b.id}
@@ -92,7 +100,7 @@ function BudgetGrid({ budgets, template }: { budgets: Budget[]; template?: strin
           preload={false}
           className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full transition-colors hover:bg-muted/50">
+          <Card className="h-full transition-colors duration-150 hover:bg-muted/50">
             <CardHeader>
               <CardTitle className="truncate">{b.name}</CardTitle>
               <CardDescription>

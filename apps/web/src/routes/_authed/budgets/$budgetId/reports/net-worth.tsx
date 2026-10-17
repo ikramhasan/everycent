@@ -164,14 +164,19 @@ function Report() {
             tagline={TAGLINE}
             fileName="Net worth"
           >
-            {({ showAmounts }) => (
+            {({ showAmounts, layout }) => (
               <>
-                <NetWorthHeadline report={report} showAmounts={showAmounts} compact />
+                <NetWorthHeadline
+                  report={report}
+                  showAmounts={showAmounts}
+                  compact
+                  className={layout === "row" ? "w-52 shrink-0" : undefined}
+                />
                 <NetWorthChart
                   months={report.months}
                   currency={report.currency as CurrencyCode}
                   showAmounts={showAmounts}
-                  className="h-40"
+                  fill
                 />
               </>
             )}

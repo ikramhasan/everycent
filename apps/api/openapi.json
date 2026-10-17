@@ -16977,7 +16977,7 @@
           }
         ],
         "operationId": "listPayees",
-        "summary": "The budget's payees, by name (built-in and transfer ones left out)",
+        "summary": "The budget's payees, by name (built-in and transfer ones left out unless asked for)",
         "parameters": [
           {
             "schema": {
@@ -16986,6 +16986,19 @@
             "required": true,
             "name": "budgetId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all"
+              ],
+              "description": "\"all\" adds the transfer payees (\"Transfer : <account>\") and built-in ones like \"Starting Balance\", for naming every payee an id points at (the Activity feed)"
+            },
+            "required": false,
+            "description": "\"all\" adds the transfer payees (\"Transfer : <account>\") and built-in ones like \"Starting Balance\", for naming every payee an id points at (the Activity feed)",
+            "name": "include",
+            "in": "query"
           }
         ],
         "responses": {

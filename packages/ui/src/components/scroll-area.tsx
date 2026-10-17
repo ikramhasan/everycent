@@ -2,11 +2,23 @@ import { cn } from "@everycent/ui/lib/utils";
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 import * as React from "react";
 
+// everycent: `viewportRef`/`viewportClassName`/`viewportProps` expose the scrolling element (for
+// virtualized rows, a sticky header, the router's scroll reset), and `scrollbars` adds the
+// horizontal bar for wide content.
 function ScrollArea({
   className,
   children,
+  viewportRef,
+  viewportClassName,
+  scrollbars = "vertical",
+  viewportProps,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+  viewportRef?: React.Ref<HTMLDivElement>;
+  viewportClassName?: string;
+  viewportProps?: React.HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, string>;
+  scrollbars?: "vertical" | "horizontal" | "both";
+}) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
@@ -14,12 +26,18 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        {...viewportProps}
+        ref={viewportRef}
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className={cn(
+          "size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
+          viewportClassName,
+        )}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar />
+      {scrollbars !== "horizontal" && <ScrollBar />}
+      {scrollbars !== "vertical" && <ScrollBar orientation="horizontal" />}
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   );
