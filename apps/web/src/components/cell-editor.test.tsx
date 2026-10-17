@@ -174,11 +174,15 @@ describe("CellEditor", () => {
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    // Transfers first while nothing is typed (YNAB, 2026-10-16).
-    expect(options()).toEqual(["Savings", "Market", "Bakery"]);
-    // The current payee is selected, so typing replaces it.
+    // The current payee under Selected, then transfers while nothing is typed (YNAB, 2026-10-16).
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^SelectedMarket$/);
+    expect(options()).toEqual(["Market", "Savings", "Market", "Bakery"]);
+    // The current payee is selected, so typing replaces it. Create is on top, but the first
+    // match stays the highlighted one.
     await user.keyboard("bak");
-    expect(options()).toEqual(["Bakery", " Create payee “bak”"]);
+    expect(options()).toEqual(["Bakery"]);
+    expect(screen.getByRole("button", { name: "Create “bak” Payee" })).toBeInTheDocument();
     await user.keyboard("{Enter}");
     expect(onCommit).toHaveBeenCalledWith("Bakery", "stay", null);
   });
@@ -211,10 +215,11 @@ describe("CellEditor", () => {
     const { onCommit } = renderCell("payee", txn, payees);
     const user = userEvent.setup();
     const options = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(options()).toEqual(["Savings", "Market"]);
+    expect(options()).toEqual(["Market", "Savings", "Market"]);
     await user.keyboard("trip cafe");
     // No "Create payee": the name is a hidden payee's.
     expect(screen.queryAllByRole("option")).toEqual([]);
+    expect(screen.queryByRole("button", { name: /Create/ })).not.toBeInTheDocument();
     expect(screen.getByText("1 matching payee is hidden")).toBeTruthy();
     await user.keyboard("{Enter}");
     expect(onCommit).toHaveBeenCalledWith("trip cafe", "stay", null);

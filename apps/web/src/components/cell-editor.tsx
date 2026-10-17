@@ -148,6 +148,7 @@ export function CellEditor({
             payees={payees}
             transfers={transfers}
             own={own && { type: own.type, direction: directionOf(BigInt(transaction.amount)) }}
+            transferAccountId={transferAccountId}
             autoFocus
           />
         );

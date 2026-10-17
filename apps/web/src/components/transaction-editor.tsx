@@ -247,6 +247,7 @@ export function TransactionEditor({
             payees={payees}
             transfers={lines ? [] : transfers}
             own={account && { type: account.type, direction: typedDirection(draft) }}
+            transferAccountId={draft.transferAccountId}
             onChange={({ name, transferAccountId, payee }) =>
               setDraft((d) => {
                 const to = accounts.find((a) => a.id === transferAccountId);
@@ -364,6 +365,7 @@ export function TransactionEditor({
             payees={payees}
             transfers={transfers}
             own={account && { type: account.type, direction: typedDirection(line) }}
+            transferAccountId={line.transferAccountId}
             onChange={({ name: payeeName, transferAccountId, payee }) => {
               const toAccount = accounts.find((a) => a.id === transferAccountId);
               const uses = account ? usesCategory(account.type, toAccount?.type) : true;

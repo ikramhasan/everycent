@@ -11,6 +11,7 @@ import {
   Autocomplete,
   AutocompleteCollection,
   AutocompleteContent,
+  AutocompleteEmpty,
   AutocompleteGroup,
   AutocompleteGroupLabel,
   AutocompleteInput,
@@ -39,7 +40,7 @@ import {
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
-import { ArrowLeftRight, CalendarDays, Plus, Split } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Check, Plus, Split } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import {
@@ -189,10 +190,12 @@ export function DateField({
 }
 
 type PayeeItem = {
+  /** Unique in the list: the copy under "Selected" has its own. */
   id: string;
   label: string;
-  kind: "payee" | "transfer" | "create";
+  kind: "payee" | "transfer";
   /** Transfers: the other account. */
+  accountId?: string;
   accountName?: string;
   /** Transfers: what the list shows (YNAB's wording, or just the account's name). */
   text?: string;
@@ -209,10 +212,9 @@ function matches(item: PayeeItem, text: string) {
   );
 }
 
-interface PayeeGroup {
-  value: string;
-  items: PayeeItem[];
-}
+/** The copy of the field's payee listed under "Selected". */
+const SELECTED = "selected:";
+const asSelected = (item: PayeeItem): PayeeItem => ({ ...item, id: `${SELECTED}${item.id}` });
 
 /** An account a transfer can go to. */
 export interface TransferTarget {
@@ -234,8 +236,9 @@ export interface PayeeChoice {
  * Payee name with suggestions, plus YNAB's "Payments and Transfers" for each account money can
  * move to, worded by `own` and the amount's direction (`transferChoiceLabel`: "Payment from F
  * Cash", "Transfer to Savings", "To/From X"); "Transfer : <account>" without `own`. Typing a new
- * name is fine (it's created on save); YNAB also lists "Create payee" so it's clear that's what
- * will happen.
+ * name is fine (it's created on save); YNAB also lists "Create … Payee" at the top so it's clear
+ * that's what will happen, while the first existing match stays the highlighted one (2026-10-16).
+ * That entry is a button above the list rather than an item, so autocomplete never lands on it.
  */
 export function PayeeField({
   label = "Payee",
@@ -245,6 +248,7 @@ export function PayeeField({
   payees,
   transfers,
   own,
+  transferAccountId = null,
   autoFocus,
 }: {
   /** Accessible name (split lines say which line). */
@@ -257,6 +261,8 @@ export function PayeeField({
   transfers: readonly TransferTarget[];
   /** The account being edited and which way its amount goes. */
   own?: { type: AccountType; direction: TransferDirection };
+  /** The account the field's transfer goes to, to tell two accounts with one name apart. */
+  transferAccountId?: string | null;
   autoFocus?: boolean;
 }) {
   const trimmed = value.trim();
@@ -269,7 +275,7 @@ export function PayeeField({
   // typing replaces it; the list narrows once something is typed.
   const [open, setOpen] = useState(Boolean(autoFocus));
   const [typed, setTyped] = useState(false);
-  const groups = useMemo<PayeeGroup[]>(() => {
+  const { groups, create } = useMemo(() => {
     const known: PayeeItem[] = payees
       .filter((p) => !p.hidden)
       .map((p) => ({ id: p.id, label: p.name, kind: "payee" }));
@@ -282,23 +288,28 @@ export function PayeeField({
         id: `transfer:${a.id}`,
         label: worded ?? transferLabel(a.name),
         kind: "transfer",
+        accountId: a.id,
         accountName: a.name,
         text: worded ?? a.name,
       };
     });
-    const exact = [...known, ...toAccounts].some((p) => matches(p, trimmed));
-    // YNAB (2026-10-16): the whole list starts with "Payments and Transfers", then "Saved
-    // Payees"; once something is typed, saved payees come first. "Create payee" stays last here
-    // (YNAB puts it on top), so autocomplete still picks an existing payee first.
+    const chosen =
+      (transferAccountId && toAccounts.find((p) => p.accountId === transferAccountId)) ||
+      [...known, ...toAccounts].find((p) => matches(p, trimmed));
+    // YNAB (2026-10-16): the whole list starts with "Selected" (the payee in the field, ticked),
+    // then "Payments and Transfers", then "Saved Payees"; once something is typed, saved payees
+    // come first.
     const saved = { value: "Saved Payees", items: known };
     const moves = { value: "Payments and Transfers", items: toAccounts };
-    return [
-      ...(typed ? [saved, moves] : [moves, saved]),
-      ...(trimmed && !exact && !hiddenMatch
-        ? [{ value: "", items: [{ id: "create", label: trimmed, kind: "create" as const }] }]
-        : []),
-    ].filter((g) => g.items.length > 0);
-  }, [payees, transfers, own, trimmed, hiddenMatch, typed]);
+    const selected = chosen && !typed ? [{ value: "Selected", items: [asSelected(chosen)] }] : [];
+    return {
+      groups: [...selected, ...(typed ? [saved, moves] : [moves, saved])].filter(
+        (g) => g.items.length > 0,
+      ),
+      // A name no payee has yet: YNAB offers to create it at the top of the list.
+      create: trimmed && !chosen && !hiddenMatch ? trimmed : null,
+    };
+  }, [payees, transfers, own, trimmed, hiddenMatch, typed, transferAccountId]);
 
   // Item presses report only the text; the highlighted item tells transfers to two accounts
   // with the same name apart.
@@ -308,8 +319,8 @@ export function PayeeField({
       picked && picked.label === text
         ? picked
         : groups.flatMap((g) => g.items).find((p) => matches(p, text.trim()));
-    if (item?.kind === "transfer") {
-      return { name: item.label, transferAccountId: item.id.slice("transfer:".length) };
+    if (item?.kind === "transfer" && item.accountId) {
+      return { name: item.label, transferAccountId: item.accountId };
     }
     return { name: text, transferAccountId: null, payee: payees.find((p) => p.name === text) };
   }
@@ -344,24 +355,41 @@ export function PayeeField({
         showTrigger={false}
         autoFocus={autoFocus}
         onFocus={(e) => {
+          // Coming back to the field shows the whole list again, Selected first.
+          setTyped(false);
           setOpen(true);
           e.currentTarget.select();
         }}
         className="h-8 w-full"
       />
       <AutocompleteContent className="min-w-64">
+        {create && (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary text-sm hover:bg-accent"
+            // Keep focus in the field: the row goes on with the new name.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange({ name: create, transferAccountId: null });
+              setOpen(false);
+            }}
+          >
+            <Plus className="size-4 shrink-0" />
+            <span className="truncate">Create “{create}” Payee</span>
+          </button>
+        )}
+        {create && <AutocompleteEmpty>“{create}” will be created as a payee.</AutocompleteEmpty>}
         <AutocompleteList>
-          {(group: PayeeGroup) => (
+          {(group: { value: string; items: PayeeItem[] }) => (
             <AutocompleteGroup key={group.value} items={group.items}>
               {group.value && <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>}
               <AutocompleteCollection>
                 {(item: PayeeItem) => (
                   <AutocompleteItem key={item.id} value={item}>
-                    {item.kind === "create" ? (
-                      <>
-                        <Plus className="size-4" /> Create payee “{item.label}”
-                      </>
-                    ) : item.kind === "transfer" ? (
+                    {item.id.startsWith(SELECTED) && (
+                      <Check aria-hidden className="size-4 text-muted-foreground" />
+                    )}
+                    {item.kind === "transfer" ? (
                       <>
                         <ArrowLeftRight className="size-4 text-muted-foreground" />
                         {item.text}
@@ -507,7 +535,8 @@ export function CategoryField({
         } else onChange(option?.id.replace(SHORTCUT, "") ?? null);
       }}
       itemToStringLabel={categoryLabel}
-      isItemEqualToValue={(a, b) => a.id === b.id}
+      // The Selected copy and the category in its group are both ticked (YNAB, 2026-10-16).
+      isItemEqualToValue={(a, b) => a.id.replace(SHORTCUT, "") === b.id.replace(SHORTCUT, "")}
       autoHighlight
     >
       <ComboboxInput
