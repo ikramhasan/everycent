@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from "@everycent/ui/components/avatar";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -23,6 +22,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@everycent/ui/components/sidebar";
 import { type Theme, useTheme } from "@everycent/ui/lib/theme";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,20 +31,25 @@ import {
   Activity,
   ChartColumn,
   ChevronsUpDown,
+  Keyboard,
   Landmark,
   LayoutGrid,
   LogOut,
+  Menu,
   Settings,
   UserCog,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
+import { useShortcut } from "@/lib/shortcuts";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
+import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { PageHeaderSlotProvider } from "./page-header";
+import { SidebarDropdownContent } from "./sidebar-dropdown-content";
 
 const THEMES: readonly { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
@@ -74,6 +79,9 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
   });
 
   const { theme, setTheme } = useTheme();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
+  const [resizing, setResizing] = useState(false);
   // The top bar's header slot, where each page puts its title and actions.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
@@ -91,172 +99,195 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
     .toUpperCase();
 
   return (
-    // Narrower than the kit's 16rem, leaving the page more room (YNAB's is narrow too).
-    <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
-      <Sidebar>
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <BudgetSwitcher
-                // Most recently used first; archived ones too, as in YNAB's Open Plan menu.
-                budgets={budgets.data?.budgets ?? []}
-                currentBudgetId={budgetId}
-              />
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
+    <SidebarProvider
+      // A tablet starts with the icon rail, leaving the page the room; the trigger opens it.
+      defaultOpen={window.innerWidth >= 1024}
+      style={
+        {
+          "--sidebar-width": `${sidebarWidth}px`,
+          // YNAB's collapsed sidebar is a 56px rail of icons.
+          "--sidebar-width-icon": "3.5rem",
+        } as React.CSSProperties
+      }
+      data-sidebar-narrow={sidebarWidth < SIDEBAR.narrow || undefined}
+      data-sidebar-resizing={resizing || undefined}
+      className="data-[sidebar-resizing]:[&_[data-slot=sidebar-container]]:transition-none data-[sidebar-resizing]:[&_[data-slot=sidebar-gap]]:transition-none"
+    >
+      <GlobalShortcuts onHelp={() => setHelpOpen(true)} />
+      <KeyboardShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <Sidebar collapsible="icon">
+        {/* One landmark for the sidebar, so everything in it is in a region (EVERYCENT-95). */}
+        <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
+          <SidebarResizer width={sidebarWidth} onWidth={setSidebarWidth} onResizing={setResizing} />
+          <SidebarHeader>
             <SidebarMenu>
-              {budgetId ? (
-                <>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link
-                        to="/budgets/$budgetId"
-                        params={{ budgetId }}
-                        // Back to the month last viewed, as YNAB's Plan link does.
-                        search={{ month: lastViewedMonth(budgetId) }}
-                        activeOptions={{ exact: true, includeSearch: false }}
-                        activeProps={{ "data-active": true }}
-                      >
-                        <Wallet />
-                        <span>Budget</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      {/* Between Plan and All Accounts, where YNAB has Reflect. */}
-                      <Link
-                        to="/budgets/$budgetId/reports"
-                        params={{ budgetId }}
-                        activeProps={{ "data-active": true }}
-                      >
-                        <ChartColumn />
-                        <span>Reports</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link
-                        to="/budgets/$budgetId/accounts"
-                        params={{ budgetId }}
-                        activeOptions={{ exact: true }}
-                        activeProps={{ "data-active": true }}
-                      >
-                        <Landmark />
-                        <span>All Accounts</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link
-                        to="/budgets/$budgetId/activity"
-                        params={{ budgetId }}
-                        activeProps={{ "data-active": true }}
-                      >
-                        <Activity />
-                        <span>Activity</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link
-                        to="/budgets/$budgetId/settings"
-                        params={{ budgetId }}
-                        activeProps={{ "data-active": true }}
-                      >
-                        <Settings />
-                        <span>Budget settings</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </>
-              ) : (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link to="/budgets" activeProps={{ "data-active": true }}>
-                      <LayoutGrid />
-                      <span>All budgets</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              <SidebarMenuItem>
+                <BudgetSwitcher
+                  // Most recently used first; archived ones too, as in YNAB's Open Plan menu.
+                  budgets={budgets.data?.budgets ?? []}
+                  currentBudgetId={budgetId}
+                />
+              </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarGroup>
-          {budgetId && currentBudget.data && <AccountsNav budget={currentBudget.data} />}
-        </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton size="lg">
-                    <Avatar className="size-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-medium">{user.name}</span>
-                      <span className="truncate text-muted-foreground text-xs">{user.email}</span>
-                    </div>
-                    <ChevronsUpDown className="ml-auto size-4" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="top"
-                  align="start"
-                  className="w-(--radix-dropdown-menu-trigger-width)"
-                >
-                  <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/account">
-                      <UserCog /> Account settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/*
-                   * Theme as a button group; picking one keeps the menu open. Text only, so the three
-                   * share the menu's width (as wide as the sidebar's user button) evenly.
-                   */}
-                  <div className="grid gap-1.5 px-2 py-1.5">
-                    <span className="text-muted-foreground text-xs">Theme</span>
-                    {/*
-                     * Menu radio items, laid out as a joined button group: the menu's arrow keys
-                     * reach them (a ToggleGroup inside a menu can't be focused from the keyboard),
-                     * and picking one keeps the menu open.
-                     */}
-                    <DropdownMenuRadioGroup
-                      aria-label="Theme"
-                      value={theme}
-                      onValueChange={(value) => setTheme(value as Theme)}
-                      className="flex overflow-hidden rounded-md border"
-                    >
-                      {THEMES.map(({ value, label }) => (
-                        <DropdownMenuRadioItem
-                          key={value}
-                          value={value}
-                          onSelect={(event) => event.preventDefault()}
-                          className={THEME_ITEM}
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarMenu>
+                {budgetId ? (
+                  <>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Budget">
+                        <Link
+                          to="/budgets/$budgetId"
+                          params={{ budgetId }}
+                          // Back to the month last viewed, as YNAB's Plan link does.
+                          search={{ month: lastViewedMonth(budgetId) }}
+                          activeOptions={{ exact: true, includeSearch: false }}
+                          activeProps={{ "data-active": true }}
                         >
-                          {label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut}>
-                    <LogOut /> Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
+                          <Wallet />
+                          <span>Budget</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Reports">
+                        {/* Between Plan and All Accounts, where YNAB has Reflect. */}
+                        <Link
+                          to="/budgets/$budgetId/reports"
+                          params={{ budgetId }}
+                          activeProps={{ "data-active": true }}
+                        >
+                          <ChartColumn />
+                          <span>Reports</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="All Accounts">
+                        <Link
+                          to="/budgets/$budgetId/accounts"
+                          params={{ budgetId }}
+                          activeOptions={{ exact: true }}
+                          activeProps={{ "data-active": true }}
+                        >
+                          <Landmark />
+                          <span>All Accounts</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Activity">
+                        <Link
+                          to="/budgets/$budgetId/activity"
+                          params={{ budgetId }}
+                          activeProps={{ "data-active": true }}
+                        >
+                          <Activity />
+                          <span>Activity</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Budget settings">
+                        <Link
+                          to="/budgets/$budgetId/settings"
+                          params={{ budgetId }}
+                          activeProps={{ "data-active": true }}
+                        >
+                          <Settings />
+                          <span>Budget settings</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </>
+                ) : (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="All budgets">
+                      <Link to="/budgets" activeProps={{ "data-active": true }}>
+                        <LayoutGrid />
+                        <span>All budgets</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroup>
+            {budgetId && currentBudget.data && (
+              // The icon rail leaves the accounts out; widening the sidebar brings them back.
+              <div className="group-data-[collapsible=icon]:hidden">
+                <AccountsNav budget={currentBudget.data} />
+              </div>
+            )}
+          </SidebarContent>
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton size="lg">
+                      <Avatar className="size-8 rounded-lg">
+                        <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-medium">{user.name}</span>
+                        <span className="truncate text-muted-foreground text-xs">{user.email}</span>
+                      </div>
+                      <ChevronsUpDown className="ml-auto size-4" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <SidebarDropdownContent side="top" align="start" railAlign="end">
+                    <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/account">
+                        <UserCog /> Account settings
+                      </Link>
+                    </DropdownMenuItem>
+                    {/* YNAB's menu has Keyboard Shortcuts under Account (2026-10-18). */}
+                    <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
+                      <Keyboard /> Keyboard Shortcuts
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {/*
+                     * Theme as a button group; picking one keeps the menu open. Text only, so the three
+                     * share the menu's width (as wide as the sidebar's user button) evenly.
+                     */}
+                    <div className="grid gap-1.5 px-2 py-1.5">
+                      <span className="text-muted-foreground text-xs">Theme</span>
+                      {/*
+                       * Menu radio items, laid out as a joined button group: the menu's arrow keys
+                       * reach them (a ToggleGroup inside a menu can't be focused from the keyboard),
+                       * and picking one keeps the menu open.
+                       */}
+                      <DropdownMenuRadioGroup
+                        aria-label="Theme"
+                        value={theme}
+                        onValueChange={(value) => setTheme(value as Theme)}
+                        className="flex overflow-hidden rounded-md border"
+                      >
+                        {THEMES.map(({ value, label }) => (
+                          <DropdownMenuRadioItem
+                            key={value}
+                            value={value}
+                            onSelect={(event) => event.preventDefault()}
+                            className={THEME_ITEM}
+                          >
+                            {label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={signOut}>
+                      <LogOut /> Sign out
+                    </DropdownMenuItem>
+                  </SidebarDropdownContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </nav>
       </Sidebar>
       {/*
        * The page scrolls inside an overlay ScrollArea under a fixed top bar, never the window: the
@@ -275,13 +306,180 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
           viewportClassName="[&>div]:block!"
           viewportProps={{ id: APP_SCROLL_ID, "data-scroll-restoration-id": APP_SCROLL_ID }}
         >
-          <div className="p-4 md:p-5">
+          {/* On a phone the page clears the bottom navigation bar and the home indicator. */}
+          <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-5">
             <PageHeaderSlotProvider value={headerSlot}>
               <Outlet />
             </PageHeaderSlotProvider>
           </div>
         </ScrollArea>
+        {budgetId && <BottomNav budgetId={budgetId} />}
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+/** YNAB's Universal shortcuts that belong to the shell: "?" for the list, Shift+. for the sidebar. */
+function GlobalShortcuts({ onHelp }: { onHelp: () => void }) {
+  const { toggleSidebar } = useSidebar();
+  useShortcut("help", onHelp);
+  useShortcut("sidebar", toggleSidebar);
+  return null;
+}
+
+/** The left sidebar's width: YNAB's limits (client code, 2026-10-18), our own starting width. */
+const SIDEBAR = {
+  /** Narrower than the kit's 16rem, leaving the page more room. */
+  default: 224,
+  /** Under this a drag folds it to the icon rail, as YNAB's does. */
+  rail: 150,
+  /** Under this the account balances hide. */
+  narrow: 220,
+  max: 600,
+};
+const SIDEBAR_WIDTH_KEY = "everycent:sidebar-width";
+
+/** The width last dragged to, kept in this browser as YNAB keeps it. */
+function useSidebarWidth() {
+  const [width, setWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+      return saved >= SIDEBAR.rail && saved <= SIDEBAR.max ? saved : SIDEBAR.default;
+    } catch {
+      return SIDEBAR.default;
+    }
+  });
+  const save = useCallback((next: number) => {
+    setWidth(next);
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
+    } catch {
+      // Storage can be unavailable (private windows); the width still holds for this visit.
+    }
+  }, []);
+  return [width, save] as const;
+}
+
+/**
+ * The sidebar's right edge, dragged to resize it as YNAB's is: 150–600px, and narrower than that
+ * folds it to the icon rail (dragging out again opens it). Arrow keys move it 16px.
+ * Hand-rolled: shadcn's Sidebar is a fixed panel sized by a CSS variable, which a panel library
+ * (they lay out both sides in one group) can't drive.
+ */
+function SidebarResizer({
+  width,
+  onWidth,
+  onResizing,
+}: {
+  width: number;
+  onWidth: (width: number) => void;
+  onResizing: (resizing: boolean) => void;
+}) {
+  const { open, setOpen, isMobile } = useSidebar();
+  // The width a drag started from: folding to the rail keeps it, to reopen at.
+  const startWidth = useRef(width);
+  if (isMobile) return null;
+
+  function moveTo(x: number) {
+    if (x < SIDEBAR.rail) {
+      setOpen(false);
+      onWidth(startWidth.current);
+      return;
+    }
+    if (!open) setOpen(true);
+    onWidth(Math.min(SIDEBAR.max, Math.round(x)));
+  }
+
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable splitter has no element of its own
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the sidebar"
+      aria-valuemin={SIDEBAR.rail}
+      aria-valuemax={SIDEBAR.max}
+      aria-valuenow={open ? width : 0}
+      tabIndex={0}
+      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-ew-resize outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-sidebar-border focus-visible:after:bg-ring"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        startWidth.current = open ? width : SIDEBAR.default;
+        onResizing(true);
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) moveTo(e.clientX);
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        onResizing(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        // From the rail, Right opens it at the width it had.
+        if (!open) {
+          if (e.key === "ArrowRight") setOpen(true);
+          return;
+        }
+        startWidth.current = width;
+        moveTo(width + (e.key === "ArrowRight" ? 16 : -16));
+      }}
+    />
+  );
+}
+
+/**
+ * A phone's main places within thumb reach (everycent's own layout, not YNAB's, EVERYCENT-93):
+ * Budget, All Accounts, Reports and Activity, and More for the rest of the sidebar (the accounts,
+ * settings, the user menu). Hidden from tablet width up, where the sidebar shows.
+ */
+function BottomNav({ budgetId }: { budgetId: string }) {
+  const { setOpenMobile } = useSidebar();
+  const item =
+    "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[0.7rem] text-muted-foreground outline-none focus-visible:bg-muted data-[active]:font-medium data-[active]:text-foreground [&_svg]:size-5";
+  return (
+    <nav
+      aria-label="Quick navigation"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      <Link
+        to="/budgets/$budgetId"
+        params={{ budgetId }}
+        search={{ month: lastViewedMonth(budgetId) }}
+        activeOptions={{ exact: true, includeSearch: false }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Wallet aria-hidden /> Budget
+      </Link>
+      <Link
+        to="/budgets/$budgetId/accounts"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Landmark aria-hidden /> Accounts
+      </Link>
+      <Link
+        to="/budgets/$budgetId/reports"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <ChartColumn aria-hidden /> Reports
+      </Link>
+      <Link
+        to="/budgets/$budgetId/activity"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Activity aria-hidden /> Activity
+      </Link>
+      <button type="button" className={item} onClick={() => setOpenMobile(true)}>
+        <Menu aria-hidden /> More
+      </button>
+    </nav>
   );
 }

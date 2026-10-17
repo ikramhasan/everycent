@@ -12,6 +12,13 @@ import {
 import { Button } from "@everycent/ui/components/button";
 import { Checkbox } from "@everycent/ui/components/checkbox";
 import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@everycent/ui/components/drawer";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -67,6 +74,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api, apiClient } from "@/lib/api";
@@ -80,6 +88,7 @@ import { exportSelected } from "@/lib/exports";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
+import { useShortcutsEnabled } from "@/lib/preferences";
 import {
   deleteWarning,
   editWarning,
@@ -113,8 +122,10 @@ import {
   type Selection,
   selectionBody,
   setSelected,
+  stepSelection,
 } from "@/lib/selection";
 import { sessionQueryOptions } from "@/lib/session";
+import { useShortcut } from "@/lib/shortcuts";
 import { createBodyFromTransaction, updateBodyFromTransaction } from "@/lib/transaction-history";
 import {
   type CellColumn,
@@ -136,6 +147,7 @@ import {
   updateBody,
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
+import { useViewportWidth } from "@/lib/use-viewport-width";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FileImportButton } from "./file-import";
@@ -144,10 +156,14 @@ import { MemberAvatar } from "./member-avatar";
 import {
   COLUMN_SPECS,
   type ColumnId,
+  columnWidth,
   isEditable,
+  MIN_COLUMN_PX,
   PINNED_BG,
   pinned,
+  RESIZABLE,
   registerColumns,
+  useColumnWidths,
 } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
@@ -207,6 +223,8 @@ type Item =
 interface EditingSplit {
   id: string;
   draft: Draft;
+  /** Opened with YNAB's S key, which starts in the memo. */
+  fromKey?: boolean;
 }
 
 /**
@@ -377,6 +395,8 @@ export function Register({
   } | null>(null);
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
+  // Where a Shift+Up/Down range has reached (its other end is `anchor`).
+  const head = useRef<string | null>(null);
   const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk", {
     onSuccess: (result) => history.noteSave(result.previousVersions, result.versions),
   });
@@ -402,6 +422,10 @@ export function Register({
   }
 
   const allAccounts = accountId === undefined;
+  const { widths, setWidth } = useColumnWidths(accountId ?? "all");
+  // Narrower than lg (a phone, a tablet upright) the register is cards, edited in a drawer: the
+  // table's columns don't fit and the amounts would scroll out of sight (EVERYCENT-93).
+  const phone = useViewportWidth() < 1024;
   const columnIds = useMemo(
     () =>
       registerColumns(allAccounts).filter(
@@ -605,6 +629,7 @@ export function Register({
   function toggleRow(id: string, on: boolean, shift: boolean) {
     const ids = shift ? rangeTo(loadedIds, anchor.current, id) : [id];
     anchor.current = id;
+    head.current = id;
     setSelection((s) => setSelected(s, ids, on));
   }
 
@@ -734,17 +759,21 @@ export function Register({
    * One action on the selected transactions and scheduled rows, undone as one. Duplicate selects
    * the copies and Enter Now the entered transactions, as YNAB does.
    */
-  async function applyBulk(action: BulkAction) {
+  async function applyBulk(
+    action: BulkAction,
+    sel: Selection = selection,
+    sched: ReadonlySet<string> = scheduledSelection,
+  ) {
     try {
       const commands: Omit<UndoCommand, "label">[] = [];
       let count = 0;
       let nextSelection: Selection = NOTHING;
       let nextScheduled: ReadonlySet<string> = NO_ROWS;
-      if (!isEmpty(selection) && action.type !== "enterNow") {
+      if (!isEmpty(sel) && action.type !== "enterNow") {
         const run = () =>
           bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
-            body: { selection: selectionBody(selection, selectionFilter), action },
+            body: { selection: selectionBody(sel, selectionFilter), action },
           });
         const result = await run();
         count += result.updated;
@@ -757,12 +786,12 @@ export function Register({
         }
       }
       if (
-        scheduledSelection.size > 0 &&
+        sched.size > 0 &&
         action.type !== "cleared" &&
         action.type !== "approve" &&
         action.type !== "reject"
       ) {
-        const ids = [...scheduledSelection];
+        const ids = [...sched];
         const result = await scheduledBulk.mutateAsync({
           params: { path: { budgetId: budget.id } },
           body: { ids, action, today },
@@ -791,8 +820,14 @@ export function Register({
         });
       }
       await refresh();
-      setSelection(nextSelection);
-      setScheduledSelection(nextScheduled);
+      // Actions that leave the rows in the register keep them selected, as YNAB's do
+      // (2026-10-18), so C can toggle them back.
+      // Only the selection the user made: Shift+L's "every row shown" isn't kept.
+      const keep =
+        sel === selection &&
+        ["flag", "cleared", "approve", "categorize", "memo"].includes(action.type);
+      setSelection(keep ? sel : nextSelection);
+      setScheduledSelection(keep ? sched : nextScheduled);
       const n = `${count} transaction${count === 1 ? "" : "s"}`;
       toast.success(
         action.type === "delete"
@@ -1090,12 +1125,12 @@ export function Register({
   }
 
   /** Splits open as a whole, as do transactions being split from the category cell. */
-  function openSplit(t: Transaction, split = false) {
+  function openSplit(t: Transaction, split = false, fromKey = false) {
     const draft = draftFrom(t, inCurrency(budget, t.currency));
     setEditing(null);
     setAdding(false);
     setSplitError(null);
-    setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft });
+    setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft, fromKey });
   }
 
   async function saveSplit(t: Transaction, draft: Draft, confirmed = false) {
@@ -1530,6 +1565,94 @@ export function Register({
     // biome-ignore lint/correctness/useExhaustiveDependencies: startAdding is a plain function
   }, [openRecordPayment, startPayment, onRecordPaymentOpened]);
 
+  // YNAB's register shortcuts (seen 2026-10-18); the selection bar binds the ones on a selection.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const idle = !adding && editing === null && editingSplit === null;
+  function stepRows(direction: 1 | -1, extend: boolean) {
+    const ids = selection.mode === "some" ? selection.ids : new Set<string>();
+    const next = stepSelection(
+      loadedIds,
+      ids,
+      { anchor: anchor.current, head: head.current },
+      direction,
+      { extend, several: "anchor" },
+    );
+    if (!next) return;
+    anchor.current = next.cursor.anchor;
+    head.current = next.cursor.head;
+    setScheduledSelection(NO_ROWS);
+    setSelection({ mode: "some", ids: new Set(next.ids) });
+    const index = flat.findIndex((item) => item.key === next.cursor.head);
+    if (index !== -1) virtualizer.scrollToIndex(index, { align: "auto" });
+  }
+  useShortcut("moveTransactions", (e) => stepRows(e.key === "ArrowUp" ? -1 : 1, false), {
+    enabled: idle && !readOnly,
+  });
+  useShortcut("extendTransactions", (e) => stepRows(e.key === "ArrowUp" ? -1 : 1, true), {
+    enabled: idle && !readOnly,
+  });
+  useShortcut("selectAll", () => setSelection({ mode: "all", except: new Set() }), {
+    enabled: idle && !readOnly && loaded.length > 0,
+  });
+  useShortcut("deselectAll", clearSelection, {
+    enabled: idle && (!isEmpty(selection) || scheduledSelection.size > 0),
+  });
+  // Shift+N opens the new row with its calendar open, as YNAB does.
+  useShortcut("addTransaction", () => startAdding(null, true), {
+    enabled: !readOnly && canAdd && idle,
+  });
+  // S and K act on one selected transaction: its split editor, or its category list.
+  useShortcut(
+    "split",
+    () => {
+      if (!single) return;
+      if (single.subtransactions.length > 0) openSplit(single, false, true);
+      else if (!single.transferFromSplit && !single.transferAccountId) {
+        openSplit(single, true, true);
+      }
+    },
+    { enabled: idle && single !== undefined },
+  );
+  // Enter edits the one selected transaction from the keyboard, as a click on a cell does: an
+  // everycent addition for keyboard and screen reader users (EVERYCENT-95).
+  const shortcutsOn = useShortcutsEnabled();
+  useHotkeys(
+    "enter",
+    () => {
+      if (!single) return;
+      if (single.subtransactions.length > 0) return openSplit(single);
+      const [first] = editableColumns(single);
+      if (first) setEditing({ id: single.id, column: first });
+    },
+    {
+      enabled: shortcutsOn && idle && single !== undefined && !phone,
+      preventDefault: true,
+      // Enter on a button or link presses it, and popovers keep their keys.
+      ignoreEventWhen: (e) =>
+        e.target instanceof Element &&
+        e.target.closest(
+          "button, a, [role=dialog], [role=menu], [data-radix-popper-content-wrapper]",
+        ) !== null,
+    },
+    [single, idle, phone],
+  );
+  const singleCategory =
+    single && editableColumns(single).includes("category") && single.subtransactions.length === 0;
+  useShortcut("search", () => {
+    rootRef.current
+      ?.querySelector<HTMLInputElement>("input[aria-label='Search transactions']")
+      ?.focus();
+  });
+  // Approve every unapproved transaction the register shows (its search included).
+  useShortcut(
+    "approveAll",
+    () => void applyBulk({ type: "approve" }, { mode: "all", except: new Set() }, NO_ROWS),
+    { enabled: idle && !readOnly && needsReview && !bulk.isPending },
+  );
+
+  const editingTransaction = editingSplit
+    ? loaded.find((t) => t.id === editingSplit.id)
+    : undefined;
   if (transactions.isPending) return <Skeleton className="h-64" />;
   if (transactions.isError) {
     return (
@@ -1816,7 +1939,7 @@ export function Register({
   }
 
   return (
-    <div className="grid gap-3">
+    <div ref={rootRef} className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {!readOnly && (
           <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
@@ -1837,7 +1960,7 @@ export function Register({
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1 max-md:w-full">
           {!readOnly && <UndoRedoButtons />}
           <RegisterViewMenu
             view={view}
@@ -1887,6 +2010,11 @@ export function Register({
             scheduledRows.filter((row) => scheduledSelection.has(row.id)),
           )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
+          onCategorizeKey={
+            singleCategory && single
+              ? () => setEditing({ id: single.id, column: "category" })
+              : undefined
+          }
           onExport={() => {
             exportSelected(budget, selectionBody(selection, selectionFilter)).catch(() =>
               toast.error("Couldn't export the selected transactions."),
@@ -1940,303 +2068,415 @@ export function Register({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* An overlay scrollbar inside the rounded border, instead of a native one that takes a strip
-          beside the header and squares off its corner. */}
-      <ScrollArea
-        viewportRef={scrollRef}
-        // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
-        viewportClassName="@container max-h-[70vh]"
-        scrollbars="both"
-        className="rounded-lg border"
-      >
-        <Table
-          containerClassName="overflow-visible"
-          className="table-fixed"
-          // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
-          // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
-          style={{
-            minWidth: `calc(${MEMO_MIN_WIDTH}${columnIds
-              .map((id) => COLUMN_SPECS[id].width)
-              .filter(Boolean)
-              .map((w) => ` + ${w}`)
-              .join("")})`,
+      {phone ? (
+        <PhoneTransactions
+          rows={loaded}
+          scheduled={scheduledRows}
+          scheduledSelected={scheduledSelection}
+          onSelectScheduled={(id) => toggleScheduled(id, !scheduledSelection.has(id), false)}
+          isSelected={(id) => isSelected(selection, id)}
+          onSelect={(t) => toggleRow(t.id, !isSelected(selection, t.id), false)}
+          onOpen={(t) => {
+            if (!readOnly && !t.transferFromSplit) openSplit(t);
           }}
+          onToggleCleared={readOnly ? undefined : (t) => void toggleCleared(t)}
+          show={(amount, currency) => show(amount, currency ?? undefined)}
+          formatDate={formatDate}
+          category={(t) => display(t, "category")}
+          flags={flags}
+          hasMore={Boolean(hasNextPage)}
+          loadingMore={isFetchingNextPage}
+          onLoadMore={() => void fetchNextPage()}
+        />
+      ) : (
+        // An overlay scrollbar inside the rounded border, instead of a native one that takes a
+        // strip beside the header and squares off its corner.
+        <ScrollArea
+          viewportRef={scrollRef}
+          // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
+          viewportClassName="@container max-h-[70vh]"
+          scrollbars="both"
+          className="rounded-lg border"
         >
-          <colgroup>
-            {columnIds.map((id) => (
-              <col key={id} style={{ width: COLUMN_SPECS[id].width }} />
-            ))}
-          </colgroup>
-          <TableHeader className="sticky top-0 z-10">
-            {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id} className="hover:bg-transparent">
-                {group.headers.map((header) => {
-                  const id = header.column.id as ColumnId;
-                  const spec = COLUMN_SPECS[id];
-                  const sortBy = SORTABLE[id];
-                  // The arrow shows on the first sort field; the rest break its ties.
-                  const active = sortBy !== undefined && sortBy === sort;
-                  const HeaderIcon =
-                    id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
-                  const pin = pinned(columnIds, id);
-                  return (
-                    <TableHead
-                      key={header.id}
-                      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
-                      style={pin?.style}
-                      className={cn(
-                        "bg-muted text-muted-foreground text-xs uppercase",
-                        pin && [pin.className, PINNED_BG.head],
-                        spec.align === "right" && "text-right",
-                        // Centred like the column's cells (the flag and cleared icons).
-                        spec.align === "center" && "text-center",
-                      )}
-                    >
-                      {id === "select" ? (
-                        <Checkbox
-                          aria-label={
-                            selection.mode === "all" ? "Unselect all" : "Select all matching"
-                          }
-                          checked={
-                            selection.mode === "all"
-                              ? selection.except.size === 0 || "indeterminate"
-                              : (selection.ids.size > 0 || scheduledSelection.size > 0) &&
-                                "indeterminate"
-                          }
-                          disabled={loaded.length === 0 && scheduledRows.length === 0}
-                          onCheckedChange={() => {
-                            // Select all takes the scheduled rows along, as YNAB's does.
-                            if (selection.mode === "all") return clearSelection();
-                            setSelection({ mode: "all", except: new Set() });
-                            setScheduledSelection(new Set(scheduledRows.map((row) => row.id)));
-                          }}
-                        />
-                      ) : id === "balance" ? (
-                        <BalanceHeader
-                          sorted={!dateOrder}
-                          onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
-                        />
-                      ) : sortBy ? (
-                        <button
-                          type="button"
-                          className={cn(
-                            "inline-flex items-center gap-1 uppercase hover:text-foreground",
-                            active && "text-foreground",
-                          )}
-                          onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
-                        >
-                          {HeaderIcon ? (
-                            <>
-                              <HeaderIcon className="size-3.5" aria-hidden />
-                              <span className="sr-only">{spec.header}</span>
-                            </>
-                          ) : (
-                            spec.header
-                          )}
-                          {active &&
-                            (dir === "asc" ? (
-                              <ArrowUp className="size-3" aria-hidden />
+          <Table
+            containerClassName="overflow-visible"
+            className="table-fixed"
+            // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
+            // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
+            style={{
+              minWidth: `calc(${MEMO_MIN_WIDTH}${columnIds
+                .map((id) => columnWidth(widths, id))
+                .filter(Boolean)
+                .map((w) => ` + ${w}`)
+                .join("")})`,
+            }}
+          >
+            <colgroup>
+              {columnIds.map((id) => (
+                <col key={id} style={{ width: columnWidth(widths, id) }} />
+              ))}
+            </colgroup>
+            <TableHeader className="sticky top-0 z-10">
+              {table.getHeaderGroups().map((group) => (
+                <TableRow key={group.id} className="hover:bg-transparent">
+                  {group.headers.map((header) => {
+                    const id = header.column.id as ColumnId;
+                    const spec = COLUMN_SPECS[id];
+                    const sortBy = SORTABLE[id];
+                    // The arrow shows on the first sort field; the rest break its ties.
+                    const active = sortBy !== undefined && sortBy === sort;
+                    const HeaderIcon =
+                      id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
+                    const pin = pinned(columnIds, id);
+                    return (
+                      <TableHead
+                        key={header.id}
+                        aria-sort={
+                          active ? (dir === "asc" ? "ascending" : "descending") : undefined
+                        }
+                        style={pin?.style}
+                        className={cn(
+                          "bg-muted text-muted-foreground text-xs uppercase",
+                          RESIZABLE.includes(id) && "relative",
+                          pin && [pin.className, PINNED_BG.head],
+                          spec.align === "right" && "text-right",
+                          // Centred like the column's cells (the flag and cleared icons).
+                          spec.align === "center" && "text-center",
+                        )}
+                      >
+                        {id === "select" ? (
+                          <Checkbox
+                            aria-label={
+                              selection.mode === "all" ? "Unselect all" : "Select all matching"
+                            }
+                            checked={
+                              selection.mode === "all"
+                                ? selection.except.size === 0 || "indeterminate"
+                                : (selection.ids.size > 0 || scheduledSelection.size > 0) &&
+                                  "indeterminate"
+                            }
+                            disabled={loaded.length === 0 && scheduledRows.length === 0}
+                            onCheckedChange={() => {
+                              // Select all takes the scheduled rows along, as YNAB's does.
+                              if (selection.mode === "all") return clearSelection();
+                              setSelection({ mode: "all", except: new Set() });
+                              setScheduledSelection(new Set(scheduledRows.map((row) => row.id)));
+                            }}
+                          />
+                        ) : id === "balance" ? (
+                          <BalanceHeader
+                            sorted={!dateOrder}
+                            onResetSort={() => setView({ sort: [...DEFAULT_SORT] })}
+                          />
+                        ) : sortBy ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "inline-flex items-center gap-1 uppercase hover:text-foreground",
+                              active && "text-foreground",
+                            )}
+                            onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
+                          >
+                            {HeaderIcon ? (
+                              <>
+                                <HeaderIcon className="size-3.5" aria-hidden />
+                                <span className="sr-only">{spec.header}</span>
+                              </>
                             ) : (
-                              <ArrowDown className="size-3" aria-hidden />
-                            ))}
-                        </button>
-                      ) : (
-                        <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
-                      )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody ref={measureScheduled}>
-            {adding && defaultAccountId && (
-              <TransactionEditor
-                transferCategory={transferCategory}
-                key={addingKey}
-                initial={addingDraft ?? newDraft(defaultAccountId, today)}
-                openDatePicker={addingPicker}
-                repeat
+                              spec.header
+                            )}
+                            {active &&
+                              (dir === "asc" ? (
+                                <ArrowUp className="size-3" aria-hidden />
+                              ) : (
+                                <ArrowDown className="size-3" aria-hidden />
+                              ))}
+                          </button>
+                        ) : (
+                          <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
+                        )}
+                        {RESIZABLE.includes(id) && (
+                          <ColumnResizer
+                            label={spec.header}
+                            width={widths[id] ?? Number.parseFloat(spec.width ?? "0") * 16}
+                            onWidth={(px) => setWidth(id, px)}
+                          />
+                        )}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody ref={measureScheduled}>
+              {adding && defaultAccountId && (
+                <TransactionEditor
+                  transferCategory={transferCategory}
+                  key={addingKey}
+                  initial={addingDraft ?? newDraft(defaultAccountId, today)}
+                  openDatePicker={addingPicker}
+                  repeat
+                  columns={columnIds}
+                  accounts={openAccounts}
+                  payees={payeeList}
+                  categories={options}
+                  dateFormat={budget.dateFormat}
+                  settings={budget}
+                  flags={flags}
+                  onRenameFlags={renameFlags}
+                  pending={create.isPending || createScheduled.isPending}
+                  error={newError}
+                  onSave={(draft) => void saveNew(draft)}
+                  onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
+                  onCancel={() => setAdding(false)}
+                />
+              )}
+              <ScheduledSection
+                rows={scheduledRows}
+                selected={scheduledSelection}
+                onSelect={toggleScheduled}
                 columns={columnIds}
-                accounts={openAccounts}
+                collapsed={view.scheduledCollapsed}
+                onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
+                accounts={accountList}
                 payees={payeeList}
                 categories={options}
-                dateFormat={budget.dateFormat}
-                settings={budget}
                 flags={flags}
                 onRenameFlags={renameFlags}
-                pending={create.isPending || createScheduled.isPending}
-                error={newError}
-                onSave={(draft) => void saveNew(draft)}
-                onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
-                onCancel={() => setAdding(false)}
+                today={today}
+                onChanged={refresh}
               />
-            )}
-            <ScheduledSection
-              rows={scheduledRows}
-              selected={scheduledSelection}
-              onSelect={toggleScheduled}
-              columns={columnIds}
-              collapsed={view.scheduledCollapsed}
-              onToggle={() => setView({ scheduledCollapsed: !view.scheduledCollapsed })}
-              accounts={accountList}
-              payees={payeeList}
-              categories={options}
-              flags={flags}
-              onRenameFlags={renameFlags}
-              today={today}
-              onChanged={refresh}
-            />
-          </TableBody>
-          <TableBody>
-            {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
-            {items.map((item) => {
-              const row = flat[item.index];
-              if (!row) return null;
-              const t = row.t;
-              const future = t.date > today;
-              if (editingSplit?.id === t.id) {
-                if (row.kind === "line") return null;
-                return (
-                  <TransactionEditor
-                    transferCategory={transferCategory}
-                    key={t.id}
-                    initial={editingSplit.draft}
-                    label="Edit transaction"
-                    columns={columnIds}
-                    accounts={editorAccounts(accountList, t.accountId)}
-                    accountChoices={movableAccounts(accountList, t)}
-                    payees={payeeList}
-                    categories={options}
-                    dateFormat={budget.dateFormat}
-                    settings={budget}
-                    flags={flags}
-                    onRenameFlags={renameFlags}
-                    pending={update.isPending}
-                    error={splitError}
-                    onSave={(draft) => void saveSplit(t, draft)}
-                    onCancel={() => setEditingSplit(null)}
-                  />
-                );
-              }
-              if (row.kind === "line") {
+            </TableBody>
+            <TableBody>
+              {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
+              {items.map((item) => {
+                const row = flat[item.index];
+                if (!row) return null;
+                const t = row.t;
+                const future = t.date > today;
+                if (editingSplit?.id === t.id) {
+                  if (row.kind === "line") return null;
+                  return (
+                    <TransactionEditor
+                      transferCategory={transferCategory}
+                      key={t.id}
+                      initial={editingSplit.draft}
+                      focusMemo={editingSplit.fromKey}
+                      label="Edit transaction"
+                      columns={columnIds}
+                      accounts={editorAccounts(accountList, t.accountId)}
+                      accountChoices={movableAccounts(accountList, t)}
+                      payees={payeeList}
+                      categories={options}
+                      dateFormat={budget.dateFormat}
+                      settings={budget}
+                      flags={flags}
+                      onRenameFlags={renameFlags}
+                      pending={update.isPending}
+                      error={splitError}
+                      onSave={(draft) => void saveSplit(t, draft)}
+                      onCancel={() => setEditingSplit(null)}
+                    />
+                  );
+                }
+                if (row.kind === "line") {
+                  return (
+                    <TableRow
+                      key={row.key}
+                      data-index={item.index}
+                      ref={virtualizer.measureElement}
+                      aria-label={`Split line of ${t.payeeName ?? "transaction"}`}
+                      className={cn("text-muted-foreground text-xs", future && "italic")}
+                    >
+                      {columnIds.map((id) => {
+                        const spec = COLUMN_SPECS[id];
+                        const pin = pinned(columnIds, id);
+                        return (
+                          <TableCell
+                            key={id}
+                            style={pin?.style}
+                            className={cn(
+                              "truncate py-1.5",
+                              pin && [pin.className, PINNED_BG.row],
+                              spec.align === "right" && "text-right tabular-nums",
+                              isEditable(id) && !readOnly && "cursor-text",
+                            )}
+                            onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
+                          >
+                            {lineDisplay(t, row.line, id)}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                }
+                const editable = editableColumns(t);
                 return (
                   <TableRow
-                    key={row.key}
+                    key={t.id}
                     data-index={item.index}
                     ref={virtualizer.measureElement}
-                    aria-label={`Split line of ${t.payeeName ?? "transaction"}`}
-                    className={cn("text-muted-foreground text-xs", future && "italic")}
+                    data-transaction-id={t.id}
+                    data-highlighted={highlightId === t.id || undefined}
+                    data-state={isSelected(selection, t.id) ? "selected" : undefined}
+                    // One height for every row, so an icon or an open editor doesn't grow it.
+                    style={{ height: ROW_HEIGHT }}
+                    className={cn(
+                      // A quick hover; a row jumped to glows, then fades out.
+                      "duration-100 data-highlighted:animate-[row-highlight_2.5s_ease-out]",
+                      future && "text-muted-foreground italic",
+                      // YNAB sets unapproved rows in bold.
+                      !t.approved && "font-semibold",
+                    )}
+                    title={future ? "Upcoming: not in the balance until its date" : undefined}
                   >
                     {columnIds.map((id) => {
                       const spec = COLUMN_SPECS[id];
                       const pin = pinned(columnIds, id);
+                      if (editing?.id === t.id && editing.column === id) {
+                        return (
+                          <TableCell key={id} className="px-1.5 py-1">
+                            <CellEditor
+                              transaction={t}
+                              column={editing.column}
+                              settings={inCurrency(budget, t.currency)}
+                              dateFormat={budget.dateFormat}
+                              accounts={movableAccounts(accountList, t)}
+                              payees={payeeList}
+                              transfers={transferTargets(t)}
+                              categories={options}
+                              onSplit={
+                                !t.transferFromSplit && !t.transferAccountId
+                                  ? () => openSplit(t, true)
+                                  : undefined
+                              }
+                              onMakeRepeating={
+                                t.transferFromSplit ? undefined : () => makeRepeating(t)
+                              }
+                              onCommit={(value, exit, transferAccountId) =>
+                                void commitCell(t, editing.column, value, exit, transferAccountId)
+                              }
+                              onCancel={() => setEditing(null)}
+                              onDontRename={() => void dontRename(t)}
+                            />
+                          </TableCell>
+                        );
+                      }
+                      const canEdit = (editable as ColumnId[]).includes(id);
                       return (
                         <TableCell
                           key={id}
                           style={pin?.style}
                           className={cn(
-                            "truncate py-1.5",
+                            "truncate",
                             pin && [pin.className, PINNED_BG.row],
                             spec.align === "right" && "text-right tabular-nums",
-                            isEditable(id) && !readOnly && "cursor-text",
+                            spec.align === "center" && "py-1 text-center",
+                            id === "flag" && "px-1",
+                            id === "actions" && "py-1",
+                            (id === "category" || id === "memo") && "text-muted-foreground",
+                            canEdit && "cursor-text",
                           )}
-                          onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
+                          onClick={
+                            canEdit
+                              ? () =>
+                                  t.subtransactions.length > 0
+                                    ? openSplit(t)
+                                    : setEditing({ id: t.id, column: id as CellColumn })
+                              : undefined
+                          }
                         >
-                          {lineDisplay(t, row.line, id)}
+                          {display(t, id)}
                         </TableCell>
                       );
                     })}
                   </TableRow>
                 );
-              }
-              const editable = editableColumns(t);
-              return (
-                <TableRow
-                  key={t.id}
-                  data-index={item.index}
-                  ref={virtualizer.measureElement}
-                  data-transaction-id={t.id}
-                  data-highlighted={highlightId === t.id || undefined}
-                  data-state={isSelected(selection, t.id) ? "selected" : undefined}
-                  // One height for every row, so an icon or an open editor doesn't grow it.
-                  style={{ height: ROW_HEIGHT }}
-                  className={cn(
-                    // A quick hover; a row jumped to glows, then fades out.
-                    "duration-100 data-highlighted:animate-[row-highlight_2.5s_ease-out]",
-                    future && "text-muted-foreground italic",
-                    // YNAB sets unapproved rows in bold.
-                    !t.approved && "font-semibold",
-                  )}
-                  title={future ? "Upcoming: not in the balance until its date" : undefined}
-                >
-                  {columnIds.map((id) => {
-                    const spec = COLUMN_SPECS[id];
-                    const pin = pinned(columnIds, id);
-                    if (editing?.id === t.id && editing.column === id) {
-                      return (
-                        <TableCell key={id} className="px-1.5 py-1">
-                          <CellEditor
-                            transaction={t}
-                            column={editing.column}
-                            settings={inCurrency(budget, t.currency)}
-                            dateFormat={budget.dateFormat}
-                            accounts={movableAccounts(accountList, t)}
-                            payees={payeeList}
-                            transfers={transferTargets(t)}
-                            categories={options}
-                            onSplit={
-                              !t.transferFromSplit && !t.transferAccountId
-                                ? () => openSplit(t, true)
-                                : undefined
-                            }
-                            onMakeRepeating={
-                              t.transferFromSplit ? undefined : () => makeRepeating(t)
-                            }
-                            onCommit={(value, exit, transferAccountId) =>
-                              void commitCell(t, editing.column, value, exit, transferAccountId)
-                            }
-                            onCancel={() => setEditing(null)}
-                            onDontRename={() => void dontRename(t)}
-                          />
-                        </TableCell>
-                      );
-                    }
-                    const canEdit = (editable as ColumnId[]).includes(id);
-                    return (
-                      <TableCell
-                        key={id}
-                        style={pin?.style}
-                        className={cn(
-                          "truncate",
-                          pin && [pin.className, PINNED_BG.row],
-                          spec.align === "right" && "text-right tabular-nums",
-                          spec.align === "center" && "py-1 text-center",
-                          id === "flag" && "px-1",
-                          id === "actions" && "py-1",
-                          (id === "category" || id === "memo") && "text-muted-foreground",
-                          canEdit && "cursor-text",
-                        )}
-                        onClick={
-                          canEdit
-                            ? () =>
-                                t.subtransactions.length > 0
-                                  ? openSplit(t)
-                                  : setEditing({ id: t.id, column: id as CellColumn })
-                            : undefined
-                        }
-                      >
-                        {display(t, id)}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              );
-            })}
-            {paddingBottom > 0 && <tr aria-hidden style={{ height: paddingBottom }} />}
-          </TableBody>
-        </Table>
-      </ScrollArea>
+              })}
+              {paddingBottom > 0 && <tr aria-hidden style={{ height: paddingBottom }} />}
+            </TableBody>
+          </Table>
+        </ScrollArea>
+      )}
+      {phone && defaultAccountId && (
+        // A phone adds and edits in a full-height drawer (everycent's own layout, EVERYCENT-93).
+        <Drawer
+          open={adding || editingSplit !== null}
+          onOpenChange={(open) => {
+            if (open) return;
+            setAdding(false);
+            setEditingSplit(null);
+          }}
+        >
+          <DrawerContent className="data-[vaul-drawer-direction=bottom]:max-h-[96svh]">
+            <DrawerHeader className="text-left">
+              <DrawerTitle>{adding ? "New transaction" : "Edit transaction"}</DrawerTitle>
+              <DrawerDescription className="sr-only">
+                The transaction's date, payee, category, memo and amount.
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="mx-auto w-full max-w-xl overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {adding ? (
+                <TransactionEditor
+                  layout="stacked"
+                  transferCategory={transferCategory}
+                  key={addingKey}
+                  initial={addingDraft ?? newDraft(defaultAccountId, today)}
+                  repeat
+                  columns={columnIds}
+                  accounts={openAccounts}
+                  payees={payeeList}
+                  categories={options}
+                  dateFormat={budget.dateFormat}
+                  settings={budget}
+                  flags={flags}
+                  onRenameFlags={renameFlags}
+                  pending={create.isPending || createScheduled.isPending}
+                  error={newError}
+                  onSave={(draft) => void saveNew(draft)}
+                  onCancel={() => setAdding(false)}
+                />
+              ) : (
+                editingTransaction &&
+                editingSplit && (
+                  <>
+                    <TransactionEditor
+                      layout="stacked"
+                      transferCategory={transferCategory}
+                      key={editingTransaction.id}
+                      initial={editingSplit.draft}
+                      label="Edit transaction"
+                      columns={columnIds}
+                      accounts={editorAccounts(accountList, editingTransaction.accountId)}
+                      accountChoices={movableAccounts(accountList, editingTransaction)}
+                      payees={payeeList}
+                      categories={options}
+                      dateFormat={budget.dateFormat}
+                      settings={budget}
+                      flags={flags}
+                      onRenameFlags={renameFlags}
+                      pending={update.isPending}
+                      error={splitError}
+                      onSave={(draft) => void saveSplit(editingTransaction, draft)}
+                      onCancel={() => setEditingSplit(null)}
+                    />
+                    <Button
+                      variant="ghost"
+                      className="mt-3 min-h-11 w-full text-destructive"
+                      onClick={() => {
+                        setEditingSplit(null);
+                        void handleDelete(editingTransaction);
+                      }}
+                    >
+                      <Trash2 /> Delete transaction
+                    </Button>
+                  </>
+                )
+              )}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
 
       {isFetchingNextPage && (
         <p className="text-muted-foreground text-xs" aria-live="polite">
@@ -2317,4 +2557,212 @@ function BalanceHeader({ sorted, onResetSort }: { sorted: boolean; onResetSort: 
 /** Accounts a transaction can move to: open ones, plus the one it's in. */
 function editorAccounts(accounts: readonly Account[], current: string) {
   return accounts.filter((a) => !a.closed || a.id === current);
+}
+
+/**
+ * A header cell's right edge, dragged to widen or narrow its column as in YNAB's register (Memo,
+ * which takes what's left, gives or takes the difference). Arrow keys move it 8px.
+ * Hand-rolled: the register is a plain table with a colgroup, not a table library's columns.
+ */
+function ColumnResizer({
+  label,
+  width,
+  onWidth,
+}: {
+  label: string;
+  /** The column's width in pixels, for screen readers. */
+  width: number;
+  onWidth: (px: number) => void;
+}) {
+  const start = useRef<{ x: number; width: number } | null>(null);
+  const cellWidth = (el: HTMLElement) => el.closest("th")?.getBoundingClientRect().width ?? 0;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable splitter has no element of its own
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${label}`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={MIN_COLUMN_PX}
+      tabIndex={0}
+      className="absolute inset-y-1 right-0 w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border/0 hover:after:bg-border focus-visible:after:bg-ring"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, width: cellWidth(e.currentTarget) };
+      }}
+      onPointerMove={(e) => {
+        if (!start.current || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        onWidth(start.current.width + e.clientX - start.current.x);
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        start.current = null;
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        onWidth(cellWidth(e.currentTarget) + (e.key === "ArrowRight" ? 8 : -8));
+      }}
+    />
+  );
+}
+
+/**
+ * A phone's register: each transaction a card, a thumb's height or more, with its payee and
+ * amount on top and its category, date and memo under them (everycent's own layout,
+ * EVERYCENT-93). A tap opens it in the drawer; the checkbox selects it for the selection bar.
+ * Upcoming scheduled transactions come first, as on the wide register.
+ */
+function PhoneTransactions({
+  rows,
+  scheduled,
+  scheduledSelected,
+  onSelectScheduled,
+  isSelected,
+  onSelect,
+  onOpen,
+  onToggleCleared,
+  show,
+  formatDate,
+  category,
+  flags,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: {
+  rows: readonly Transaction[];
+  scheduled: readonly ScheduledTransaction[];
+  scheduledSelected: ReadonlySet<string>;
+  onSelectScheduled: (id: string) => void;
+  isSelected: (id: string) => boolean;
+  onSelect: (t: Transaction) => void;
+  onOpen: (t: Transaction) => void;
+  onToggleCleared?: (t: Transaction) => void;
+  show: (amount: bigint, currency: string | null) => string;
+  formatDate: (iso: string) => string;
+  category: (t: Transaction) => ReactNode;
+  flags: readonly Flag[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const card = "flex items-start gap-3 border-b px-3 py-3 last:border-b-0";
+  return (
+    <div className="grid gap-4">
+      {scheduled.length > 0 && (
+        <section aria-label="Upcoming" className="overflow-hidden rounded-lg border bg-muted/30">
+          <h2 className="border-b px-3 py-2 font-medium text-muted-foreground text-xs uppercase">
+            Upcoming
+          </h2>
+          <ul>
+            {scheduled.map((row) => (
+              <li key={row.id} className={card}>
+                <Checkbox
+                  className="mt-0.5 size-5"
+                  aria-label={`Select ${row.payeeName ?? "scheduled transaction"} on ${formatDate(row.dateNext)}`}
+                  checked={scheduledSelected.has(row.id)}
+                  onCheckedChange={() => onSelectScheduled(row.id)}
+                />
+                <div className="grid min-w-0 flex-1 gap-0.5 italic">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-medium">{row.payeeName ?? "No payee"}</span>
+                    <span className="shrink-0 tabular-nums">
+                      {show(BigInt(row.amount), row.currency)}
+                    </span>
+                  </div>
+                  <span className="truncate text-muted-foreground text-xs">
+                    {[formatDate(row.dateNext), row.categoryName].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <ul aria-label="Transactions" className="overflow-hidden rounded-lg border">
+        {rows.length === 0 && (
+          <li className="px-3 py-6 text-center text-muted-foreground text-sm">No transactions</li>
+        )}
+        {rows.map((t) => {
+          const amount = BigInt(t.amount);
+          const flag = flags.find((f) => f.color === t.flag);
+          return (
+            <li
+              key={t.id}
+              data-transaction-id={t.id}
+              data-state={isSelected(t.id) ? "selected" : undefined}
+              className={cn(card, "data-[state=selected]:bg-muted")}
+            >
+              <Checkbox
+                className="mt-0.5 size-5"
+                aria-label={`Select ${t.payeeName ?? "transaction"} on ${formatDate(t.date)}`}
+                checked={isSelected(t.id)}
+                onCheckedChange={() => onSelect(t)}
+              />
+              <button
+                type="button"
+                className="grid min-h-11 min-w-0 flex-1 gap-0.5 text-left outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => onOpen(t)}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className={cn("truncate font-medium", !t.approved && "font-semibold")}>
+                    {flag && (
+                      <Bookmark
+                        className={cn("mr-1 inline size-3.5 fill-current", FLAG_CLASS[flag.color])}
+                        aria-label={`Flag: ${flagLabel(flag)}`}
+                      />
+                    )}
+                    {t.payeeName ?? "No payee"}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 tabular-nums",
+                      amount > 0n && "text-green-700 dark:text-green-400",
+                    )}
+                  >
+                    {amount > 0n ? "+" : ""}
+                    {show(amount, t.currency)}
+                  </span>
+                </span>
+                <span className="truncate text-muted-foreground text-xs">
+                  {formatDate(t.date)} · {category(t)}
+                  {t.memo ? ` · ${t.memo}` : ""}
+                </span>
+                {!t.approved && <span className="text-primary text-xs">Needs approval</span>}
+              </button>
+              {onToggleCleared && t.cleared !== "reconciled" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="-my-1 size-11 shrink-0"
+                  aria-label={t.cleared === "cleared" ? "Cleared" : "Uncleared"}
+                  aria-pressed={t.cleared === "cleared"}
+                  onClick={() => onToggleCleared(t)}
+                >
+                  {t.cleared === "cleared" ? (
+                    <CircleCheck className="text-primary" />
+                  ) : (
+                    <Circle className="text-muted-foreground" />
+                  )}
+                </Button>
+              ) : t.cleared === "reconciled" ? (
+                <Lock
+                  className="m-3 size-4 shrink-0 text-muted-foreground"
+                  aria-label="Reconciled"
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {hasMore && (
+        <Button variant="outline" className="min-h-11" disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? "Loading…" : "Show more"}
+        </Button>
+      )}
+    </div>
+  );
 }

@@ -1,6 +1,5 @@
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -14,6 +13,7 @@ import {
   ChevronsUpDown,
   FileDown,
   LayoutGrid,
+  Palette,
   Plus,
   Wallet,
 } from "lucide-react";
@@ -21,7 +21,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Budget } from "@/lib/budgets";
 import { exportPlan } from "@/lib/exports";
+import { DisplayOptionsDialog } from "./display-options-dialog";
 import { EditFlagsDialog } from "./edit-flags-dialog";
+import { SidebarDropdownContent } from "./sidebar-dropdown-content";
 
 export function BudgetSwitcher({
   budgets,
@@ -32,11 +34,12 @@ export function BudgetSwitcher({
 }) {
   const current = budgets.find((b) => b.id === currentBudgetId);
   const [editingFlags, setEditingFlags] = useState(false);
+  const [displayOptions, setDisplayOptions] = useState(false);
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuButton size="lg" aria-label="Switch budget">
+          <SidebarMenuButton size="lg">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Wallet className="size-4" />
             </div>
@@ -46,10 +49,12 @@ export function BudgetSwitcher({
                 {current ? current.currency : "everycent"}
               </span>
             </div>
-            <ChevronsUpDown className="ml-auto size-4" />
+            <ChevronsUpDown className="ml-auto size-4" aria-hidden />
+            {/* After the name, so the visible text starts the button's name (WCAG 2.5.3). */}
+            <span className="sr-only">Switch budget</span>
           </SidebarMenuButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
+        <SidebarDropdownContent align="start">
           <DropdownMenuLabel className="text-muted-foreground text-xs">Budgets</DropdownMenuLabel>
           {budgets.map((b) => (
             <DropdownMenuItem key={b.id} asChild>
@@ -80,6 +85,10 @@ export function BudgetSwitcher({
               <DropdownMenuItem onSelect={() => setEditingFlags(true)}>
                 <Bookmark /> Edit Flags
               </DropdownMenuItem>
+              {/* After Edit Flags, as in YNAB's plan menu (2026-10-18). */}
+              <DropdownMenuItem onSelect={() => setDisplayOptions(true)}>
+                <Palette /> Display Options
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
                   exportPlan(current).catch(() => toast.error("Couldn't export the budget."));
@@ -89,11 +98,12 @@ export function BudgetSwitcher({
               </DropdownMenuItem>
             </>
           )}
-        </DropdownMenuContent>
+        </SidebarDropdownContent>
       </DropdownMenu>
       {current && (
         <EditFlagsDialog budgetId={current.id} open={editingFlags} onOpenChange={setEditingFlags} />
       )}
+      <DisplayOptionsDialog open={displayOptions} onOpenChange={setDisplayOptions} />
     </>
   );
 }

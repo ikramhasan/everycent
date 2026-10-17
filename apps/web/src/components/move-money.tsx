@@ -9,6 +9,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { CalendarDays, ChevronDown, CircleCheck, Zap } from "lucide-react";
 import { type FormEvent, type ReactElement, type ReactNode, useState } from "react";
 import type { TargetMark } from "@/lib/budget-view";
+import { useDifferentiateWithoutColor } from "@/lib/display-options";
 import { type MoneyOption, minAmount, monthLabel } from "@/lib/months";
 import { CategoryField } from "./register-fields";
 
@@ -41,6 +42,25 @@ export interface MoveActions {
 
 type Format = (minorUnits: string) => string;
 
+export const PILL = {
+  caution: "bg-yellow-100 text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100",
+  positive: "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
+  negative: "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
+  zero: "bg-muted text-muted-foreground",
+};
+
+/**
+ * Display Options → Differentiate Without Color: YNAB's stronger fills with a 1px border, black
+ * in light and white in dark (its CSS variables, read 2026-10-18). The padding gives up the
+ * border's pixel so the pill keeps its size. Positive and zero pills don't change.
+ */
+export const STRONG_PILL = {
+  caution:
+    "border border-black bg-[#f6c91d] px-[7px] py-px text-[#191818] dark:border-white dark:bg-[#fbe48e] dark:text-[#0c0d22]",
+  negative:
+    "border border-black bg-[#bf2e3b] px-[7px] py-px text-white dark:border-white dark:bg-[#912333]",
+};
+
 /**
  * Available as YNAB shows it: a pill, green with money, red when overspent, grey at zero. Yellow
  * ("cautious") is credit overspending, an underfunded target, and a payment category that doesn't
@@ -65,17 +85,14 @@ export function AvailablePill({
   const sign = amount === "0" ? 0 : amount.startsWith("-") ? -1 : 1;
   // An overspent category shows only its overspending.
   const mark = sign >= 0 ? target : undefined;
+  const [strong] = useDifferentiateWithoutColor();
+  const tone = caution ? "caution" : sign > 0 ? "positive" : sign < 0 ? "negative" : "zero";
   return (
     <span
+      data-tone={tone}
       className={cn(
         "inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 align-middle font-medium text-sm transition-colors duration-150 ease-out-quint",
-        caution
-          ? "bg-yellow-100 text-yellow-900 dark:bg-yellow-900/50 dark:text-yellow-100"
-          : [
-              sign > 0 && "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100",
-              sign < 0 && "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
-              sign === 0 && "bg-muted text-muted-foreground",
-            ],
+        strong && (tone === "caution" || tone === "negative") ? STRONG_PILL[tone] : PILL[tone],
         className,
       )}
     >
@@ -101,6 +118,11 @@ export function AvailablePill({
       )}
       {icon}
       <span className="truncate">{format(amount)}</span>
+      {/* The colour in words: cash and credit overspending must not differ only by colour. */}
+      {tone === "negative" && <span className="sr-only">, overspent</span>}
+      {tone === "caution" && (
+        <span className="sr-only">{sign < 0 ? ", credit overspending" : ", needs more"}</span>
+      )}
     </span>
   );
 }
@@ -170,7 +192,15 @@ export function AvailableButton({
         {trigger ?? (
           <button
             type="button"
-            aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}`}
+            aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}${
+              caution
+                ? amount.startsWith("-")
+                  ? ", credit overspending"
+                  : ", needs more"
+                : overspent
+                  ? ", overspent"
+                  : ""
+            }`}
             className="max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AvailablePill

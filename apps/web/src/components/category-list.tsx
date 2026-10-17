@@ -24,6 +24,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@everycent/ui/components/popover";
+import { useIsMobile } from "@everycent/ui/hooks/use-mobile";
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -46,6 +47,8 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
+import { stepSelection } from "@/lib/selection";
+import { useShortcut } from "@/lib/shortcuts";
 import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
@@ -135,8 +138,14 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
  * narrower than the columns scrolls sideways instead of squeezing them (mobile gets its own pass).
  */
 // Assigned and Activity fit "-$10,000.00"; Available keeps room for its pill and icon.
+// On a phone a row is its name and Available, a thumb's height; Assigned and Activity are in the
+// category's drawer (EVERYCENT-93).
 const ROW =
-  "grid grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
+  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 py-1.5 max-md:min-h-12 md:grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem]";
+/** The plan's keys also work from a category's open Assigned input. */
+const inAssigned = (target: Element) => target.closest("[data-assigned-cell]") !== null;
+/** Cells left off a phone's narrow rows. */
+const WIDE_ONLY = "max-md:hidden";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
 /**
@@ -159,7 +168,7 @@ const SLOT = "flex size-6 shrink-0 items-center justify-center";
  * hover), so they don't cost a column of their own.
  */
 const HOVER_REVEAL =
-  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
+  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 max-md:invisible";
 
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
@@ -243,6 +252,74 @@ export function CategoryList({
     selection.setAll([...next]);
   }
 
+  // YNAB's plan keys (seen 2026-10-18): Up/Down walk the categories on screen, opening each one's
+  // Assigned amount; Shift extends; Cmd/Ctrl+Up/Down collapse and expand groups.
+  const cursor = useRef<{ anchor: string | null; head: string | null }>({
+    anchor: null,
+    head: null,
+  });
+  const [keyEdit, setKeyEdit] = useState<string | undefined>();
+  const onScreen = [
+    ...(showUncategorized ? [UNCATEGORIZED_ID] : []),
+    ...groupOrder.filter((g) => !collapsed.has(g)).flatMap((g) => itemsOf(g)),
+  ];
+  const groupOf = (id: string) => groupOrder.find((g) => (layout.items[g] ?? []).includes(id));
+  /** Leaves an open Assigned input, saving it, as moving away from it does in YNAB. */
+  function leaveAssigned() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest("[data-assigned-cell]")) active.blur();
+  }
+  function stepCategories(direction: 1 | -1, extend: boolean) {
+    if (!selection) return;
+    const next = stepSelection(onScreen, selection.selected, cursor.current, direction, {
+      extend,
+      several: "none",
+    });
+    if (!next) return;
+    cursor.current = next.cursor;
+    leaveAssigned();
+    selection.setAll(next.ids);
+    const id = next.cursor.head;
+    if (!id) return;
+    if (!extend && id !== UNCATEGORIZED_ID && figures?.assign) setKeyEdit(id);
+    document.querySelector(`[data-category-row="${id}"]`)?.scrollIntoView?.({ block: "nearest" });
+  }
+  const keys = { enabled: selection !== undefined, allowIn: inAssigned };
+  useShortcut("moveRows", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, false), keys);
+  useShortcut("extendCategories", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, true), keys);
+  useShortcut(
+    "collapseGroups",
+    (e) => {
+      const up = e.key === "ArrowUp";
+      if (!selection || selection.selected.size === 0) {
+        onCollapsedChange?.(up ? new Set(layout.groupOrder) : new Set());
+        return;
+      }
+      // With categories selected, Up folds their groups and Down leaves them open; both clear the
+      // selection (YNAB, 2026-10-18).
+      leaveAssigned();
+      if (!up) {
+        selection.setAll([]);
+        return;
+      }
+      const next = new Set(collapsed);
+      for (const id of selection.selected) {
+        const g = groupOf(id);
+        if (g) next.add(g);
+      }
+      leaveAssigned();
+      selection.setAll([]);
+      onCollapsedChange?.(next);
+    },
+    keys,
+  );
+  useShortcut("selectAll", () => selection?.setAll(selectable), {
+    enabled: selection !== undefined,
+  });
+  useShortcut("deselectAll", () => selection?.setAll([]), {
+    enabled: (selection?.selected.size ?? 0) > 0,
+  });
+
   function toggleGroup(groupId: string) {
     const next = new Set(collapsed);
     if (!next.delete(groupId)) next.add(groupId);
@@ -317,7 +394,7 @@ export function CategoryList({
                 />
               </Button>
               {selection && (
-                <span className={SLOT}>
+                <span className={cn(SLOT, WIDE_ONLY)}>
                   <Checkbox
                     aria-label={allChecked ? "Uncheck all" : "Check all"}
                     checked={allChecked}
@@ -349,8 +426,8 @@ export function CategoryList({
             </div>
             {figures && (
               <>
-                <span className={cn(FIGURE, FIGURE_PAD)}>Assigned</span>
-                <span className={cn(FIGURE, FIGURE_PAD)}>Activity</span>
+                <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>Assigned</span>
+                <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>Activity</span>
                 <span className={cn(FIGURE, FIGURE_PAD)}>Available</span>
               </>
             )}
@@ -386,8 +463,8 @@ export function CategoryList({
                 )}
               </div>
               {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
-              <span className={cn(FIGURE, FIGURE_PAD)}>–</span>
-              <span className={cn(FIGURE, "text-sm")}>
+              <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>–</span>
+              <span className={cn(FIGURE, "text-sm", WIDE_ONLY)}>
                 <Activity
                   figures={figures}
                   target={{ uncategorized: true }}
@@ -483,6 +560,8 @@ export function CategoryList({
                         figures={figures}
                         reorderable={!shown && !readOnly}
                         onDelete={() => requestDelete("category", category.id, category.name)}
+                        keyEdit={keyEdit === categoryId}
+                        onKeyEditStarted={() => setKeyEdit(undefined)}
                       />
                     );
                   })}
@@ -672,6 +751,8 @@ function GroupSection({
       aria-label={group.name}
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
+      {/* An empty handle keeps dnd-kit's button role off a group that can't move (EVERYCENT-95). */}
+      {(managed || !reorderable) && <span ref={handleRef} hidden />}
       <div className={cn(ROW, "group/row bg-muted/60")}>
         <div className={NAME_CELL}>
           <Button
@@ -689,7 +770,7 @@ function GroupSection({
             />
           </Button>
           {onToggleSelection && (
-            <span className={SLOT}>
+            <span className={cn(SLOT, WIDE_ONLY)}>
               <Checkbox
                 aria-label={`Select ${group.name}`}
                 checked={checked ?? false}
@@ -806,6 +887,8 @@ function CategoryRow({
   figures,
   reorderable,
   onDelete,
+  keyEdit = false,
+  onKeyEditStarted,
 }: {
   category: Category;
   index: number;
@@ -815,6 +898,9 @@ function CategoryRow({
   figures: CategoryFigures | undefined;
   reorderable: boolean;
   onDelete: () => void;
+  /** Up/Down arrived here: open the Assigned amount for typing. */
+  keyEdit?: boolean;
+  onKeyEditStarted?: () => void;
 }) {
   const { format, assign, move, selection } = figures ?? {};
   const isPayment = Boolean(category.linkedAccountId);
@@ -833,9 +919,11 @@ function CategoryRow({
   const onlySelected = selected && selection?.selected.size === 1;
   // Set by a click on the row: opens its Assigned amount for typing, as YNAB does.
   const [editAssigned, setEditAssigned] = useState(false);
+  // A phone has no Assigned cell in the row: the tap opens the category's drawer instead.
+  const phone = useIsMobile();
   function selectAndEdit() {
     selection?.selectOnly(category.id);
-    if (assign) setEditAssigned(true);
+    if (assign && !phone) setEditAssigned(true);
   }
   /**
    * A click anywhere on the row selects it alone and starts editing its Assigned amount, as does
@@ -892,7 +980,11 @@ function CategoryRow({
               className={HOVER_REVEAL}
             />
           ) : (
-            <Spacer />
+            <>
+              <Spacer />
+              {/* An empty handle keeps dnd-kit's button role off the row (EVERYCENT-95). */}
+              <span ref={handleRef} hidden />
+            </>
           )}
           {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
           <NamePopover
@@ -981,7 +1073,7 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          <div data-assigned-cell className="group/assigned relative min-w-0">
+          <div data-assigned-cell className={cn("group/assigned relative min-w-0", WIDE_ONLY)}>
             {assign ? (
               <AssignedCell
                 categoryId={category.id}
@@ -989,9 +1081,10 @@ function CategoryRow({
                 amount={totals.assigned}
                 format={format}
                 actions={assign}
-                startEditing={editAssigned || figures?.editAssigned === category.id}
+                startEditing={editAssigned || keyEdit || figures?.editAssigned === category.id}
                 onStartedEditing={() => {
                   setEditAssigned(false);
+                  onKeyEditStarted?.();
                   figures?.onEditAssignedStarted?.();
                 }}
               />
@@ -1013,7 +1106,7 @@ function CategoryRow({
               </span>
             )}
           </div>
-          <span className={cn(FIGURE, "text-sm")}>
+          <span className={cn(FIGURE, "text-sm", WIDE_ONLY)}>
             {figures && (
               <Activity
                 figures={figures}
@@ -1094,10 +1187,10 @@ function TotalCells({
 }) {
   return (
     <>
-      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm", WIDE_ONLY)}>
         {format(totals.assigned)}
       </span>
-      <span className={cn(FIGURE, "font-medium text-sm")}>
+      <span className={cn(FIGURE, "font-medium text-sm", WIDE_ONLY)}>
         {activity ?? <span className={FIGURE_PAD}>{format(totals.activity)}</span>}
       </span>
       <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
@@ -1148,7 +1241,7 @@ function RowCheckbox({
   selection: SelectionActions;
 }) {
   return (
-    <span className={SLOT}>
+    <span className={cn(SLOT, WIDE_ONLY)}>
       <Checkbox
         aria-label={`Select ${name}`}
         checked={selection.selected.has(id)}

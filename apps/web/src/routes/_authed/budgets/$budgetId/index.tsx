@@ -1,14 +1,27 @@
 import { addMonths, type BudgetMonth, type CurrencyCode, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@everycent/ui/components/drawer";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  useDefaultLayout,
+} from "@everycent/ui/components/resizable";
 import { Skeleton } from "@everycent/ui/components/skeleton";
-import { cn } from "@everycent/ui/lib/utils";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Pencil, Plus } from "lucide-react";
+import { PanelRight, Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
+import { AssignedCell } from "@/components/assigned-cell";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
 import { BudgetOptionsMenu } from "@/components/budget-options-menu";
@@ -78,13 +91,36 @@ import {
   monthMovesQueryOptions,
 } from "@/lib/moves";
 import { sessionQueryOptions } from "@/lib/session";
+import { useShortcut } from "@/lib/shortcuts";
 import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
 import { useViewportWidth } from "@/lib/use-viewport-width";
 
 /** The category list and the inspector; the header shares them so Ready to Assign fills the inspector's width. */
-const COLUMNS = "lg:grid-cols-[minmax(0,1fr)_16rem]";
+/** Shift+Z also works from a category's Assigned input. */
+const inAssignedCell = (target: Element) => target.closest("[data-assigned-cell]") !== null;
+
+/** localStorage for the inspector's width, or nothing where the browser blocks storage. */
+const layoutStorage = {
+  getItem: (key: string) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage can be unavailable (private windows); the width holds for this visit.
+    }
+  },
+};
+
+/** YNAB's inspector width, in percent of the list and inspector together (its client code). */
+const INSPECTOR_SHARE = { min: 25, max: 50, default: 33 };
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/")({
   // The month on screen, YYYY-MM; the current month when absent.
@@ -122,6 +158,14 @@ function BudgetPage() {
   const { filter, setFilter } = useBudgetFilter(budget.id);
   const views = useQuery(viewsQueryOptions(budget.id));
   const viewportWidth = useViewportWidth();
+  const phone = viewportWidth < 768;
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspectorLayout = useDefaultLayout({
+    id: "everycent:budget-inspector",
+    storage: layoutStorage,
+  });
+  // The header's Ready to Assign sits over the inspector at its width.
+  const [inspectorWidth, setInspectorWidth] = useState<number | null>(null);
   const viewActions = useViewActions(budget.id);
   const [viewDialog, setViewDialog] = useState<ViewDialog>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -243,6 +287,38 @@ function BudgetPage() {
         ),
       ),
     [selected, visible, shown],
+  );
+
+  // YNAB's Shift+Z (seen 2026-10-18): snoozes every selected category with a target, or wakes
+  // them when all are snoozed already; it works from the Assigned input too. This month only.
+  useShortcut(
+    "snooze",
+    () => {
+      const data = figures.data;
+      if (!data) return;
+      const withTarget = [...selection].filter((id) => listed.get(id)?.target);
+      if (withTarget.length === 0) return;
+      const snoozedNow = (id: string) =>
+        data.categories.find((c) => c.categoryId === id)?.target?.snoozed ?? false;
+      const on = !withTarget.every(snoozedNow);
+      const changing = withTarget.filter((id) => snoozedNow(id) !== on);
+      const apply = async (snoozed: boolean) => {
+        for (const id of changing) await targetActions.snooze(id, month, snoozed);
+      };
+      void (async () => {
+        const done = await Promise.all(changing.map((id) => targetActions.snooze(id, month, on)));
+        if (!done.some(Boolean)) return;
+        history.record({
+          label: on ? "snooze target" : "wake target",
+          undo: () => apply(!on),
+          redo: () => apply(on),
+        });
+      })();
+    },
+    {
+      enabled: month === today && !readOnly && selection.size > 0,
+      allowIn: inAssignedCell,
+    },
   );
 
   const listFigures = useMemo<CategoryFigures | undefined>(() => {
@@ -582,6 +658,160 @@ function BudgetPage() {
       />
     );
 
+  // Below lg the inspector stacks under the list; from there it's beside it, and as wide as the
+  // user drags it, as YNAB's is (25–50% of the area, a third to start, kept in this browser).
+  const wide = viewportWidth >= 1024;
+  // On a phone, picking one category opens the inspector drawer for it. A tablet shows the
+  // Assigned column, so a tap there edits it in place, as on a desktop; Summary opens the drawer.
+  const pickedOne = selection.size === 1 ? [...selection][0] : undefined;
+  useEffect(() => {
+    if (phone && pickedOne !== undefined) setInspectorOpen(true);
+  }, [pickedOne, phone]);
+  const listColumn = (
+    <>
+      {categories.isPending ? (
+        <Skeleton className="h-64" />
+      ) : categories.isError ? (
+        <p className="text-muted-foreground">Couldn't load categories.</p>
+      ) : (
+        <div className="grid gap-3">
+          {/*
+           * One bar over the list: the views as text tabs on the left, the list's tools as icons
+           * on the right. The divider is an inset shadow the selected tab's underline paints over.
+           */}
+          <div className="flex flex-wrap items-end gap-x-2 gap-y-1 shadow-[inset_0_-1px_0_var(--border)]">
+            {listFigures && (
+              <BudgetFilterBar
+                filter={customView ? filter : preset}
+                overspent={overspentCount(listFigures.month, visible)}
+                onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
+                onChange={setFilter}
+                order={views.data?.order}
+                custom={views.data?.views}
+                viewportWidth={viewportWidth}
+                menu={(overflow) =>
+                  views.data && (
+                    <ViewsMenu
+                      full={views.data.views.length >= MAX_CUSTOM_VIEWS}
+                      overflow={overflow}
+                      onPick={setFilter}
+                      onManage={() => setViewDialog({ kind: "manage" })}
+                      onNew={() =>
+                        setViewDialog({
+                          kind: "edit",
+                          view: null,
+                          // Categories selected on the budget start checked (YNAB, 2026-10-14).
+                          preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
+                        })
+                      }
+                    />
+                  )
+                }
+              />
+            )}
+            <div className="ml-auto flex items-center gap-1 pb-1">
+              {customView && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setViewDialog({ kind: "edit", view: customView })}
+                >
+                  <Pencil /> Edit View
+                </Button>
+              )}
+              {listFigures && (
+                <RecentMoves
+                  budgetId={budget.id}
+                  categories={categories.data}
+                  format={listFigures.format}
+                  formatDate={formatDate}
+                  onOpenCategory={(categoryId, m) =>
+                    void navigate({
+                      search: { month: m === today ? undefined : m, category: categoryId },
+                    })
+                  }
+                />
+              )}
+              {!readOnly && <UndoRedoButtons />}
+              <BudgetOptionsMenu
+                onTemplates={readOnly ? undefined : () => setGalleryOpen(true)}
+                progressBars={progressBars}
+                onProgressBarsChange={setProgressBars}
+              />
+            </div>
+          </div>
+          {views.data && (
+            <ViewDialogs
+              dialog={viewDialog}
+              onDialogChange={setViewDialog}
+              order={views.data.order}
+              views={views.data.views}
+              categories={categories.data}
+              actions={viewActions}
+              onCreated={(view) => {
+                // YNAB switches to a new view and clears the selection.
+                setFilter(view.id);
+                setSelected(new Set());
+              }}
+              onDeleted={(viewId) => {
+                if (filter === viewId) setFilter("all");
+              }}
+            />
+          )}
+          <CategoryList
+            data={categories.data}
+            actions={actions}
+            figures={coverFigures}
+            collapsed={collapsed}
+            onCollapsedChange={setCollapsed}
+            addGroupDisabled={Boolean(customView)}
+          />
+        </div>
+      )}
+    </>
+  );
+  const onlySelected = selection.size === 1 ? [...selection][0] : undefined;
+  const inspectorTitle =
+    onlySelected === undefined
+      ? "Month summary"
+      : onlySelected === UNCATEGORIZED
+        ? "Uncategorized Transactions"
+        : (listed.get(onlySelected)?.name ?? "Category");
+  // A phone's rows have no Assigned cell, so the drawer leads with a large one.
+  const onlyFigures =
+    onlySelected && listFigures?.month.categories.find((c) => c.categoryId === onlySelected);
+  const drawerAssigned = phone && onlySelected && onlyFigures && listFigures?.assign && (
+    <div className="grid gap-1.5">
+      <span className="text-muted-foreground text-sm">Assigned this month</span>
+      <AssignedCell
+        categoryId={onlySelected}
+        categoryName={inspectorTitle}
+        amount={onlyFigures.assigned}
+        format={listFigures.format}
+        actions={listFigures.assign}
+        className="h-11 border text-left text-base"
+      />
+    </div>
+  );
+  const inspectorColumn = listFigures && (
+    <aside className="grid grid-cols-[minmax(0,1fr)] gap-4" aria-label="Inspector">
+      <Inspector
+        figures={listFigures}
+        selection={selection}
+        shown={shown}
+        listed={listed}
+        onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
+        targetActions={targetActions}
+        onShowOverspent={() => setFilter("overspent")}
+      />
+      {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
+      {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && autoAssignPanel(selection)}
+      {month === today && (
+        <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
+      )}
+    </aside>
+  );
+
   return (
     // No max width: the category list is dense, so it takes the room a wide screen gives it.
     <div className="grid gap-4">
@@ -607,9 +837,33 @@ function BudgetPage() {
           if (await templates.importTemplate(importing.id, categoryIds)) setTemplate(undefined);
         }}
       />
-      <div className={cn("flex flex-wrap items-center justify-between gap-4 lg:grid", COLUMNS)}>
+      <div
+        className="flex flex-wrap items-center justify-between gap-4 lg:grid"
+        // The header's right column sits over the inspector, as wide as it is.
+        style={
+          wide && inspectorWidth !== null
+            ? { gridTemplateColumns: `minmax(0,1fr) ${inspectorWidth}px` }
+            : undefined
+        }
+      >
         <div className="grid gap-1">
-          <PageHeader title={budget.name} />
+          <PageHeader
+            title={budget.name}
+            // Without the side inspector, the month's summary is a page action in the top bar.
+            actions={
+              !wide &&
+              listFigures && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="max-md:min-h-11"
+                  onClick={() => setInspectorOpen(true)}
+                >
+                  <PanelRight /> Summary
+                </Button>
+              )
+            }
+          />
           <MonthNav
             month={month}
             current={today}
@@ -678,125 +932,60 @@ function BudgetPage() {
           <AddAccountDialog budget={budget} open={addingAccount} onOpenChange={setAddingAccount} />
         </div>
       )}
-      <div className={cn("grid items-start gap-4", COLUMNS)}>
-        {categories.isPending ? (
-          <Skeleton className="h-64" />
-        ) : categories.isError ? (
-          <p className="text-muted-foreground">Couldn't load categories.</p>
-        ) : (
-          <div className="grid gap-3">
-            {/*
-             * One bar over the list: the views as text tabs on the left, the list's tools as icons
-             * on the right. The divider is an inset shadow the selected tab's underline paints over.
-             */}
-            <div className="flex flex-wrap items-end gap-x-2 gap-y-1 shadow-[inset_0_-1px_0_var(--border)]">
-              {listFigures && (
-                <BudgetFilterBar
-                  filter={customView ? filter : preset}
-                  overspent={overspentCount(listFigures.month, visible)}
-                  onlyCredit={overspentOnlyCredit(listFigures.month, visible)}
-                  onChange={setFilter}
-                  order={views.data?.order}
-                  custom={views.data?.views}
-                  viewportWidth={viewportWidth}
-                  menu={(overflow) =>
-                    views.data && (
-                      <ViewsMenu
-                        full={views.data.views.length >= MAX_CUSTOM_VIEWS}
-                        overflow={overflow}
-                        onPick={setFilter}
-                        onManage={() => setViewDialog({ kind: "manage" })}
-                        onNew={() =>
-                          setViewDialog({
-                            kind: "edit",
-                            view: null,
-                            // Categories selected on the budget start checked (YNAB, 2026-10-14).
-                            preselected: [...selection].filter((id) => id !== UNCATEGORIZED),
-                          })
-                        }
-                      />
-                    )
-                  }
-                />
-              )}
-              <div className="ml-auto flex items-center gap-1 pb-1">
-                {customView && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setViewDialog({ kind: "edit", view: customView })}
-                  >
-                    <Pencil /> Edit View
-                  </Button>
-                )}
-                {listFigures && (
-                  <RecentMoves
-                    budgetId={budget.id}
-                    categories={categories.data}
-                    format={listFigures.format}
-                    formatDate={formatDate}
-                    onOpenCategory={(categoryId, m) =>
-                      void navigate({
-                        search: { month: m === today ? undefined : m, category: categoryId },
-                      })
-                    }
-                  />
-                )}
-                {!readOnly && <UndoRedoButtons />}
-                <BudgetOptionsMenu
-                  onTemplates={readOnly ? undefined : () => setGalleryOpen(true)}
-                  progressBars={progressBars}
-                  onProgressBarsChange={setProgressBars}
-                />
+      {wide ? (
+        <ResizablePanelGroup
+          id="budget-inspector"
+          defaultLayout={inspectorLayout.defaultLayout}
+          onLayoutChanged={inspectorLayout.onLayoutChanged}
+          className="items-start"
+        >
+          <ResizablePanel id="list" minSize="50" className="min-w-0">
+            {listColumn}
+          </ResizablePanel>
+          <ResizableHandle
+            aria-label="Resize the inspector"
+            className="mx-2 self-stretch bg-transparent after:w-3 hover:bg-border"
+          />
+          <ResizablePanel
+            id="inspector"
+            defaultSize={String(INSPECTOR_SHARE.default)}
+            minSize={String(INSPECTOR_SHARE.min)}
+            maxSize={String(INSPECTOR_SHARE.max)}
+            onResize={(size) => setInspectorWidth(size.inPixels)}
+          >
+            {inspectorColumn}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <>
+          {listColumn}
+          {/*
+           * Narrower than lg the inspector is a drawer (everycent's own layout, EVERYCENT-93): up
+           * from the bottom on a phone, in from the side on a tablet. Picking a category opens it.
+           */}
+          <Drawer
+            open={inspectorOpen}
+            onOpenChange={(open) => {
+              setInspectorOpen(open);
+              if (!open && selection.size === 1) setSelected(new Set());
+            }}
+            direction={phone ? "bottom" : "right"}
+          >
+            <DrawerContent className="data-[vaul-drawer-direction=bottom]:max-h-[90svh] data-[vaul-drawer-direction=right]:w-[min(26rem,92vw)] data-[vaul-drawer-direction=right]:sm:max-w-none">
+              <DrawerHeader className="text-left">
+                <DrawerTitle>{inspectorTitle}</DrawerTitle>
+                <DrawerDescription className="sr-only">
+                  The category's numbers, target and note, or the month's summary.
+                </DrawerDescription>
+              </DrawerHeader>
+              <div className="grid gap-4 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                {drawerAssigned}
+                {inspectorColumn}
               </div>
-            </div>
-            {views.data && (
-              <ViewDialogs
-                dialog={viewDialog}
-                onDialogChange={setViewDialog}
-                order={views.data.order}
-                views={views.data.views}
-                categories={categories.data}
-                actions={viewActions}
-                onCreated={(view) => {
-                  // YNAB switches to a new view and clears the selection.
-                  setFilter(view.id);
-                  setSelected(new Set());
-                }}
-                onDeleted={(viewId) => {
-                  if (filter === viewId) setFilter("all");
-                }}
-              />
-            )}
-            <CategoryList
-              data={categories.data}
-              actions={actions}
-              figures={coverFigures}
-              collapsed={collapsed}
-              onCollapsedChange={setCollapsed}
-              addGroupDisabled={Boolean(customView)}
-            />
-          </div>
-        )}
-        {listFigures && (
-          <aside className="grid grid-cols-[minmax(0,1fr)] gap-4" aria-label="Inspector">
-            <Inspector
-              figures={listFigures}
-              selection={selection}
-              shown={shown}
-              listed={listed}
-              onNoteChange={(categoryId, note) => actions.updateCategory(categoryId, { note })}
-              targetActions={targetActions}
-              onShowOverspent={() => setFilter("overspent")}
-            />
-            {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
-            {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && autoAssignPanel(selection)}
-            {month === today && (
-              <FutureMonthsPanel data={listFigures.month} format={listFigures.format} />
-            )}
-          </aside>
-        )}
-      </div>
+            </DrawerContent>
+          </Drawer>
+        </>
+      )}
     </div>
   );
 }

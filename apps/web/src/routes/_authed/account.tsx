@@ -281,6 +281,8 @@ function DevicesCard() {
               return (
                 <Item
                   key={s.id}
+                  // ItemGroup is a list, so each session is an item of it.
+                  role="listitem"
                   size="sm"
                   // Dividers between rows: Item's own (transparent) border would hide divide-y's.
                   className="rounded-none border-0 border-border border-t first:border-t-0"

@@ -207,3 +207,81 @@ describe("Match and Unmatch (EVERYCENT-68)", () => {
     expect(onUnmatch).toHaveBeenCalled();
   });
 });
+
+describe("SelectionBar keys (YNAB, 2026-10-18)", () => {
+  const flags = [
+    { color: "red", name: "" },
+    { color: "orange", name: "" },
+  ] as Parameters<typeof SelectionBar>[0]["flags"];
+
+  it("approves with A and rejects with Shift+R while unapproved rows are selected", async () => {
+    const { onAction } = bar(summary({ unapproved: 1 }));
+    await userEvent.keyboard("a");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "approve" });
+    await userEvent.keyboard("{Shift>}R{/Shift}");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "reject" });
+  });
+
+  it("toggles cleared with C: mixed become cleared, all cleared become uncleared", async () => {
+    const mixed = bar(summary({ uncleared: 1, cleared: 1 }));
+    await userEvent.keyboard("c");
+    expect(mixed.onAction).toHaveBeenLastCalledWith({ type: "cleared", cleared: "cleared" });
+    mixed.unmount();
+    const cleared = bar(summary({ uncleared: 0, cleared: 2 }));
+    await userEvent.keyboard("c");
+    expect(cleared.onAction).toHaveBeenLastCalledWith({ type: "cleared", cleared: "uncleared" });
+  });
+
+  it("opens the Categorize menu with K, or hands K to the register for one row", async () => {
+    bar(summary({}));
+    await userEvent.keyboard("k");
+    expect(await screen.findByRole("menuitem", { name: "Bills" })).toBeInTheDocument();
+  });
+
+  it("hands K to the register when one transaction is selected", async () => {
+    const onCategorizeKey = vi.fn();
+    bar(summary({ count: 1 }), { onCategorizeKey });
+    await userEvent.keyboard("k");
+    expect(onCategorizeKey).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("menuitem", { name: "Bills" })).toBeNull();
+  });
+
+  it("opens Flag with Shift+F and takes a digit: 1–6 a colour, 0 none", async () => {
+    const { onAction } = bar(summary({}), { flags });
+    await userEvent.keyboard("{Shift>}F{/Shift}");
+    expect(await screen.findByRole("menu", { name: "Flag selected" })).toBeInTheDocument();
+    await userEvent.keyboard("2");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "flag", flag: "orange" });
+    await userEvent.keyboard("{Shift>}F{/Shift}");
+    await screen.findByRole("menu", { name: "Flag selected" });
+    await userEvent.keyboard("0");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "flag", flag: null });
+  });
+
+  it("opens Flag with Shift+F even while Flag sits in More", async () => {
+    bar(summary({ unapproved: 1 }), { flags });
+    await userEvent.keyboard("{Shift>}F{/Shift}");
+    expect(await screen.findByRole("menu", { name: "Flag selected" })).toBeInTheDocument();
+  });
+
+  it("duplicates with Shift+D and deletes with Delete", async () => {
+    const { onAction } = bar(summary({}));
+    await userEvent.keyboard("{Shift>}D{/Shift}");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "duplicate" });
+    await userEvent.keyboard("{Delete}");
+    expect(onAction).toHaveBeenLastCalledWith({ type: "delete" });
+  });
+
+  it("enters scheduled rows now with E, makes one repeating with Shift+T", async () => {
+    const onMakeRepeating = vi.fn();
+    const scheduled = bar(summary({ count: 0, categorizable: 0, deletable: 0 }), {
+      scheduledCount: 1,
+    });
+    await userEvent.keyboard("e");
+    expect(scheduled.onAction).toHaveBeenLastCalledWith({ type: "enterNow" });
+    scheduled.unmount();
+    bar(summary({ count: 1 }), { onMakeRepeating });
+    await userEvent.keyboard("{Shift>}T{/Shift}");
+    expect(onMakeRepeating).toHaveBeenCalledOnce();
+  });
+});

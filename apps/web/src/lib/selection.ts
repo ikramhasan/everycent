@@ -45,3 +45,52 @@ export function selectionBody<F>(selection: Selection, filter: F) {
     ? { ids: [...selection.ids] }
     : { filter, exclude: [...selection.except] };
 }
+
+/** Where keyboard selection stands: the row a Shift range starts from, and the row it reaches. */
+export interface KeyCursor {
+  anchor: string | null;
+  head: string | null;
+}
+
+/**
+ * YNAB's Up/Down over a list of rows (seen 2026-10-18 in the plan and the register). With nothing
+ * selected, Down selects the first row and Up the last. Plain Up/Down moves a single selection one
+ * row, wrapping at the ends; with several selected the register moves on from the range's anchor
+ * and the plan does nothing (`several`). Shift grows or shrinks a range from the anchor and stops
+ * at the ends. Null when nothing changes.
+ */
+export function stepSelection(
+  order: readonly string[],
+  selected: ReadonlySet<string>,
+  cursor: KeyCursor,
+  direction: 1 | -1,
+  { extend = false, several }: { extend?: boolean; several: "anchor" | "none" },
+): { ids: string[]; cursor: KeyCursor } | null {
+  if (order.length === 0) return null;
+  const inList = [...selected].filter((id) => order.includes(id));
+  if (inList.length === 0) {
+    const id = (direction > 0 ? order[0] : order.at(-1)) as string;
+    return { ids: [id], cursor: { anchor: id, head: id } };
+  }
+  const first = order.find((id) => selected.has(id)) as string;
+  const anchor =
+    inList.length === 1
+      ? (inList[0] as string)
+      : cursor.anchor !== null && selected.has(cursor.anchor)
+        ? cursor.anchor
+        : first;
+  if (extend) {
+    const head =
+      cursor.head !== null && order.includes(cursor.head) && inList.length > 1
+        ? cursor.head
+        : anchor;
+    const at = order.indexOf(head) + direction;
+    if (at < 0 || at >= order.length) return null;
+    const next = order[at] as string;
+    return { ids: rangeTo(order, anchor, next), cursor: { anchor, head: next } };
+  }
+  if (inList.length > 1 && several === "none") return null;
+  const at = (order.indexOf(anchor) + direction + order.length) % order.length;
+  const next = order[at] as string;
+  return { ids: [next], cursor: { anchor: next, head: next } };
+}

@@ -20,7 +20,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, GripVertical, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -167,7 +167,11 @@ function AccountSection({
             <ChevronRight className="transition-transform group-data-[state=open]/collapsible:rotate-90" />
             <span className="uppercase tracking-wide">{section.title}</span>
             {section.id !== "closed" && (
-              <span className="ml-auto tabular-nums" title={hint ?? undefined}>
+              // Under 220px of sidebar the balances make way for the names, as YNAB's do.
+              <span
+                className="ml-auto tabular-nums [[data-sidebar-narrow]_&]:hidden"
+                title={hint ?? undefined}
+              >
                 {section.converted && <span aria-hidden>≈</span>}
                 {format(section.total, section.currency)}
                 {/* The `*` marks accounts left out for want of a rate. */}
@@ -218,7 +222,7 @@ function AccountItem({
   /** False for a viewer, who can't reorder. */
   reorderable: boolean;
 }) {
-  const { ref, isDragSource } = useSortable({
+  const { ref, handleRef, isDragSource } = useSortable({
     // A starred account is in two sections, so its id here includes the section.
     id: `${section}:${account.id}`,
     index,
@@ -230,7 +234,23 @@ function AccountItem({
   });
   const working = BigInt(account.balances.working);
   return (
-    <SidebarMenuItem ref={ref} className={cn(isDragSource && "opacity-60")}>
+    <SidebarMenuItem ref={ref} className={cn("group/account", isDragSource && "opacity-60")}>
+      {/*
+       * Dragging goes through a handle, so the row stays a list item with a link in it rather than
+       * a button around one; without reordering the handle is an empty, hidden element.
+       */}
+      {reorderable ? (
+        <button
+          ref={handleRef}
+          type="button"
+          aria-label={`Reorder ${account.name}`}
+          className="absolute top-1/2 -left-1 z-10 grid h-6 w-3 -translate-y-1/2 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 active:cursor-grabbing group-hover/account:opacity-100 pointer-coarse:hidden"
+        >
+          <GripVertical className="size-3" />
+        </button>
+      ) : (
+        <span ref={handleRef} hidden />
+      )}
       <SidebarMenuButton asChild>
         <Link
           to="/budgets/$budgetId/accounts/$accountId"
@@ -251,7 +271,12 @@ function AccountItem({
         </Link>
       </SidebarMenuButton>
       {/* `!` beats the sidebar's active-item colour so money owed always reads red, as in YNAB. */}
-      <SidebarMenuBadge className={cn("tabular-nums", working < 0n && "text-destructive!")}>
+      <SidebarMenuBadge
+        className={cn(
+          "tabular-nums [[data-sidebar-narrow]_&]:hidden",
+          working < 0n && "text-destructive!",
+        )}
+      >
         {format(working, account.currency)}
       </SidebarMenuBadge>
     </SidebarMenuItem>

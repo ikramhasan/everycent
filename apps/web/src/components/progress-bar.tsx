@@ -28,7 +28,8 @@ export function ProgressBar({ bar, className }: { bar: Bar; className?: string }
   // first rounded left, the fifth right, then the extra one fully rounded).
   const last = sections.findLastIndex((s) => s.kind !== "extra");
   return (
-    <div className={cn("flex h-1 gap-1", className)} aria-hidden>
+    // The bar says in words what its colours show (EVERYCENT-95).
+    <div role="img" aria-label={barLabel(bar)} className={cn("flex h-1 gap-1", className)}>
       {sections.map((section, i) => (
         <div
           key={i}
@@ -66,4 +67,24 @@ export function ProgressBar({ bar, className }: { bar: Bar; className?: string }
       ))}
     </div>
   );
+}
+
+/** A bar in words: how much of it is spent, still available and overspent, in whole percent. */
+export function barLabel(bar: Bar): string {
+  const sums = { spent: 0n, available: 0n, overspent: 0n };
+  let total = 0n;
+  for (const section of bar.sections) {
+    total += BigInt(section.size);
+    for (const g of section.segments) {
+      if (g.kind in sums) sums[g.kind as keyof typeof sums] += BigInt(g.amount);
+    }
+  }
+  const pct = (part: bigint) => (total === 0n ? 0n : (part * 100n) / total);
+  const parts = [
+    sums.spent > 0n && `${pct(sums.spent)}% spent`,
+    sums.available > 0n && `${pct(sums.available)}% available`,
+    sums.overspent > 0n && `${pct(sums.overspent)}% overspent`,
+  ].filter(Boolean);
+  const tone = bar.tone === "underfunded" ? "Needs more" : "On track";
+  return `Progress: ${tone}${parts.length ? `, ${parts.join(", ")}` : ""}`;
 }

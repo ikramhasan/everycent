@@ -500,3 +500,36 @@ describe("TransactionEditor", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ flag: "red" }));
   });
 });
+
+describe("TransactionEditor, stacked for a phone's drawer (EVERYCENT-93)", () => {
+  it("names each field, opens without focusing one, and saves", async () => {
+    const onSave = vi.fn();
+    render(
+      <TransactionEditor
+        layout="stacked"
+        initial={emptyDraft("checking", "2026-10-01")}
+        columns={registerColumns(false)}
+        accounts={[account("checking", "checking")]}
+        payees={[]}
+        categories={[{ id: "rent", name: "Rent", group: "Bills" }]}
+        dateFormat="MM/DD/YYYY"
+        settings={usd}
+        flags={[]}
+        onRenameFlags={async () => {}}
+        pending={false}
+        error={null}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+    const form = screen.getByRole("form", { name: "New transaction" });
+    for (const name of ["Date", "Payee", "Category", "Memo", "Outflow", "Inflow"]) {
+      expect(within(form).getByText(name)).toBeInTheDocument();
+    }
+    expect(document.activeElement).toBe(document.body);
+    const user = userEvent.setup();
+    await user.type(within(form).getByLabelText("Outflow"), "12.50");
+    await user.click(within(form).getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ outflow: "12.50" }));
+  });
+});

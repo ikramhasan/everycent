@@ -54,7 +54,7 @@ function ActivityPage() {
 
   return (
     // The app shell pads the page; the page width matches the others, the feed stays readable.
-    <main className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,48rem)] content-start gap-4">
+    <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,48rem)] content-start gap-4">
       <PageHeader
         title="Activity"
         meta={
@@ -114,6 +114,6 @@ function ActivityPage() {
           {activity.isFetchingNextPage && <Spinner />} Load more
         </Button>
       )}
-    </main>
+    </div>
   );
 }

@@ -1,7 +1,16 @@
 import { Input } from "@everycent/ui/components/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { Calculator, Divide, Minus, Plus, X } from "lucide-react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
+const OPERATORS = [
+  { operator: "+", label: "Plus", Icon: Plus },
+  { operator: "-", label: "Minus", Icon: Minus },
+  { operator: "*", label: "Multiply", Icon: X },
+  { operator: "/", label: "Divide", Icon: Divide },
+] as const;
 
 export interface AssignActions {
   /** Reads typed text (math allowed, e.g. "200+50") into minor units, or explains why not. */
@@ -39,6 +48,8 @@ export function AssignedCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
+  const [calculator, setCalculator] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   // Enter commits and unmounts the input; the blur that follows must not commit again.
   const done = useRef(false);
 
@@ -66,28 +77,78 @@ export function AssignedCell({
     if (parsed !== BigInt(amount)) await actions.assign(categoryId, parsed);
   }
 
+  /** YNAB's calculator: an operator goes on the end of the amount, the cursor after it. */
+  function addOperator(operator: string) {
+    setText((t) => t + operator);
+    setCalculator(false);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+  }
+  // Clicking the calculator keeps the focus in the input, so it doesn't save on blur.
+  const keepFocus = (e: MouseEvent) => e.preventDefault();
+
   if (editing) {
     return (
-      <Input
-        aria-label={`Assigned to ${categoryName}`}
-        autoFocus
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onFocus={(e) => e.currentTarget.select()}
-        onBlur={() => void commit()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            void commit();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            done.current = true;
-            setEditing(false);
-          }
-        }}
-        className={cn("h-7 text-right tabular-nums", className)}
-      />
+      <div className="relative">
+        <Input
+          ref={inputRef}
+          aria-label={`Assigned to ${categoryName}`}
+          autoFocus
+          inputMode="decimal"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              done.current = true;
+              setEditing(false);
+            }
+          }}
+          className={cn("h-7 pl-6 text-right tabular-nums", className)}
+        />
+        <Popover open={calculator} onOpenChange={setCalculator}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="Open calculator"
+              title="Open calculator"
+              onMouseDown={keepFocus}
+              className="absolute top-1/2 left-1 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <Calculator className="size-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="grid w-auto grid-cols-2 gap-1 p-1.5"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            {OPERATORS.map(({ operator, label, Icon }) => (
+              <button
+                key={operator}
+                type="button"
+                aria-label={label}
+                onMouseDown={keepFocus}
+                onClick={() => addOperator(operator)}
+                className="grid size-7 place-items-center rounded-md border text-primary hover:bg-muted"
+              >
+                <Icon className="size-3.5" />
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   }
   return (

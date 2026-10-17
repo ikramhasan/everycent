@@ -52,6 +52,28 @@ import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fi
  * fields, Enter saves, Esc cancels. A split adds a row per line, then a row to add lines and see
  * what's left to split; the last row holds the buttons and any error.
  */
+/** Fields that share a line in the stacked editor. */
+const STACKED_ROWS: ColumnId[][] = [
+  ["account"],
+  ["date"],
+  ["payee"],
+  ["category"],
+  ["memo"],
+  ["outflow", "inflow"],
+  ["flag", "cleared"],
+];
+const STACKED_LABEL: Partial<Record<ColumnId, string>> = {
+  account: "Account",
+  date: "Date",
+  payee: "Payee",
+  category: "Category",
+  memo: "Memo",
+  outflow: "Outflow",
+  inflow: "Inflow",
+  flag: "Flag",
+  cleared: "Cleared",
+};
+
 export function TransactionEditor({
   initial,
   columns,
@@ -67,6 +89,8 @@ export function TransactionEditor({
   repeat = false,
   scheduled = false,
   openDatePicker = false,
+  focusMemo = false,
+  layout = "row",
   pending,
   error,
   transferCategory,
@@ -95,6 +119,10 @@ export function TransactionEditor({
   scheduled?: boolean;
   /** Open the date picker first (Make Repeating, as YNAB does). */
   openDatePicker?: boolean;
+  /** Start in the memo, as YNAB's S (split) does. */
+  focusMemo?: boolean;
+  /** "stacked" lays the fields out one under another, for a phone's drawer. */
+  layout?: "row" | "stacked";
   pending: boolean;
   error: string | null;
   /** An in-budget transfer's category text ("Credit Card Payments: <card>"), or "". */
@@ -229,7 +257,8 @@ export function TransactionEditor({
             value={draft.date}
             onChange={(date) => set({ date })}
             format={dateFormat}
-            autoFocus={!columns.includes("account")}
+            // A phone's drawer opens without the keyboard; the date is a tap away.
+            autoFocus={!columns.includes("account") && !focusMemo && layout !== "stacked"}
             defaultOpen={openDatePicker}
             repeat={
               repeat
@@ -305,6 +334,7 @@ export function TransactionEditor({
           <Input
             aria-label="Memo"
             placeholder="Memo"
+            autoFocus={focusMemo}
             value={draft.memo}
             onChange={(e) => set({ memo: e.target.value })}
             className="h-8"
@@ -443,6 +473,195 @@ export function TransactionEditor({
   const remaining = split && "remaining" in split ? split.remaining : null;
   const rateLabel = transferRate(draft, settings, account?.currency, crossTo?.currency);
 
+  const footerItems = (
+    <>
+      {lines && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => set({ lines: [...lines, emptyLine()] })}
+          >
+            <Plus /> Add line
+          </Button>
+          <p
+            className={cn(
+              "mr-auto text-sm tabular-nums",
+              remaining !== null && remaining !== 0n ? "text-destructive" : "text-muted-foreground",
+            )}
+            aria-live="polite"
+          >
+            {remaining === null ? "Check the amounts" : remainingLabel(remaining, settings)}
+          </p>
+        </>
+      )}
+      {error && <FieldError className="mr-auto">{error}</FieldError>}
+      {crossTo && (
+        // EVERYCENT-55: the other account's own amount; left empty, the date's rate.
+        <div className="flex flex-col items-end gap-0.5 text-muted-foreground text-sm">
+          <div className="flex items-center gap-1.5">
+            <span aria-hidden>
+              {crossTo.name} {typedDirection(draft) === "in" ? "sends" : "receives"}
+            </span>
+            <Input
+              aria-label={`${crossTo.name} ${
+                typedDirection(draft) === "in" ? "sends" : "receives"
+              } (${crossTo.currency})`}
+              className="h-7 w-28 text-right tabular-nums"
+              inputMode="decimal"
+              placeholder="Date's rate"
+              value={draft.transferAmount ?? ""}
+              onChange={(e) => set({ transferAmount: e.target.value })}
+            />
+            <span aria-hidden>{crossTo.currency}</span>
+          </div>
+          {rateLabel && (
+            <span className="text-xs tabular-nums" aria-live="polite">
+              {rateLabel}
+            </span>
+          )}
+        </div>
+      )}
+      {withFee && sending && (
+        <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+          <span aria-hidden>Fee</span>
+          <Input
+            aria-label={`Transfer fee (${feeSettings.currency})`}
+            className="h-7 w-20 text-right tabular-nums"
+            inputMode="decimal"
+            placeholder="None"
+            value={draft.fee ?? ""}
+            onChange={(e) => set({ fee: e.target.value })}
+          />
+          <span aria-hidden>{feeSettings.currency}</span>
+          {draft.fee?.trim() && usesCategory(sending.type, null) && (
+            <div className="w-44">
+              <CategoryField
+                label="Fee category"
+                value={draft.feeCategoryId ?? null}
+                onChange={(feeCategoryId) => set({ feeCategoryId })}
+                categories={categories}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {foreign && account && (
+        // EVERYCENT-54: what the plan counts is this amount at the rate; left empty, the
+        // date's rate (locked once saved, looked up again only when the date changes).
+        <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+          <span aria-hidden>1 {account.currency} =</span>
+          <Input
+            aria-label={`Rate from ${account.currency} to ${budgetSettings.currency}`}
+            className="h-7 w-24 tabular-nums"
+            inputMode="decimal"
+            placeholder="Date's rate"
+            value={draft.fxRate ?? ""}
+            onChange={(e) => set({ fxRate: e.target.value })}
+          />
+          <span aria-hidden>{budgetSettings.currency}</span>
+        </div>
+      )}
+      <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button type="button" size="sm" onClick={() => save()} disabled={pending}>
+        Save
+      </Button>
+      {onSaveAndAddAnother && (
+        <Button type="button" size="sm" onClick={() => save(true)} disabled={pending}>
+          Save and add another
+        </Button>
+      )}
+    </>
+  );
+  const mismatchDialog = (
+    <AlertDialog open={mismatch !== null} onOpenChange={(open) => !open && setMismatch(null)}>
+      <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Something Doesn't Add Up</AlertDialogTitle>
+          <AlertDialogDescription>
+            {mismatch &&
+              `The total is ${show(mismatch.total)}, but the splits add up to ${show(
+                mismatch.lines,
+              )}. How would you like to handle the unassigned ${show(mismatch.unassigned)}?`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {/* YNAB's order; each leaves the row open to check before saving. */}
+        <AlertDialogFooter>
+          {mismatch?.distributed && (
+            <AlertDialogAction
+              onClick={() => {
+                const lines = mismatch.distributed;
+                setDraft((d) => ({ ...d, lines }));
+              }}
+            >
+              Auto-Distribute
+            </AlertDialogAction>
+          )}
+          <AlertDialogAction
+            variant="outline"
+            onClick={() => setDraft((d) => withSplitTotal(d, settings))}
+          >
+            Update Total
+          </AlertDialogAction>
+          <AlertDialogCancel>Adjust Manually</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  // A phone edits in a drawer: the same fields, one under another, with their names (EVERYCENT-93).
+  if (layout === "stacked") {
+    const stacked = STACKED_ROWS.flat().filter(
+      (c) => columns.includes(c) || c === "flag" || c === "cleared",
+    );
+    return (
+      <form
+        aria-label={label}
+        className="grid gap-3"
+        onKeyDown={handleKeyDown}
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        {STACKED_ROWS.map((row) => {
+          const fields = row
+            .filter((column) => stacked.includes(column))
+            .map((column) => ({ column, field: cell(column) }))
+            .filter(({ field }) => field);
+          if (fields.length === 0) return null;
+          return (
+            <div key={row.join()} className="grid auto-cols-fr grid-flow-col gap-3">
+              {fields.map(({ column, field }) => (
+                <div key={column} className="grid gap-1.5 [&_button]:min-h-11 [&_input]:h-11">
+                  <span className="text-muted-foreground text-xs">{STACKED_LABEL[column]}</span>
+                  {field}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+        {lines?.map((line, index) => (
+          <fieldset key={line.key} className="grid gap-2 rounded-lg border p-3 [&_input]:h-11">
+            <legend className="px-1 text-muted-foreground text-xs">Split line {index + 1}</legend>
+            {(["payee", "category", "memo", "outflow", "inflow", "actions"] as const).map(
+              (column) => (
+                <div key={column}>{lineCell(line, index, column)}</div>
+              ),
+            )}
+          </fieldset>
+        ))}
+        <div className="flex flex-wrap items-center justify-end gap-2 [&>button]:min-h-11 [&>button]:flex-1">
+          {footerItems}
+        </div>
+        {mismatchDialog}
+      </form>
+    );
+  }
+
   return (
     <>
       <TableRow
@@ -498,141 +717,9 @@ export function TransactionEditor({
             className="sticky left-1.5 flex max-w-full flex-wrap items-center justify-end gap-2 whitespace-normal"
             style={{ width: `calc(100cqw - 0.75rem - ${pinnedWidth(columns)})` }}
           >
-            {lines && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => set({ lines: [...lines, emptyLine()] })}
-                >
-                  <Plus /> Add line
-                </Button>
-                <p
-                  className={cn(
-                    "mr-auto text-sm tabular-nums",
-                    remaining !== null && remaining !== 0n
-                      ? "text-destructive"
-                      : "text-muted-foreground",
-                  )}
-                  aria-live="polite"
-                >
-                  {remaining === null ? "Check the amounts" : remainingLabel(remaining, settings)}
-                </p>
-              </>
-            )}
-            {error && <FieldError className="mr-auto">{error}</FieldError>}
-            {crossTo && (
-              // EVERYCENT-55: the other account's own amount; left empty, the date's rate.
-              <div className="flex flex-col items-end gap-0.5 text-muted-foreground text-sm">
-                <div className="flex items-center gap-1.5">
-                  <span aria-hidden>
-                    {crossTo.name} {typedDirection(draft) === "in" ? "sends" : "receives"}
-                  </span>
-                  <Input
-                    aria-label={`${crossTo.name} ${
-                      typedDirection(draft) === "in" ? "sends" : "receives"
-                    } (${crossTo.currency})`}
-                    className="h-7 w-28 text-right tabular-nums"
-                    inputMode="decimal"
-                    placeholder="Date's rate"
-                    value={draft.transferAmount ?? ""}
-                    onChange={(e) => set({ transferAmount: e.target.value })}
-                  />
-                  <span aria-hidden>{crossTo.currency}</span>
-                </div>
-                {rateLabel && (
-                  <span className="text-xs tabular-nums" aria-live="polite">
-                    {rateLabel}
-                  </span>
-                )}
-              </div>
-            )}
-            {withFee && sending && (
-              <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                <span aria-hidden>Fee</span>
-                <Input
-                  aria-label={`Transfer fee (${feeSettings.currency})`}
-                  className="h-7 w-20 text-right tabular-nums"
-                  inputMode="decimal"
-                  placeholder="None"
-                  value={draft.fee ?? ""}
-                  onChange={(e) => set({ fee: e.target.value })}
-                />
-                <span aria-hidden>{feeSettings.currency}</span>
-                {draft.fee?.trim() && usesCategory(sending.type, null) && (
-                  <div className="w-44">
-                    <CategoryField
-                      label="Fee category"
-                      value={draft.feeCategoryId ?? null}
-                      onChange={(feeCategoryId) => set({ feeCategoryId })}
-                      categories={categories}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            {foreign && account && (
-              // EVERYCENT-54: what the plan counts is this amount at the rate; left empty, the
-              // date's rate (locked once saved, looked up again only when the date changes).
-              <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                <span aria-hidden>1 {account.currency} =</span>
-                <Input
-                  aria-label={`Rate from ${account.currency} to ${budgetSettings.currency}`}
-                  className="h-7 w-24 tabular-nums"
-                  inputMode="decimal"
-                  placeholder="Date's rate"
-                  value={draft.fxRate ?? ""}
-                  onChange={(e) => set({ fxRate: e.target.value })}
-                />
-                <span aria-hidden>{budgetSettings.currency}</span>
-              </div>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" onClick={() => save()} disabled={pending}>
-              Save
-            </Button>
-            {onSaveAndAddAnother && (
-              <Button type="button" size="sm" onClick={() => save(true)} disabled={pending}>
-                Save and add another
-              </Button>
-            )}
+            {footerItems}
           </div>
-          <AlertDialog open={mismatch !== null} onOpenChange={(open) => !open && setMismatch(null)}>
-            <AlertDialogContent className="data-[size=default]:sm:max-w-md">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Something Doesn't Add Up</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {mismatch &&
-                    `The total is ${show(mismatch.total)}, but the splits add up to ${show(
-                      mismatch.lines,
-                    )}. How would you like to handle the unassigned ${show(mismatch.unassigned)}?`}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              {/* YNAB's order; each leaves the row open to check before saving. */}
-              <AlertDialogFooter>
-                {mismatch?.distributed && (
-                  <AlertDialogAction
-                    onClick={() => {
-                      const lines = mismatch.distributed;
-                      setDraft((d) => ({ ...d, lines }));
-                    }}
-                  >
-                    Auto-Distribute
-                  </AlertDialogAction>
-                )}
-                <AlertDialogAction
-                  variant="outline"
-                  onClick={() => setDraft((d) => withSplitTotal(d, settings))}
-                >
-                  Update Total
-                </AlertDialogAction>
-                <AlertDialogCancel>Adjust Manually</AlertDialogCancel>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {mismatchDialog}
         </TableCell>
         {pinnedColumns(columns).map((column) => (
           <TableCell

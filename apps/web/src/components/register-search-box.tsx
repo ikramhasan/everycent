@@ -88,7 +88,7 @@ export function RegisterSearchBox({
         aria-label="Search transactions"
         placeholder={placeholder}
         showTrigger={false}
-        className="h-8 w-64 focus-within:w-80 transition-[width]"
+        className="h-8 w-64 transition-[width] focus-within:w-80 max-md:h-11 max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:focus-within:w-auto"
         onKeyDown={(e) => {
           // With no suggestion highlighted, Enter searches for what's typed, in any field.
           if (e.key !== "Enter" || highlighted.current) return;
@@ -113,7 +113,10 @@ export function RegisterSearchBox({
           </InputGroupAddon>
         )}
       </AutocompleteInput>
-      <AutocompleteContent align="end" className="w-auto min-w-96 max-w-[32rem]">
+      <AutocompleteContent
+        align="end"
+        className="w-auto min-w-96 max-w-[32rem] max-md:min-w-[calc(100vw-2rem)]"
+      >
         <AutocompleteList>
           {(item: Item) => (
             <AutocompleteItem key={item.value} value={item} className="gap-3">

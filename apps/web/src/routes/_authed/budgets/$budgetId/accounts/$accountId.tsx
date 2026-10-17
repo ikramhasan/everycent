@@ -48,9 +48,9 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { inCurrency } from "@/lib/money-input";
 import { invalidateMonths } from "@/lib/months";
-import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { scheduledQueryPrefix } from "@/lib/scheduled";
+import { useShortcut } from "@/lib/shortcuts";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
@@ -141,19 +141,7 @@ function AccountPage() {
   useEffect(() => setReconcilingTo(null), [accountId]);
 
   // YNAB's shortcut for Reconcile is Shift+E.
-  const shortcuts = useShortcutsEnabled();
-  useEffect(() => {
-    if (!reconcilable || !shortcuts) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (!event.shiftKey || event.code !== "KeyE" || event.metaKey || event.ctrlKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable=true], [role=dialog]")) return;
-      event.preventDefault();
-      setReconcileOpen(true);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [reconcilable, shortcuts]);
+  useShortcut("reconcile", () => setReconcileOpen(true), { enabled: reconcilable });
 
   async function refresh() {
     await Promise.all([
@@ -606,12 +594,11 @@ function AccountPage() {
       />
       {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
 
-      <dl className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-lg border px-4 py-3 tabular-nums">
+      <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 rounded-lg border px-4 py-3 tabular-nums">
         <Balance label="Cleared Balance" value={show(account.balances.cleared)} />
-        <span className="pb-0.5 text-muted-foreground">+</span>
-        <Balance label="Uncleared Balance" value={show(account.balances.uncleared)} />
-        <span className="pb-0.5 text-muted-foreground">=</span>
+        <Balance label="Uncleared Balance" value={show(account.balances.uncleared)} operator="+" />
         <Balance
+          operator="="
           label="Working Balance"
           value={show(account.balances.working)}
           negative={working < 0n}
@@ -696,14 +683,24 @@ function Balance({
   value,
   negative = false,
   strong = false,
+  operator,
 }: {
   label: string;
   value: string;
   negative?: boolean;
   strong?: boolean;
+  /** The "+" or "=" before it, drawn by CSS: a list of terms can't hold loose text. */
+  operator?: "+" | "=";
 }) {
   return (
-    <div className="grid">
+    <div
+      className={cn(
+        "relative grid",
+        operator &&
+          "before:absolute before:-left-5 before:bottom-0.5 before:text-muted-foreground before:content-[var(--operator)]",
+      )}
+      style={operator ? ({ "--operator": `"${operator}"` } as React.CSSProperties) : undefined}
+    >
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd
         className={cn(

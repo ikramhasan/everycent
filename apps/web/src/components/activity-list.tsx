@@ -26,6 +26,11 @@ export function useActivityLookups(): ActivityLookups {
     const groups = categories.data?.groups ?? [];
     const accountNames = byId(accounts.data?.accounts);
     const categoryNames = byId(groups.flatMap((g) => g.categories));
+    // The built-in categories aren't in any group; a transaction that needs one has Uncategorized.
+    if (categories.data) {
+      categoryNames.set(categories.data.uncategorizedCategoryId, "Uncategorized");
+      categoryNames.set(categories.data.readyToAssignCategoryId, "Inflow: Ready to Assign");
+    }
     const groupNames = byId(groups);
     const payeeNames = byId(payees.data?.payees);
     const memberNames = new Map((members.data?.members ?? []).map((m) => [m.userId, m.name]));
