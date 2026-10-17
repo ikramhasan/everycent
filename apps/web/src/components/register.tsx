@@ -137,6 +137,7 @@ import {
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
+import { FileImportButton } from "./file-import";
 import { FlagMenu } from "./flag-menu";
 import { MemberAvatar } from "./member-avatar";
 import {
@@ -149,7 +150,6 @@ import {
 } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
-import { FileImportButton } from "./file-import";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
 import { ScheduledSection } from "./scheduled-section";
 import { type BulkAction, SelectionBar } from "./selection-bar";
