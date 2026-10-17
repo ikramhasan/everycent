@@ -17,7 +17,14 @@ export const getImportContextHandler: RouteHandler<typeof getImportContext, Env>
   await loadBudgetAccess(c, budgetId);
   const account = await findAccount(db, budgetId, accountId);
   const cutoff = await importCutoff(db, account.id);
-  return c.json({ ...cutoff, csvSettings: account.csvImportSettings ?? null }, 200);
+  return c.json(
+    {
+      ...cutoff,
+      csvSettings: account.csvImportSettings ?? null,
+      statementSettings: account.statementImportSettings ?? null,
+    },
+    200,
+  );
 };
 
 export const importTransactionsHandler: RouteHandler<typeof importTransactions, Env> = async (
@@ -33,10 +40,15 @@ export const importTransactionsHandler: RouteHandler<typeof importTransactions, 
   const result = await db.transaction(async (tx) => {
     const account = await findAccount(tx, budgetId, accountId);
     assertOpen(account);
-    if (body.csvSettings !== undefined) {
+    if (body.csvSettings !== undefined || body.statementSettings !== undefined) {
       await tx
         .update(budgetAccount)
-        .set({ csvImportSettings: body.csvSettings })
+        .set({
+          ...(body.csvSettings !== undefined ? { csvImportSettings: body.csvSettings } : {}),
+          ...(body.statementSettings !== undefined
+            ? { statementImportSettings: body.statementSettings }
+            : {}),
+        })
         .where(eq(budgetAccount.id, account.id));
     }
     return importRows(

@@ -14,8 +14,6 @@ export interface ImportRow {
   amount: bigint;
   payee: string;
   memo: string;
-  /** The file's own id for it (OFX `FITID`); otherwise one is made from amount and date. */
-  fileId?: string;
 }
 
 /**
@@ -226,12 +224,11 @@ const abs = (n: bigint) => (n < 0n ? -n : n);
  * YNAB-style import ids (`YNAB:<milliunits>:<date>:<occurrence>`, seen 2026-10-17), here in the
  * budget's minor units: amount, date, and which occurrence of that amount on that date it is
  * within the file. Importing the same file again gives the same ids, so its rows are skipped.
- * A row with the file's own id (OFX `FITID`) keeps that.
+ * YNAB uses these for OFX files too, not the file's FITIDs (2026-10-17, EVERYCENT-67).
  */
 export function importIds(rows: readonly ImportRow[]): string[] {
   const seen = new Map<string, number>();
   return rows.map((row) => {
-    if (row.fileId) return `FILE:${row.fileId}`;
     const key = `${row.amount}:${row.date}`;
     const n = (seen.get(key) ?? 0) + 1;
     seen.set(key, n);

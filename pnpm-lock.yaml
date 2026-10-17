@@ -321,6 +321,9 @@ catalogs:
     modern-screenshot:
       specifier: ^4.7.0
       version: 4.7.0
+    ofx-js:
+      specifier: ^1.1.2
+      version: 1.1.2
     openapi-fetch:
       specifier: ^0.17.0
       version: 0.17.0
@@ -666,6 +669,9 @@ importers:
       decimal.js:
         specifier: 'catalog:'
         version: 10.6.0
+      ofx-js:
+        specifier: 'catalog:'
+        version: 1.1.2
       papaparse:
         specifier: 'catalog:'
         version: 5.7.0
@@ -3914,6 +3920,9 @@ packages:
   obug@3.0.0:
     resolution: {integrity: sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw==}
     engines: {node: '>=12.20.0'}
+
+  ofx-js@1.1.2:
+    resolution: {integrity: sha512-aKGgu+/vF70vvPpjSuAiTy+jroSb2JVtKDf72U9ZgCf8/zZk/lOuzRbOc73Fn9xdecolBOBW5i1c6uVkj0r1zw==}
 
   openapi-fetch@0.17.0:
     resolution: {integrity: sha512-PsbZR1wAPcG91eEthKhN+Zn92FMHxv+/faECIwjXdxfTODGSGegYv0sc1Olz+HYPvKOuoXfp+0pA2XVt2cI0Ig==}
@@ -7294,6 +7303,8 @@ snapshots:
   obug@2.2.1: {}
 
   obug@3.0.0: {}
+
+  ofx-js@1.1.2: {}
 
   openapi-fetch@0.17.0:
     dependencies:

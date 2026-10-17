@@ -75,6 +75,8 @@ export const budgetAccount = pgTable(
      * options and date format, for files with these column names.
      */
     csvImportSettings: jsonb().$type<CsvImportSettings>(),
+    /** The same for OFX/QFX and QIF files (EVERYCENT-67): their three options. */
+    statementImportSettings: jsonb().$type<StatementImportSettings>(),
     /**
      * A tracking liability updated to a loan account (YNAB's "Update to a Loan Account"): the new
      * loan. The original stays closed with its history, which the loan's page shows.
@@ -299,8 +301,8 @@ export const transaction = pgTable(
     /** Bumped by the trigger on every real change: undo sends it to detect a partner's edit. */
     version: integer().notNull().default(1),
     /**
-     * From a file import (EVERYCENT-66): its import id (`EC:<amount>:<date>:<n>`, or `FILE:` and
-     * the file's own id), and the payee as the file named it, before renaming rules.
+     * From a file import (EVERYCENT-66): its import id (`EC:<amount>:<date>:<n>`) and the payee as
+     * the file named it, before renaming rules.
      */
     importId: text(),
     importedPayee: text(),
@@ -428,6 +430,13 @@ export interface CsvImportSettings {
   noHeaderRow: boolean;
   swapInflowOutflow: boolean;
   dateFormat: CsvDateFormat | null;
+}
+
+/** What an OFX/QFX or QIF import remembers for an account. */
+export interface StatementImportSettings {
+  importMemos: boolean;
+  swapPayeeMemo: boolean;
+  swapInflowOutflow: boolean;
 }
 
 /**

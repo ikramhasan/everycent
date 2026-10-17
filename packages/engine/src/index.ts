@@ -285,6 +285,16 @@ export {
   topSpenders,
   trendMonths,
 } from "./spending-trends";
+export {
+  applyStatementOptions,
+  ofxRows,
+  qifRows,
+  readOfx,
+  readQif,
+  type Statement,
+  type StatementEntry,
+  type StatementOptions,
+} from "./statement-import";
 export { type SuggestedBudgetSettings, suggestFormatSettings } from "./suggest-format-settings";
 export {
   type CategoryTarget,

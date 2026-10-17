@@ -7466,12 +7466,16 @@
           },
           "csvSettings": {
             "$ref": "#/components/schemas/CsvImportSettings"
+          },
+          "statementSettings": {
+            "$ref": "#/components/schemas/StatementImportSettings"
           }
         },
         "required": [
           "startDate",
           "reconciledThrough",
-          "csvSettings"
+          "csvSettings",
+          "statementSettings"
         ]
       },
       "CsvImportSettings": {
@@ -7580,6 +7584,29 @@
         ],
         "description": "What \"Remember setting for this account\" kept from the last CSV import"
       },
+      "StatementImportSettings": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "importMemos": {
+            "type": "boolean"
+          },
+          "swapPayeeMemo": {
+            "type": "boolean"
+          },
+          "swapInflowOutflow": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "importMemos",
+          "swapPayeeMemo",
+          "swapInflowOutflow"
+        ],
+        "description": "The same for the last OFX/QFX or QIF import"
+      },
       "ImportResult": {
         "type": "object",
         "properties": {
@@ -7630,12 +7657,6 @@
                 "memo": {
                   "type": "string",
                   "maxLength": 2000
-                },
-                "fileId": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "description": "The file's own id for it (OFX FITID); otherwise one is made from amount and date"
                 }
               },
               "required": [
@@ -7752,6 +7773,29 @@
               "dateFormat"
             ],
             "description": "Saved for the account's next CSV import; null forgets them, left out keeps them"
+          },
+          "statementSettings": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "importMemos": {
+                "type": "boolean"
+              },
+              "swapPayeeMemo": {
+                "type": "boolean"
+              },
+              "swapInflowOutflow": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "importMemos",
+              "swapPayeeMemo",
+              "swapInflowOutflow"
+            ],
+            "description": "Saved for the account's next OFX/QFX or QIF import, like `csvSettings`"
           }
         },
         "required": [

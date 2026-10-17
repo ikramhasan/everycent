@@ -1,11 +1,18 @@
 import {
+  applyStatementOptions,
   CSV_DATE_FORMATS,
   type CsvDateFormat,
   type CsvMapping,
   csvColumnNames,
   csvRows,
   type ImportRow,
+  ofxRows,
   parseCsvText,
+  possibleDateFormats,
+  qifRows,
+  readOfx,
+  readQif,
+  type StatementOptions,
 } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import { Checkbox } from "@everycent/ui/components/checkbox";
@@ -20,7 +27,7 @@ import {
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { cn } from "@everycent/ui/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight, CircleAlert, FileUp, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -192,7 +199,70 @@ function FileImportIntro({
 
 type Result = { title: string; message: string };
 
-function ImportTransactionsDialog({
+function ImportTransactionsDialog(props: {
+  file: LoadedFile;
+  initialAccountId?: string;
+  onClose: () => void;
+}) {
+  return props.file.kind === "csv" ? (
+    <CsvImportDialog {...props} />
+  ) : (
+    <StatementImportDialog {...props} />
+  );
+}
+
+/** After an import: everything the new transactions show up in. */
+async function refreshAfterImport(queryClient: QueryClient, budgetId: string) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
+    queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budgetId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/v1/budgets/{budgetId}/accounts/{accountId}/import-context"],
+    }),
+    invalidateMonths(queryClient),
+  ]);
+}
+
+function ResultDialog({ result, onClose }: { result: Result; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{result.title}</DialogTitle>
+          <DialogDescription>{result.message}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={onClose}>OK</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AccountSelect({
+  accounts,
+  value,
+  onChange,
+}: {
+  accounts: readonly { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <NativeSelect aria-label="Account" value={value} onChange={(e) => onChange(e.target.value)}>
+      <NativeSelectOption value="">Select an account...</NativeSelectOption>
+      {accounts.map((a) => (
+        <NativeSelectOption key={a.id} value={a.id}>
+          {a.name}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
+  );
+}
+
+function CsvImportDialog({
   file,
   initialAccountId,
   onClose,
@@ -268,37 +338,14 @@ function ImportTransactionsDialog({
           ...(remember ? { csvSettings: settings } : {}),
         },
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
-        queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
-        queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
-        queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/v1/budgets/{budgetId}/accounts/{accountId}/import-context"],
-        }),
-        invalidateMonths(queryClient),
-      ]);
+      await refreshAfterImport(queryClient, budget.id);
       setResult(resultMessage(rows.length, done.imported));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     }
   }
 
-  if (result) {
-    return (
-      <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{result.title}</DialogTitle>
-            <DialogDescription>{result.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={onClose}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  if (result) return <ResultDialog result={result} onClose={onClose} />;
 
   const amountCell = (r: ImportRow) =>
     `${r.amount < 0n ? "-" : "+"}${formatAmount({
@@ -318,18 +365,7 @@ function ImportTransactionsDialog({
               {rows.length} {rows.length === 1 ? "Transaction" : "Transactions"} from{" "}
               <strong>{file.name}</strong> will be imported into
             </p>
-            <NativeSelect
-              aria-label="Account"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-            >
-              <NativeSelectOption value="">Select an account...</NativeSelectOption>
-              {open.map((a) => (
-                <NativeSelectOption key={a.id} value={a.id}>
-                  {a.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            <AccountSelect accounts={open} value={accountId} onChange={setAccountId} />
           </div>
           {file.kind === "csv" ? (
             <div className="grid gap-2">
@@ -498,6 +534,227 @@ function ImportTransactionsDialog({
     </Dialog>
   );
 }
+
+/**
+ * Import Transactions for an OFX/QFX or QIF file (YNAB, 2026-10-17, EVERYCENT-67): "N
+ * transactions will be imported from CHECKING: ***2345 into", the skip notice on top, the
+ * preview with unsigned amounts, then Import Memos, Swap Payee and Memo, Swap Inflow and
+ * Outflow and Remember setting for this account. A QIF file's unclear dates are asked about
+ * as in a CSV.
+ */
+function StatementImportDialog({
+  file,
+  initialAccountId,
+  onClose,
+}: {
+  file: LoadedFile;
+  initialAccountId?: string;
+  onClose: () => void;
+}) {
+  const { budget, formatAmount, formatDate } = useBudget();
+  const queryClient = useQueryClient();
+  const accounts = useQuery(accountsQueryOptions(budget.id));
+  const open = (accounts.data?.accounts ?? []).filter((a) => !a.closed);
+  const [accountId, setAccountId] = useState(initialAccountId ?? "");
+  const account = open.find((a) => a.id === accountId);
+  const currency = account?.currency ?? budget.currency;
+  const context = $api.useQuery(
+    "get",
+    "/v1/budgets/{budgetId}/accounts/{accountId}/import-context",
+    { params: { path: { budgetId: budget.id, accountId } } },
+    { enabled: accountId !== "" },
+  );
+  const submit = $api.useMutation("post", "/v1/budgets/{budgetId}/accounts/{accountId}/import");
+  const [result, setResult] = useState<Result | null>(null);
+  const [options, setOptions] = useState<StatementOptions | null>(null);
+  const current = options ?? context.data?.statementSettings ?? DEFAULT_STATEMENT_OPTIONS;
+  const set = (patch: Partial<StatementOptions>) => setOptions({ ...current, ...patch });
+  const [remember, setRemember] = useState(true);
+  const [includeEarly, setIncludeEarly] = useState(false);
+  const [qifFormat, setQifFormat] = useState<CsvDateFormat | null>(null);
+
+  const read = useMemo(() => {
+    try {
+      const statement =
+        file.kind === "ofx"
+          ? readOfx(file.text, currency)
+          : readQif(file.text, currency, budget.numberFormat);
+      return { statement, error: null };
+    } catch (error) {
+      return { statement: null, error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [file, currency, budget.numberFormat]);
+  const statement = read.statement;
+  const qifCandidates =
+    statement && file.kind === "qif"
+      ? possibleDateFormats(statement.entries.map((e) => e.date))
+      : [];
+  const dateFormat = qifFormat ?? (qifCandidates.length === 1 ? (qifCandidates[0] ?? null) : null);
+  const dateUnclear =
+    file.kind === "qif" && statement !== null && statement.entries.length > 0 && !dateFormat;
+  let parsed: ImportRow[] = [];
+  if (statement && file.kind === "ofx") parsed = ofxRows(statement);
+  else if (statement && dateFormat) parsed = qifRows(statement, dateFormat);
+  const all = applyStatementOptions(parsed, current);
+  const cutoff = laterOf(context.data?.startDate ?? null, context.data?.reconciledThrough ?? null);
+  const early = account && cutoff ? all.filter((r) => r.date < cutoff) : [];
+  const rows = !account ? [] : includeEarly ? all : all.filter((r) => !cutoff || r.date >= cutoff);
+
+  async function runImport() {
+    if (!account) return;
+    try {
+      const done = await submit.mutateAsync({
+        params: {
+          path: { budgetId: budget.id, accountId: account.id },
+          query: { today: todayIso() },
+        },
+        body: {
+          transactions: rows.map((r) => ({ ...r, amount: r.amount.toString() })),
+          ...(remember ? { statementSettings: current } : {}),
+        },
+      });
+      await refreshAfterImport(queryClient, budget.id);
+      setResult(resultMessage(rows.length, done.imported));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Import failed");
+    }
+  }
+
+  if (result) return <ResultDialog result={result} onClose={onClose} />;
+  const money = (amount: bigint) =>
+    formatAmount({ amount: amount < 0n ? -amount : amount, currency });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import Transactions</DialogTitle>
+        </DialogHeader>
+        {read.error ? (
+          <p className="text-destructive text-sm">
+            {file.name} couldn't be read: {read.error}
+          </p>
+        ) : (
+          <div className="grid gap-4 text-sm">
+            <div className="grid gap-2">
+              <p>
+                {rows.length} {rows.length === 1 ? "transaction" : "transactions"} will be imported
+                from <strong>{statement?.source}</strong> into
+              </p>
+              <AccountSelect accounts={open} value={accountId} onChange={setAccountId} />
+            </div>
+            {early.length > 0 && (
+              <div className="grid gap-2 rounded-md bg-amber-50 p-3 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+                <p className="italic">
+                  This file has transactions dated before the account's start date or last
+                  reconciliation. Importing them will modify the start date for this account.
+                </p>
+                <Label className="font-normal">
+                  <Checkbox
+                    checked={includeEarly}
+                    onCheckedChange={(v) => setIncludeEarly(v === true)}
+                  />
+                  Include {early.length} {early.length === 1 ? "transaction" : "transactions"} dated
+                  before account start date or last reconciliation
+                </Label>
+              </div>
+            )}
+            {dateUnclear && statement && (
+              <DateFormatPrompt
+                fileName={file.name}
+                first={statement.entries[0]?.date ?? ""}
+                candidates={qifCandidates}
+                onSave={setQifFormat}
+              />
+            )}
+            <div className="grid gap-1">
+              <p className="font-medium">Preview</p>
+              <div className="max-h-56 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground text-xs uppercase">
+                      <th className="px-2 py-1 text-left font-medium">Date</th>
+                      <th className="px-2 py-1 text-left font-medium">Payee</th>
+                      <th className="px-2 py-1 text-left font-medium">Memo</th>
+                      <th className="px-2 py-1 text-right font-medium">Outflow</th>
+                      <th className="px-2 py-1 text-right font-medium">Inflow</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-2 py-2">
+                          No transactions to import
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((r, i) => (
+                        <tr key={`${i}-${r.date}`} className="border-b last:border-0">
+                          <td className="whitespace-nowrap px-2 py-1.5">{formatDate(r.date)}</td>
+                          <td className="max-w-40 truncate px-2 py-1.5">{r.payee}</td>
+                          <td className="max-w-40 truncate px-2 py-1.5">{r.memo}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {r.amount < 0n ? money(r.amount) : ""}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {r.amount > 0n ? money(r.amount) : ""}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <p className="font-medium">Options</p>
+              <Label className="font-normal">
+                <Checkbox
+                  checked={current.importMemos}
+                  onCheckedChange={(v) => set({ importMemos: v === true })}
+                />
+                Import Memos
+              </Label>
+              <Label className="font-normal">
+                <Checkbox
+                  checked={current.swapPayeeMemo}
+                  onCheckedChange={(v) => set({ swapPayeeMemo: v === true })}
+                />
+                Swap Payee and Memo
+              </Label>
+              <Label className="font-normal">
+                <Checkbox
+                  checked={current.swapInflowOutflow}
+                  onCheckedChange={(v) => set({ swapInflowOutflow: v === true })}
+                />
+                Swap Inflow and Outflow
+              </Label>
+              <Label className="font-normal">
+                <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
+                Remember setting for this account
+              </Label>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={runImport} disabled={!account || rows.length === 0 || submit.isPending}>
+            Import
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** YNAB's OFX/QIF options start with memos imported and nothing swapped (2026-10-17). */
+const DEFAULT_STATEMENT_OPTIONS: StatementOptions = {
+  importMemos: true,
+  swapPayeeMemo: false,
+  swapInflowOutflow: false,
+};
 
 const FIELD_LABELS = {
   date: "Date",

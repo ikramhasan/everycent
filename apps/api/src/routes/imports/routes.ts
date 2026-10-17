@@ -26,12 +26,19 @@ export const CsvImportSettingsSchema = z
   })
   .openapi("CsvImportSettings");
 
+export const StatementImportSettingsSchema = z
+  .object({ importMemos: z.boolean(), swapPayeeMemo: z.boolean(), swapInflowOutflow: z.boolean() })
+  .openapi("StatementImportSettings");
+
 const ImportContextSchema = z
   .object({
     startDate: IsoDate.nullable().describe("The account's oldest transaction"),
     reconciledThrough: IsoDate.nullable().describe("The newest reconciled transaction's date"),
     csvSettings: CsvImportSettingsSchema.nullable().describe(
       'What "Remember setting for this account" kept from the last CSV import',
+    ),
+    statementSettings: StatementImportSettingsSchema.nullable().describe(
+      "The same for the last OFX/QFX or QIF import",
     ),
   })
   .openapi("ImportContext");
@@ -41,12 +48,6 @@ const ImportRowSchema = z.object({
   amount: zMinorUnits.describe("In the account's currency; negative is an outflow"),
   payee: z.string().max(500).describe("As the file names it (renaming rules apply)"),
   memo: z.string().max(2000),
-  fileId: z
-    .string()
-    .min(1)
-    .max(255)
-    .optional()
-    .describe("The file's own id for it (OFX FITID); otherwise one is made from amount and date"),
 });
 
 const ImportBodySchema = z
@@ -55,6 +56,9 @@ const ImportBodySchema = z
     csvSettings: CsvImportSettingsSchema.nullable()
       .optional()
       .describe("Saved for the account's next CSV import; null forgets them, left out keeps them"),
+    statementSettings: StatementImportSettingsSchema.nullable()
+      .optional()
+      .describe("Saved for the account's next OFX/QFX or QIF import, like `csvSettings`"),
   })
   .openapi("ImportTransactions");
 

@@ -132,8 +132,10 @@ describe("CSV import (EVERYCENT-66)", () => {
 
   it("gives each row an id from amount, date and occurrence, as YNAB does", () => {
     const row = { date: "2026-10-10", amount: -450n, payee: "A", memo: "" };
-    expect(
-      importIds([row, { ...row, payee: "B" }, { ...row, amount: 1n }, { ...row, fileId: "F1" }]),
-    ).toEqual(["EC:-450:2026-10-10:1", "EC:-450:2026-10-10:2", "EC:1:2026-10-10:1", "FILE:F1"]);
+    expect(importIds([row, { ...row, payee: "B" }, { ...row, amount: 1n }])).toEqual([
+      "EC:-450:2026-10-10:1",
+      "EC:-450:2026-10-10:2",
+      "EC:1:2026-10-10:1",
+    ]);
   });
 });

@@ -12,6 +12,7 @@
   "dependencies": {
     "date-fns": "catalog:",
     "decimal.js": "catalog:",
+    "ofx-js": "catalog:",
     "papaparse": "catalog:",
     "zod": "catalog:"
   },

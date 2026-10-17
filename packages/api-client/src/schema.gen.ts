@@ -3281,6 +3281,7 @@ export interface components {
              */
             reconciledThrough: string | null;
             csvSettings: components["schemas"]["CsvImportSettings"];
+            statementSettings: components["schemas"]["StatementImportSettings"];
         };
         /** @description What "Remember setting for this account" kept from the last CSV import */
         CsvImportSettings: {
@@ -3298,6 +3299,12 @@ export interface components {
             swapInflowOutflow: boolean;
             /** @enum {string|null} */
             dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "DD/MMM/YYYY" | "DD/MMMM/YYYY" | "YYYY/MM/DD" | "YYYY/DD/MM" | "MM-DD-YYYY" | "DD-MM-YY" | "DD-MM-YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY.MM.DD" | "MM/DD'YYYY" | null;
+        } | null;
+        /** @description The same for the last OFX/QFX or QIF import */
+        StatementImportSettings: {
+            importMemos: boolean;
+            swapPayeeMemo: boolean;
+            swapInflowOutflow: boolean;
         } | null;
         ImportResult: {
             imported: number;
@@ -3318,8 +3325,6 @@ export interface components {
                 /** @description As the file names it (renaming rules apply) */
                 payee: string;
                 memo: string;
-                /** @description The file's own id for it (OFX FITID); otherwise one is made from amount and date */
-                fileId?: string;
             }[];
             /** @description Saved for the account's next CSV import; null forgets them, left out keeps them */
             csvSettings?: {
@@ -3337,6 +3342,12 @@ export interface components {
                 swapInflowOutflow: boolean;
                 /** @enum {string|null} */
                 dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "DD/MMM/YYYY" | "DD/MMMM/YYYY" | "YYYY/MM/DD" | "YYYY/DD/MM" | "MM-DD-YYYY" | "DD-MM-YY" | "DD-MM-YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY.MM.DD" | "MM/DD'YYYY" | null;
+            } | null;
+            /** @description Saved for the account's next OFX/QFX or QIF import, like `csvSettings` */
+            statementSettings?: {
+                importMemos: boolean;
+                swapPayeeMemo: boolean;
+                swapInflowOutflow: boolean;
             } | null;
         };
         BudgetViewList: {

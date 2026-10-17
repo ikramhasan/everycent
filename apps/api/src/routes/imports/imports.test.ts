@@ -129,17 +129,6 @@ describe("file import (EVERYCENT-66)", () => {
     expect(await rows()).toHaveLength(3);
   });
 
-  it("uses the file's own ids when it has them", async () => {
-    const { importFile } = await setup();
-    await importFile([{ ...coffee, fileId: "A1" }]);
-    // Same id, different row: still the same transaction. Same row, new id: a new one.
-    expect(await importFile([{ ...pay, fileId: "A1" }])).toMatchObject({
-      imported: 0,
-      duplicates: 1,
-    });
-    expect(await importFile([{ ...coffee, fileId: "A2" }])).toMatchObject({ imported: 1 });
-  });
-
   it("keeps each account's import ids to itself", async () => {
     const { importFile, addAccount } = await setup();
     const savings = await addAccount("Savings", "savings");
@@ -193,26 +182,30 @@ describe("file import (EVERYCENT-66)", () => {
       dateFormat: "MM/DD/YYYY",
     };
     const context = async () =>
-      json<{ startDate: string | null; reconciledThrough: string | null; csvSettings: unknown }>(
-        await send("GET", `${base}/accounts/${checking.id}/import-context`, owner.cookie),
-      );
+      json<{
+        startDate: string | null;
+        reconciledThrough: string | null;
+        csvSettings: unknown;
+        statementSettings: unknown;
+      }>(await send("GET", `${base}/accounts/${checking.id}/import-context`, owner.cookie));
     expect(await context()).toEqual({
       startDate: "2026-10-01",
       reconciledThrough: null,
       csvSettings: null,
+      statementSettings: null,
     });
     await importFile([coffee], { csvSettings: settings });
-    expect(await context()).toEqual({
-      startDate: "2026-10-01",
-      reconciledThrough: null,
-      csvSettings: settings,
-    });
+    expect(await context()).toMatchObject({ startDate: "2026-10-01", csvSettings: settings });
     await importFile([{ ...pay, date: "2026-09-20" }]);
     expect((await context()).startDate).toBe("2026-09-20");
     // Left out keeps them; null forgets them.
     expect((await context()).csvSettings).toEqual(settings);
     await importFile([], { csvSettings: null });
     expect((await context()).csvSettings).toBeNull();
+    // OFX/QIF options are kept apart (EVERYCENT-67).
+    const statement = { importMemos: false, swapPayeeMemo: true, swapInflowOutflow: false };
+    await importFile([], { statementSettings: statement });
+    expect(await context()).toMatchObject({ csvSettings: null, statementSettings: statement });
   });
 
   it("lets editors import and refuses viewers", async () => {
