@@ -294,11 +294,13 @@ Extras:
 
 ### 17. UX polish
 
-- [ ] Keyboard shortcuts across budget and register (with a cheat-sheet)
+- [x] Keyboard shortcuts across budget and register (with a cheat-sheet)
 - [ ] Command palette **(extra)**
-- [ ] Responsive layout for phones and tablets
+- [x] Responsive layout for phones and tablets **(our own design, not YNAB's)**
 - [ ] Installable PWA with offline entry queue and sync
-- [ ] Accessibility pass (screen readers, focus order, contrast)
+- [x] Accessibility pass (screen readers, focus order, contrast)
+- [x] Display Options: theme, progress bars, Differentiate Without Color; resizable sidebar,
+      inspector and register columns
 - [ ] Internationalization (UI translations)
 - [ ] Hide amounts
 - [ ] In-app notifications center (overspending, sync issues, upcoming bills)
