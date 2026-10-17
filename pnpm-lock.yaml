@@ -261,6 +261,9 @@ catalogs:
     '@types/node':
       specifier: ^24.0.0
       version: 24.19.0
+    '@types/papaparse':
+      specifier: ^5.5.2
+      version: 5.5.2
     '@types/react':
       specifier: ^19.3.0
       version: 19.3.0
@@ -327,6 +330,9 @@ catalogs:
     openapi-typescript:
       specifier: ^7.13.0
       version: 7.13.0
+    papaparse:
+      specifier: ^5.7.0
+      version: 5.7.0
     postgres:
       specifier: ^3.4.9
       version: 3.4.9
@@ -660,6 +666,9 @@ importers:
       decimal.js:
         specifier: 'catalog:'
         version: 10.6.0
+      papaparse:
+        specifier: 'catalog:'
+        version: 5.7.0
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -667,6 +676,9 @@ importers:
       '@everycent/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/papaparse':
+        specifier: 'catalog:'
+        version: 5.5.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -2883,6 +2895,9 @@ packages:
   '@types/node@24.19.0':
     resolution: {integrity: sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew==}
 
+  '@types/papaparse@5.5.2':
+    resolution: {integrity: sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA==}
+
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
@@ -3920,6 +3935,9 @@ packages:
 
   openapi3-ts@4.6.1:
     resolution: {integrity: sha512-XW9MOldkhoICNeXVzzmXzmOW5G73ppOEGmh7fLCqHjgfdEYCGGN+00MlVCeUZgovjjfC56j9tvtDt1zGabNjjA==}
+
+  papaparse@5.7.0:
+    resolution: {integrity: sha512-qBGxg/7Q3Kl9Wfhrz2Z74UnvnHTXLNG6jmKJFeBvP2+y4lV7So+7SR62+Zd47JvdrCkX+nDcnr0ObPzek/+6RA==}
 
   parse-json@8.3.0:
     resolution: {integrity: sha512-ybiGyvspI+fAoRQbIPRddCcSTV9/LsJbf0e/S85VLowVGzRmokfneg2kwVW/KU5rOXrPSbF1qAKPMgNTqqROQQ==}
@@ -6538,6 +6556,10 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
+  '@types/papaparse@5.5.2':
+    dependencies:
+      '@types/node': 24.19.0
+
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
@@ -7298,6 +7320,8 @@ snapshots:
   openapi3-ts@4.6.1:
     dependencies:
       yaml: 2.9.1
+
+  papaparse@5.7.0: {}
 
   parse-json@8.3.0:
     dependencies:

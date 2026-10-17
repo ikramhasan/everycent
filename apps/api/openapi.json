@@ -7445,6 +7445,319 @@
           "name"
         ]
       },
+      "ImportContext": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The account's oldest transaction"
+          },
+          "reconciledThrough": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The newest reconciled transaction's date"
+          },
+          "csvSettings": {
+            "$ref": "#/components/schemas/CsvImportSettings"
+          }
+        },
+        "required": [
+          "startDate",
+          "reconciledThrough",
+          "csvSettings"
+        ]
+      },
+      "CsvImportSettings": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 200,
+            "description": "The column names they were set for: the lowercased header, or A, B, C…"
+          },
+          "mapping": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 200
+              },
+              "payee": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 200
+              },
+              "memo": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 200
+              },
+              "outflow": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 200
+              },
+              "inflow": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "date",
+              "payee",
+              "memo",
+              "outflow",
+              "inflow"
+            ],
+            "description": "The column (0-based) feeding each field; one column can be both amounts"
+          },
+          "noHeaderRow": {
+            "type": "boolean"
+          },
+          "swapInflowOutflow": {
+            "type": "boolean"
+          },
+          "dateFormat": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "MM/DD/YYYY",
+              "DD/MM/YYYY",
+              "DD/MMM/YYYY",
+              "DD/MMMM/YYYY",
+              "YYYY/MM/DD",
+              "YYYY/DD/MM",
+              "MM-DD-YYYY",
+              "DD-MM-YY",
+              "DD-MM-YYYY",
+              "YYYY-MM-DD",
+              "DD.MM.YYYY",
+              "YYYY.MM.DD",
+              "MM/DD'YYYY",
+              null
+            ]
+          }
+        },
+        "required": [
+          "columns",
+          "mapping",
+          "noHeaderRow",
+          "swapInflowOutflow",
+          "dateFormat"
+        ],
+        "description": "What \"Remember setting for this account\" kept from the last CSV import"
+      },
+      "ImportResult": {
+        "type": "object",
+        "properties": {
+          "imported": {
+            "type": "integer"
+          },
+          "duplicates": {
+            "type": "integer",
+            "description": "Rows skipped because the account already took them in (same import id)"
+          },
+          "transactionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The new transactions, in the file's order"
+          }
+        },
+        "required": [
+          "imported",
+          "duplicates",
+          "transactionIds"
+        ]
+      },
+      "ImportTransactions": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Calendar date, YYYY-MM-DD"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "In the account's currency; negative is an outflow"
+                },
+                "payee": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "description": "As the file names it (renaming rules apply)"
+                },
+                "memo": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "fileId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "description": "The file's own id for it (OFX FITID); otherwise one is made from amount and date"
+                }
+              },
+              "required": [
+                "date",
+                "amount",
+                "payee",
+                "memo"
+              ]
+            },
+            "maxItems": 10000
+          },
+          "csvSettings": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "maxItems": 200,
+                "description": "The column names they were set for: the lowercased header, or A, B, C…"
+              },
+              "mapping": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "payee": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "memo": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "outflow": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "inflow": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 200
+                  }
+                },
+                "required": [
+                  "date",
+                  "payee",
+                  "memo",
+                  "outflow",
+                  "inflow"
+                ],
+                "description": "The column (0-based) feeding each field; one column can be both amounts"
+              },
+              "noHeaderRow": {
+                "type": "boolean"
+              },
+              "swapInflowOutflow": {
+                "type": "boolean"
+              },
+              "dateFormat": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "MM/DD/YYYY",
+                  "DD/MM/YYYY",
+                  "DD/MMM/YYYY",
+                  "DD/MMMM/YYYY",
+                  "YYYY/MM/DD",
+                  "YYYY/DD/MM",
+                  "MM-DD-YYYY",
+                  "DD-MM-YY",
+                  "DD-MM-YYYY",
+                  "YYYY-MM-DD",
+                  "DD.MM.YYYY",
+                  "YYYY.MM.DD",
+                  "MM/DD'YYYY",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "columns",
+              "mapping",
+              "noHeaderRow",
+              "swapInflowOutflow",
+              "dateFormat"
+            ],
+            "description": "Saved for the account's next CSV import; null forgets them, left out keeps them"
+          }
+        },
+        "required": [
+          "transactions"
+        ]
+      },
       "BudgetViewList": {
         "type": "object",
         "properties": {
@@ -18672,6 +18985,186 @@
           },
           "404": {
             "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/import-context": {
+      "get": {
+        "operationId": "getImportContext",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "What a file import into the account needs: its start date and remembered CSV settings",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportContext"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/accounts/{accountId}/import": {
+      "post": {
+        "operationId": "importTransactions",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Import a bank file's transactions into the account (cleared, unapproved)",
+        "description": "The rows come already read from the file (CSV, OFX/QFX or QIF). Rows the account took in before (same import id, even if since deleted) are skipped. Payees go through the plan's renaming rules; categories follow the payee's.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "accountId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: a row dated later is refused (`DATE_IN_FUTURE`)"
+            },
+            "required": false,
+            "description": "The user's today: a row dated later is refused (`DATE_IN_FUTURE`)",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTransactions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, a closed account, or a row dated in the future",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't add transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or account, or the caller isn't a member",
             "content": {
               "application/json": {
                 "schema": {

@@ -1241,6 +1241,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/import-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a file import into the account needs: its start date and remembered CSV settings */
+        get: operations["getImportContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a bank file's transactions into the account (cleared, unapproved)
+         * @description The rows come already read from the file (CSV, OFX/QFX or QIF). Rows the account took in before (same import id, even if since deleted) are skipped. Payees go through the plan's renaming rules; categories follow the payee's.
+         */
+        post: operations["importTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/views": {
         parameters: {
             query?: never;
@@ -3231,6 +3268,76 @@ export interface components {
         };
         RenameFlag: {
             name: string;
+        };
+        ImportContext: {
+            /**
+             * Format: date
+             * @description The account's oldest transaction
+             */
+            startDate: string | null;
+            /**
+             * Format: date
+             * @description The newest reconciled transaction's date
+             */
+            reconciledThrough: string | null;
+            csvSettings: components["schemas"]["CsvImportSettings"];
+        };
+        /** @description What "Remember setting for this account" kept from the last CSV import */
+        CsvImportSettings: {
+            /** @description The column names they were set for: the lowercased header, or A, B, C… */
+            columns: string[];
+            /** @description The column (0-based) feeding each field; one column can be both amounts */
+            mapping: {
+                date: number | null;
+                payee: number | null;
+                memo: number | null;
+                outflow: number | null;
+                inflow: number | null;
+            };
+            noHeaderRow: boolean;
+            swapInflowOutflow: boolean;
+            /** @enum {string|null} */
+            dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "DD/MMM/YYYY" | "DD/MMMM/YYYY" | "YYYY/MM/DD" | "YYYY/DD/MM" | "MM-DD-YYYY" | "DD-MM-YY" | "DD-MM-YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY.MM.DD" | "MM/DD'YYYY" | null;
+        } | null;
+        ImportResult: {
+            imported: number;
+            /** @description Rows skipped because the account already took them in (same import id) */
+            duplicates: number;
+            /** @description The new transactions, in the file's order */
+            transactionIds: string[];
+        };
+        ImportTransactions: {
+            transactions: {
+                /**
+                 * Format: date
+                 * @description Calendar date, YYYY-MM-DD
+                 */
+                date: string;
+                /** @description In the account's currency; negative is an outflow */
+                amount: string;
+                /** @description As the file names it (renaming rules apply) */
+                payee: string;
+                memo: string;
+                /** @description The file's own id for it (OFX FITID); otherwise one is made from amount and date */
+                fileId?: string;
+            }[];
+            /** @description Saved for the account's next CSV import; null forgets them, left out keeps them */
+            csvSettings?: {
+                /** @description The column names they were set for: the lowercased header, or A, B, C… */
+                columns: string[];
+                /** @description The column (0-based) feeding each field; one column can be both amounts */
+                mapping: {
+                    date: number | null;
+                    payee: number | null;
+                    memo: number | null;
+                    outflow: number | null;
+                    inflow: number | null;
+                };
+                noHeaderRow: boolean;
+                swapInflowOutflow: boolean;
+                /** @enum {string|null} */
+                dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "DD/MMM/YYYY" | "DD/MMMM/YYYY" | "YYYY/MM/DD" | "YYYY/DD/MM" | "MM-DD-YYYY" | "DD-MM-YY" | "DD-MM-YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY.MM.DD" | "MM/DD'YYYY" | null;
+            } | null;
         };
         BudgetViewList: {
             /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
@@ -8851,6 +8958,122 @@ export interface operations {
                 };
             };
             /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getImportContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Import context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportContext"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importTransactions: {
+        parameters: {
+            query?: {
+                /** @description The user's today: a row dated later is refused (`DATE_IN_FUTURE`) */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportTransactions"];
+            };
+        };
+        responses: {
+            /** @description Imported */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Invalid input, a closed account, or a row dated in the future */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't add transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

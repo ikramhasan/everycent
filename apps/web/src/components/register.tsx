@@ -149,6 +149,7 @@ import {
 } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
+import { FileImportButton } from "./file-import";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
 import { ScheduledSection } from "./scheduled-section";
 import { type BulkAction, SelectionBar } from "./selection-bar";
@@ -1678,6 +1679,7 @@ export function Register({
             <CreditCard /> Record Payment
           </Button>
         )}
+        {!readOnly && canAdd && <FileImportButton accountId={accountId} />}
         {!canAdd && account?.closed && (
           <p className="text-muted-foreground text-sm">Reopen this account to add transactions.</p>
         )}

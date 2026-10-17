@@ -46,6 +46,22 @@ export {
   MoneyParseError,
   UnknownCurrencyError,
 } from "./errors";
+export {
+  CSV_DATE_FORMATS,
+  type CsvDateFormat,
+  type CsvMapping,
+  type CsvOptions,
+  type CsvRowError,
+  csvColumnNames,
+  csvRows,
+  guessCsvMapping,
+  type ImportRow,
+  importIds,
+  parseCsvText,
+  parseImportAmount,
+  parseImportDate,
+  possibleDateFormats,
+} from "./file-import";
 export { currencySymbol, formatAmount, parseAmount } from "./format-amount";
 export { formatDate } from "./format-date";
 export {

@@ -12,10 +12,12 @@
   "dependencies": {
     "date-fns": "catalog:",
     "decimal.js": "catalog:",
+    "papaparse": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@everycent/tsconfig": "workspace:*",
+    "@types/papaparse": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

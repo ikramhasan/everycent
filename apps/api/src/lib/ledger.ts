@@ -136,6 +136,9 @@ export interface NewTransaction {
   approved?: boolean;
   transferTransactionId?: string | null;
   transferSubTransactionId?: string | null;
+  /** A file import's id and payee as the file named it (EVERYCENT-66). */
+  importId?: string | null;
+  importedPayee?: string | null;
   /**
    * The amount in the budget's currency, when already known (a revaluation's). Left out, it's
    * `amount` in an account in the budget's currency, or converted with `fx` (at `rate`, or the
