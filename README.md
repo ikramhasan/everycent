@@ -325,7 +325,7 @@ Off by default, per-user toggle, clear data-usage notice, no data sent unless en
 - [x] Audit log / change history per budget
 - [ ] Automated backups and point-in-time restore
 - [x] Observability: structured logs, metrics, error tracking
-- [ ] Deployment: Docker images, production config, migrations on deploy
+- [x] Deployment: Docker images, production config, migrations on deploy
 - [ ] Native mobile apps (or Capacitor wrapper around the PWA)
 - [ ] Billing / subscriptions (if hosted as a service)
 

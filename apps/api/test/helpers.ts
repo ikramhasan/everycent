@@ -39,9 +39,11 @@ export function createTestApp({
   serverDate = () => null,
   fxProviders = [new FakeFxProvider()],
   ynab,
+  envOverrides = {},
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & AuthOptions = {}) {
-  const env = testEnv();
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> &
+  AuthOptions & { envOverrides?: Partial<Env> } = {}) {
+  const env = { ...testEnv(), ...envOverrides };
   const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
   const outbox = new MemoryEmailSender();

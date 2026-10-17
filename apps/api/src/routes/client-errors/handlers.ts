@@ -19,9 +19,11 @@ export const reportClientErrorHandler: RouteHandler<typeof reportClientError, Ap
   c,
 ) => {
   const { message, stack, path } = c.req.valid("json");
-  // Keyed by the first forwarded hop: spoofable, but a spoofer only fills the log faster, and a
+  // Keyed like Better Auth's limits: the host's client IP header (CLIENT_IP_HEADER), else the
+  // first forwarded hop. That one is spoofable, but a spoofer only fills the log faster, and a
   // global cap bounds that too.
-  const client = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "direct";
+  const header = c.var.deps.env.CLIENT_IP_HEADER ?? "x-forwarded-for";
+  const client = c.req.header(header)?.split(",")[0]?.trim() || "direct";
   if (await tryClientErrorReport(c.var.deps.db, client)) {
     log.error("Web app error", {
       source: "web",

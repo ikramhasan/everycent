@@ -25,6 +25,17 @@ const EnvSchema = z
      */
     TRUSTED_PROXIES: optional(z.string()),
     /**
+     * A header the host's edge sets to the client's IP and overwrites on every request, read
+     * instead of `x-forwarded-for` (Railway: `x-real-ip`; it publishes no proxy ranges for
+     * TRUSTED_PROXIES). Only safe when clients can't reach the API except through that edge.
+     */
+    CLIENT_IP_HEADER: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9-]+$/)
+        .toLowerCase(),
+    ),
+    /**
      * `all` (default): the API process also runs background jobs. `api`: it only queues them, and
      * a separate `node dist/worker.mjs` process runs them.
      */

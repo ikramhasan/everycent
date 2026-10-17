@@ -219,6 +219,7 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
     advanced: {
       database: { generateId: () => newId() },
       ipAddress: {
+        ...(env.CLIENT_IP_HEADER ? { ipAddressHeaders: [env.CLIENT_IP_HEADER] } : {}),
         trustedProxies: env.TRUSTED_PROXIES?.split(",")
           .map((s) => s.trim())
           .filter(Boolean),

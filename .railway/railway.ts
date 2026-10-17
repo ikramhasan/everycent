@@ -21,11 +21,13 @@ export default defineRailway(() => {
       // The service's own generated domain; one origin serves the web app and the API.
       BETTER_AUTH_URL: PUBLIC_URL,
       WEB_ORIGIN: PUBLIC_URL,
+      // Railway's edge overwrites X-Real-IP on every request and publishes no proxy ranges, so
+      // rate limits read it rather than X-Forwarded-For through TRUSTED_PROXIES.
+      CLIENT_IP_HEADER: "x-real-ip",
       // Secrets are set in Railway and kept as they are.
       BETTER_AUTH_SECRET: preserve(),
       RESEND_API_KEY: preserve(),
       FROM_EMAIL: preserve(),
-      TRUSTED_PROXIES: preserve(),
     },
   });
 
