@@ -39,7 +39,7 @@ export function BudgetSwitcher({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuButton size="lg" aria-label="Switch budget">
+          <SidebarMenuButton size="lg">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Wallet className="size-4" />
             </div>
@@ -49,7 +49,9 @@ export function BudgetSwitcher({
                 {current ? current.currency : "everycent"}
               </span>
             </div>
-            <ChevronsUpDown className="ml-auto size-4" />
+            <ChevronsUpDown className="ml-auto size-4" aria-hidden />
+            {/* After the name, so the visible text starts the button's name (WCAG 2.5.3). */}
+            <span className="sr-only">Switch budget</span>
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">

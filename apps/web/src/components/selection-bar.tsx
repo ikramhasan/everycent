@@ -226,18 +226,21 @@ export function SelectionBar({
       // Floats at the bottom like YNAB's, so the rows don't jump when it appears.
       className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 md:bottom-6 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm shadow-lg duration-200 ease-out-quint animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:slide-in-from-bottom-0"
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Clear selection"
-        onClick={onClear}
-      >
-        <X />
-        <span aria-live="polite" className="tabular-nums">
+      {/* The count is read out as it changes; the X beside it clears the selection. */}
+      <span className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Clear selection"
+          onClick={onClear}
+        >
+          <X />
+        </Button>
+        <span aria-live="polite" className="pr-1 font-medium tabular-nums">
           {count === null ? "Counting…" : plural(count, "Transaction")}
         </span>
-      </Button>
+      </span>
       {total !== null && <span className="text-muted-foreground tabular-nums">Total {total}</span>}
       {canSelectAll && !allMatching && (
         <Button type="button" variant="link" size="sm" onClick={onSelectAll}>

@@ -36,6 +36,7 @@ catalog:
   "@vitejs/plugin-react": ^6.1.1
   better-auth: ^1.7.6
   canvas-confetti: ^1.9.4
+  axe-core: ^4.14.0
   bowser: ^2.14.1
   cmdk: ^1.1.1
   date-fns: ^4.4.0

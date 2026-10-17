@@ -20,7 +20,7 @@ import {
 import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, GripVertical, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -222,7 +222,7 @@ function AccountItem({
   /** False for a viewer, who can't reorder. */
   reorderable: boolean;
 }) {
-  const { ref, isDragSource } = useSortable({
+  const { ref, handleRef, isDragSource } = useSortable({
     // A starred account is in two sections, so its id here includes the section.
     id: `${section}:${account.id}`,
     index,
@@ -234,7 +234,23 @@ function AccountItem({
   });
   const working = BigInt(account.balances.working);
   return (
-    <SidebarMenuItem ref={ref} className={cn(isDragSource && "opacity-60")}>
+    <SidebarMenuItem ref={ref} className={cn("group/account", isDragSource && "opacity-60")}>
+      {/*
+       * Dragging goes through a handle, so the row stays a list item with a link in it rather than
+       * a button around one; without reordering the handle is an empty, hidden element.
+       */}
+      {reorderable ? (
+        <button
+          ref={handleRef}
+          type="button"
+          aria-label={`Reorder ${account.name}`}
+          className="absolute top-1/2 -left-1 z-10 grid h-6 w-3 -translate-y-1/2 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 active:cursor-grabbing group-hover/account:opacity-100 pointer-coarse:hidden"
+        >
+          <GripVertical className="size-3" />
+        </button>
+      ) : (
+        <span ref={handleRef} hidden />
+      )}
       <SidebarMenuButton asChild>
         <Link
           to="/budgets/$budgetId/accounts/$accountId"

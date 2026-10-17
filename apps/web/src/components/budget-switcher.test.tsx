@@ -39,7 +39,7 @@ async function renderSwitcher(currentBudgetId: string | undefined) {
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   render(<RouterProvider router={router} />);
-  return screen.findByRole("button", { name: "Switch budget" });
+  return screen.findByRole("button", { name: /Switch budget$/ });
 }
 
 describe("BudgetSwitcher", () => {

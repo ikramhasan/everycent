@@ -161,12 +161,10 @@ export function ReadyToAssignBanner({
       {breakdown ? (
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label="View Ready to Assign Breakdown"
-              className="grid cursor-pointer text-left"
-            >
+            <button type="button" className="grid cursor-pointer text-left">
               {summary}
+              {/* After the amount, so the visible text starts the button's name (WCAG 2.5.3). */}
+              <span className="sr-only">View Ready to Assign Breakdown</span>
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-96">

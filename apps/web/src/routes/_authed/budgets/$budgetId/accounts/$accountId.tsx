@@ -594,12 +594,11 @@ function AccountPage() {
       />
       {account.note && <p className="max-w-prose text-sm">{account.note}</p>}
 
-      <dl className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-lg border px-4 py-3 tabular-nums">
+      <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 rounded-lg border px-4 py-3 tabular-nums">
         <Balance label="Cleared Balance" value={show(account.balances.cleared)} />
-        <span className="pb-0.5 text-muted-foreground">+</span>
-        <Balance label="Uncleared Balance" value={show(account.balances.uncleared)} />
-        <span className="pb-0.5 text-muted-foreground">=</span>
+        <Balance label="Uncleared Balance" value={show(account.balances.uncleared)} operator="+" />
         <Balance
+          operator="="
           label="Working Balance"
           value={show(account.balances.working)}
           negative={working < 0n}
@@ -684,14 +683,24 @@ function Balance({
   value,
   negative = false,
   strong = false,
+  operator,
 }: {
   label: string;
   value: string;
   negative?: boolean;
   strong?: boolean;
+  /** The "+" or "=" before it, drawn by CSS: a list of terms can't hold loose text. */
+  operator?: "+" | "=";
 }) {
   return (
-    <div className="grid">
+    <div
+      className={cn(
+        "relative grid",
+        operator &&
+          "before:absolute before:-left-5 before:bottom-0.5 before:text-muted-foreground before:content-[var(--operator)]",
+      )}
+      style={operator ? ({ "--operator": `"${operator}"` } as React.CSSProperties) : undefined}
+    >
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd
         className={cn(

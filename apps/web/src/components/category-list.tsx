@@ -745,6 +745,8 @@ function GroupSection({
       aria-label={group.name}
       className={cn("border-b bg-background last:border-b-0", isDragSource && "opacity-60")}
     >
+      {/* An empty handle keeps dnd-kit's button role off a group that can't move (EVERYCENT-95). */}
+      {(managed || !reorderable) && <span ref={handleRef} hidden />}
       <div className={cn(ROW, "group/row bg-muted/60")}>
         <div className={NAME_CELL}>
           <Button
@@ -972,7 +974,11 @@ function CategoryRow({
               className={HOVER_REVEAL}
             />
           ) : (
-            <Spacer />
+            <>
+              <Spacer />
+              {/* An empty handle keeps dnd-kit's button role off the row (EVERYCENT-95). */}
+              <span ref={handleRef} hidden />
+            </>
           )}
           {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
           <NamePopover

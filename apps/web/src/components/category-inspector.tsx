@@ -123,7 +123,7 @@ export function MonthSummary({
           <p className="text-muted-foreground text-xs">{selectedNames.join(", ")}</p>
         </div>
       )}
-      <h3 className="font-semibold text-sm">{name}'s Summary</h3>
+      <h2 className="font-semibold text-sm">{name}'s Summary</h2>
       <dl className="grid gap-2">
         <Line
           label="Left Over from Last Month"

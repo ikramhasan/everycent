@@ -36,7 +36,13 @@ export function KeyboardShortcutsDialog({
             The keys for the plan, accounts, transactions and dates.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Focusable, so keyboard users can scroll the list (it has no controls of its own). */}
+        <section
+          aria-label="Shortcuts"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must take focus (WCAG 2.1.1)
+          tabIndex={0}
+          className="min-h-0 flex-1 overflow-y-auto focus-visible:outline-2 focus-visible:outline-ring"
+        >
           <div className="grid gap-6 p-4">
             {BY_SECTION.map(({ section, shortcuts }) => (
               <section key={section} aria-labelledby={`shortcuts-${section}`}>
@@ -60,7 +66,7 @@ export function KeyboardShortcutsDialog({
               </section>
             ))}
           </div>
-        </div>
+        </section>
         <DialogFooter className="m-0 border-t px-4 py-3">
           <DialogClose asChild>
             <Button>OK</Button>

@@ -78,7 +78,7 @@ describe("Ready to Assign Breakdown", () => {
         breakdown={{ lines: october, month: "2026-10" }}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "View Ready to Assign Breakdown" }));
+    await userEvent.click(screen.getByRole("button", { name: /View Ready to Assign Breakdown$/ }));
     expect(screen.getByText("Ready to Assign Breakdown")).toBeInTheDocument();
     expect(screen.getByText("+$13")).toBeInTheDocument();
     expect(screen.getByText("$-13")).toBeInTheDocument();
