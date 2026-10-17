@@ -298,6 +298,77 @@ describe("budget backup", () => {
     expect(budget.id).not.toBe(second.budget.id);
   });
 
+  it("keeps file imports' ids, settings and matches (EVERYCENT-66/68)", async () => {
+    const { cookie } = await signUp(app);
+    const budget = await createBudget(app, cookie, { name: "Imports" });
+    const base = `/v1/budgets/${budget.id}`;
+    const checking = await ok<Account>(
+      send("POST", `${base}/accounts`, cookie, {
+        name: "Checking",
+        type: "checking",
+        balance: "0",
+        date: "2026-10-01",
+      }),
+      201,
+    );
+    await ok(
+      send("POST", `${base}/transactions`, cookie, {
+        accountId: checking.id,
+        date: "2026-10-10",
+        amount: "-2000",
+        payeeName: "Mine",
+        categoryId: null,
+        memo: "",
+        flag: null,
+      }),
+      201,
+    );
+    const file = [
+      { date: "2026-10-11", amount: "-2000", payee: "BANK A", memo: "" },
+      { date: "2026-10-12", amount: "-300", payee: "BANK B", memo: "" },
+    ];
+    const settings = {
+      columns: ["date", "payee", "amount"],
+      mapping: { date: 0, payee: 1, memo: null, outflow: 2, inflow: 2 },
+      noHeaderRow: false,
+      swapInflowOutflow: false,
+      dateFormat: "YYYY-MM-DD",
+    };
+    await ok(
+      send("POST", `${base}/accounts/${checking.id}/import?today=2026-10-17`, cookie, {
+        transactions: file,
+        csvSettings: settings,
+      }),
+    );
+    const backup = await ok<Record<string, unknown>>(send("GET", `${base}/backup`, cookie));
+    const restored = await ok<Imported>(send("POST", "/v1/budgets/import", cookie, backup), 201);
+    expect(restored.counts.accountImportIds).toBe(2);
+    const newBase = `/v1/budgets/${restored.budget.id}`;
+    const [account] = (
+      await ok<{ accounts: Account[] }>(send("GET", `${newBase}/accounts`, cookie))
+    ).accounts;
+    if (!account) throw new Error("no account");
+    // The same file adds nothing, the settings came along, and the match is still a match.
+    const again = await ok<{ imported: number; duplicates: number }>(
+      send("POST", `${newBase}/accounts/${account.id}/import?today=2026-10-17`, cookie, {
+        transactions: file,
+      }),
+    );
+    expect(again).toMatchObject({ imported: 0, duplicates: 2 });
+    const context = await ok<{ csvSettings: unknown }>(
+      send("GET", `${newBase}/accounts/${account.id}/import-context`, cookie),
+    );
+    expect(context.csvSettings).toEqual(settings);
+    const matched = await ok<{ transactions: { payeeName: string; matched: unknown }[] }>(
+      send(
+        "GET",
+        `${newBase}/transactions?accountId=${account.id}&q=${encodeURIComponent("Is: Matched")}`,
+        cookie,
+      ),
+    );
+    expect(matched.transactions.map((t) => t.payeeName)).toEqual(["Mine"]);
+  });
+
   it("refuses a backup that doesn't hold together, keeping nothing", async () => {
     const { cookie, base } = await richBudget();
     const backup = (await (await send("GET", `${base}/backup`, cookie)).json()) as {

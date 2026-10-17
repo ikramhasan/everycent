@@ -1,4 +1,5 @@
 import {
+  accountImportId,
   budgetAccount,
   budgetView,
   category,
@@ -22,6 +23,9 @@ import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import type { BudgetRow } from "../budget-access";
 import type { Db } from "../ledger";
 import { BACKUP_FORMAT, BACKUP_SECTIONS, BACKUP_VERSION, type Backup } from "./schema";
+
+/** A JSON column, as the file's loose object (it's written back as it was). */
+const loose = (value: object | null) => (value ?? null) as Record<string, unknown> | null;
 
 /** Rows read per query for the big sections. */
 const PAGE = 1000;
@@ -109,6 +113,8 @@ const readers: { [S in Section]: Reader<S> } = {
       pairedCategoryId: a.pairedCategoryId,
       paidOffBannerDismissed: a.paidOffBannerDismissed,
       migratedToAccountId: a.migratedToAccountId,
+      csvImportSettings: loose(a.csvImportSettings),
+      statementImportSettings: loose(a.statementImportSettings),
     }));
   },
   loanTerms: async function* (db, budgetId) {
@@ -157,6 +163,8 @@ const readers: { [S in Section]: Reader<S> } = {
           categorization: payee.categorization,
           defaultCategoryId: payee.defaultCategoryId,
           carriedCategoryId: payee.carriedCategoryId,
+          autoCategoryId: payee.autoCategoryId,
+          autoCategorySaved: payee.autoCategorySaved,
         })
         .from(payee)
         .where(eq(payee.budgetId, budgetId))
@@ -297,6 +305,9 @@ const readers: { [S in Section]: Reader<S> } = {
           approved: t.approved,
           transferTransactionId: t.transferTransactionId,
           transferSubTransactionId: t.transferSubTransactionId,
+          importId: t.importId,
+          importedPayee: t.importedPayee,
+          matchedImport: loose(t.matchedImport),
         })),
     ),
   subTransactions: (db, budgetId) =>
@@ -382,6 +393,15 @@ const readers: { [S in Section]: Reader<S> } = {
         .from(fxRateOverride)
         .where(eq(fxRateOverride.budgetId, budgetId))
         .orderBy(asc(fxRateOverride.date), asc(fxRateOverride.currency)),
+    ),
+  accountImportIds: (db, budgetId) =>
+    once(
+      db
+        .select({ accountId: accountImportId.accountId, importId: accountImportId.importId })
+        .from(accountImportId)
+        .innerJoin(budgetAccount, eq(budgetAccount.id, accountImportId.accountId))
+        .where(eq(budgetAccount.budgetId, budgetId))
+        .orderBy(asc(accountImportId.accountId), asc(accountImportId.importId)),
     ),
 };
 

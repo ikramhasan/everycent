@@ -2058,6 +2058,22 @@
                   ],
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "csvImportSettings": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {},
+                  "additionalProperties": {}
+                },
+                "statementImportSettings": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {},
+                  "additionalProperties": {}
                 }
               },
               "required": [
@@ -2571,6 +2587,17 @@
                   ],
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "autoCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "autoCategorySaved": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -3675,6 +3702,28 @@
                   ],
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "importId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 300
+                },
+                "importedPayee": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 10000
+                },
+                "matchedImport": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {},
+                  "additionalProperties": {}
                 }
               },
               "required": [
@@ -4578,6 +4627,28 @@
                 "rate"
               ]
             }
+          },
+          "accountImportIds": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "importId": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "accountId",
+                "importId"
+              ]
+            },
+            "default": []
           }
         },
         "required": [

@@ -1,8 +1,10 @@
 import { newId, sql } from "@everycent/db";
 import {
+  accountImportId,
   budget,
   budgetAccount,
   budgetView,
+  type CsvImportSettings,
   category,
   categoryAssignment,
   categoryGroup,
@@ -11,11 +13,13 @@ import {
   fxRateOverride,
   loanCharge,
   loanTerms,
+  type MatchedImport,
   moneyMove,
   monthNote,
   PRESET_BUDGET_VIEWS,
   payee,
   payeeRule,
+  type StatementImportSettings,
   scheduledSubTransaction,
   scheduledTransaction,
   subTransaction,
@@ -142,6 +146,17 @@ export async function importBackup(tx: Tx, doc: Backup, budgetId: string): Promi
       escrowAmount: bigOrNull(a.escrowAmount),
       lastReconciledAt: a.lastReconciledAt ? new Date(a.lastReconciledAt) : null,
       paidOffBannerDismissed: a.paidOffBannerDismissed,
+      csvImportSettings: (a.csvImportSettings ?? null) as CsvImportSettings | null,
+      statementImportSettings: (a.statementImportSettings ??
+        null) as StatementImportSettings | null,
+    })),
+  );
+  await insertChunks(
+    tx,
+    accountImportId,
+    doc.accountImportIds.map((r) => ({
+      accountId: accounts.get(r.accountId),
+      importId: r.importId,
     })),
   );
 
@@ -218,6 +233,8 @@ export async function importBackup(tx: Tx, doc: Backup, budgetId: string): Promi
       categorization: p.categorization,
       defaultCategoryId: categories.ref(p.defaultCategoryId),
       carriedCategoryId: categories.ref(p.carriedCategoryId),
+      autoCategoryId: categories.ref(p.autoCategoryId ?? null),
+      autoCategorySaved: p.autoCategorySaved ?? false,
     })),
   );
   await insertChunks(
@@ -338,6 +355,9 @@ export async function importBackup(tx: Tx, doc: Backup, budgetId: string): Promi
       cleared: t.cleared,
       flag: t.flag,
       approved: t.approved,
+      importId: t.importId ?? null,
+      importedPayee: t.importedPayee ?? null,
+      matchedImport: (t.matchedImport ?? null) as MatchedImport | null,
     })),
   );
   await insertChunks(

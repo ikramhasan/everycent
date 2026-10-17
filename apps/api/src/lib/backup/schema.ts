@@ -79,6 +79,9 @@ const CategorySchema = z.object({
   linkedAccountId: Ref,
 });
 
+/** A file import's remembered settings, kept as they are (they only steer the import dialog). */
+const ImportSettings = z.looseObject({}).nullish();
+
 const AccountSchema = z.object({
   id: Id,
   name: Name,
@@ -95,6 +98,9 @@ const AccountSchema = z.object({
   pairedCategoryId: Ref,
   paidOffBannerDismissed: z.boolean(),
   migratedToAccountId: Ref,
+  /** File import's remembered settings (EVERYCENT-66/67), as stored. */
+  csvImportSettings: ImportSettings,
+  statementImportSettings: ImportSettings,
 });
 
 const LoanTermsSchema = z.object({
@@ -126,6 +132,9 @@ const PayeeSchema = z.object({
   categorization: z.enum(PAYEE_CATEGORIZATIONS),
   defaultCategoryId: Ref,
   carriedCategoryId: Ref,
+  /** The stored auto-categorization default (EVERYCENT-182). */
+  autoCategoryId: Ref.optional(),
+  autoCategorySaved: z.boolean().optional(),
 });
 
 const PayeeRuleSchema = z.object({
@@ -196,7 +205,14 @@ const TransactionSchema = z.object({
   approved: z.boolean(),
   transferTransactionId: Ref,
   transferSubTransactionId: Ref,
+  /** File import (EVERYCENT-66/68): its import id, the payee as the file named it, a match. */
+  importId: z.string().max(300).nullish(),
+  importedPayee: Text.nullish(),
+  matchedImport: z.looseObject({}).nullish(),
 });
+
+/** The import ids an account has taken in, so a restored budget skips the same rows. */
+const AccountImportIdSchema = z.object({ accountId: Id, importId: z.string().max(300) });
 
 const SubTransactionSchema = z.object({
   id: Id,
@@ -260,6 +276,7 @@ export const BackupSchema = z
     scheduledTransactions: z.array(ScheduledSchema),
     scheduledSubTransactions: z.array(ScheduledSubSchema),
     fxRateOverrides: z.array(FxOverrideSchema),
+    accountImportIds: z.array(AccountImportIdSchema).default([]),
   })
   .openapi("BudgetBackup");
 
@@ -287,6 +304,7 @@ export const BACKUP_SECTIONS = [
   "scheduledTransactions",
   "scheduledSubTransactions",
   "fxRateOverrides",
+  "accountImportIds",
 ] as const satisfies readonly Exclude<
   keyof Backup,
   "format" | "version" | "exportedAt" | "budget"

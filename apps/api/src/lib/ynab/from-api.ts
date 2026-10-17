@@ -683,6 +683,7 @@ export function fromYnabApi(plan: YnabPlan, now = new Date()): Conversion {
       scheduledTransactions,
       scheduledSubTransactions,
       fxRateOverrides: [],
+      accountImportIds: [],
     },
     warnings,
   };

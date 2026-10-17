@@ -23,7 +23,13 @@ type Txn = {
   cleared: string;
   approved: boolean;
 };
-type Result = { imported: number; duplicates: number; transactionIds: string[] };
+type Result = {
+  imported: number;
+  matched: number;
+  duplicates: number;
+  transactionIds: string[];
+  matchedIds: string[];
+};
 
 function send(method: string, path: string, cookie: string, body?: unknown) {
   return app.request(path, {

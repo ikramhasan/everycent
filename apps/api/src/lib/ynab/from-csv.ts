@@ -565,6 +565,7 @@ export function fromYnabCsv(
       scheduledTransactions: [],
       scheduledSubTransactions: [],
       fxRateOverrides: [],
+      accountImportIds: [],
     },
   };
 }
