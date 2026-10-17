@@ -1188,6 +1188,31 @@ export function Register({
     }
   }
 
+  /**
+   * Tab off the row's last editable cell (Shift+Tab off its first) goes on to the row's next control
+   * (the Cleared button; the flag going back), as the browser would have: the closing editor took
+   * the focus with it, which otherwise lands on the page and costs an extra Tab.
+   */
+  function focusPast(id: string, cell: CellColumn, exit: "next" | "previous") {
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`tr[data-transaction-id="${id}"]`);
+      if (!row) return;
+      const at = columnIds.indexOf(cell);
+      const cells = [...row.children];
+      const beyond = exit === "next" ? cells.slice(at + 1) : cells.slice(0, at).reverse();
+      for (const td of beyond) {
+        const controls = [
+          ...td.querySelectorAll<HTMLElement>("button, input, select, a[href], [tabindex]"),
+        ].filter((el) => el.tabIndex >= 0 && !el.hasAttribute("disabled"));
+        const target = exit === "next" ? controls[0] : controls.at(-1);
+        if (target) {
+          target.focus();
+          return;
+        }
+      }
+    });
+  }
+
   async function commitCell(
     t: Transaction,
     cell: CellColumn,
@@ -1212,6 +1237,7 @@ export function Register({
     const order = editableColumns(t);
     const next = order[order.indexOf(cell) + (exit === "next" ? 1 : -1)];
     setEditing(exit !== "stay" && next ? { id: t.id, column: next } : null);
+    if (exit !== "stay" && !next) focusPast(t.id, cell, exit);
     if (Object.keys(result.body).length === 0) return;
     const save = async () => {
       try {
@@ -1954,6 +1980,7 @@ export function Register({
                   key={t.id}
                   data-index={item.index}
                   ref={virtualizer.measureElement}
+                  data-transaction-id={t.id}
                   data-highlighted={highlightId === t.id || undefined}
                   data-state={isSelected(selection, t.id) ? "selected" : undefined}
                   // One height for every row, so an icon or an open editor doesn't grow it.
