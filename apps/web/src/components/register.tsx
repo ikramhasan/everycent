@@ -139,7 +139,14 @@ import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FlagMenu } from "./flag-menu";
 import { MemberAvatar } from "./member-avatar";
-import { COLUMN_SPECS, type ColumnId, isEditable, registerColumns } from "./register-columns";
+import {
+  COLUMN_SPECS,
+  type ColumnId,
+  isEditable,
+  PINNED_BG,
+  pinned,
+  registerColumns,
+} from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
@@ -1769,12 +1776,15 @@ export function Register({
                   const active = sortBy !== undefined && sortBy === sort;
                   const HeaderIcon =
                     id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
+                  const pin = pinned(columnIds, id);
                   return (
                     <TableHead
                       key={header.id}
                       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
+                      style={pin?.style}
                       className={cn(
                         "bg-muted text-muted-foreground text-xs uppercase",
+                        pin && [pin.className, PINNED_BG.head],
                         spec.align === "right" && "text-right",
                         // Centred like the column's cells (the flag and cleared icons).
                         spec.align === "center" && "text-center",
@@ -1918,11 +1928,14 @@ export function Register({
                   >
                     {columnIds.map((id) => {
                       const spec = COLUMN_SPECS[id];
+                      const pin = pinned(columnIds, id);
                       return (
                         <TableCell
                           key={id}
+                          style={pin?.style}
                           className={cn(
                             "truncate py-1.5",
+                            pin && [pin.className, PINNED_BG.row],
                             spec.align === "right" && "text-right tabular-nums",
                             isEditable(id) && !readOnly && "cursor-text",
                           )}
@@ -1956,6 +1969,7 @@ export function Register({
                 >
                   {columnIds.map((id) => {
                     const spec = COLUMN_SPECS[id];
+                    const pin = pinned(columnIds, id);
                     if (editing?.id === t.id && editing.column === id) {
                       return (
                         <TableCell key={id} className="px-1.5 py-1">
@@ -1988,8 +2002,10 @@ export function Register({
                     return (
                       <TableCell
                         key={id}
+                        style={pin?.style}
                         className={cn(
                           "truncate",
+                          pin && [pin.className, PINNED_BG.row],
                           spec.align === "right" && "text-right tabular-nums",
                           spec.align === "center" && "py-1 text-center",
                           id === "flag" && "px-1",

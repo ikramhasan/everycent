@@ -76,3 +76,55 @@ export function registerColumns(allAccounts: boolean): ColumnId[] {
 export function isEditable(column: ColumnId): column is EditableColumn {
   return ["account", "date", "payee", "category", "memo", "outflow", "inflow"].includes(column);
 }
+
+/** The columns people act on in every row, kept in view at the register's right edge. */
+const PINNED: readonly ColumnId[] = ["cleared", "actions"];
+
+/**
+ * Opaque stand-ins for the rows' see-through backgrounds (each the row's colour mixed onto the page
+ * background), so cells scrolling underneath don't show through. Written out in full so Tailwind
+ * finds the classes.
+ */
+export const PINNED_BG = {
+  /** Transaction and split-line rows: plain, hovered, expanded (a split), selected, jumped to. */
+  row: "bg-background [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))] [tr:has([aria-expanded=true])>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))] [tr[data-state=selected]>&]:bg-muted [tr[data-highlighted]>&]:animate-[row-highlight-pinned_2.5s_ease-out]",
+  /** The inline editor's rows (`bg-muted/50`). */
+  editor: "bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]",
+  /** Scheduled rows (`bg-muted/40`, `bg-primary/10` when selected). */
+  scheduled:
+    "bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] [tr[data-selected]>&]:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]",
+  /** Header cells are already opaque (`bg-muted`); they sit above the body's pinned cells. */
+  head: "z-[2]",
+};
+
+/**
+ * Pins Cleared and Actions to the right edge while the other columns scroll beneath them: sticky
+ * at the summed width of the pinned columns after it, the first one with a divider on its left.
+ * `null` for the scrolling columns.
+ */
+export function pinned(
+  columns: readonly ColumnId[],
+  id: ColumnId,
+): { className: string; style: { right: string } } | null {
+  if (!PINNED.includes(id)) return null;
+  const visible = columns.filter((c) => PINNED.includes(c));
+  const after = visible.slice(visible.indexOf(id) + 1);
+  const right = `calc(0rem${after.map((c) => ` + ${COLUMN_SPECS[c].width}`).join("")})`;
+  return {
+    className: [
+      "sticky z-[1]",
+      visible[0] === id ? "shadow-[inset_1px_0_0_var(--border)]" : "",
+    ].join(" "),
+    style: { right },
+  };
+}
+
+/** The pinned columns among these, left to right. */
+export const pinnedColumns = (columns: readonly ColumnId[]) =>
+  columns.filter((c) => PINNED.includes(c));
+
+/** How wide the pinned columns are together, as CSS. */
+export const pinnedWidth = (columns: readonly ColumnId[]) =>
+  `calc(0rem${pinnedColumns(columns)
+    .map((c) => ` + ${COLUMN_SPECS[c].width}`)
+    .join("")})`;
