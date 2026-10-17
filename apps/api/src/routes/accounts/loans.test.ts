@@ -261,7 +261,7 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     // Not in the month's payments or balance.
     expect(body.months.at(-1)).toMatchObject({ month: "2026-10", payments: "0" });
 
-    // Once today passes one, it's entered, and the rest stay upcoming.
+    // Once today passes one, it's no longer upcoming.
     const later = await send(
       "GET",
       `${base}/accounts/${mortgage.id}/loan?today=2026-10-23`,
