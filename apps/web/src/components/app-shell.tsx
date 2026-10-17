@@ -4,6 +4,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
@@ -21,7 +23,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@everycent/ui/components/sidebar";
-import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
 import { type Theme, useTheme } from "@everycent/ui/lib/theme";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
@@ -44,8 +45,18 @@ import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
 import { PageHeaderSlotProvider } from "./page-header";
 
-/** A theme choice in the user menu: an equal share of the row, its label never pushing it wider. */
-const THEME_ITEM = "min-w-0 flex-1 px-1 text-xs";
+const THEMES: readonly { value: Theme; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
+/**
+ * A theme choice in the user menu: an equal share of the row, its label never pushing it wider, the
+ * chosen one filled. The radio item's check (`[data-slot=...indicator]`) is hidden; the fill shows it.
+ */
+const THEME_ITEM =
+  "min-w-0 flex-1 justify-center rounded-none border-l px-1 py-1.5 text-xs first:border-l-0 data-[state=checked]:bg-muted data-[state=checked]:font-medium [&>[data-slot=dropdown-menu-radio-item-indicator]]:hidden";
 
 export function AppShell({ user }: { user: { name: string; email: string } }) {
   const queryClient = useQueryClient();
@@ -210,26 +221,28 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                    */}
                   <div className="grid gap-1.5 px-2 py-1.5">
                     <span className="text-muted-foreground text-xs">Theme</span>
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      size="sm"
-                      spacing={0}
+                    {/*
+                     * Menu radio items, laid out as a joined button group: the menu's arrow keys
+                     * reach them (a ToggleGroup inside a menu can't be focused from the keyboard),
+                     * and picking one keeps the menu open.
+                     */}
+                    <DropdownMenuRadioGroup
                       aria-label="Theme"
-                      className="w-full"
                       value={theme}
-                      onValueChange={(value) => value && setTheme(value as Theme)}
+                      onValueChange={(value) => setTheme(value as Theme)}
+                      className="flex overflow-hidden rounded-md border"
                     >
-                      <ToggleGroupItem value="light" className={THEME_ITEM}>
-                        Light
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="dark" className={THEME_ITEM}>
-                        Dark
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="system" className={THEME_ITEM}>
-                        System
-                      </ToggleGroupItem>
-                    </ToggleGroup>
+                      {THEMES.map(({ value, label }) => (
+                        <DropdownMenuRadioItem
+                          key={value}
+                          value={value}
+                          onSelect={(event) => event.preventDefault()}
+                          className={THEME_ITEM}
+                        >
+                          {label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={signOut}>

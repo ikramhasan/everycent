@@ -27,11 +27,16 @@ export function PageHeader({
   const slot = useContext(PageHeaderSlot);
   const content = (
     <>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      {/* The title keeps at least 5rem; on a narrow bar the actions scroll sideways instead. */}
+      <div className="flex min-w-20 flex-1 items-center gap-2">
         <h1 className="truncate font-semibold text-base">{title}</h1>
         {meta}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto py-1 [scrollbar-width:none]">
+          {actions}
+        </div>
+      )}
     </>
   );
   if (slot === undefined) return <header className="flex items-center gap-2">{content}</header>;

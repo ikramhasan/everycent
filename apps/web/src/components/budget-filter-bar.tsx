@@ -24,6 +24,10 @@ const FIXED: readonly BudgetFilter[] = ["all", "overspent"];
  * Overfunded, Money Available, Snoozed and the custom views in the plan's order, and the Views
  * Menu after them. Views that don't fit the window (`fitsViewsBar`) move into the Views Menu,
  * except the selected one.
+ *
+ * everycent differs on purpose (Plane, "Design notes and known differences"): the views are text
+ * tabs, the bar shows at most four (`BAR_VIEWS`) however wide the window, and the Views Menu is a
+ * "More" tab holding the rest.
  */
 export function BudgetFilterBar({
   filter,

@@ -174,7 +174,6 @@ export function CategoryList({
   figures,
   collapsed = NO_GROUPS,
   onCollapsedChange,
-  toolbar,
   addGroupDisabled = false,
 }: {
   data: CategoryListData;
@@ -182,9 +181,7 @@ export function CategoryList({
   figures?: CategoryFigures;
   collapsed?: ReadonlySet<string>;
   onCollapsedChange?: (collapsed: ReadonlySet<string>) => void;
-  /** More buttons next to "Category Group" (e.g. Recent Moves). */
-  toolbar?: ReactNode;
-  /** Greys out "Category Group" (YNAB does in a custom view). */
+  /** Greys out the header's "Add a category group" button (YNAB does in a custom view). */
   addGroupDisabled?: boolean;
 }) {
   // A viewer (EVERYCENT-88) can't add, rename, hide, delete or reorder.
@@ -295,8 +292,6 @@ export function CategoryList({
 
   return (
     <div className="grid gap-4">
-      {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
-
       <div className="overflow-x-auto rounded-lg border">
         <div className="min-w-fit">
           <div
