@@ -1,4 +1,5 @@
 import { sendQueuedEmail } from "../email/queue";
+import { prefetchFxRates } from "../fx";
 import { remindInvitations } from "../invitations";
 import type { JobHandlers } from "./index";
 
@@ -6,4 +7,5 @@ import type { JobHandlers } from "./index";
 export const jobHandlers: JobHandlers = {
   "email.send": sendQueuedEmail,
   "invitations.remind": remindInvitations,
+  "fx.prefetch": prefetchFxRates,
 };
