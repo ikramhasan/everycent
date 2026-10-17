@@ -33,7 +33,7 @@ export const COLUMN_SPECS: Record<ColumnId, ColumnSpec> = {
   select: { header: "Select", width: "2.25rem", align: "center", srOnly: true },
   review: { header: "Approval", width: "2.25rem", align: "center", srOnly: true },
   flag: { header: "Flag", width: "2.5rem", align: "center", srOnly: true },
-  account: { header: "Account", width: "9rem" },
+  account: { header: "Account", width: "8rem" },
   // Room for the date editor: the date plus its calendar button.
   date: { header: "Date", width: "8.75rem" },
   payee: { header: "Payee", width: "11.5rem" },

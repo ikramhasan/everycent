@@ -188,6 +188,8 @@ const NO_SUMMARY = {
   deletable: 0,
 };
 const ROW_HEIGHT = 41;
+/** The least the Memo column gets; it takes whatever width the fixed columns leave beyond that. */
+const MEMO_MIN_WIDTH = "9rem";
 
 interface EditingCell {
   id: string;
@@ -1785,7 +1787,19 @@ export function Register({
         scrollbars="both"
         className="rounded-lg border"
       >
-        <Table containerClassName="overflow-visible" className="min-w-[68rem] table-fixed">
+        <Table
+          containerClassName="overflow-visible"
+          className="table-fixed"
+          // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
+          // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
+          style={{
+            minWidth: `calc(${MEMO_MIN_WIDTH}${columnIds
+              .map((id) => COLUMN_SPECS[id].width)
+              .filter(Boolean)
+              .map((w) => ` + ${w}`)
+              .join("")})`,
+          }}
+        >
           <colgroup>
             {columnIds.map((id) => (
               <col key={id} style={{ width: COLUMN_SPECS[id].width }} />
