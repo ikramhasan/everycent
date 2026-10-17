@@ -52,18 +52,6 @@ import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fi
  * fields, Enter saves, Esc cancels. A split adds a row per line, then a row to add lines and see
  * what's left to split; the last row holds the buttons and any error.
  */
-/** The stacked editor's order and the names over its fields. */
-const STACKED_ORDER: ColumnId[] = [
-  "account",
-  "date",
-  "payee",
-  "category",
-  "memo",
-  "outflow",
-  "inflow",
-  "flag",
-  "cleared",
-];
 /** Fields that share a line in the stacked editor. */
 const STACKED_ROWS: ColumnId[][] = [
   ["account"],
@@ -626,7 +614,7 @@ export function TransactionEditor({
 
   // A phone edits in a drawer: the same fields, one under another, with their names (EVERYCENT-93).
   if (layout === "stacked") {
-    const stacked = STACKED_ORDER.filter(
+    const stacked = STACKED_ROWS.flat().filter(
       (c) => columns.includes(c) || c === "flag" || c === "cleared",
     );
     return (

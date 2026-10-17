@@ -246,6 +246,8 @@ export function useShortcut(
     enableOnContentEditable: false,
     ignoreEventWhen: (event) => {
       if (inOverlay(event)) return true;
+      // "?" and ">" ignore Shift (it's how they're typed), but not Ctrl, Cmd or Alt.
+      if (def.useKey && (event.ctrlKey || event.metaKey || event.altKey)) return true;
       if (!allowIn) return false;
       const target = event.target;
       // With allowIn the library lets every field through; keep only the ones asked for.

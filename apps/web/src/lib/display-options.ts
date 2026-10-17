@@ -13,7 +13,10 @@ function localSetting<T>(
 ) {
   const listeners = new Set<() => void>();
   let cached: { raw: string | null; value: T } | undefined;
+  // Set when storage refuses a write: the value then holds for this visit.
+  let unsaved: { value: T } | undefined;
   function get(): T {
+    if (unsaved) return unsaved.value;
     let raw: string | null = null;
     try {
       raw = localStorage.getItem(key);
@@ -26,8 +29,9 @@ function localSetting<T>(
   function set(value: T) {
     try {
       localStorage.setItem(key, write(value));
+      unsaved = undefined;
     } catch {
-      cached = { raw: write(value), value };
+      unsaved = { value };
     }
     for (const listener of listeners) listener();
   }

@@ -98,6 +98,27 @@ import { useCategoryActions } from "@/lib/use-category-actions";
 import { useViewportWidth } from "@/lib/use-viewport-width";
 
 /** The category list and the inspector; the header shares them so Ready to Assign fills the inspector's width. */
+/** Shift+Z also works from a category's Assigned input. */
+const inAssignedCell = (target: Element) => target.closest("[data-assigned-cell]") !== null;
+
+/** localStorage for the inspector's width, or nothing where the browser blocks storage. */
+const layoutStorage = {
+  getItem: (key: string) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage can be unavailable (private windows); the width holds for this visit.
+    }
+  },
+};
+
 /** YNAB's inspector width, in percent of the list and inspector together (its client code). */
 const INSPECTOR_SHARE = { min: 25, max: 50, default: 33 };
 
@@ -141,7 +162,7 @@ function BudgetPage() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorLayout = useDefaultLayout({
     id: "everycent:budget-inspector",
-    storage: localStorage,
+    storage: layoutStorage,
   });
   // The header's Ready to Assign sits over the inspector at its width.
   const [inspectorWidth, setInspectorWidth] = useState<number | null>(null);
@@ -296,7 +317,7 @@ function BudgetPage() {
     },
     {
       enabled: month === today && !readOnly && selection.size > 0,
-      allowIn: (target) => target.closest("[data-assigned-cell]") !== null,
+      allowIn: inAssignedCell,
     },
   );
 
@@ -641,9 +662,10 @@ function BudgetPage() {
   // user drags it, as YNAB's is (25–50% of the area, a third to start, kept in this browser).
   const wide = viewportWidth >= 1024;
   // Below lg, picking one category opens the inspector drawer for it.
+  const pickedOne = selection.size === 1 ? [...selection][0] : undefined;
   useEffect(() => {
-    if (!wide && selection.size === 1) setInspectorOpen(true);
-  }, [selection, wide]);
+    if (!wide && pickedOne !== undefined) setInspectorOpen(true);
+  }, [pickedOne, wide]);
   const listColumn = (
     <>
       {categories.isPending ? (

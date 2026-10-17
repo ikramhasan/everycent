@@ -142,6 +142,8 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
 // category's drawer (EVERYCENT-93).
 const ROW =
   "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 py-1.5 max-md:min-h-12 md:grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem]";
+/** The plan's keys also work from a category's open Assigned input. */
+const inAssigned = (target: Element) => target.closest("[data-assigned-cell]") !== null;
 /** Cells left off a phone's narrow rows. */
 const WIDE_ONLY = "max-md:hidden";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
@@ -282,7 +284,6 @@ export function CategoryList({
     if (!extend && id !== UNCATEGORIZED_ID && figures?.assign) setKeyEdit(id);
     document.querySelector(`[data-category-row="${id}"]`)?.scrollIntoView?.({ block: "nearest" });
   }
-  const inAssigned = (target: Element) => target.closest("[data-assigned-cell]") !== null;
   const keys = { enabled: selection !== undefined, allowIn: inAssigned };
   useShortcut("moveRows", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, false), keys);
   useShortcut("extendCategories", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, true), keys);

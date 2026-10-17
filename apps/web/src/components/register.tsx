@@ -822,7 +822,10 @@ export function Register({
       await refresh();
       // Actions that leave the rows in the register keep them selected, as YNAB's do
       // (2026-10-18), so C can toggle them back.
-      const keep = ["flag", "cleared", "approve", "categorize", "memo"].includes(action.type);
+      // Only the selection the user made: Shift+L's "every row shown" isn't kept.
+      const keep =
+        sel === selection &&
+        ["flag", "cleared", "approve", "categorize", "memo"].includes(action.type);
       setSelection(keep ? sel : nextSelection);
       setScheduledSelection(keep ? sched : nextScheduled);
       const n = `${count} transaction${count === 1 ? "" : "s"}`;
