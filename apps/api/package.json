@@ -21,6 +21,7 @@
     "bowser": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "papaparse": "catalog:",
     "rate-limiter-flexible": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"
@@ -29,6 +30,7 @@
     "@better-auth/utils": "catalog:",
     "@everycent/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "@types/papaparse": "catalog:",
     "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",

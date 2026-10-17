@@ -33,7 +33,7 @@ function send(method: string, path: string, cookie: string, body?: unknown) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
-async function ok<T>(res: Promise<Response>, status = 200): Promise<T> {
+async function ok<T>(res: Response | Promise<Response>, status = 200): Promise<T> {
   const r = await res;
   expect(r.status, await r.clone().text()).toBe(status);
   return (await r.json()) as T;

@@ -1,12 +1,11 @@
 import { newId } from "@everycent/db";
-import { budget } from "@everycent/db/schema";
 import type { BudgetFormatSettings, CurrencyCode } from "@everycent/engine";
-import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { setAuditContext } from "../audit-context";
 import { rememberLastBudget } from "../budget-access";
+import { deleteBudgetRow } from "../delete-budget";
 import type { Tx } from "../ledger";
 
 /**
@@ -43,7 +42,7 @@ export async function createFilledBudget<T>(
     await rememberLastBudget(db, c.var.user.id, created.id);
     return { budgetId: created.id, result };
   } catch (error) {
-    await db.delete(budget).where(eq(budget.id, created.id));
+    await deleteBudgetRow(db, created.id);
     throw error;
   }
 }

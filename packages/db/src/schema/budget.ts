@@ -62,6 +62,11 @@ export const budget = pgTable("budget", {
    * lacks go last (see the views route).
    */
   viewOrder: text().array(),
+  /**
+   * Where the budget was imported from, e.g. "ynab:<plan id>" (EVERYCENT-69), so importing the
+   * same plan again finds it instead of making a copy. Null for budgets made here.
+   */
+  importSource: text(),
   ...timestamps,
 });
 

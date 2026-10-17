@@ -151,6 +151,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/import/ynab/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The YNAB plans a personal access token can read
+         * @description A POST so the token travels in the body, never in a URL.
+         */
+        post: operations["listYnabPlans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/import/ynab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a YNAB plan through YNAB's API, as a new budget
+         * @description An everycent extra (EVERYCENT-69). Reads the whole plan with the caller's personal access token and makes a new budget of it: accounts (with loan rates, minimum payments and escrow), category groups and categories (hidden ones, notes, targets), credit card payment categories, payees, every month's assigned amounts and notes, transactions (transfers, splits, flags, cleared, reconciled and approved states) and scheduled transactions. Milliunits convert exactly to the currency's minor units. Importing the same plan again returns the budget the first import made (`reused`); `replace` imports it afresh and deletes that one.
+         */
+        post: operations["importYnabPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/import/ynab-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import YNAB's Export Plan files as a new budget (the fallback to the API)
+         * @description The plan and register files from YNAB's Export Plan, in the plan's currency, number and date format. They hold categories, assigned amounts and transactions, but not account types (give them in `accountTypes`, or take the guesses `dryRun` returns), targets, scheduled transactions, approvals or transfer links (transfers are paired by account, date and amount; splits are rebuilt from their "Split (i/n)" memos). The same files imported again return the first import's budget (`reused`).
+         */
+        post: operations["importYnabFiles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/backup": {
         parameters: {
             query?: never;
@@ -1843,6 +1903,124 @@ export interface components {
         DeleteAccount: {
             password: string;
         };
+        YnabPlanList: {
+            plans: {
+                id: string;
+                name: string;
+                lastModifiedOn: string | null;
+            }[];
+        };
+        YnabToken: {
+            /** @description A YNAB personal access token (YNAB → Account Settings → Developer Settings). Used for this request only; never stored. */
+            token: string;
+        };
+        YnabImportReport: {
+            budget: components["schemas"]["Budget"];
+            /** @description The same plan (or files) was imported before: this is that budget, nothing new was made */
+            reused: boolean;
+            /** @description How many rows of each kind came over; null when reused */
+            counts: {
+                [key: string]: number;
+            } | null;
+            /** @description What couldn't come over as it was in YNAB, in plain words */
+            warnings: string[];
+        };
+        Budget: {
+            id: string;
+            name: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /**
+             * @description Digit grouping and decimal separator
+             * @enum {string}
+             */
+            numberFormat: "comma_dot" | "dot_comma" | "space_comma" | "space_dot" | "apostrophe_dot" | "indian";
+            /**
+             * @description Where the currency symbol goes
+             * @enum {string}
+             */
+            currencySymbolPosition: "before" | "after" | "none";
+            /**
+             * @description How dates are displayed
+             * @enum {string}
+             */
+            dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY/MM/DD" | "DD-MM-YYYY";
+            /**
+             * @description The signed-in user's role in this budget
+             * @enum {string}
+             */
+            role: "owner" | "editor" | "viewer";
+            /**
+             * Format: date-time
+             * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
+             */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the signed-in user last opened this budget; null if never
+             */
+            lastUsedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ImportYnabPlan: {
+            /** @description A YNAB personal access token (YNAB → Account Settings → Developer Settings). Used for this request only; never stored. */
+            token: string;
+            planId: string;
+            /** @description The new budget's name; the plan's by default */
+            name?: string;
+            replace?: boolean;
+        };
+        YnabFilesPreview: {
+            accounts: {
+                name: string;
+                /**
+                 * @description YNAB account type
+                 * @enum {string}
+                 */
+                type: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+                guessed: boolean;
+            }[];
+        };
+        ImportYnabFiles: {
+            /** @description The text of YNAB's "… - Plan.csv" (or .tsv) file */
+            plan: string;
+            /** @description The text of YNAB's "… - Register.csv" (or .tsv) file */
+            register: string;
+            name: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /**
+             * @description Digit grouping and decimal separator
+             * @enum {string}
+             */
+            numberFormat: "comma_dot" | "dot_comma" | "space_comma" | "space_dot" | "apostrophe_dot" | "indian";
+            /**
+             * @description Where the currency symbol goes
+             * @enum {string}
+             */
+            currencySymbolPosition: "before" | "after" | "none";
+            /**
+             * @description How dates are displayed
+             * @enum {string}
+             */
+            dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY/MM/DD" | "DD-MM-YYYY";
+            /** @description Each account's type by name; the files don't say, so ones left out are guessed */
+            accountTypes?: {
+                [key: string]: "checking" | "savings" | "cash" | "credit_card" | "line_of_credit" | "mortgage" | "auto_loan" | "student_loan" | "personal_loan" | "medical_debt" | "other_debt" | "asset" | "liability";
+            };
+            /** @description Only read the files: return the accounts and their (guessed) types */
+            dryRun?: boolean;
+            replace?: boolean;
+        };
         BudgetBackup: {
             /** @enum {string} */
             format: "everycent-backup";
@@ -2138,49 +2316,6 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
-        };
-        Budget: {
-            id: string;
-            name: string;
-            /**
-             * @description ISO 4217 currency code
-             * @enum {string}
-             */
-            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
-            /**
-             * @description Digit grouping and decimal separator
-             * @enum {string}
-             */
-            numberFormat: "comma_dot" | "dot_comma" | "space_comma" | "space_dot" | "apostrophe_dot" | "indian";
-            /**
-             * @description Where the currency symbol goes
-             * @enum {string}
-             */
-            currencySymbolPosition: "before" | "after" | "none";
-            /**
-             * @description How dates are displayed
-             * @enum {string}
-             */
-            dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD" | "DD.MM.YYYY" | "YYYY/MM/DD" | "DD-MM-YYYY";
-            /**
-             * @description The signed-in user's role in this budget
-             * @enum {string}
-             */
-            role: "owner" | "editor" | "viewer";
-            /**
-             * Format: date-time
-             * @description Set when a fresh start replaced this budget (its name gets '(Archived on <date>)'); it stays usable. Renaming it without that stamp restores it (clears this).
-             */
-            archivedAt: string | null;
-            /**
-             * Format: date-time
-             * @description When the signed-in user last opened this budget; null if never
-             */
-            lastUsedAt: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
         };
         BudgetList: {
             budgets: components["schemas"]["Budget"][];
@@ -4770,6 +4905,285 @@ export interface operations {
             };
             /** @description Too many attempts (`RATE_LIMITED`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listYnabPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YnabToken"];
+            };
+        };
+        responses: {
+            /** @description The plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YnabPlanList"];
+                };
+            };
+            /** @description Invalid input, or YNAB refused the token (YNAB_TOKEN_INVALID) or the files aren't YNAB's (YNAB_FILE_INVALID) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB has no such plan (YNAB_PLAN_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The plan can't be converted exactly: a currency everycent doesn't have (YNAB_CURRENCY_UNSUPPORTED) or a fraction of the currency's smallest unit (YNAB_AMOUNT_INEXACT) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB's hourly request limit was reached (YNAB_RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB couldn't be reached or answered unexpectedly (YNAB_UNAVAILABLE, YNAB_UNEXPECTED) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importYnabPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportYnabPlan"];
+            };
+        };
+        responses: {
+            /** @description Imported before: the earlier import's budget */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YnabImportReport"];
+                };
+            };
+            /** @description The new budget and the import report */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YnabImportReport"];
+                };
+            };
+            /** @description Invalid input, or YNAB refused the token (YNAB_TOKEN_INVALID) or the files aren't YNAB's (YNAB_FILE_INVALID) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB has no such plan (YNAB_PLAN_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The plan can't be converted exactly: a currency everycent doesn't have (YNAB_CURRENCY_UNSUPPORTED) or a fraction of the currency's smallest unit (YNAB_AMOUNT_INEXACT) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB's hourly request limit was reached (YNAB_RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB couldn't be reached or answered unexpectedly (YNAB_UNAVAILABLE, YNAB_UNEXPECTED) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importYnabFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportYnabFiles"];
+            };
+        };
+        responses: {
+            /** @description A dry run's accounts, or the budget an earlier import of the same files made */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YnabFilesPreview"] | components["schemas"]["YnabImportReport"];
+                };
+            };
+            /** @description The new budget and the import report */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YnabImportReport"];
+                };
+            };
+            /** @description Invalid input, or YNAB refused the token (YNAB_TOKEN_INVALID) or the files aren't YNAB's (YNAB_FILE_INVALID) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB has no such plan (YNAB_PLAN_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The plan can't be converted exactly: a currency everycent doesn't have (YNAB_CURRENCY_UNSUPPORTED) or a fraction of the currency's smallest unit (YNAB_AMOUNT_INEXACT) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB's hourly request limit was reached (YNAB_RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description YNAB couldn't be reached or answered unexpectedly (YNAB_UNAVAILABLE, YNAB_UNEXPECTED) */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
