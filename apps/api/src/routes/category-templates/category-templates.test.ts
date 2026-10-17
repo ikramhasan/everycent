@@ -176,6 +176,33 @@ describe("category templates", () => {
     expect(helpers?.categories).toHaveLength(3);
   });
 
+  it("counts hidden groups and categories as already there (EVERYCENT-177)", async () => {
+    const { cookie, base, importTemplate, groups } = await setup();
+    await importTemplate("moving", allIds("moving"));
+    const unexpected = (await groups()).find((g) => g.name === "Unexpected");
+    const supplies = (await groups()).find((g) => g.name === "Supplies & Services");
+    const truck = supplies?.categories.find((c) => c.name === "🚚 Moving Truck");
+    const settle = unexpected?.categories.find((c) => c.name === "🔑 Settling in Fund");
+    if (!unexpected || !truck || !settle) throw new Error("import missing");
+    // As in YNAB's check (2026-10-17): hide a group and a category, take one away from the group.
+    await send("PATCH", `${base}/category-groups/${unexpected.id}`, cookie, { hidden: true });
+    await send("PATCH", `${base}/categories/${truck.id}`, cookie, { hidden: true });
+    await send("PATCH", `${base}/categories/${settle.id}`, cookie, { name: "x settle" });
+
+    const body = await json<ImportResult>(await importTemplate("moving", allIds("moving")));
+    expect(body.added).toBe(1);
+    const after = body.categories.groups as (Group & { hidden: boolean })[];
+    // The hidden group is filled (and stays hidden); the hidden category isn't added again.
+    expect(after.filter((g) => g.name === "Unexpected")).toHaveLength(1);
+    const filled = after.find((g) => g.name === "Unexpected");
+    expect(filled?.hidden).toBe(true);
+    expect(filled?.categories[0]?.name).toBe("🔑 Settling in Fund");
+    const trucks = after
+      .find((g) => g.name === "Supplies & Services")
+      ?.categories.filter((c) => c.name === "🚚 Moving Truck");
+    expect(trucks?.map((c) => c.id)).toEqual([truck.id]);
+  });
+
   it("puts several missing categories at the top in the template's order", async () => {
     const { cookie, base, importTemplate, groups } = await setup();
     await importTemplate("moving", allIds("moving"));
