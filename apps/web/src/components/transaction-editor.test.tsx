@@ -143,6 +143,48 @@ describe("TransactionEditor", () => {
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Groceries"]);
   });
 
+  it("lists the selected category without a payee too (YNAB, 2026-10-17)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("Category"));
+    // Nothing chosen yet: no sections.
+    expect(within(screen.getByRole("listbox")).getAllByRole("group")[0]).toHaveTextContent(
+      /^Inflow/,
+    );
+    await user.click(screen.getByRole("option", { name: "Rent" }));
+    await user.click(screen.getByLabelText("Category"));
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Rent \(Bills\)$/);
+    expect(groups[1]).toHaveTextContent(/^Inflow/);
+  });
+
+  it("suggests a split line's categories from its own payee only (YNAB, 2026-10-17)", async () => {
+    renderEditor();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Payee"), "Market");
+    await user.keyboard("{Enter}");
+    await user.type(screen.getByLabelText("Outflow"), "20");
+    await user.click(screen.getByLabelText("Category"));
+    await user.click(screen.getByRole("option", { name: "Split" }));
+
+    // Line 1 has no payee of its own: Selected only, nothing from the transaction's payee.
+    await user.click(screen.getByLabelText("Category, line 1"));
+    await user.click(screen.getByRole("option", { name: "Rent" }));
+    await user.click(screen.getByLabelText("Category, line 1"));
+    let groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Rent \(Bills\)$/);
+    expect(groups[1]).toHaveTextContent(/^Inflow/);
+    await user.keyboard("{Escape}");
+
+    // Line 2 with the payee Market: its recent categories.
+    await user.type(screen.getByLabelText("Payee, line 2"), "Market");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByLabelText("Category, line 2"));
+    groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Groceries \(Everyday\)$/);
+    expect(groups[1]).toHaveTextContent(/^Suggested\s*Rent \(Bills\)$/);
+  });
+
   it("offers Save and add another on a new row, and Enter does it (YNAB)", async () => {
     const { onSave, onSaveAndAddAnother } = renderEditor("checking", { another: true });
     const user = userEvent.setup();

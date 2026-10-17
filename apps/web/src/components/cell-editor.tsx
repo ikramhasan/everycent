@@ -10,6 +10,7 @@ import {
   cellValue,
   directionOf,
   type Payee,
+  payeeSuggestionIds,
   type Transaction,
 } from "@/lib/transactions";
 import {
@@ -164,6 +165,8 @@ export function CellEditor({
                 : undefined
             }
             categories={categories}
+            shortcuts
+            suggestedIds={payeeSuggestionIds(payees, transaction)}
             autoFocus
           />
         );

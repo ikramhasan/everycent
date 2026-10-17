@@ -416,9 +416,9 @@ const SHORTCUT = "__shortcut:";
 const shortcut = (option: CategoryOption) => ({ ...option, id: `${SHORTCUT}${option.id}` });
 
 /**
- * YNAB's sections above the groups once a known payee is picked: "Selected" (the category in the
- * field) and "Suggested" (the payee's other recent categories). They make way for the matches as
- * soon as something is typed.
+ * YNAB's sections above the groups: "Selected" (the category in the field, with or without a
+ * payee) and, once a known payee is picked, "Suggested" (the payee's other recent categories).
+ * They make way for the matches as soon as something is typed (2026-10-16 and 2026-10-17).
  */
 function shortcutGroups(
   categories: readonly CategoryOption[],
@@ -439,8 +439,9 @@ function shortcutGroups(
  * Category picker grouped like the budget; clearing it means Uncategorized. With `onSplit`, the
  * list ends with YNAB's "Split", to spread the transaction across several categories; with
  * `onPaymentTransfer`, with its "Payment/Transfer" (before Split, in cash and card registers alike;
- * 2026-10-16), which goes to the payee list to pick an account. With `suggestedIds` (a payee's
- * recent categories), it starts with YNAB's "Selected" and "Suggested".
+ * 2026-10-16), which goes to the payee list to pick an account. With `shortcuts` (the register's
+ * category fields, split lines included), it starts with YNAB's "Selected", then "Suggested" from
+ * `suggestedIds` (a payee's recent categories).
  */
 export function CategoryField({
   label = "Category",
@@ -452,6 +453,7 @@ export function CategoryField({
   autoFocus,
   placeholder = "Uncategorized",
   describe,
+  shortcuts = false,
   suggestedIds,
 }: {
   label?: string;
@@ -464,6 +466,8 @@ export function CategoryField({
   placeholder?: string;
   /** Extra text at the end of an option, e.g. what's available in it. */
   describe?: (option: CategoryOption) => ReactNode;
+  /** List the chosen category under "Selected" (and the suggestions under "Suggested"). */
+  shortcuts?: boolean;
   /** The payee's recent categories, most recent first (see `payeeSuggestions`). */
   suggestedIds?: readonly string[];
 }) {
@@ -477,14 +481,14 @@ export function CategoryField({
       ([group, items]): CategoryGroupItems => ({ value: group, items }),
     );
     const actions = [...(onPaymentTransfer ? [PAYMENT_TRANSFER] : []), ...(onSplit ? [SPLIT] : [])];
-    const shortcuts =
-      suggestedIds && !typing ? shortcutGroups(categories, selected, suggestedIds) : [];
-    return [...shortcuts, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
-  }, [categories, onSplit, onPaymentTransfer, suggestedIds, typing, selected]);
+    const top =
+      shortcuts && !typing ? shortcutGroups(categories, selected, suggestedIds ?? []) : [];
+    return [...top, ...list, ...(actions.length > 0 ? [{ value: "", items: actions }] : [])];
+  }, [categories, onSplit, onPaymentTransfer, shortcuts, suggestedIds, typing, selected]);
   // With the shortcuts, the "Selected" entry is the one ticked, so the list opens at the top.
   const shown = useMemo(
-    () => (selected && suggestedIds ? shortcut(selected) : selected),
-    [selected, suggestedIds],
+    () => (selected && shortcuts ? shortcut(selected) : selected),
+    [selected, shortcuts],
   );
   const [open, setOpen] = useState(Boolean(autoFocus));
 

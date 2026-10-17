@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { MoneySettings } from "@/lib/money-input";
@@ -93,6 +93,26 @@ describe("CellEditor", () => {
     await user.keyboard("ren");
     await user.click(await screen.findByRole("option", { name: "Rent" }));
     expect(onCommit).toHaveBeenCalledWith("rent", "stay", null);
+  });
+
+  it("lists an existing row's category under Selected", async () => {
+    renderCell("category", { ...txn, categoryId: "rent", categoryName: "Rent" }, [
+      {
+        id: "p1",
+        name: "Market",
+        hidden: false,
+        useCount: 1,
+        categorization: "auto",
+        defaultCategoryId: null,
+        autoCategoryId: "rent",
+        prefillCategoryId: "rent",
+        recentCategoryIds: ["rent"],
+      },
+    ]);
+    const groups = within(await screen.findByRole("listbox")).getAllByRole("group");
+    // The row itself counts (YNAB, 2026-10-17), but Rent is the one selected.
+    expect(groups[0]).toHaveTextContent(/^Selected\s*Rent \(Bills\)$/);
+    expect(groups[1]).toHaveTextContent(/^Bills/);
   });
 
   it("moves on with Tab from a payee while its list is open", async () => {

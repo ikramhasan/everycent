@@ -34,6 +34,7 @@ import {
   emptyLine,
   type LineDraft,
   type Payee,
+  payeeSuggestionIds,
   remainingLabel,
   splitMismatch,
   splitRemaining,
@@ -290,6 +291,7 @@ export function TransactionEditor({
             // YNAB (2026-10-16): opens the payee list, keeping the payee and category.
             onPaymentTransfer={() => setPayeeFocus((n) => n + 1)}
             categories={pickable}
+            shortcuts
             suggestedIds={payeeSuggestionIds(payees, draft)}
           />
         ) : (
@@ -383,6 +385,8 @@ export function TransactionEditor({
             value={line.categoryId}
             onChange={(categoryId) => setLine(line.key, { categoryId })}
             categories={categories}
+            shortcuts
+            suggestedIds={payeeSuggestionIds(payees, line)}
           />
         ) : (
           <p className="px-2 text-muted-foreground text-sm italic">Category not needed</p>
@@ -663,18 +667,4 @@ function typedDirection(amounts: { outflow: string; inflow: string }): TransferD
   if (amounts.inflow.trim()) return "in";
   if (amounts.outflow.trim()) return "out";
   return null;
-}
-
-/**
- * The payee's recent categories for the category list's "Suggested" (YNAB lists none for a payee
- * set to "Do not auto-categorize", nor for transfers).
- */
-function payeeSuggestionIds(
-  payees: readonly Payee[],
-  draft: { payeeName: string; transferAccountId: string | null },
-): readonly string[] | undefined {
-  if (draft.transferAccountId) return undefined;
-  const name = draft.payeeName.trim().toLowerCase();
-  const payee = name ? payees.find((p) => p.name.toLowerCase() === name) : undefined;
-  return payee && payee.categorization !== "never" ? payee.recentCategoryIds : undefined;
 }
