@@ -32,10 +32,7 @@ import {
   Landmark,
   LayoutGrid,
   LogOut,
-  Monitor,
-  Moon,
   Settings,
-  Sun,
   UserCog,
   Wallet,
 } from "lucide-react";
@@ -46,6 +43,9 @@ import { lastViewedMonth } from "@/lib/months";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
 import { PageHeaderSlotProvider } from "./page-header";
+
+/** A theme choice in the user menu: an equal share of the row, its label never pushing it wider. */
+const THEME_ITEM = "min-w-0 flex-1 px-1 text-xs";
 
 export function AppShell({ user }: { user: { name: string; email: string } }) {
   const queryClient = useQueryClient();
@@ -194,7 +194,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                 <DropdownMenuContent
                   side="top"
                   align="start"
-                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
+                  className="w-(--radix-dropdown-menu-trigger-width)"
                 >
                   <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -204,7 +204,10 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {/* Theme as a button group; picking one keeps the menu open. */}
+                  {/*
+                   * Theme as a button group; picking one keeps the menu open. Text only, so the three
+                   * share the menu's width (as wide as the sidebar's user button) evenly.
+                   */}
                   <div className="grid gap-1.5 px-2 py-1.5">
                     <span className="text-muted-foreground text-xs">Theme</span>
                     <ToggleGroup
@@ -217,14 +220,14 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       value={theme}
                       onValueChange={(value) => value && setTheme(value as Theme)}
                     >
-                      <ToggleGroupItem value="light" className="flex-1">
-                        <Sun /> Light
+                      <ToggleGroupItem value="light" className={THEME_ITEM}>
+                        Light
                       </ToggleGroupItem>
-                      <ToggleGroupItem value="dark" className="flex-1">
-                        <Moon /> Dark
+                      <ToggleGroupItem value="dark" className={THEME_ITEM}>
+                        Dark
                       </ToggleGroupItem>
-                      <ToggleGroupItem value="system" className="flex-1">
-                        <Monitor /> System
+                      <ToggleGroupItem value="system" className={THEME_ITEM}>
+                        System
                       </ToggleGroupItem>
                     </ToggleGroup>
                   </div>
