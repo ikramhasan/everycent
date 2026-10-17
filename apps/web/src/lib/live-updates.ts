@@ -3,9 +3,12 @@ import { useEffect } from "react";
 
 /**
  * This browser tab, sent with every request (`X-Client-Id`) so the budget's event stream can
- * tell the tab which changes were its own.
+ * tell the tab which changes were its own. `getRandomValues`, not `randomUUID`: the latter only
+ * exists on https or localhost, and the app is also opened over plain http (e.g. on a tailnet).
  */
-export const CLIENT_ID = crypto.randomUUID();
+export const CLIENT_ID = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+  b.toString(16).padStart(2, "0"),
+).join("");
 
 /** How long to gather a burst of changes (a bulk edit, a partner typing) into one refetch. */
 const SETTLE_MS = 300;
