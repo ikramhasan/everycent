@@ -40,6 +40,9 @@ describe("categories", () => {
   it("seeds a new budget with the starter template", async () => {
     const { tree } = await setup();
     expect(names(await tree())).toEqual(STARTER_CATEGORIES.map((g) => [g.group, g.categories]));
+    // A new YNAB plan's groups (EVERYCENT-180).
+    expect((await tree()).groups.map((g) => g.name)).toEqual(["Bills", "Needs", "Wants"]);
+    expect(STARTER_CATEGORIES.flatMap((g) => g.categories)).toHaveLength(12);
   });
 
   it("starts every starter category with an emoji, like YNAB", () => {
@@ -108,71 +111,65 @@ describe("categories", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Group;
     expect(body).toMatchObject({ name: "Fixed", hidden: true });
-    expect(body.categories).toHaveLength(5);
+    expect(body.categories).toHaveLength(3);
   });
 
   it("moves a group before another, and to the end", async () => {
     const { cookie, base, tree } = await setup();
-    const [bills, frequent, nonMonthly] = (await tree()).groups;
+    const [bills, , wants] = (await tree()).groups;
 
-    let res = await send("POST", `${base}/category-groups/${nonMonthly?.id}/move`, cookie, {
+    let res = await send("POST", `${base}/category-groups/${wants?.id}/move`, cookie, {
       beforeGroupId: bills?.id,
     });
     expect(res.status).toBe(200);
     expect(((await res.json()) as Tree).groups.slice(0, 3).map((g) => g.name)).toEqual([
-      "Non-Monthly",
+      "Wants",
       "Bills",
-      "Frequent",
+      "Needs",
     ]);
 
-    res = await send("POST", `${base}/category-groups/${frequent?.id}/move`, cookie, {
+    res = await send("POST", `${base}/category-groups/${bills?.id}/move`, cookie, {
       beforeGroupId: null,
     });
-    expect((await tree()).groups.map((g) => g.name)).toEqual([
-      "Non-Monthly",
-      "Bills",
-      "Goals",
-      "Quality of Life Goals",
-      "Frequent",
-    ]);
+    expect((await tree()).groups.map((g) => g.name)).toEqual(["Wants", "Needs", "Bills"]);
   });
 
   it("moves a category within its group and into another group", async () => {
     const { cookie, base, tree } = await setup();
-    const [bills, frequent] = (await tree()).groups;
-    const [rent, electric] = bills?.categories ?? [];
-    const eatingOut = frequent?.categories[1];
+    const [bills, needs] = (await tree()).groups;
+    const [rent, phone] = bills?.categories ?? [];
+    const transportation = needs?.categories[1];
 
-    await send("POST", `${base}/categories/${electric?.id}/move`, cookie, {
+    await send("POST", `${base}/categories/${phone?.id}/move`, cookie, {
       groupId: bills?.id,
       beforeCategoryId: rent?.id,
     });
-    const res = await send("POST", `${base}/categories/${eatingOut?.id}/move`, cookie, {
+    const res = await send("POST", `${base}/categories/${transportation?.id}/move`, cookie, {
       groupId: bills?.id,
       beforeCategoryId: null,
     });
     expect(res.status).toBe(200);
 
-    const [billsAfter, frequentAfter] = (await tree()).groups;
+    const [billsAfter, needsAfter] = (await tree()).groups;
     expect(billsAfter?.categories.map((c) => c.name)).toEqual([
-      "🔌 Electric",
-      "🏡 Rent/Mortgage",
-      "💧 Water",
-      "🌐 Internet",
-      "📱 Phone",
-      "🍽️ Eating Out",
+      "📱 Phone & Internet",
+      "🏠 Rent/Mortgage",
+      "⚡️ Utilities",
+      "🚘 Transportation",
     ]);
     expect(billsAfter?.categories.at(-1)?.groupId).toBe(bills?.id);
-    expect(frequentAfter?.categories.map((c) => c.name)).toEqual([
+    expect(needsAfter?.categories.map((c) => c.name)).toEqual([
       "🛒 Groceries",
-      "🚌 Transportation",
+      "🩺 Medical expenses",
+      "😌 Emergency fund",
     ]);
 
     // A later insert into the old group still lands at the end, after the renumbering.
-    await send("POST", `${base}/categories`, cookie, { groupId: frequent?.id, name: "Coffee" });
+    await send("POST", `${base}/categories`, cookie, { groupId: needs?.id, name: "Coffee" });
     expect((await tree()).groups[1]?.categories.map((c) => c.name)).toEqual([
       "🛒 Groceries",
-      "🚌 Transportation",
+      "🩺 Medical expenses",
+      "😌 Emergency fund",
       "Coffee",
     ]);
   });
@@ -198,8 +195,8 @@ describe("categories", () => {
     );
 
     const after = await tree();
-    expect(after.groups.map((g) => g.name)).not.toContain("Frequent");
-    expect(after.groups[0]?.categories.map((c) => c.name)).not.toContain("🏡 Rent/Mortgage");
+    expect(after.groups.map((g) => g.name)).not.toContain("Needs");
+    expect(after.groups[0]?.categories.map((c) => c.name)).not.toContain("🏠 Rent/Mortgage");
     const orphans = await db
       .select()
       .from(category)
@@ -304,7 +301,7 @@ describe("categories", () => {
       }),
     ];
     for (const res of await Promise.all(attempts)) expect(res.status).toBe(404);
-    expect((await owner.tree()).groups[0]?.categories[0]?.name).toBe("🏡 Rent/Mortgage");
+    expect((await owner.tree()).groups[0]?.categories[0]?.name).toBe("🏠 Rent/Mortgage");
   });
 
   it("lets a partner with editor access manage categories", async () => {

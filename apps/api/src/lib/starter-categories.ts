@@ -3,20 +3,29 @@ import { category, categoryGroup } from "@everycent/db/schema";
 import type { Db } from "./ledger";
 
 /**
- * Categories a new budget starts with, in YNAB's default groups. The setup flow lets people
- * untick the ones they don't need.
+ * Categories a new budget starts with: a new YNAB plan's groups and categories, in order
+ * (Create New Plan, checked 2026-10-17, EVERYCENT-180). YNAB's API reports $0 placeholder
+ * targets on some of them, but its plan screen shows none, so they start without targets. The
+ * setup flow lets people untick the ones they don't need.
  */
 export const STARTER_CATEGORIES: ReadonlyArray<{ group: string; categories: readonly string[] }> = [
   {
     group: "Bills",
-    categories: ["🏡 Rent/Mortgage", "🔌 Electric", "💧 Water", "🌐 Internet", "📱 Phone"],
+    categories: ["🏠 Rent/Mortgage", "📱 Phone & Internet", "⚡️ Utilities"],
   },
-  { group: "Frequent", categories: ["🛒 Groceries", "🍽️ Eating Out", "🚌 Transportation"] },
-  { group: "Non-Monthly", categories: ["🔧 Home Maintenance", "🚗 Auto Maintenance", "🎁 Gifts"] },
-  { group: "Goals", categories: ["🏖️ Vacation", "🎓 Education", "🔨 Home Improvement"] },
   {
-    group: "Quality of Life Goals",
-    categories: ["🎨 Hobbies", "💪 Health & Wellness", "🎬 Entertainment"],
+    group: "Needs",
+    categories: ["🛒 Groceries", "🚘 Transportation", "🩺 Medical expenses", "😌 Emergency fund"],
+  },
+  {
+    group: "Wants",
+    categories: [
+      "🍽️ Dining out",
+      "🍿 Entertainment",
+      "🏝️ Vacation",
+      "❗️ Stuff I forgot to plan for",
+      "🌳 YNAB subscription",
+    ],
   },
 ];
 
