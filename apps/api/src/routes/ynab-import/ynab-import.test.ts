@@ -232,6 +232,7 @@ describe("import from YNAB's API", () => {
 });
 
 describe("import from YNAB's Export Plan files", () => {
+  // Rebuilds a whole real plan twice over: seconds alone, much longer under a parallel run.
   it("rebuilds the plan from its two files: YNAB's numbers again", async () => {
     const { cookie } = await signUp(app);
     const { body } = await importPlan(cookie);
@@ -295,7 +296,7 @@ describe("import from YNAB's Export Plan files", () => {
     });
     expect(again.status).toBe(200);
     expect(((await again.json()) as Report).budget.id).toBe(report.budget.id);
-  });
+  }, 60_000);
 
   it("refuses files that aren't YNAB's", async () => {
     const { cookie } = await signUp(app);
