@@ -24,6 +24,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@everycent/ui/components/popover";
+import { useIsMobile } from "@everycent/ui/hooks/use-mobile";
 import { cn } from "@everycent/ui/lib/utils";
 import { ChevronRight, GripVertical, Plus, StickyNote } from "lucide-react";
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -137,8 +138,12 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
  * narrower than the columns scrolls sideways instead of squeezing them (mobile gets its own pass).
  */
 // Assigned and Activity fit "-$10,000.00"; Available keeps room for its pill and icon.
+// On a phone a row is its name and Available, a thumb's height; Assigned and Activity are in the
+// category's drawer (EVERYCENT-93).
 const ROW =
-  "grid grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem] items-center gap-x-1 px-2 py-1.5";
+  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 py-1.5 max-md:min-h-12 md:grid-cols-[minmax(10rem,1fr)_6.5rem_6.5rem_7.5rem]";
+/** Cells left off a phone's narrow rows. */
+const WIDE_ONLY = "max-md:hidden";
 const NAME_CELL = "flex min-w-0 items-center gap-1";
 const FIGURE = "min-w-0 truncate text-right tabular-nums";
 /**
@@ -161,7 +166,7 @@ const SLOT = "flex size-6 shrink-0 items-center justify-center";
  * hover), so they don't cost a column of their own.
  */
 const HOVER_REVEAL =
-  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
+  "opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 max-md:invisible";
 
 /** Draggable types: payment categories only move within the Credit Card Payments group. */
 const categoryType = (c: Category) => (c.linkedAccountId ? "payment" : "category");
@@ -383,7 +388,7 @@ export function CategoryList({
                 />
               </Button>
               {selection && (
-                <span className={SLOT}>
+                <span className={cn(SLOT, WIDE_ONLY)}>
                   <Checkbox
                     aria-label={allChecked ? "Uncheck all" : "Check all"}
                     checked={allChecked}
@@ -415,8 +420,8 @@ export function CategoryList({
             </div>
             {figures && (
               <>
-                <span className={cn(FIGURE, FIGURE_PAD)}>Assigned</span>
-                <span className={cn(FIGURE, FIGURE_PAD)}>Activity</span>
+                <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>Assigned</span>
+                <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>Activity</span>
                 <span className={cn(FIGURE, FIGURE_PAD)}>Available</span>
               </>
             )}
@@ -452,8 +457,8 @@ export function CategoryList({
                 )}
               </div>
               {/* YNAB shows a dash: money can't be assigned to Uncategorized. */}
-              <span className={cn(FIGURE, FIGURE_PAD)}>–</span>
-              <span className={cn(FIGURE, "text-sm")}>
+              <span className={cn(FIGURE, FIGURE_PAD, WIDE_ONLY)}>–</span>
+              <span className={cn(FIGURE, "text-sm", WIDE_ONLY)}>
                 <Activity
                   figures={figures}
                   target={{ uncategorized: true }}
@@ -757,7 +762,7 @@ function GroupSection({
             />
           </Button>
           {onToggleSelection && (
-            <span className={SLOT}>
+            <span className={cn(SLOT, WIDE_ONLY)}>
               <Checkbox
                 aria-label={`Select ${group.name}`}
                 checked={checked ?? false}
@@ -906,9 +911,11 @@ function CategoryRow({
   const onlySelected = selected && selection?.selected.size === 1;
   // Set by a click on the row: opens its Assigned amount for typing, as YNAB does.
   const [editAssigned, setEditAssigned] = useState(false);
+  // A phone has no Assigned cell in the row: the tap opens the category's drawer instead.
+  const phone = useIsMobile();
   function selectAndEdit() {
     selection?.selectOnly(category.id);
-    if (assign) setEditAssigned(true);
+    if (assign && !phone) setEditAssigned(true);
   }
   /**
    * A click anywhere on the row selects it alone and starts editing its Assigned amount, as does
@@ -1054,7 +1061,7 @@ function CategoryRow({
       </div>
       {totals && format && (
         <>
-          <div data-assigned-cell className="group/assigned relative min-w-0">
+          <div data-assigned-cell className={cn("group/assigned relative min-w-0", WIDE_ONLY)}>
             {assign ? (
               <AssignedCell
                 categoryId={category.id}
@@ -1087,7 +1094,7 @@ function CategoryRow({
               </span>
             )}
           </div>
-          <span className={cn(FIGURE, "text-sm")}>
+          <span className={cn(FIGURE, "text-sm", WIDE_ONLY)}>
             {figures && (
               <Activity
                 figures={figures}
@@ -1168,10 +1175,10 @@ function TotalCells({
 }) {
   return (
     <>
-      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
+      <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm", WIDE_ONLY)}>
         {format(totals.assigned)}
       </span>
-      <span className={cn(FIGURE, "font-medium text-sm")}>
+      <span className={cn(FIGURE, "font-medium text-sm", WIDE_ONLY)}>
         {activity ?? <span className={FIGURE_PAD}>{format(totals.activity)}</span>}
       </span>
       <span className={cn(FIGURE, FIGURE_PAD, "font-medium text-sm")}>
@@ -1222,7 +1229,7 @@ function RowCheckbox({
   selection: SelectionActions;
 }) {
   return (
-    <span className={SLOT}>
+    <span className={cn(SLOT, WIDE_ONLY)}>
       <Checkbox
         aria-label={`Select ${name}`}
         checked={selection.selected.has(id)}

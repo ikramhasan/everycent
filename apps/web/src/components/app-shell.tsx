@@ -36,6 +36,7 @@ import {
   Landmark,
   LayoutGrid,
   LogOut,
+  Menu,
   Settings,
   UserCog,
   Wallet,
@@ -99,6 +100,8 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
 
   return (
     <SidebarProvider
+      // A tablet starts with the icon rail, leaving the page the room; the trigger opens it.
+      defaultOpen={window.innerWidth >= 1024}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
@@ -304,12 +307,14 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
           viewportClassName="[&>div]:block!"
           viewportProps={{ id: APP_SCROLL_ID, "data-scroll-restoration-id": APP_SCROLL_ID }}
         >
-          <div className="p-4 md:p-5">
+          {/* On a phone the page clears the bottom navigation bar and the home indicator. */}
+          <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-5">
             <PageHeaderSlotProvider value={headerSlot}>
               <Outlet />
             </PageHeaderSlotProvider>
           </div>
         </ScrollArea>
+        {budgetId && <BottomNav budgetId={budgetId} />}
       </SidebarInset>
     </SidebarProvider>
   );
@@ -422,5 +427,60 @@ function SidebarResizer({
         moveTo(width + (e.key === "ArrowRight" ? 16 : -16));
       }}
     />
+  );
+}
+
+/**
+ * A phone's main places within thumb reach (everycent's own layout, not YNAB's, EVERYCENT-93):
+ * Budget, All Accounts, Reports and Activity, and More for the rest of the sidebar (the accounts,
+ * settings, the user menu). Hidden from tablet width up, where the sidebar shows.
+ */
+function BottomNav({ budgetId }: { budgetId: string }) {
+  const { setOpenMobile } = useSidebar();
+  const item =
+    "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[0.7rem] text-muted-foreground outline-none focus-visible:bg-muted data-[active]:font-medium data-[active]:text-foreground [&_svg]:size-5";
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      <Link
+        to="/budgets/$budgetId"
+        params={{ budgetId }}
+        search={{ month: lastViewedMonth(budgetId) }}
+        activeOptions={{ exact: true, includeSearch: false }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Wallet aria-hidden /> Budget
+      </Link>
+      <Link
+        to="/budgets/$budgetId/accounts"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Landmark aria-hidden /> Accounts
+      </Link>
+      <Link
+        to="/budgets/$budgetId/reports"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <ChartColumn aria-hidden /> Reports
+      </Link>
+      <Link
+        to="/budgets/$budgetId/activity"
+        params={{ budgetId }}
+        activeProps={{ "data-active": true, "aria-current": "page" }}
+        className={item}
+      >
+        <Activity aria-hidden /> Activity
+      </Link>
+      <button type="button" className={item} onClick={() => setOpenMobile(true)}>
+        <Menu aria-hidden /> More
+      </button>
+    </nav>
   );
 }

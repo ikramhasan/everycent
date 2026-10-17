@@ -1,6 +1,13 @@
 import { addMonths, type BudgetMonth, type CurrencyCode, isBudgetMonth } from "@everycent/engine";
 import { Button } from "@everycent/ui/components/button";
 import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@everycent/ui/components/drawer";
+import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -9,11 +16,12 @@ import {
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Pencil, Plus } from "lucide-react";
+import { PanelRight, Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AddAccountDialog } from "@/components/add-account-dialog";
+import { AssignedCell } from "@/components/assigned-cell";
 import { AutoAssignPanel } from "@/components/auto-assign";
 import { BudgetFilterBar } from "@/components/budget-filter-bar";
 import { BudgetOptionsMenu } from "@/components/budget-options-menu";
@@ -129,6 +137,8 @@ function BudgetPage() {
   const { filter, setFilter } = useBudgetFilter(budget.id);
   const views = useQuery(viewsQueryOptions(budget.id));
   const viewportWidth = useViewportWidth();
+  const phone = viewportWidth < 768;
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorLayout = useDefaultLayout({
     id: "everycent:budget-inspector",
     storage: localStorage,
@@ -630,6 +640,10 @@ function BudgetPage() {
   // Below lg the inspector stacks under the list; from there it's beside it, and as wide as the
   // user drags it, as YNAB's is (25–50% of the area, a third to start, kept in this browser).
   const wide = viewportWidth >= 1024;
+  // Below lg, picking one category opens the inspector drawer for it.
+  useEffect(() => {
+    if (!wide && selection.size === 1) setInspectorOpen(true);
+  }, [selection, wide]);
   const listColumn = (
     <>
       {categories.isPending ? (
@@ -733,6 +747,29 @@ function BudgetPage() {
       )}
     </>
   );
+  const onlySelected = selection.size === 1 ? [...selection][0] : undefined;
+  const inspectorTitle =
+    onlySelected === undefined
+      ? "Month summary"
+      : onlySelected === UNCATEGORIZED
+        ? "Uncategorized Transactions"
+        : (listed.get(onlySelected)?.name ?? "Category");
+  // A phone's rows have no Assigned cell, so the drawer leads with a large one.
+  const onlyFigures =
+    onlySelected && listFigures?.month.categories.find((c) => c.categoryId === onlySelected);
+  const drawerAssigned = phone && onlySelected && onlyFigures && listFigures?.assign && (
+    <div className="grid gap-1.5">
+      <span className="text-muted-foreground text-sm">Assigned this month</span>
+      <AssignedCell
+        categoryId={onlySelected}
+        categoryName={inspectorTitle}
+        amount={onlyFigures.assigned}
+        format={listFigures.format}
+        actions={listFigures.assign}
+        className="h-11 border text-left text-base"
+      />
+    </div>
+  );
   const inspectorColumn = listFigures && (
     <aside className="grid grid-cols-[minmax(0,1fr)] gap-4" aria-label="Inspector">
       <Inspector
@@ -788,13 +825,25 @@ function BudgetPage() {
       >
         <div className="grid gap-1">
           <PageHeader title={budget.name} />
-          <MonthNav
-            month={month}
-            current={today}
-            first={range?.first ?? month}
-            last={range?.last ?? month}
-            onChange={goTo}
-          />
+          <div className="flex items-center gap-2">
+            <MonthNav
+              month={month}
+              current={today}
+              first={range?.first ?? month}
+              last={range?.last ?? month}
+              onChange={goTo}
+            />
+            {!wide && listFigures && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto max-md:min-h-11"
+                onClick={() => setInspectorOpen(true)}
+              >
+                <PanelRight /> Summary
+              </Button>
+            )}
+          </div>
           {figures.data && (
             <MonthNote
               key={month}
@@ -881,10 +930,34 @@ function BudgetPage() {
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
-        <div className="grid items-start gap-4">
+        <>
           {listColumn}
-          {inspectorColumn}
-        </div>
+          {/*
+           * Narrower than lg the inspector is a drawer (everycent's own layout, EVERYCENT-93): up
+           * from the bottom on a phone, in from the side on a tablet. Picking a category opens it.
+           */}
+          <Drawer
+            open={inspectorOpen}
+            onOpenChange={(open) => {
+              setInspectorOpen(open);
+              if (!open && selection.size === 1) setSelected(new Set());
+            }}
+            direction={phone ? "bottom" : "right"}
+          >
+            <DrawerContent className="data-[vaul-drawer-direction=bottom]:max-h-[90svh] data-[vaul-drawer-direction=right]:w-[min(26rem,92vw)] data-[vaul-drawer-direction=right]:sm:max-w-none">
+              <DrawerHeader className="text-left">
+                <DrawerTitle>{inspectorTitle}</DrawerTitle>
+                <DrawerDescription className="sr-only">
+                  The category's numbers, target and note, or the month's summary.
+                </DrawerDescription>
+              </DrawerHeader>
+              <div className="grid gap-4 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                {drawerAssigned}
+                {inspectorColumn}
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </>
       )}
     </div>
   );
