@@ -48,3 +48,18 @@ describe("DisplayOptionsDialog", () => {
     expect(localStorage.getItem("theme")).not.toBe("dark");
   });
 });
+
+describe("AvailablePill in words (EVERYCENT-95)", () => {
+  it("says overspent, credit overspending or needs more, not only by colour", () => {
+    render(
+      <>
+        <AvailablePill amount="-500" format={(a) => a} />
+        <AvailablePill amount="-500" format={(a) => a} caution />
+        <AvailablePill amount="500" format={(a) => a} caution />
+      </>,
+    );
+    expect(screen.getByText(", overspent")).toHaveClass("sr-only");
+    expect(screen.getByText(", credit overspending")).toHaveClass("sr-only");
+    expect(screen.getByText(", needs more")).toHaveClass("sr-only");
+  });
+});

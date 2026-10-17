@@ -47,7 +47,7 @@ describe("AvailableButton", () => {
         }}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-2, overspent" }));
     await userEvent.selectOptions(await screen.findByLabelText("Month"), "2026-11");
     await userEvent.click(screen.getByRole("combobox", { name: "Cover overspending from" }));
     await userEvent.click(await screen.findByRole("option", { name: /Food/ }));
@@ -89,7 +89,7 @@ describe("AvailableButton", () => {
         actions={actions}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-80" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cover Phone: $-80, overspent" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Cover overspending from" }));
     // Only places with money are offered.
     expect(screen.queryByRole("option", { name: /Food/ })).not.toBeInTheDocument();

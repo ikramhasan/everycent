@@ -118,6 +118,11 @@ export function AvailablePill({
       )}
       {icon}
       <span className="truncate">{format(amount)}</span>
+      {/* The colour in words: cash and credit overspending must not differ only by colour. */}
+      {tone === "negative" && <span className="sr-only">, overspent</span>}
+      {tone === "caution" && (
+        <span className="sr-only">{sign < 0 ? ", credit overspending" : ", needs more"}</span>
+      )}
     </span>
   );
 }
@@ -187,7 +192,15 @@ export function AvailableButton({
         {trigger ?? (
           <button
             type="button"
-            aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}`}
+            aria-label={`${overspent ? "Cover" : "Move"} ${categoryName}: ${format(amount)}${
+              caution
+                ? amount.startsWith("-")
+                  ? ", credit overspending"
+                  : ", needs more"
+                : overspent
+                  ? ", overspent"
+                  : ""
+            }`}
             className="max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AvailablePill

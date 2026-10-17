@@ -5,6 +5,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { Bookmark, Check, Pencil } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel } from "@/lib/flags";
+import { menuKeyDown } from "@/lib/menu-keys";
 
 /**
  * YNAB's flag cell: a bookmark showing the transaction's flag color, opening a menu of the six
@@ -101,7 +102,8 @@ export function FlagMenu({
             </div>
           </form>
         ) : (
-          <div role="menu" aria-label="Flags" className="grid">
+          // biome-ignore lint/a11y/useKeyWithClickEvents: arrow keys only; the items are buttons
+          <div role="menu" aria-label="Flags" className="grid" onKeyDown={menuKeyDown}>
             {flags.map((f) => (
               <button
                 key={f.color}

@@ -74,6 +74,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { $api, apiClient } from "@/lib/api";
@@ -87,6 +88,7 @@ import { exportSelected } from "@/lib/exports";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
+import { useShortcutsEnabled } from "@/lib/preferences";
 import {
   deleteWarning,
   editWarning,
@@ -1607,6 +1609,29 @@ export function Register({
       }
     },
     { enabled: idle && single !== undefined },
+  );
+  // Enter edits the one selected transaction from the keyboard, as a click on a cell does: an
+  // everycent addition for keyboard and screen reader users (EVERYCENT-95).
+  const shortcutsOn = useShortcutsEnabled();
+  useHotkeys(
+    "enter",
+    () => {
+      if (!single) return;
+      if (single.subtransactions.length > 0) return openSplit(single);
+      const [first] = editableColumns(single);
+      if (first) setEditing({ id: single.id, column: first });
+    },
+    {
+      enabled: shortcutsOn && idle && single !== undefined && !phone,
+      preventDefault: true,
+      // Enter on a button or link presses it, and popovers keep their keys.
+      ignoreEventWhen: (e) =>
+        e.target instanceof Element &&
+        e.target.closest(
+          "button, a, [role=dialog], [role=menu], [data-radix-popper-content-wrapper]",
+        ) !== null,
+    },
+    [single, idle, phone],
   );
   const singleCategory =
     single && editableColumns(single).includes("category") && single.subtransactions.length === 0;

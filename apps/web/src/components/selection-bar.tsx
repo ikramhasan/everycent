@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel } from "@/lib/flags";
+import { menuKeyDown } from "@/lib/menu-keys";
 import { useShortcut } from "@/lib/shortcuts";
 import { type CategoryOption, categoryLabel } from "@/lib/transactions";
 
@@ -321,7 +322,15 @@ export function SelectionBar({
           )}
           {reviewing && <PopoverAnchor virtualRef={moreRef} />}
           <PopoverContent align="end" className="w-60 p-1.5">
-            <div role="menu" aria-label="Flag selected" className="grid" onKeyDown={flagByDigit}>
+            <div
+              role="menu"
+              aria-label="Flag selected"
+              className="grid"
+              onKeyDown={(e) => {
+                flagByDigit(e);
+                menuKeyDown(e);
+              }}
+            >
               {flags.map((f, i) => (
                 <button
                   key={f.color}

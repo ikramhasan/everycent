@@ -729,3 +729,11 @@ describe("CategoryList keys (YNAB, 2026-10-18)", () => {
     expect(selectedNow()).toBe("uncategorized,pay,c1,c2");
   });
 });
+
+describe("CategoryList with axe (EVERYCENT-95)", () => {
+  it("finds nothing on the plan's list", async () => {
+    const { expectAccessible } = await import("@/test/axe");
+    renderWithFigures();
+    await expectAccessible(document.body);
+  });
+});
