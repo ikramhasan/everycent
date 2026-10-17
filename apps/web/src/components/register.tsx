@@ -2414,7 +2414,16 @@ function editorAccounts(accounts: readonly Account[], current: string) {
  * which takes what's left, gives or takes the difference). Arrow keys move it 8px.
  * Hand-rolled: the register is a plain table with a colgroup, not a table library's columns.
  */
-function ColumnResizer({ label, onWidth }: { label: string; onWidth: (px: number) => void }) {
+function ColumnResizer({
+  label,
+  width,
+  onWidth,
+}: {
+  label: string;
+  /** The column's width in pixels, for screen readers. */
+  width: number;
+  onWidth: (px: number) => void;
+}) {
   const start = useRef<{ x: number; width: number } | null>(null);
   const cellWidth = (el: HTMLElement) => el.closest("th")?.getBoundingClientRect().width ?? 0;
   return (
@@ -2423,6 +2432,8 @@ function ColumnResizer({ label, onWidth }: { label: string; onWidth: (px: number
       role="separator"
       aria-orientation="vertical"
       aria-label={`Resize ${label}`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={MIN_COLUMN_PX}
       tabIndex={0}
       className="absolute inset-y-1 right-0 w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border/0 hover:after:bg-border focus-visible:after:bg-ring"
       onClick={(e) => e.stopPropagation()}
