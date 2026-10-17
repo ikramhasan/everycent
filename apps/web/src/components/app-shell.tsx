@@ -23,6 +23,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@everycent/ui/components/sidebar";
 import { type Theme, useTheme } from "@everycent/ui/lib/theme";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,8 +43,10 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
+import { useShortcut } from "@/lib/shortcuts";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
+import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { PageHeaderSlotProvider } from "./page-header";
 
 const THEMES: readonly { value: Theme; label: string }[] = [
@@ -93,6 +96,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
   return (
     // Narrower than the kit's 16rem, leaving the page more room (YNAB's is narrow too).
     <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
+      <GlobalShortcuts />
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>
@@ -284,4 +288,13 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+/** YNAB's Universal shortcuts that belong to the shell: "?" for the list, Shift+. for the sidebar. */
+function GlobalShortcuts() {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const { toggleSidebar } = useSidebar();
+  useShortcut("help", () => setHelpOpen(true));
+  useShortcut("sidebar", toggleSidebar);
+  return <KeyboardShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />;
 }

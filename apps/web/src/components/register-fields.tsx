@@ -51,8 +51,9 @@ import {
   Split,
   X,
 } from "lucide-react";
-import { type ReactNode, useId, useMemo, useRef, useState } from "react";
-import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
+import { type KeyboardEvent, type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { dateForKey, dateToIso, isoToDate, parseDateInput, todayIso } from "@/lib/dates";
+import { useShortcutsEnabled } from "@/lib/preferences";
 import {
   type CategoryOption,
   categoryLabel,
@@ -118,6 +119,18 @@ export function DateField({
   const [open, setOpen] = useState(defaultOpen);
   const inputRef = useRef<HTMLInputElement>(null);
   const repeatId = useId();
+  const shortcuts = useShortcutsEnabled();
+
+  /** YNAB's date-picker keys change the date in place, the text selected for the next one. */
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (!shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
+    const next = dateForKey(value, e.key, todayIso(), { dash: !format.includes("-") });
+    if (!next) return;
+    e.preventDefault();
+    onChange(next);
+    setText(display(next));
+    requestAnimationFrame(() => inputRef.current?.select());
+  }
 
   return (
     <InputGroup className="h-8">
@@ -127,6 +140,7 @@ export function DateField({
         value={text}
         autoFocus={autoFocus}
         onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={onKeyDown}
         onChange={(e) => {
           setText(e.target.value);
           const iso = parseDateInput(e.target.value, format);

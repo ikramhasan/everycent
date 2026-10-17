@@ -48,9 +48,9 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { inCurrency } from "@/lib/money-input";
 import { invalidateMonths } from "@/lib/months";
-import { useShortcutsEnabled } from "@/lib/preferences";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { scheduledQueryPrefix } from "@/lib/scheduled";
+import { useShortcut } from "@/lib/shortcuts";
 import { transactionsQueryPrefix } from "@/lib/transactions";
 
 export const Route = createFileRoute("/_authed/budgets/$budgetId/accounts/$accountId")({
@@ -141,19 +141,7 @@ function AccountPage() {
   useEffect(() => setReconcilingTo(null), [accountId]);
 
   // YNAB's shortcut for Reconcile is Shift+E.
-  const shortcuts = useShortcutsEnabled();
-  useEffect(() => {
-    if (!reconcilable || !shortcuts) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (!event.shiftKey || event.code !== "KeyE" || event.metaKey || event.ctrlKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable=true], [role=dialog]")) return;
-      event.preventDefault();
-      setReconcileOpen(true);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [reconcilable, shortcuts]);
+  useShortcut("reconcile", () => setReconcileOpen(true), { enabled: reconcilable });
 
   async function refresh() {
     await Promise.all([

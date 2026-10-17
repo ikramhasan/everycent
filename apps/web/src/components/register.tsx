@@ -113,8 +113,10 @@ import {
   type Selection,
   selectionBody,
   setSelected,
+  stepSelection,
 } from "@/lib/selection";
 import { sessionQueryOptions } from "@/lib/session";
+import { useShortcut } from "@/lib/shortcuts";
 import { createBodyFromTransaction, updateBodyFromTransaction } from "@/lib/transaction-history";
 import {
   type CellColumn,
@@ -207,6 +209,8 @@ type Item =
 interface EditingSplit {
   id: string;
   draft: Draft;
+  /** Opened with YNAB's S key, which starts in the memo. */
+  fromKey?: boolean;
 }
 
 /**
@@ -377,6 +381,8 @@ export function Register({
   } | null>(null);
   const proceeding = useRef(false);
   const anchor = useRef<string | null>(null);
+  // Where a Shift+Up/Down range has reached (its other end is `anchor`).
+  const head = useRef<string | null>(null);
   const bulk = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/bulk", {
     onSuccess: (result) => history.noteSave(result.previousVersions, result.versions),
   });
@@ -605,6 +611,7 @@ export function Register({
   function toggleRow(id: string, on: boolean, shift: boolean) {
     const ids = shift ? rangeTo(loadedIds, anchor.current, id) : [id];
     anchor.current = id;
+    head.current = id;
     setSelection((s) => setSelected(s, ids, on));
   }
 
@@ -734,17 +741,21 @@ export function Register({
    * One action on the selected transactions and scheduled rows, undone as one. Duplicate selects
    * the copies and Enter Now the entered transactions, as YNAB does.
    */
-  async function applyBulk(action: BulkAction) {
+  async function applyBulk(
+    action: BulkAction,
+    sel: Selection = selection,
+    sched: ReadonlySet<string> = scheduledSelection,
+  ) {
     try {
       const commands: Omit<UndoCommand, "label">[] = [];
       let count = 0;
       let nextSelection: Selection = NOTHING;
       let nextScheduled: ReadonlySet<string> = NO_ROWS;
-      if (!isEmpty(selection) && action.type !== "enterNow") {
+      if (!isEmpty(sel) && action.type !== "enterNow") {
         const run = () =>
           bulk.mutateAsync({
             params: { path: { budgetId: budget.id } },
-            body: { selection: selectionBody(selection, selectionFilter), action },
+            body: { selection: selectionBody(sel, selectionFilter), action },
           });
         const result = await run();
         count += result.updated;
@@ -757,12 +768,12 @@ export function Register({
         }
       }
       if (
-        scheduledSelection.size > 0 &&
+        sched.size > 0 &&
         action.type !== "cleared" &&
         action.type !== "approve" &&
         action.type !== "reject"
       ) {
-        const ids = [...scheduledSelection];
+        const ids = [...sched];
         const result = await scheduledBulk.mutateAsync({
           params: { path: { budgetId: budget.id } },
           body: { ids, action, today },
@@ -791,8 +802,11 @@ export function Register({
         });
       }
       await refresh();
-      setSelection(nextSelection);
-      setScheduledSelection(nextScheduled);
+      // Flag and the cleared states leave the rows selected, as YNAB's do (2026-10-18), so C can
+      // toggle them back.
+      const keep = action.type === "flag" || action.type === "cleared";
+      setSelection(keep ? sel : nextSelection);
+      setScheduledSelection(keep ? sched : nextScheduled);
       const n = `${count} transaction${count === 1 ? "" : "s"}`;
       toast.success(
         action.type === "delete"
@@ -1090,12 +1104,12 @@ export function Register({
   }
 
   /** Splits open as a whole, as do transactions being split from the category cell. */
-  function openSplit(t: Transaction, split = false) {
+  function openSplit(t: Transaction, split = false, fromKey = false) {
     const draft = draftFrom(t, inCurrency(budget, t.currency));
     setEditing(null);
     setAdding(false);
     setSplitError(null);
-    setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft });
+    setEditingSplit({ id: t.id, draft: split ? startSplit(draft) : draft, fromKey });
   }
 
   async function saveSplit(t: Transaction, draft: Draft, confirmed = false) {
@@ -1530,6 +1544,68 @@ export function Register({
     // biome-ignore lint/correctness/useExhaustiveDependencies: startAdding is a plain function
   }, [openRecordPayment, startPayment, onRecordPaymentOpened]);
 
+  // YNAB's register shortcuts (seen 2026-10-18); the selection bar binds the ones on a selection.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const idle = !adding && editing === null && editingSplit === null;
+  function stepRows(direction: 1 | -1, extend: boolean) {
+    const ids = selection.mode === "some" ? selection.ids : new Set<string>();
+    const next = stepSelection(
+      loadedIds,
+      ids,
+      { anchor: anchor.current, head: head.current },
+      direction,
+      { extend, several: "anchor" },
+    );
+    if (!next) return;
+    anchor.current = next.cursor.anchor;
+    head.current = next.cursor.head;
+    setScheduledSelection(NO_ROWS);
+    setSelection({ mode: "some", ids: new Set(next.ids) });
+    const index = flat.findIndex((item) => item.key === next.cursor.head);
+    if (index !== -1) virtualizer.scrollToIndex(index, { align: "auto" });
+  }
+  useShortcut("moveTransactions", (e) => stepRows(e.key === "ArrowUp" ? -1 : 1, false), {
+    enabled: idle && !readOnly,
+  });
+  useShortcut("extendTransactions", (e) => stepRows(e.key === "ArrowUp" ? -1 : 1, true), {
+    enabled: idle && !readOnly,
+  });
+  useShortcut("selectAll", () => setSelection({ mode: "all", except: new Set() }), {
+    enabled: idle && !readOnly && loaded.length > 0,
+  });
+  useShortcut("deselectAll", clearSelection, {
+    enabled: idle && (!isEmpty(selection) || scheduledSelection.size > 0),
+  });
+  // Shift+N opens the new row with its calendar open, as YNAB does.
+  useShortcut("addTransaction", () => startAdding(null, true), {
+    enabled: !readOnly && canAdd && idle,
+  });
+  // S and K act on one selected transaction: its split editor, or its category list.
+  useShortcut(
+    "split",
+    () => {
+      if (!single) return;
+      if (single.subtransactions.length > 0) openSplit(single, false, true);
+      else if (!single.transferFromSplit && !single.transferAccountId) {
+        openSplit(single, true, true);
+      }
+    },
+    { enabled: idle && single !== undefined },
+  );
+  const singleCategory =
+    single && editableColumns(single).includes("category") && single.subtransactions.length === 0;
+  useShortcut("search", () => {
+    rootRef.current
+      ?.querySelector<HTMLInputElement>("input[aria-label='Search transactions']")
+      ?.focus();
+  });
+  // Approve every unapproved transaction the register shows (its search included).
+  useShortcut(
+    "approveAll",
+    () => void applyBulk({ type: "approve" }, { mode: "all", except: new Set() }, NO_ROWS),
+    { enabled: idle && !readOnly && needsReview && !bulk.isPending },
+  );
+
   if (transactions.isPending) return <Skeleton className="h-64" />;
   if (transactions.isError) {
     return (
@@ -1816,7 +1892,7 @@ export function Register({
   }
 
   return (
-    <div className="grid gap-3">
+    <div ref={rootRef} className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {!readOnly && (
           <Button size="sm" onClick={() => startAdding()} disabled={!canAdd || adding}>
@@ -1887,6 +1963,11 @@ export function Register({
             scheduledRows.filter((row) => scheduledSelection.has(row.id)),
           )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
+          onCategorizeKey={
+            singleCategory && single
+              ? () => setEditing({ id: single.id, column: "category" })
+              : undefined
+          }
           onExport={() => {
             exportSelected(budget, selectionBody(selection, selectionFilter)).catch(() =>
               toast.error("Couldn't export the selected transactions."),
@@ -2102,6 +2183,7 @@ export function Register({
                     transferCategory={transferCategory}
                     key={t.id}
                     initial={editingSplit.draft}
+                    focusMemo={editingSplit.fromKey}
                     label="Edit transaction"
                     columns={columnIds}
                     accounts={editorAccounts(accountList, t.accountId)}

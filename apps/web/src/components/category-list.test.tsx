@@ -624,3 +624,108 @@ describe("CategoryList", () => {
     });
   });
 });
+
+describe("CategoryList keys (YNAB, 2026-10-18)", () => {
+  function Harness({ onAssign }: { onAssign: (id: string, amount: bigint) => void }) {
+    const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    return (
+      <>
+        <output aria-label="Selected">{[...selected].join(",")}</output>
+        <CategoryList
+          data={withCards}
+          actions={makeActions()}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
+          figures={{
+            month: {
+              ...month,
+              categories: [
+                ...month.categories,
+                { ...month.categories[0], categoryId: "pay" } as BudgetMonthData["categories"][0],
+              ],
+            },
+            currentMonth: "2026-10",
+            format: (a) => `A${a}`,
+            selection: {
+              selected,
+              toggle: () => {},
+              selectOnly: (id) => setSelected(new Set([id])),
+              setAll: (ids) => setSelected(new Set(ids)),
+            },
+            assign: {
+              parse: (text) => BigInt(text),
+              toInput: (a) => a,
+              assign: async (id, amount) => onAssign(id, amount),
+            },
+          }}
+        />
+      </>
+    );
+  }
+  const selectedNow = () => screen.getByRole("status", { name: "Selected" }).textContent;
+
+  function setup() {
+    const onAssign = vi.fn();
+    render(<Harness onAssign={onAssign} />);
+    return { onAssign, user: userEvent.setup() };
+  }
+
+  it("walks the categories with Up/Down, wrapping, with each one's Assigned open", async () => {
+    const { user } = setup();
+    await user.keyboard("{ArrowDown}");
+    expect(selectedNow()).toBe("uncategorized");
+    await user.keyboard("{ArrowDown}");
+    expect(selectedNow()).toBe("pay");
+    expect(screen.getByRole("textbox", { name: "Assigned to Visa" })).toHaveFocus();
+    // From the open Assigned input too.
+    await user.keyboard("{ArrowDown}");
+    expect(selectedNow()).toBe("c1");
+    expect(screen.getByRole("textbox", { name: "Assigned to Rent" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(selectedNow()).toBe("uncategorized");
+    await user.keyboard("{ArrowUp}");
+    expect(selectedNow()).toBe("c2");
+  });
+
+  it("saves the Assigned amount it leaves", async () => {
+    const { user, onAssign } = setup();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    await user.keyboard("{Control>}a{/Control}42");
+    await user.keyboard("{ArrowDown}");
+    expect(onAssign).toHaveBeenCalledWith("pay", 42n);
+  });
+
+  it("extends with Shift+Up/Down from the anchor and stops at the end", async () => {
+    const { user } = setup();
+    await user.keyboard("{ArrowUp}{Escape}");
+    expect(selectedNow()).toBe("c2");
+    await user.keyboard("{Shift>}{ArrowUp}{ArrowUp}{/Shift}");
+    expect(selectedNow()).toBe("pay,c1,c2");
+    // Plain Down does nothing with several selected.
+    await user.keyboard("{ArrowDown}");
+    expect(selectedNow()).toBe("pay,c1,c2");
+    await user.keyboard("{Escape}");
+    expect(selectedNow()).toBe("");
+  });
+
+  it("collapses and expands every group with Cmd/Ctrl+Up/Down, or a selection's group", async () => {
+    const { user } = setup();
+    await user.keyboard("{Control>}{ArrowUp}{/Control}");
+    expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Visa" })).not.toBeInTheDocument();
+    await user.keyboard("{Control>}{ArrowDown}{/Control}");
+    expect(screen.getByRole("button", { name: "Rent" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rent" }));
+    await user.keyboard("{Control>}{ArrowUp}{/Control}");
+    expect(screen.queryByRole("button", { name: "Rent" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Visa" })).toBeInTheDocument();
+    expect(selectedNow()).toBe("");
+  });
+
+  it("selects every category with Cmd/Ctrl+A", async () => {
+    const { user } = setup();
+    await user.keyboard("{Control>}a{/Control}");
+    expect(selectedNow()).toBe("uncategorized,pay,c1,c2");
+  });
+});

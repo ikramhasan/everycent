@@ -1,5 +1,14 @@
 import type { DateFormat } from "@everycent/engine";
-import { format as format_, isValid, parse } from "date-fns";
+import {
+  addDays,
+  endOfMonth,
+  endOfYear,
+  format as format_,
+  isValid,
+  parse,
+  startOfMonth,
+  startOfYear,
+} from "date-fns";
 
 /** The user's local calendar date as YYYY-MM-DD (what YNAB means by "today"). */
 export function todayIso(now = new Date()): string {
@@ -38,3 +47,45 @@ export function parseDateInput(text: string, format: DateFormat, reference = new
 /** YYYY-MM-DD ↔ a local Date at midnight (for the calendar). */
 export const isoToDate = (iso: string) => parse(iso, "yyyy-MM-dd", new Date());
 export const dateToIso = (date: Date) => format_(date, "yyyy-MM-dd");
+
+/**
+ * YNAB's date-picker keys, applied to the field's date (seen 2026-10-18): + and - a day, T today,
+ * M / Shift+M the first and last day of its month, Y / Shift+Y of its year, Left/Right a day and
+ * Up/Down a week. Null for any other key. `dash` is false when the date format uses "-" between
+ * its parts, so typing a dash still types one.
+ */
+export function dateForKey(
+  iso: string,
+  key: string,
+  today: string,
+  { dash = true }: { dash?: boolean } = {},
+): string | null {
+  const date = isoToDate(iso);
+  if (!isValid(date)) return null;
+  switch (key) {
+    case "+":
+    case "ArrowRight":
+      return dateToIso(addDays(date, 1));
+    case "-":
+      return dash ? dateToIso(addDays(date, -1)) : null;
+    case "ArrowLeft":
+      return dateToIso(addDays(date, -1));
+    case "ArrowDown":
+      return dateToIso(addDays(date, 7));
+    case "ArrowUp":
+      return dateToIso(addDays(date, -7));
+    case "t":
+    case "T":
+      return today;
+    case "m":
+      return dateToIso(startOfMonth(date));
+    case "M":
+      return dateToIso(endOfMonth(date));
+    case "y":
+      return dateToIso(startOfYear(date));
+    case "Y":
+      return dateToIso(endOfYear(date));
+    default:
+      return null;
+  }
+}

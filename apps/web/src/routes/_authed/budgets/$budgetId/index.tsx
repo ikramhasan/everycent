@@ -78,6 +78,7 @@ import {
   monthMovesQueryOptions,
 } from "@/lib/moves";
 import { sessionQueryOptions } from "@/lib/session";
+import { useShortcut } from "@/lib/shortcuts";
 import { type CategoryTarget, useTargetActions } from "@/lib/targets";
 import { useUndo } from "@/lib/undo";
 import { useCategoryActions } from "@/lib/use-category-actions";
@@ -243,6 +244,38 @@ function BudgetPage() {
         ),
       ),
     [selected, visible, shown],
+  );
+
+  // YNAB's Shift+Z (seen 2026-10-18): snoozes every selected category with a target, or wakes
+  // them when all are snoozed already; it works from the Assigned input too. This month only.
+  useShortcut(
+    "snooze",
+    () => {
+      const data = figures.data;
+      if (!data) return;
+      const withTarget = [...selection].filter((id) => listed.get(id)?.target);
+      if (withTarget.length === 0) return;
+      const snoozedNow = (id: string) =>
+        data.categories.find((c) => c.categoryId === id)?.target?.snoozed ?? false;
+      const on = !withTarget.every(snoozedNow);
+      const changing = withTarget.filter((id) => snoozedNow(id) !== on);
+      const apply = async (snoozed: boolean) => {
+        for (const id of changing) await targetActions.snooze(id, month, snoozed);
+      };
+      void (async () => {
+        const done = await Promise.all(changing.map((id) => targetActions.snooze(id, month, on)));
+        if (!done.some(Boolean)) return;
+        history.record({
+          label: on ? "snooze target" : "wake target",
+          undo: () => apply(!on),
+          redo: () => apply(on),
+        });
+      })();
+    },
+    {
+      enabled: month === today && !readOnly && selection.size > 0,
+      allowIn: (target) => target.closest("[data-assigned-cell]") !== null,
+    },
   );
 
   const listFigures = useMemo<CategoryFigures | undefined>(() => {

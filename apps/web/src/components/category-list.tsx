@@ -46,6 +46,8 @@ import {
   visibleLayout,
 } from "@/lib/categories";
 import type { BudgetMonthData, MonthTotals } from "@/lib/months";
+import { stepSelection } from "@/lib/selection";
+import { useShortcut } from "@/lib/shortcuts";
 import { categoryRowNote } from "@/lib/targets";
 import { type AssignActions, AssignedCell } from "./assigned-cell";
 import { ActivityButton, type ActivityTarget, type CardSummary } from "./category-activity";
@@ -242,6 +244,70 @@ export function CategoryList({
     }
     selection.setAll([...next]);
   }
+
+  // YNAB's plan keys (seen 2026-10-18): Up/Down walk the categories on screen, opening each one's
+  // Assigned amount; Shift extends; Cmd/Ctrl+Up/Down collapse and expand groups.
+  const cursor = useRef<{ anchor: string | null; head: string | null }>({
+    anchor: null,
+    head: null,
+  });
+  const [keyEdit, setKeyEdit] = useState<string | undefined>();
+  const onScreen = [
+    ...(showUncategorized ? [UNCATEGORIZED_ID] : []),
+    ...groupOrder.filter((g) => !collapsed.has(g)).flatMap((g) => itemsOf(g)),
+  ];
+  const groupOf = (id: string) => groupOrder.find((g) => (layout.items[g] ?? []).includes(id));
+  /** Leaves an open Assigned input, saving it, as moving away from it does in YNAB. */
+  function leaveAssigned() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest("[data-assigned-cell]")) active.blur();
+  }
+  function stepCategories(direction: 1 | -1, extend: boolean) {
+    if (!selection) return;
+    const next = stepSelection(onScreen, selection.selected, cursor.current, direction, {
+      extend,
+      several: "none",
+    });
+    if (!next) return;
+    cursor.current = next.cursor;
+    leaveAssigned();
+    selection.setAll(next.ids);
+    const id = next.cursor.head;
+    if (!id) return;
+    if (!extend && id !== UNCATEGORIZED_ID && figures?.assign) setKeyEdit(id);
+    document.querySelector(`[data-category-row="${id}"]`)?.scrollIntoView?.({ block: "nearest" });
+  }
+  const inAssigned = (target: Element) => target.closest("[data-assigned-cell]") !== null;
+  const keys = { enabled: selection !== undefined, allowIn: inAssigned };
+  useShortcut("moveRows", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, false), keys);
+  useShortcut("extendCategories", (e) => stepCategories(e.key === "ArrowUp" ? -1 : 1, true), keys);
+  useShortcut(
+    "collapseGroups",
+    (e) => {
+      const up = e.key === "ArrowUp";
+      if (!selection || selection.selected.size === 0) {
+        onCollapsedChange?.(up ? new Set(layout.groupOrder) : new Set());
+        return;
+      }
+      // With categories selected, Up folds their groups and clears the selection.
+      if (!up) return;
+      const next = new Set(collapsed);
+      for (const id of selection.selected) {
+        const g = groupOf(id);
+        if (g) next.add(g);
+      }
+      leaveAssigned();
+      selection.setAll([]);
+      onCollapsedChange?.(next);
+    },
+    keys,
+  );
+  useShortcut("selectAll", () => selection?.setAll(selectable), {
+    enabled: selection !== undefined,
+  });
+  useShortcut("deselectAll", () => selection?.setAll([]), {
+    enabled: (selection?.selected.size ?? 0) > 0,
+  });
 
   function toggleGroup(groupId: string) {
     const next = new Set(collapsed);
@@ -483,6 +549,8 @@ export function CategoryList({
                         figures={figures}
                         reorderable={!shown && !readOnly}
                         onDelete={() => requestDelete("category", category.id, category.name)}
+                        keyEdit={keyEdit === categoryId}
+                        onKeyEditStarted={() => setKeyEdit(undefined)}
                       />
                     );
                   })}
@@ -806,6 +874,8 @@ function CategoryRow({
   figures,
   reorderable,
   onDelete,
+  keyEdit = false,
+  onKeyEditStarted,
 }: {
   category: Category;
   index: number;
@@ -815,6 +885,9 @@ function CategoryRow({
   figures: CategoryFigures | undefined;
   reorderable: boolean;
   onDelete: () => void;
+  /** Up/Down arrived here: open the Assigned amount for typing. */
+  keyEdit?: boolean;
+  onKeyEditStarted?: () => void;
 }) {
   const { format, assign, move, selection } = figures ?? {};
   const isPayment = Boolean(category.linkedAccountId);
@@ -989,9 +1062,10 @@ function CategoryRow({
                 amount={totals.assigned}
                 format={format}
                 actions={assign}
-                startEditing={editAssigned || figures?.editAssigned === category.id}
+                startEditing={editAssigned || keyEdit || figures?.editAssigned === category.id}
                 onStartedEditing={() => {
                   setEditAssigned(false);
+                  onKeyEditStarted?.();
                   figures?.onEditAssignedStarted?.();
                 }}
               />

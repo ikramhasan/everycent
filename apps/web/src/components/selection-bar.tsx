@@ -28,8 +28,14 @@ import {
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
 import { Input } from "@everycent/ui/components/input";
+import { Kbd } from "@everycent/ui/components/kbd";
 import { Label } from "@everycent/ui/components/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@everycent/ui/components/popover";
 import { cn } from "@everycent/ui/lib/utils";
 import {
   ArrowRightLeft,
@@ -52,6 +58,7 @@ import {
 } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel } from "@/lib/flags";
+import { useShortcut } from "@/lib/shortcuts";
 import { type CategoryOption, categoryLabel } from "@/lib/transactions";
 
 export type BulkAction =
@@ -70,6 +77,9 @@ export type BulkAction =
 type Summary = components["schemas"]["SelectionSummary"];
 
 const NO_SPLITS = { splits: 0, splitsWithTransfers: 0 };
+
+const FLAG_ITEM =
+  "flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -99,6 +109,7 @@ export function SelectionBar({
   onMatch,
   onUnmatch,
   onExport,
+  onCategorizeKey,
 }: {
   /** The selected transactions' summary; undefined while it loads. */
   summary: Summary | undefined;
@@ -126,8 +137,12 @@ export function SelectionBar({
   onUnmatch?: () => void;
   /** YNAB's "Export # Transactions": downloads the selected transactions. */
   onExport?: () => void;
+  /** K with one transaction selected opens its category list instead of the menu (YNAB). */
+  onCategorizeKey?: () => void;
 }) {
   const [flagOpen, setFlagOpen] = useState(false);
+  const [categorizeOpen, setCategorizeOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const [unsplitFor, setUnsplitFor] = useState<string | null>(null);
   const [memoOpen, setMemoOpen] = useState(false);
   // Set while a menu opens a dialog (More's memo, Categorize's un-split warning), so the closing
@@ -166,6 +181,43 @@ export function SelectionBar({
   }
   const unsplitName = categories.find((c) => c.id === unsplitFor);
   const unsplitLabel = unsplitName ? categoryLabel(unsplitName) : "";
+
+  // YNAB's keys for the selection (seen 2026-10-18), each where its button or menu item is.
+  const ready = !pending && s !== undefined;
+  const canCategorize = s !== undefined && (s.categorizable > 0 || scheduledCount > 0);
+  const transactions = s !== undefined && s.count > 0 && scheduledCount === 0;
+  useShortcut("approve", () => onAction({ type: "approve" }), { enabled: ready && reviewing });
+  useShortcut("reject", () => onAction({ type: "reject" }), { enabled: ready && reviewing });
+  useShortcut("categorize", () => (onCategorizeKey ? onCategorizeKey() : setCategorizeOpen(true)), {
+    enabled: ready && canCategorize,
+  });
+  // C toggles: anything uncleared makes them all cleared, all cleared makes them uncleared.
+  useShortcut(
+    "toggleCleared",
+    () => onAction({ type: "cleared", cleared: (s?.uncleared ?? 0) > 0 ? "cleared" : "uncleared" }),
+    { enabled: ready && transactions },
+  );
+  useShortcut("flag", () => setFlagOpen(true), { enabled: ready });
+  useShortcut("duplicate", () => onAction({ type: "duplicate" }), { enabled: ready });
+  useShortcut("makeRepeating", () => onMakeRepeating?.(), { enabled: ready && !!onMakeRepeating });
+  useShortcut("delete", () => onAction({ type: "delete" }), {
+    enabled: ready && (s.deletable > 0 || scheduledCount > 0),
+  });
+  useShortcut("enterNow", () => onAction({ type: "enterNow" }), {
+    enabled: ready && onlyScheduled,
+  });
+  useShortcut("match", () => onMatch?.(), { enabled: ready && !!onMatch });
+  useShortcut("unmatch", () => onUnmatch?.(), { enabled: ready && !!onUnmatch });
+
+  /** Shift+F's menu takes YNAB's digits: 1–6 a colour in order, 0 no flag. */
+  function flagByDigit(e: React.KeyboardEvent) {
+    if (!/^[0-6]$/.test(e.key)) return;
+    const flag = e.key === "0" ? null : flags[Number(e.key) - 1]?.color;
+    if (flag === undefined) return;
+    e.preventDefault();
+    setFlagOpen(false);
+    onAction({ type: "flag", flag });
+  }
 
   return (
     <section
@@ -229,7 +281,7 @@ export function SelectionBar({
           // YNAB's Categorize is a menu of category groups, each opening its categories (checked
           // 2026-10-15, EVERYCENT-134): Inflow → Ready to Assign first, then the visible groups
           // in plan order, without payment or hidden categories, and no search box.
-          <DropdownMenu>
+          <DropdownMenu open={categorizeOpen} onOpenChange={setCategorizeOpen}>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="sm" disabled={pending}>
                 <Tag /> Categorize
@@ -251,46 +303,53 @@ export function SelectionBar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {!reviewing && (
-          <Popover open={flagOpen} onOpenChange={setFlagOpen}>
+        {/*
+         * The Flag menu. With unapproved rows selected YNAB moves Flag into More; Shift+F still
+         * opens this menu, anchored to More then.
+         */}
+        <Popover open={flagOpen} onOpenChange={setFlagOpen}>
+          {!reviewing && (
             <PopoverTrigger asChild>
               <Button type="button" variant="ghost" size="sm" disabled={pending || !s}>
                 <Bookmark /> Flag
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-60 p-1.5">
-              <div role="menu" aria-label="Flag selected" className="grid">
-                {flags.map((f) => (
-                  <button
-                    key={f.color}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setFlagOpen(false);
-                      onAction({ type: "flag", flag: f.color });
-                    }}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
-                  >
-                    <Bookmark className={cn("size-4 fill-current", FLAG_CLASS[f.color])} />
-                    {flagLabel(f)}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
+          )}
+          {reviewing && <PopoverAnchor virtualRef={moreRef} />}
+          <PopoverContent align="end" className="w-60 p-1.5">
+            <div role="menu" aria-label="Flag selected" className="grid" onKeyDown={flagByDigit}>
+              {flags.map((f, i) => (
                 <button
+                  key={f.color}
                   type="button"
                   role="menuitem"
                   onClick={() => {
                     setFlagOpen(false);
-                    onAction({ type: "flag", flag: null });
+                    onAction({ type: "flag", flag: f.color });
                   }}
-                  className="rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className={FLAG_ITEM}
                 >
-                  Clear flag
+                  <Bookmark className={cn("size-4 fill-current", FLAG_CLASS[f.color])} />
+                  {flagLabel(f)}
+                  <Kbd className="ml-auto">{i + 1}</Kbd>
                 </button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
+              ))}
+              <div className="my-1 border-t" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFlagOpen(false);
+                  onAction({ type: "flag", flag: null });
+                }}
+                className={FLAG_ITEM}
+              >
+                Clear flag
+                <Kbd className="ml-auto">0</Kbd>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
         {toggle && (
           <Button
             type="button"
@@ -317,7 +376,7 @@ export function SelectionBar({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="sm" disabled={pending || !s}>
+            <Button ref={moreRef} type="button" variant="ghost" size="sm" disabled={pending || !s}>
               <MoreHorizontal /> More
             </Button>
           </DropdownMenuTrigger>

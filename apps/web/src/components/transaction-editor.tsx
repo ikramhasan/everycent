@@ -67,6 +67,7 @@ export function TransactionEditor({
   repeat = false,
   scheduled = false,
   openDatePicker = false,
+  focusMemo = false,
   pending,
   error,
   transferCategory,
@@ -95,6 +96,8 @@ export function TransactionEditor({
   scheduled?: boolean;
   /** Open the date picker first (Make Repeating, as YNAB does). */
   openDatePicker?: boolean;
+  /** Start in the memo, as YNAB's S (split) does. */
+  focusMemo?: boolean;
   pending: boolean;
   error: string | null;
   /** An in-budget transfer's category text ("Credit Card Payments: <card>"), or "". */
@@ -229,7 +232,7 @@ export function TransactionEditor({
             value={draft.date}
             onChange={(date) => set({ date })}
             format={dateFormat}
-            autoFocus={!columns.includes("account")}
+            autoFocus={!columns.includes("account") && !focusMemo}
             defaultOpen={openDatePicker}
             repeat={
               repeat
@@ -305,6 +308,7 @@ export function TransactionEditor({
           <Input
             aria-label="Memo"
             placeholder="Memo"
+            autoFocus={focusMemo}
             value={draft.memo}
             onChange={(e) => set({ memo: e.target.value })}
             className="h-8"
