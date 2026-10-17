@@ -3,6 +3,7 @@ import { category, categoryGroup, categoryTarget } from "@everycent/db/schema";
 import { type CurrencyCode, currencyExponent } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { CATEGORY_TEMPLATE_DATA } from "./category-template-data";
+import { templateCategoryNote } from "./category-template-notes";
 import { AppError } from "./errors";
 import type { Db } from "./ledger";
 import { writeOrder } from "./ordering";
@@ -51,6 +52,8 @@ const key = (name: string) => name.trim().toLowerCase();
  *   with the same name in another group doesn't count: the template's is added too.
  * - Each new category with an example amount gets a "Have a balance of" target for it, due
  *   eventually, from `month` on (YNAB's API: goal_type TB). Nothing is assigned.
+ * - A new category gets the template's note for it, if there is one (ours, see
+ *   `category-template-notes.ts`; every "About This Template" has one).
  *
  * Group names match ignoring case, where YNAB's import fails outright (see "Design notes").
  * Returns how many categories were added.
@@ -134,6 +137,7 @@ export async function importCategoryTemplate(
       groupId,
       name: c.name,
       sortOrder: i,
+      note: templateCategoryNote(template.id, c.name) ?? "",
       amount: c.amount,
     }));
     await tx.insert(category).values(rows.map(({ amount: _, ...row }) => row));

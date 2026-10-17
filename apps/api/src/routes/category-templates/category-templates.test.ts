@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
+import { isAboutCategory, templateCategoryNote } from "../../lib/category-template-notes";
 import { CATEGORY_TEMPLATES } from "../../lib/category-templates";
 
 const { app, db, close } = createTestApp();
@@ -130,6 +131,41 @@ describe("category templates", () => {
     expect(readMe?.categories.map((c) => [c.name, c.target])).toEqual([
       ["📋 About This Template", null],
     ]);
+  });
+
+  it("imports our note on each About This Template category (EVERYCENT-178)", async () => {
+    const { importTemplate, groups } = await setup();
+    await importTemplate("kid", allIds("kid"));
+    const notes = (await groups()).flatMap((g) =>
+      g.categories.map((c) => [c.name, (c as Category & { note: string }).note] as const),
+    );
+    const about = notes.find(([name]) => name === "📋 About This Template");
+    expect(about?.[1]).toBe(templateCategoryNote("kid", "📋 About This Template"));
+    expect(about?.[1]).toMatch(/spend, some to save and some to give/);
+    // The other categories have no note of ours.
+    expect(notes.filter(([name]) => name !== "📋 About This Template" && name.length > 0)).toEqual(
+      expect.arrayContaining([["🍭 Spend", ""]]),
+    );
+
+    // Importing again skips it: nothing new, nothing rewritten.
+    const again = await json<ImportResult>(await importTemplate("kid", allIds("kid")));
+    expect(again.added).toBe(0);
+  });
+
+  it("has a note for every About This Template category in the gallery", () => {
+    const missing = CATEGORY_TEMPLATES.flatMap((t) =>
+      t.groups.flatMap((g) =>
+        g.categories
+          .filter((c) => isAboutCategory(c.name) && !templateCategoryNote(t.id, c.name))
+          .map((c) => `${t.id}: ${c.name}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+    const abouts = CATEGORY_TEMPLATES.filter((t) =>
+      t.groups.some((g) => g.categories.some((c) => c.name.includes("About This Template"))),
+    );
+    // Both spellings YNAB uses ("📋 About…", "📋About…") are recognised.
+    expect(abouts).toHaveLength(29);
   });
 
   it("fills an existing group's missing categories at its top and skips the rest", async () => {
