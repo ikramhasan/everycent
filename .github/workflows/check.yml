@@ -1,6 +1,7 @@
 name: Check
+# Main only, not PRs: both jobs take minutes, and Railway deploys a main commit only once this
+# workflow passes on it, so a failure never reaches production and is fixed from the main run.
 on:
-  pull_request:
   push:
     branches: [main]
 
