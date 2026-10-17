@@ -661,11 +661,12 @@ function BudgetPage() {
   // Below lg the inspector stacks under the list; from there it's beside it, and as wide as the
   // user drags it, as YNAB's is (25–50% of the area, a third to start, kept in this browser).
   const wide = viewportWidth >= 1024;
-  // Below lg, picking one category opens the inspector drawer for it.
+  // On a phone, picking one category opens the inspector drawer for it. A tablet shows the
+  // Assigned column, so a tap there edits it in place, as on a desktop; Summary opens the drawer.
   const pickedOne = selection.size === 1 ? [...selection][0] : undefined;
   useEffect(() => {
-    if (!wide && pickedOne !== undefined) setInspectorOpen(true);
-  }, [pickedOne, wide]);
+    if (phone && pickedOne !== undefined) setInspectorOpen(true);
+  }, [pickedOne, phone]);
   const listColumn = (
     <>
       {categories.isPending ? (

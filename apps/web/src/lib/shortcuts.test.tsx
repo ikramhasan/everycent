@@ -31,6 +31,10 @@ function Bound({
     <>
       <input aria-label="Field" />
       <input aria-label="Assigned" data-allowed />
+      {/* biome-ignore lint/a11y/useSemanticElements: a Radix ToggleGroup item renders this */}
+      <button type="button" role="radio" aria-checked="false">
+        View tab
+      </button>
       <div role="dialog" aria-label="Dialog">
         <button type="button">In dialog</button>
       </div>
@@ -91,6 +95,9 @@ describe("useShortcut", () => {
   it("fires from the fields a shortcut allows, and only those", async () => {
     const { onFire, user } = setup("snooze", { allowIn: (t) => t.hasAttribute("data-allowed") });
     await user.click(screen.getByRole("textbox", { name: "Field" }));
+    await user.keyboard("{Shift>}Z{/Shift}");
+    // A role-based control (a toggle-group item) is a field too.
+    await user.click(screen.getByRole("radio", { name: "View tab" }));
     await user.keyboard("{Shift>}Z{/Shift}");
     expect(onFire).not.toHaveBeenCalled();
     await user.click(screen.getByRole("textbox", { name: "Assigned" }));

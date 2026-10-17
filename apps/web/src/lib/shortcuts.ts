@@ -265,6 +265,29 @@ export function useShortcut(
   ]);
 }
 
+/**
+ * What react-hotkeys-hook counts as a form field (by tag or role), so `allowIn` lets a shortcut
+ * into the fields it names and no others: a toggle-group item is a `radio`, a menu entry a
+ * `menuitem…`.
+ */
+const FIELD = [
+  "input",
+  "textarea",
+  "select",
+  "[contenteditable=true]",
+  ...[
+    "searchbox",
+    "slider",
+    "spinbutton",
+    "menuitem",
+    "menuitemcheckbox",
+    "menuitemradio",
+    "option",
+    "radio",
+    "textbox",
+  ].map((role) => `[role=${role}]`),
+].join(", ");
+
 function isField(element: Element) {
-  return element.closest("input, textarea, select, [contenteditable=true]") !== null;
+  return element.closest(FIELD) !== null;
 }
