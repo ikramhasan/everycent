@@ -97,7 +97,12 @@ export function readQif(
     const raw = record.T ?? record.U;
     const amount = raw === undefined ? null : parseImportAmount(raw, currency, numberFormat);
     if (record.D && amount !== null) {
-      entries.push({ date: qifDate(record.D), amount, payee: record.P ?? "", memo: record.M ?? "" });
+      entries.push({
+        date: qifDate(record.D),
+        amount,
+        payee: record.P ?? "",
+        memo: record.M ?? "",
+      });
     }
     record = {};
   };
