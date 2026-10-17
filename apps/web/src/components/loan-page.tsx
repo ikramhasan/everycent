@@ -42,6 +42,7 @@ import {
   joinAnd,
   type LoanLineData,
   type LoanMonthData,
+  type LoanUpcoming,
   loanQueryOptions,
   longMonth,
   newestFirst,
@@ -69,6 +70,7 @@ import { PageHeader } from "./page-header";
 import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
 import { ShareProgressDialog } from "./share-progress";
+import { UpcomingActivity, upcomingLabel } from "./upcoming-transactions";
 import { OriginalHistory } from "./update-to-loan";
 
 type Open =
@@ -178,7 +180,7 @@ export function LoanPage({
   accounts: readonly Account[];
   onEdit: () => void;
 }) {
-  const { budget, formatAmount, readOnly } = useBudget();
+  const { budget, formatAmount, formatDate, readOnly } = useBudget();
   const today = todayIso();
   const format = (minorUnits: bigint) =>
     formatAmount({ amount: minorUnits, currency: budget.currency });
@@ -439,6 +441,15 @@ export function LoanPage({
               month={m}
               first={index === months.length - 1}
               defaultOpen={m.month === current}
+              upcoming={m.month === current ? (loan.data?.upcoming ?? []) : []}
+              formatDate={formatDate}
+              onOpenUpcoming={(u) =>
+                void navigate({
+                  to: "/budgets/$budgetId/accounts/$accountId",
+                  params: { budgetId: budget.id, accountId: u.payingAccountId },
+                  search: { transaction: u.payingRowId },
+                })
+              }
               accounts={accounts}
               budgetId={budget.id}
               format={format}
@@ -735,10 +746,13 @@ const StatusIcon = ({ status }: { status: ReturnType<typeof paymentStatus> }) =>
   );
 
 /** One month of YNAB's Account Activity: payments, interest, escrow and other activity. */
-function MonthCard({
+export function MonthCard({
   month,
   first,
   defaultOpen,
+  upcoming,
+  formatDate,
+  onOpenUpcoming,
   accounts,
   budgetId,
   format,
@@ -749,6 +763,10 @@ function MonthCard({
   /** The loan's first month ("Initial Balance" under its total). */
   first: boolean;
   defaultOpen: boolean;
+  /** This month's scheduled payments still to come (today's month only, as YNAB). */
+  upcoming: readonly LoanUpcoming[];
+  formatDate: (isoDate: string) => string;
+  onOpenUpcoming: (item: LoanUpcoming) => void;
   accounts: readonly Account[];
   budgetId: string;
   format: (minorUnits: bigint) => string;
@@ -772,6 +790,24 @@ function MonthCard({
   const Toggle = open ? ChevronDown : ChevronRight;
   const otherTotal = others.reduce((s, t) => s + BigInt(t.amount), 0n);
   const status = paymentStatus(month);
+  // YNAB (2026-10-17): "2 Upcoming Transactions for $50.00", the count opening the Activity
+  // popover; under the entered payments, or in place of "No payments this month".
+  const upcomingTotal = upcoming.reduce((s, u) => s + BigInt(u.amount), 0n);
+  const upcomingLine = (
+    <>
+      <UpcomingActivity
+        label={upcomingLabel(upcoming.length)}
+        transactions={upcoming}
+        // Signed for the loan, as YNAB lists them (+$20.00).
+        format={(m) => `+${format(BigInt(m))}`}
+        formatDate={formatDate}
+        onOpen={onOpenUpcoming}
+        align="start"
+        className="text-primary"
+      />{" "}
+      for {format(upcomingTotal)}
+    </>
+  );
 
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -816,7 +852,11 @@ function MonthCard({
             </span>
             <span className="pl-6 text-muted-foreground text-xs">
               {payments.length === 0 ? (
-                "No payments this month"
+                upcoming.length > 0 ? (
+                  upcomingLine
+                ) : (
+                  "No payments this month"
+                )
               ) : payments.length === 1 && payments[0] ? (
                 <PaymentLink budgetId={budgetId} line={payments[0]}>
                   {paymentText(payments[0])}
@@ -835,6 +875,11 @@ function MonthCard({
                 </PaymentLink>
               </Row>
             ))}
+          {payments.length > 0 && upcoming.length > 0 && (
+            <Row className="pl-10 text-muted-foreground text-xs">
+              <span>{upcomingLine}</span>
+            </Row>
+          )}
           {chargeShown(month.interest) && (
             <Row
               amount={format(-BigInt(month.interest.applied))}
