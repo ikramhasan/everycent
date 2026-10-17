@@ -148,6 +148,7 @@ import {
   type ColumnId,
   columnWidth,
   isEditable,
+  MIN_COLUMN_PX,
   PINNED_BG,
   pinned,
   RESIZABLE,
@@ -2130,7 +2131,11 @@ export function Register({
                         <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
                       )}
                       {RESIZABLE.includes(id) && (
-                        <ColumnResizer label={spec.header} onWidth={(px) => setWidth(id, px)} />
+                        <ColumnResizer
+                          label={spec.header}
+                          width={widths[id] ?? Number.parseFloat(spec.width ?? "0") * 16}
+                          onWidth={(px) => setWidth(id, px)}
+                        />
                       )}
                     </TableHead>
                   );
