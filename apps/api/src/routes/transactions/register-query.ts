@@ -182,6 +182,8 @@ interface Unit {
   isSplit: SQL;
   /** In Ready to Assign (YNAB's `Income:`). */
   income: SQL;
+  /** Left Uncategorized (YNAB's `Is: Needs Category`). */
+  needsCategory: SQL;
 }
 
 function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string): SQL {
@@ -225,9 +227,9 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
         case "unapproved":
           return sql`not ${r.approved}`;
         case "needs_category":
-          return sql`${r.needsCategory}`;
+          return unit.needsCategory;
         case "unapproved_or_needs_category":
-          return sql`(not ${r.approved} or ${r.needsCategory})`;
+          return sql`(not ${r.approved} or ${unit.needsCategory})`;
       }
       break;
     case "amount": {
@@ -266,6 +268,7 @@ function parentUnit(r: Register): Unit {
     amount: sql`${r.amount}`,
     isSplit: sql`exists (select 1 from ${subTransaction} where ${subTransaction.transactionId} = ${r.id})`,
     income: sql`${r.income}`,
+    needsCategory: sql`${r.needsCategory}`,
   };
 }
 
@@ -278,6 +281,9 @@ function lineUnit(r: Register): Unit {
     amount: sql`st.amount`,
     isSplit: sql`false`,
     income: sql`coalesce(sc.internal_kind = 'ready_to_assign', false)`,
+    // An approved split with an uncategorized line still needs a category in YNAB, and its
+    // search shows only that line (2026-10-17, EVERYCENT-179).
+    needsCategory: sql`coalesce(sc.internal_kind = 'uncategorized', false)`,
   };
 }
 
@@ -485,6 +491,7 @@ async function queryLines(db: Db, transactionIds: readonly string[]) {
       payeeName: payee.name,
       categoryId: subTransaction.categoryId,
       categoryName: category.name,
+      needsCategory: sql<boolean>`coalesce(${category.internalKind} = 'uncategorized', false)`,
       memo: subTransaction.memo,
       transferAccountId: payee.transferAccountId,
       transferTransactionId: other.id,

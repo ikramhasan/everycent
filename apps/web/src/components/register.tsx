@@ -1646,9 +1646,8 @@ export function Register({
       case "category": {
         const type = accountById.get(t.accountId)?.type ?? "checking";
         const to = line.transferAccountId ? accountById.get(line.transferAccountId)?.type : null;
-        return usesCategory(type, to)
-          ? line.categoryName
-          : transferCategory(t.accountId, line.transferAccountId);
+        if (!usesCategory(type, to)) return transferCategory(t.accountId, line.transferAccountId);
+        return line.needsCategory ? <NeedsCategoryPill /> : line.categoryName;
       }
       case "memo":
         return line.memo;

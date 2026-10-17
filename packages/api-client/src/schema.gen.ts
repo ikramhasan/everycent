@@ -2544,7 +2544,7 @@ export interface components {
             flag: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | null;
             /** @description False until it's approved (e.g. a scheduled transaction entered on its date); it counts in balances and the plan either way */
             approved: boolean;
-            /** @description Left Uncategorized (YNAB's "This needs a category"); transfers within the budget, tracking accounts and splits have no category and never need one */
+            /** @description Left Uncategorized (YNAB's "This needs a category" icon); transfers within the budget, tracking accounts and splits have no category (a split's lines have their own `needsCategory`) */
             needsCategory: boolean;
             /** @description Transfers: the other account (the payee is "Transfer : <account>") */
             transferAccountId: string | null;
@@ -2599,6 +2599,8 @@ export interface components {
             payeeName: string | null;
             categoryId: string | null;
             categoryName: string | null;
+            /** @description Left Uncategorized (YNAB's "This needs a category" on the line); the split then counts as needing a category in the review banner and search */
+            needsCategory: boolean;
             memo: string;
             /** @description Transfer lines: the other account */
             transferAccountId: string | null;

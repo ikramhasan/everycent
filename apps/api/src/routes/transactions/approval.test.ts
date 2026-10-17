@@ -249,4 +249,34 @@ describe("unapproved transactions (EVERYCENT-65)", () => {
       "uncategorized",
     ]);
   });
+
+  it("counts an approved split with an uncategorized line as needing a category (EVERYCENT-179)", async () => {
+    const { add, rows, accounts, checking, groceries } = await setup();
+    const split = await add({
+      memo: "split",
+      categoryId: null,
+      amount: "-500",
+      subtransactions: [
+        { amount: "-300", categoryId: groceries.id, memo: "food" },
+        { amount: "-200", categoryId: null, memo: "left" },
+      ],
+    });
+    expect(split.approved).toBe(true);
+    // The split's row has no icon of its own; its line carries the pill.
+    const row = (await rows()).find((t) => t.id === split.id) as Txn & {
+      subtransactions: { memo: string; needsCategory: boolean }[];
+    };
+    expect(row.needsCategory).toBe(false);
+    expect(row.subtransactions.map((l) => [l.memo, l.needsCategory])).toEqual([
+      ["food", false],
+      ["left", true],
+    ]);
+    expect((await accounts()).find((a) => a.id === checking.id)?.toReview).toBe(1);
+    // The search finds it and shows only the uncategorized line.
+    const found = (await rows("Is: Needs Category")) as (Txn & { matchingLineIds: string[] })[];
+    expect(found.map((t) => t.memo)).toEqual(["split"]);
+    const left = row.subtransactions.find((l) => l.memo === "left") as unknown as { id: string };
+    expect(found[0]?.matchingLineIds).toEqual([left.id]);
+    expect((await rows("Is: Unapproved or Needs Category")).map((t) => t.memo)).toEqual(["split"]);
+  });
 });

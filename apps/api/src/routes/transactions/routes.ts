@@ -76,6 +76,12 @@ const SubTransactionSchema = z
     payeeName: z.string().nullable(),
     categoryId: z.string().nullable(),
     categoryName: z.string().nullable(),
+    needsCategory: z
+      .boolean()
+      .describe(
+        'Left Uncategorized (YNAB\'s "This needs a category" on the line); the split then ' +
+          "counts as needing a category in the review banner and search",
+      ),
     memo: z.string(),
     transferAccountId: z.string().nullable().describe("Transfer lines: the other account"),
     transferTransactionId: z
@@ -125,8 +131,9 @@ export const TransactionSchema = z
     needsCategory: z
       .boolean()
       .describe(
-        'Left Uncategorized (YNAB\'s "This needs a category"); transfers within the budget, ' +
-          "tracking accounts and splits have no category and never need one",
+        'Left Uncategorized (YNAB\'s "This needs a category" icon); transfers within the ' +
+          "budget, tracking accounts and splits have no category (a split's lines have their " +
+          "own `needsCategory`)",
       ),
     transferAccountId: z
       .string()

@@ -94,6 +94,7 @@ describe("deleteWarning", () => {
           payeeName: "Transfer : Savings",
           categoryId: null,
           categoryName: null,
+          needsCategory: false,
           memo: "",
           transferAccountId: "a2",
           transferTransactionId: "t3",
