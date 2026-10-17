@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from "@everycent/ui/components/avatar";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -50,6 +49,7 @@ import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { PageHeaderSlotProvider } from "./page-header";
+import { SidebarDropdownContent } from "./sidebar-dropdown-content";
 
 const THEMES: readonly { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
@@ -236,11 +236,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       <ChevronsUpDown className="ml-auto size-4" />
                     </SidebarMenuButton>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    side="top"
-                    align="start"
-                    className="w-(--radix-dropdown-menu-trigger-width)"
-                  >
+                  <SidebarDropdownContent side="top" align="start" railAlign="end">
                     <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
@@ -286,7 +282,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                     <DropdownMenuItem onClick={signOut}>
                       <LogOut /> Sign out
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  </SidebarDropdownContent>
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>

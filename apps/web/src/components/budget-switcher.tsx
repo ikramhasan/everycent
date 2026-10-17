@@ -1,6 +1,5 @@
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -24,6 +23,7 @@ import type { Budget } from "@/lib/budgets";
 import { exportPlan } from "@/lib/exports";
 import { DisplayOptionsDialog } from "./display-options-dialog";
 import { EditFlagsDialog } from "./edit-flags-dialog";
+import { SidebarDropdownContent } from "./sidebar-dropdown-content";
 
 export function BudgetSwitcher({
   budgets,
@@ -54,7 +54,7 @@ export function BudgetSwitcher({
             <span className="sr-only">Switch budget</span>
           </SidebarMenuButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
+        <SidebarDropdownContent align="start">
           <DropdownMenuLabel className="text-muted-foreground text-xs">Budgets</DropdownMenuLabel>
           {budgets.map((b) => (
             <DropdownMenuItem key={b.id} asChild>
@@ -98,7 +98,7 @@ export function BudgetSwitcher({
               </DropdownMenuItem>
             </>
           )}
-        </DropdownMenuContent>
+        </SidebarDropdownContent>
       </DropdownMenu>
       {current && (
         <EditFlagsDialog budgetId={current.id} open={editingFlags} onOpenChange={setEditingFlags} />
