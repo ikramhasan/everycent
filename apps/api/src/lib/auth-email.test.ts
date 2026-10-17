@@ -289,6 +289,36 @@ describe("change email (EVERYCENT-46)", () => {
     expect(await db.query.user.findFirst({ where: eq(user.email, next) })).toBeTruthy();
   });
 
+  it("says the new address is taken when someone signed up with it before the change was confirmed", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    expect((await verify(linkToken(approval[0]))).status).toBe(200);
+    const confirm = await emailsTo(app, next, "change-email-verify");
+
+    // Someone signs up with the pending address (unconfirmed, but it's theirs now).
+    expect((await signUpOnly(next, "another-password-456", "Newcomer")).status).toBe(200);
+
+    const res = await verify(linkToken(confirm[0]), cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "EMAIL_TAKEN" });
+    expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
+  });
+
+  it("says so at the approval step too", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    await signUpOnly(next, "another-password-456", "Newcomer");
+
+    const res = await verify(linkToken(approval[0]));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "EMAIL_TAKEN" });
+    expect(await emailsTo(app, next, "change-email-verify")).toHaveLength(0);
+  });
+
   it("answers the same when the new address already has an account, and sends nothing", async () => {
     const { cookie, email, password } = await signUp(app);
     const { email: taken } = await signUp(app);

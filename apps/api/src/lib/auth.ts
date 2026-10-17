@@ -1,9 +1,10 @@
-import { type Database, newId } from "@everycent/db";
+import { type Database, newId, sql } from "@everycent/db";
 import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
+import { jwtVerify } from "jose";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
 import { deleteBudgetTransactions } from "./delete-budget";
@@ -28,6 +29,37 @@ function tokenRequestType(token: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The addresses a change-email link moves between, from a token whose signature checks out (so a
+ * made-up token can't ask whether an address has an account). Undefined for any other token.
+ */
+async function changeEmailTarget(token: string, secret: string) {
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
+      algorithms: ["HS256"],
+    });
+    const { email, updateTo, requestType } = payload as Record<string, unknown>;
+    if (
+      typeof email === "string" &&
+      typeof updateTo === "string" &&
+      (requestType === "change-email-confirmation" || requestType === "change-email-verification")
+    ) {
+      return { from: email, to: updateTo };
+    }
+  } catch {
+    // Expired or invalid: Better Auth answers that itself.
+  }
+  return undefined;
+}
+
+async function addressTakenByOther(db: Database, from: string, to: string) {
+  const [row] = await db
+    .select({ email: schema.user.email })
+    .from(schema.user)
+    .where(sql`lower(${schema.user.email}) = ${to.toLowerCase()}`);
+  return row !== undefined && row.email.toLowerCase() !== from.toLowerCase();
 }
 
 export function createAuth(db: Database, env: Env, email: EmailSender, options: AuthOptions = {}) {
@@ -140,6 +172,15 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
             throw new APIError("UNAUTHORIZED", {
               code: "SIGN_IN_REQUIRED",
               message: "Sign in to your account on this device, then open the link again.",
+            });
+          }
+          // Someone may have signed up with the new address since the change was asked for.
+          // Confirming would then fail on the taken address with a generic error; say why.
+          const change = await changeEmailTarget(token, env.BETTER_AUTH_SECRET);
+          if (change && (await addressTakenByOther(db, change.from, change.to))) {
+            throw new APIError("CONFLICT", {
+              code: "EMAIL_TAKEN",
+              message: "That address now belongs to another account, so your email wasn't changed.",
             });
           }
         }

@@ -312,6 +312,9 @@ catalogs:
     input-otp:
       specifier: ^1.5.0
       version: 1.5.0
+    jose:
+      specifier: ^6.2.12
+      version: 6.2.12
     jsdom:
       specifier: ^30.1.1
       version: 30.1.1
@@ -443,6 +446,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.9
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.12
       papaparse:
         specifier: 'catalog:'
         version: 5.7.0

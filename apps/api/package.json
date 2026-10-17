@@ -22,6 +22,7 @@
     "bowser": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "jose": "catalog:",
     "papaparse": "catalog:",
     "pg-boss": "catalog:",
     "rate-limiter-flexible": "catalog:",
