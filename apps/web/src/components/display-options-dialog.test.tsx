@@ -21,16 +21,7 @@ function setup() {
 const pill = (tone: string) => document.querySelector(`[data-tone=${tone}]`) as HTMLElement;
 
 describe("DisplayOptionsDialog", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    // jsdom has no matchMedia; the theme provider asks for the system theme.
-    window.matchMedia ??= ((query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    })) as unknown as typeof window.matchMedia;
-  });
+  beforeEach(() => localStorage.clear());
 
   it("applies Differentiate Without Color and progress bars only on Apply", async () => {
     const { user, onOpenChange } = setup();
