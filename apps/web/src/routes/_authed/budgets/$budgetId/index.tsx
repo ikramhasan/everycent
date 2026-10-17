@@ -846,26 +846,30 @@ function BudgetPage() {
         }
       >
         <div className="grid gap-1">
-          <PageHeader title={budget.name} />
-          <div className="flex items-center gap-2">
-            <MonthNav
-              month={month}
-              current={today}
-              first={range?.first ?? month}
-              last={range?.last ?? month}
-              onChange={goTo}
-            />
-            {!wide && listFigures && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto max-md:min-h-11"
-                onClick={() => setInspectorOpen(true)}
-              >
-                <PanelRight /> Summary
-              </Button>
-            )}
-          </div>
+          <PageHeader
+            title={budget.name}
+            // Without the side inspector, the month's summary is a page action in the top bar.
+            actions={
+              !wide &&
+              listFigures && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="max-md:min-h-11"
+                  onClick={() => setInspectorOpen(true)}
+                >
+                  <PanelRight /> Summary
+                </Button>
+              )
+            }
+          />
+          <MonthNav
+            month={month}
+            current={today}
+            first={range?.first ?? month}
+            last={range?.last ?? month}
+            onChange={goTo}
+          />
           {figures.data && (
             <MonthNote
               key={month}
