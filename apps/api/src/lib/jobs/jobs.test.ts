@@ -1,5 +1,5 @@
 import { sql } from "@everycent/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestApp, emailsTo, resetDatabase, runJobs } from "../../../test/helpers";
 import type { AppDeps } from "../../types";
 import { enqueueEmail } from "../email/queue";
@@ -78,6 +78,16 @@ describe("background jobs", () => {
     await jobs.runQueued(jobHandlers, deps);
     expect(calls).toBe(2);
     expect(outbox.outbox.map((m) => m.to)).toEqual(["retry@example.com"]);
+    expect((await emailJobs()).map((j) => j.state)).toEqual(["completed"]);
+  });
+
+  it("drops, without retrying, an email sealed under another secret", async () => {
+    const other = { BETTER_AUTH_SECRET: "a-rotated-away-secret-that-is-long-enough!" };
+    await enqueueEmail(jobs, db, other, message("rotated@example.com"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runJobs(app);
+    logged.mockRestore();
+    expect(outbox.outbox).toHaveLength(0);
     expect((await emailJobs()).map((j) => j.state)).toEqual(["completed"]);
   });
 

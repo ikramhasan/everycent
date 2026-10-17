@@ -44,6 +44,19 @@ describe("POST /v1/client-errors (EVERYCENT-106)", () => {
     expect(logged).toHaveBeenCalledTimes(CLIENT_ERRORS_PER_CLIENT + 1);
   });
 
+  it("masks quoted text and amounts, keeping stack positions", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await report({
+      message: `Error: can't save "Costco Wholesale" for $1,234.56`,
+      stack: "Error: x\n    at save (https://app.example/assets/index-abc.js:12:345)",
+    });
+    const [, attributes] = logged.mock.calls[0] ?? [];
+    const text = JSON.stringify(attributes);
+    expect(text).not.toContain("Costco");
+    expect(text).not.toContain("1,234");
+    expect(text).toContain("index-abc.js:12:345");
+  });
+
   it("refuses an empty report", async () => {
     expect((await report({ message: "" })).status).toBe(400);
   });

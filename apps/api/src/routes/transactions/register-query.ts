@@ -734,7 +734,7 @@ async function toJson(
       })),
       matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
       // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
-      runningBalance: BigInt(balances.get(row.id) ?? "0").toString(),
+      runningBalance: BigInt(balanceOf(balances, row.id)).toString(),
     }),
   );
 }
@@ -911,6 +911,12 @@ async function runningBalances(db: Db, ids: readonly string[]): Promise<Map<stri
     where w.id in (${list})
   `)) as unknown as { id: string; balance: string }[];
   return new Map(rows.map((r) => [r.id, r.balance]));
+}
+
+function balanceOf(balances: ReadonlyMap<string, string>, id: string) {
+  const balance = balances.get(id);
+  if (balance === undefined) throw new Error(`No running balance for transaction ${id}`);
+  return balance;
 }
 
 /** Transactions as the register shows them (with each account's running balance). */

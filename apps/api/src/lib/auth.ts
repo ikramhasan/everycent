@@ -55,12 +55,19 @@ async function changeEmailTarget(token: string, secret: string) {
   return undefined;
 }
 
+/**
+ * Whether another account has `to` while the account changing from `from` still exists. Once the
+ * change is done, `from` is gone and `to` is the account's own: a replayed link is then left to
+ * Better Auth ("isn't valid any more"), not reported as taken.
+ */
 async function addressTakenByOther(db: Database, from: string, to: string) {
-  const [row] = await db
-    .select({ email: schema.user.email })
+  const rows = await db
+    .select({ id: schema.user.id, email: schema.user.email })
     .from(schema.user)
-    .where(sql`lower(${schema.user.email}) = ${to.toLowerCase()}`);
-  return row !== undefined && row.email.toLowerCase() !== from.toLowerCase();
+    .where(sql`lower(${schema.user.email}) in (${from.toLowerCase()}, ${to.toLowerCase()})`);
+  const owner = rows.find((r) => r.email.toLowerCase() === from.toLowerCase());
+  const holder = rows.find((r) => r.email.toLowerCase() === to.toLowerCase());
+  return owner !== undefined && holder !== undefined && holder.id !== owner.id;
 }
 
 export function createAuth(db: Database, env: Env, email: EmailSender, options: AuthOptions = {}) {

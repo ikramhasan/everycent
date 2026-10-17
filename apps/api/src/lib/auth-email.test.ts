@@ -306,6 +306,26 @@ describe("change email (EVERYCENT-46)", () => {
     expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
   });
 
+  it("doesn't call the address taken when a finished change's link is opened again", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    expect((await verify(linkToken(approval[0]))).status).toBe(200);
+    const confirm = await emailsTo(app, next, "change-email-verify");
+    expect((await verify(linkToken(confirm[0]), cookie)).status).toBe(200);
+    const signedIn = await signIn(app, next, password);
+
+    for (const replay of [
+      verify(linkToken(confirm[0]), signedIn),
+      verify(linkToken(approval[0])),
+    ]) {
+      const res = await replay;
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(await res.json()).not.toMatchObject({ code: "EMAIL_TAKEN" });
+    }
+  });
+
   it("says so at the approval step too", async () => {
     const { cookie, email, password } = await signUp(app);
     const next = fresh();

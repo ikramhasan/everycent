@@ -15,7 +15,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "generate": "turbo run generate",
-    "check": "biome check . && turbo run typecheck test build",
+    "check": "biome check . && tsc -p .railway && turbo run typecheck test build",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @everycent/db db:generate",

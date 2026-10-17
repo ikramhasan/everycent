@@ -1,6 +1,7 @@
 import type { Env } from "../../env";
 import type { JobHandler, Jobs } from "../jobs";
 import type { Db } from "../ledger";
+import { log } from "../log";
 import { seal, unseal } from "../sealed";
 import type { EmailMessage, EmailSender } from "./sender";
 
@@ -22,7 +23,15 @@ export async function enqueueEmail(
 
 /** The `email.send` worker: hands the message to the real sender (throttled, then Resend). */
 export const sendQueuedEmail: JobHandler<"email.send"> = async (deps, { sealed }) => {
-  await deps.email.send(unseal<EmailMessage>(sealed, deps.env.BETTER_AUTH_SECRET, PURPOSE));
+  let message: EmailMessage;
+  try {
+    message = unseal<EmailMessage>(sealed, deps.env.BETTER_AUTH_SECRET, PURPOSE);
+  } catch (error) {
+    // Sealed under another BETTER_AUTH_SECRET (rotated since): no retry can open it.
+    log.error("Queued email dropped: it can't be opened with the current secret", {}, error);
+    return;
+  }
+  await deps.email.send(message);
 };
 
 /** An `EmailSender` that queues instead of sending, for Better Auth's email callbacks. */
