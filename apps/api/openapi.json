@@ -11813,6 +11813,17 @@
           "importedTransactionId"
         ]
       },
+      "DontRenameResult": {
+        "type": "object",
+        "properties": {
+          "payeeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payeeId"
+        ]
+      },
       "BudgetViewList": {
         "type": "object",
         "properties": {
@@ -23868,6 +23879,91 @@
           },
           "400": {
             "description": "The transaction isn't matched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename": {
+      "post": {
+        "operationId": "dontRenameTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
+        "description": "The transaction takes its imported payee name again, and its payee loses the renaming rule \"Is <imported name>\".",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Renamed back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DontRenameResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The transaction wasn't imported",
             "content": {
               "application/json": {
                 "schema": {

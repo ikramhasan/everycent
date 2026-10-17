@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import {
+  dontRename,
   importCutoff,
   importTransactions as importRows,
   matchTransactions as matchRows,
@@ -13,6 +14,7 @@ import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { assertOpen, findAccount } from "../transactions/rules";
 import type {
+  dontRenameTransaction,
   getImportContext,
   importTransactions,
   matchTransactions,
@@ -98,4 +100,11 @@ export const unmatchTransactionHandler: RouteHandler<typeof unmatchTransaction, 
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   const result = await c.var.deps.db.transaction((tx) => unmatchRow(tx, budgetId, transactionId));
   return c.json(result, 200);
+};
+
+export const dontRenameHandler: RouteHandler<typeof dontRenameTransaction, Env> = async (c) => {
+  const { budgetId, transactionId } = c.req.valid("param");
+  await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
+  const payeeId = await c.var.deps.db.transaction((tx) => dontRename(tx, budgetId, transactionId));
+  return c.json({ payeeId }, 200);
 };

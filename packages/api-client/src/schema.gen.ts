@@ -1415,6 +1415,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * YNAB's "Don't Rename as <payee>": back to the imported payee, without the rule
+         * @description The transaction takes its imported payee name again, and its payee loses the renaming rule "Is <imported name>".
+         */
+        post: operations["dontRenameTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/views": {
         parameters: {
             query?: never;
@@ -3991,6 +4011,9 @@ export interface components {
             transactionId: string;
             /** @description The imported one again: cleared, unapproved, Uncategorized */
             importedTransactionId: string;
+        };
+        DontRenameResult: {
+            payeeId: string;
         };
         BudgetViewList: {
             /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
@@ -10206,6 +10229,65 @@ export interface operations {
                 };
             };
             /** @description The transaction isn't matched */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    dontRenameTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Renamed back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DontRenameResult"];
+                };
+            };
+            /** @description The transaction wasn't imported */
             400: {
                 headers: {
                     [name: string]: unknown;

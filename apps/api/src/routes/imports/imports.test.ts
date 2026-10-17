@@ -407,3 +407,66 @@ describe("matching imports (EVERYCENT-68)", () => {
     expect(twoEntered.status).toBe(400);
   });
 });
+
+describe("renaming imported payees (EVERYCENT-174)", () => {
+  it("makes an Is rule when an imported transaction's payee changes, and Don't Rename undoes it", async () => {
+    const s = await setup();
+    const [id] = (
+      await s.importFile([
+        { date: "2026-10-10", amount: "-500", payee: "SQ *CORNER CAFE", memo: "" },
+      ])
+    ).transactionIds;
+    const res = await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, {
+      payeeName: "Corner Cafe",
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const payee = (await json<{ payeeId: string }>(res)).payeeId;
+    const rules = async () =>
+      (
+        await json<{ rules: { payeeId: string; operator: string; text: string }[] }>(
+          await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
+        )
+      ).rules;
+    expect(await rules()).toEqual([
+      expect.objectContaining({ payeeId: payee, operator: "is", text: "SQ *CORNER CAFE" }),
+    ]);
+    // Changing it again, or to the same payee, adds nothing more.
+    await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, { memo: "x" });
+    expect(await rules()).toHaveLength(1);
+    // The next import of that name lands on the renamed payee.
+    await s.importFile([
+      { date: "2026-10-12", amount: "-600", payee: "SQ *CORNER CAFE", memo: "" },
+    ]);
+    expect((await s.rows()).map((t) => t.payeeName)).toEqual(["Corner Cafe", "Corner Cafe"]);
+
+    const back = await send("POST", `${s.base}/transactions/${id}/dont-rename`, s.owner.cookie);
+    expect(back.status, await back.clone().text()).toBe(200);
+    expect(await rules()).toEqual([]);
+    const row = (await s.rows()).find((t) => t.id === id);
+    expect(row).toMatchObject({ payeeName: "SQ *CORNER CAFE", approved: true });
+  });
+
+  it("leaves entered and matched transactions' payee changes alone", async () => {
+    const s = await setup();
+    const res = await send("POST", `${s.base}/transactions`, s.owner.cookie, {
+      accountId: s.checking.id,
+      date: "2026-10-10",
+      amount: "-100",
+      payeeName: "Typed",
+      categoryId: null,
+      memo: "",
+      flag: null,
+    });
+    const typed = await json<{ id: string }>(res);
+    await send("PATCH", `${s.base}/transactions/${typed.id}`, s.owner.cookie, {
+      payeeName: "Other",
+    });
+    const rules = await json<{ rules: unknown[] }>(
+      await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
+    );
+    expect(rules.rules).toEqual([]);
+    expect(
+      (await send("POST", `${s.base}/transactions/${typed.id}/dont-rename`, s.owner.cookie)).status,
+    ).toBe(400);
+  });
+});

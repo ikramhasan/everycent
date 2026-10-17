@@ -40,7 +40,17 @@ import {
 import { Label } from "@everycent/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
-import { ArrowLeftRight, CalendarDays, Check, Plus, Split } from "lucide-react";
+import { cn } from "@everycent/ui/lib/utils";
+import {
+  ArrowLeftRight,
+  CalendarDays,
+  Check,
+  ExternalLink,
+  Info,
+  Plus,
+  Split,
+  X,
+} from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { dateToIso, isoToDate, parseDateInput } from "@/lib/dates";
 import {
@@ -250,6 +260,7 @@ export function PayeeField({
   own,
   transferAccountId = null,
   autoFocus,
+  importDetails,
 }: {
   /** Accessible name (split lines say which line). */
   label?: string;
@@ -264,9 +275,12 @@ export function PayeeField({
   /** The account the field's transfer goes to, to tell two accounts with one name apart. */
   transferAccountId?: string | null;
   autoFocus?: boolean;
+  /** An imported transaction's Bank Import Details (EVERYCENT-155), behind the Selected payee. */
+  importDetails?: ImportDetails;
 }) {
   const trimmed = value.trim();
   const managePayees = useManagePayees();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Hidden payees aren't suggested, but typing one's exact name still uses it (YNAB).
   const hiddenMatch = payees.some(
     (p) => p.hidden && p.name.toLowerCase() === trimmed.toLowerCase(),
@@ -362,66 +376,185 @@ export function PayeeField({
         }}
         className="h-8 w-full"
       />
-      <AutocompleteContent className="min-w-64">
-        {create && (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary text-sm hover:bg-accent"
-            // Keep focus in the field: the row goes on with the new name.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              onChange({ name: create, transferAccountId: null });
-              setOpen(false);
-            }}
-          >
-            <Plus className="size-4 shrink-0" />
-            <span className="truncate">Create “{create}” Payee</span>
-          </button>
-        )}
-        {create && <AutocompleteEmpty>“{create}” will be created as a payee.</AutocompleteEmpty>}
-        <AutocompleteList>
-          {(group: { value: string; items: PayeeItem[] }) => (
-            <AutocompleteGroup key={group.value} items={group.items}>
-              {group.value && <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>}
-              <AutocompleteCollection>
-                {(item: PayeeItem) => (
-                  <AutocompleteItem key={item.id} value={item}>
-                    {item.id.startsWith(SELECTED) && (
-                      <Check aria-hidden className="size-4 text-muted-foreground" />
+      <AutocompleteContent
+        className={cn("min-w-64", detailsOpen && importDetails && "sm:min-w-[36rem]")}
+      >
+        <div className="flex flex-col gap-0 sm:flex-row">
+          <div className="min-w-64 flex-1">
+            {create && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary text-sm hover:bg-accent"
+                // Keep focus in the field: the row goes on with the new name.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange({ name: create, transferAccountId: null });
+                  setOpen(false);
+                }}
+              >
+                <Plus className="size-4 shrink-0" />
+                <span className="truncate">Create “{create}” Payee</span>
+              </button>
+            )}
+            {create && (
+              <AutocompleteEmpty>“{create}” will be created as a payee.</AutocompleteEmpty>
+            )}
+            <AutocompleteList>
+              {(group: { value: string; items: PayeeItem[] }) => (
+                <AutocompleteGroup key={group.value} items={group.items}>
+                  {group.value && <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>}
+                  <AutocompleteCollection>
+                    {(item: PayeeItem) => (
+                      <AutocompleteItem key={item.id} value={item}>
+                        {item.id.startsWith(SELECTED) && (
+                          <Check aria-hidden className="size-4 text-muted-foreground" />
+                        )}
+                        {item.kind === "transfer" ? (
+                          <>
+                            <ArrowLeftRight className="size-4 text-muted-foreground" />
+                            {item.text}
+                          </>
+                        ) : (
+                          item.label
+                        )}
+                        {importDetails && item.id.startsWith(SELECTED) && (
+                          <button
+                            type="button"
+                            aria-label="Bank Import Details"
+                            aria-expanded={detailsOpen}
+                            className="ml-auto rounded-full text-muted-foreground hover:text-foreground"
+                            // Not the item: keep the field's focus and its payee.
+                            onMouseDown={(e) => e.preventDefault()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDetailsOpen((o) => !o);
+                            }}
+                          >
+                            <Info className="size-4" />
+                          </button>
+                        )}
+                      </AutocompleteItem>
                     )}
-                    {item.kind === "transfer" ? (
-                      <>
-                        <ArrowLeftRight className="size-4 text-muted-foreground" />
-                        {item.text}
-                      </>
-                    ) : (
-                      item.label
-                    )}
-                  </AutocompleteItem>
-                )}
-              </AutocompleteCollection>
-            </AutocompleteGroup>
+                  </AutocompleteCollection>
+                </AutocompleteGroup>
+              )}
+            </AutocompleteList>
+            {hiddenMatch && (
+              <p className="px-2 py-1.5 text-muted-foreground text-xs">
+                1 matching payee is hidden
+              </p>
+            )}
+            {managePayees && (
+              <button
+                type="button"
+                className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
+                // Keep focus in the field until the dialog takes it.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setOpen(false);
+                  managePayees();
+                }}
+              >
+                Manage Payees
+              </button>
+            )}
+          </div>
+          {detailsOpen && importDetails && (
+            <BankImportDetails details={importDetails} onClose={() => setDetailsOpen(false)} />
           )}
-        </AutocompleteList>
-        {hiddenMatch && (
-          <p className="px-2 py-1.5 text-muted-foreground text-xs">1 matching payee is hidden</p>
-        )}
-        {managePayees && (
-          <button
-            type="button"
-            className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
-            // Keep focus in the field until the dialog takes it.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              setOpen(false);
-              managePayees();
-            }}
-          >
-            Manage Payees
-          </button>
-        )}
+        </div>
       </AutocompleteContent>
     </Autocomplete>
+  );
+}
+
+/** What Bank Import Details shows for an imported transaction. */
+export interface ImportDetails {
+  /** The payee as the bank sent it. */
+  statement: string;
+  /** As it was imported: everycent doesn't clean names up (EVERYCENT-206), so the same text. */
+  imported: string;
+  /** The payee a renaming rule (or an edit) moved it to, when it isn't the imported name. */
+  renamedTo: string | null;
+  orderLink: { label: string; url: string } | null;
+  onDontRename?: () => void;
+}
+
+/**
+ * YNAB's Bank Import Details (2026-10-17): the payee as it appears on the statement and as it was
+ * imported, each with Copy, "Don't Rename as …" when it was renamed, and a store's order history.
+ */
+function BankImportDetails({ details, onClose }: { details: ImportDetails; onClose: () => void }) {
+  const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
+  const card = "grid gap-1 rounded-md border bg-background p-2.5";
+  return (
+    <section
+      aria-label="Bank Import Details"
+      className="grid content-start gap-2 border-t bg-muted/40 p-2.5 text-sm sm:w-72 sm:border-t-0 sm:border-l"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="flex items-center justify-between">
+        <p className="font-medium">Bank Import Details</p>
+        <button
+          type="button"
+          aria-label="Close Bank Import Details"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className={card}>
+        <p className="font-medium text-xs">As it appears on your statement</p>
+        <p className="break-words">{details.statement}</p>
+        <button
+          type="button"
+          className="justify-self-start text-primary text-xs hover:underline"
+          onClick={() => copy(details.statement)}
+        >
+          Copy
+        </button>
+      </div>
+      <div className={card}>
+        <p className="font-medium text-xs">As everycent imported it</p>
+        <p className="break-words">{details.imported}</p>
+        <button
+          type="button"
+          className="justify-self-start text-primary text-xs hover:underline"
+          onClick={() => copy(details.imported)}
+        >
+          Copy
+        </button>
+        {details.renamedTo && details.onDontRename && (
+          <button
+            type="button"
+            className="justify-self-start text-left text-primary text-xs hover:underline"
+            onClick={details.onDontRename}
+          >
+            Don't Rename as {details.renamedTo}
+          </button>
+        )}
+      </div>
+      {details.orderLink && (
+        <>
+          <p className="font-medium text-xs">Additional Information</p>
+          <div className={card}>
+            <a
+              href={details.orderLink.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              {details.orderLink.label}
+              <ExternalLink className="size-3.5" />
+            </a>
+            <p className="text-muted-foreground text-xs">External link</p>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

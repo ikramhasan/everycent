@@ -3,6 +3,7 @@ import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { type FocusEvent, type KeyboardEvent, useRef, useState } from "react";
 import type { Account } from "@/lib/accounts";
+import { storeOrderLink } from "@/lib/bank-import";
 import type { MoneySettings } from "@/lib/money-input";
 import {
   type CategoryOption,
@@ -16,6 +17,7 @@ import {
 import {
   CategoryField,
   DateField,
+  type ImportDetails,
   isInsidePopup,
   listOwnsKey,
   PayeeField,
@@ -41,6 +43,7 @@ export function CellEditor({
   onMakeRepeating,
   onCommit,
   onCancel,
+  onDontRename,
 }: {
   transaction: Transaction;
   column: CellColumn;
@@ -58,6 +61,8 @@ export function CellEditor({
   /** `transferAccountId` is set when the payee cell now holds a transfer. */
   onCommit: (value: string | null, exit: CellExit, transferAccountId: string | null) => void;
   onCancel: () => void;
+  /** Bank Import Details' "Don't Rename as …" for an imported transaction (EVERYCENT-174). */
+  onDontRename?: () => void;
 }) {
   const own = accounts.find((a) => a.id === transaction.accountId);
   const [value, setValue] = useState(() => cellValue(transaction, column, settings));
@@ -150,6 +155,10 @@ export function CellEditor({
             own={own && { type: own.type, direction: directionOf(BigInt(transaction.amount)) }}
             transferAccountId={transferAccountId}
             autoFocus
+            importDetails={importDetails(transaction, () => {
+              done.current = true;
+              onDontRename?.();
+            })}
           />
         );
       case "category":
@@ -196,4 +205,18 @@ export function CellEditor({
         );
     }
   }
+}
+
+/** An imported transaction's Bank Import Details (EVERYCENT-155); none for entered ones. */
+function importDetails(t: Transaction, onDontRename: () => void): ImportDetails | undefined {
+  if (!t.imported || !t.importedPayee) return undefined;
+  const renamed =
+    t.payeeName && t.payeeName.toLowerCase() !== t.importedPayee.toLowerCase() ? t.payeeName : null;
+  return {
+    statement: t.importedPayee,
+    imported: t.importedPayee,
+    renamedTo: t.transferAccountId ? null : renamed,
+    orderLink: storeOrderLink(t.importedPayee, BigInt(t.amount), t.currency),
+    onDontRename,
+  };
 }

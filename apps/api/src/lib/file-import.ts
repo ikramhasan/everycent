@@ -1,4 +1,4 @@
-import { sql } from "@everycent/db";
+import { newId, sql } from "@everycent/db";
 import {
   accountImportId,
   budgetAccount,
@@ -374,4 +374,62 @@ export async function unmatchTransaction(tx: Db, budgetId: string, id: string) {
     importedPayee: matched.importedPayee,
   });
   return { transactionId: target.id, importedTransactionId: importedId };
+}
+
+/**
+ * YNAB's automatic renaming rule (2026-10-17, EVERYCENT-174): changing an imported transaction's
+ * payee adds "Is <imported name>" to the new payee's renaming rules, unless it has that rule or
+ * the new payee is the imported name itself.
+ */
+export async function rememberRename(
+  tx: Db,
+  budgetId: string,
+  payeeId: string,
+  importedName: string,
+) {
+  const text = importedName.trim();
+  if (!text) return;
+  const [target] = await tx.select({ name: payee.name }).from(payee).where(eq(payee.id, payeeId));
+  if (!target || target.name.toLowerCase() === text.toLowerCase()) return;
+  const rules = await tx
+    .select({ operator: payeeRule.operator, text: payeeRule.text, position: payeeRule.position })
+    .from(payeeRule)
+    .where(eq(payeeRule.payeeId, payeeId));
+  if (rules.some((r) => r.operator === "is" && r.text.toLowerCase() === text.toLowerCase())) return;
+  await tx.insert(payeeRule).values({
+    id: newId(),
+    budgetId,
+    payeeId,
+    operator: "is",
+    text,
+    position: Math.max(-1, ...rules.map((r) => r.position)) + 1,
+  });
+}
+
+/**
+ * YNAB's "Don't Rename as <payee>" (Bank Import Details, 2026-10-17): the transaction goes back to
+ * its imported payee name, and the payee's "Is <imported name>" rule is removed.
+ */
+export async function dontRename(tx: Db, budgetId: string, transactionId: string) {
+  const [row] = await tx
+    .select()
+    .from(transaction)
+    .where(and(eq(transaction.budgetId, budgetId), eq(transaction.id, transactionId)));
+  if (!row) throw new AppError(404, "NOT_FOUND", "No such transaction");
+  const name = row.importedPayee?.trim();
+  if (!name) throw new AppError(400, "NOT_IMPORTED", "This transaction wasn't imported");
+  if (row.payeeId) {
+    await tx
+      .delete(payeeRule)
+      .where(
+        and(
+          eq(payeeRule.payeeId, row.payeeId),
+          eq(payeeRule.operator, "is"),
+          sql`lower(${payeeRule.text}) = lower(${name})`,
+        ),
+      );
+  }
+  const payeeId = await findOrCreatePayee(tx, budgetId, name);
+  await tx.update(transaction).set({ payeeId, approved: true }).where(eq(transaction.id, row.id));
+  return payeeId;
 }

@@ -222,3 +222,37 @@ export const unmatchTransaction = createRoute({
     404: jsonError("No such budget or transaction, or the caller isn't a member"),
   },
 });
+
+export const dontRenameTransaction = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/{transactionId}/dont-rename",
+  operationId: "dontRenameTransaction",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
+  description:
+    "The transaction takes its imported payee name again, and its payee loses the renaming " +
+    'rule "Is <imported name>".',
+  request: {
+    params: BudgetParams.extend({
+      transactionId: z.string().openapi({ param: { name: "transactionId", in: "path" } }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Renamed back",
+      content: {
+        "application/json": {
+          schema: z.object({ payeeId: z.string() }).openapi("DontRenameResult"),
+        },
+      },
+    },
+    400: jsonError("The transaction wasn't imported"),
+    401: jsonError("Not signed in"),
+    403: jsonError(
+      "The caller's role can't change transactions, or the account's email address isn't confirmed",
+    ),
+    404: jsonError("No such budget or transaction, or the caller isn't a member"),
+  },
+});

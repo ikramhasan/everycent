@@ -342,6 +342,10 @@ export function Register({
   });
   const remove = $api.useMutation("delete", "/v1/budgets/{budgetId}/transactions/{transactionId}");
   const matchTx = $api.useMutation("post", "/v1/budgets/{budgetId}/transactions/match");
+  const dontRenameTx = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename",
+  );
   const unmatchTx = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch",
@@ -650,6 +654,22 @@ export function Register({
       params: { path: { budgetId: budget.id, transactionId: id } },
     });
     return done.importedTransactionId;
+  }
+
+  /**
+   * Bank Import Details' "Don't Rename as …" (EVERYCENT-174): back to the imported payee, and
+   * the payee's rule for that name goes.
+   */
+  async function dontRename(t: Transaction) {
+    try {
+      await dontRenameTx.mutateAsync({
+        params: { path: { budgetId: budget.id, transactionId: t.id } },
+      });
+      setEditing(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't rename it back");
+    }
   }
 
   async function matchSelected() {
@@ -2177,6 +2197,7 @@ export function Register({
                               void commitCell(t, editing.column, value, exit, transferAccountId)
                             }
                             onCancel={() => setEditing(null)}
+                            onDontRename={() => void dontRename(t)}
                           />
                         </TableCell>
                       );
