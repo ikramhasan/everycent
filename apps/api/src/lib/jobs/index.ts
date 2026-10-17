@@ -11,6 +11,14 @@ export { type JobData, QUEUES, type QueueName } from "./queues";
 export type JobHandler<Q extends QueueName> = (deps: AppDeps, data: JobData[Q]) => Promise<void>;
 export type JobHandlers = { [Q in QueueName]: JobHandler<Q> };
 
+/**
+ * A failed attempt, logged: pg-boss records it and retries, but its `error` event is only for
+ * its own errors, so without this a failing job leaves no trace in the logs.
+ */
+function logJobFailure(queue: QueueName, job: { id: string; retryCount: number }, error: unknown) {
+  log.error("Job failed", { queue, jobId: job.id, attempt: job.retryCount + 1 }, error);
+}
+
 /** The schema pg-boss keeps its tables in, apart from ours. */
 export const JOBS_SCHEMA = "pgboss";
 
@@ -91,7 +99,13 @@ export class Jobs {
     for (const queue of Object.keys(QUEUES) as QueueName[]) {
       const handler = handlers[queue] as JobHandler<QueueName>;
       await this.#boss.work<JobData[QueueName]>(queue, async ([job]) => {
-        if (job) await handler(deps, job.data);
+        if (!job) return;
+        try {
+          await handler(deps, job.data);
+        } catch (error) {
+          logJobFailure(queue, job, error);
+          throw error;
+        }
       });
     }
   }
@@ -121,6 +135,7 @@ export class Jobs {
             await handler(deps, job.data);
             await this.#boss.complete(queue, job);
           } catch (error) {
+            logJobFailure(queue, job, error);
             await this.#boss.fail(queue, job, { message: String(error) });
           }
         }
