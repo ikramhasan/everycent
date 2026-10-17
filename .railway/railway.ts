@@ -1,4 +1,4 @@
-import { defineRailway, postgres, preserve, project, service } from "railway/iac";
+import { defineRailway, github, postgres, preserve, project, service } from "railway/iac";
 
 /**
  * everycent on Railway (Infrastructure as Code: `railway config plan` / `apply`; EVERYCENT-105).
@@ -12,6 +12,8 @@ export default defineRailway(() => {
   const db = postgres("postgres");
 
   const app = service("everycent", {
+    // Deploys every push to main once its CI checks pass. Needs Railway's GitHub app on the repo.
+    source: github("ikramhasan/everycent", { branch: "main", checkSuites: true }),
     // Migrations and the job queue's schema, once per deploy, before the new version starts.
     preDeploy: "node dist/migrate.mjs",
     healthcheck: "/v1/health",
