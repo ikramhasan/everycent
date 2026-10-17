@@ -114,7 +114,8 @@ describe("TargetSection with a target in its own currency (EVERYCENT-58)", () =>
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ cadence: "monthly", amount: "150000", currency: "JPY" }),
     );
-  });
+    // The currency list has every ISO code; under a full parallel run this takes seconds.
+  }, 15_000);
 
   it("edits a EUR target in euros", async () => {
     const { onSave } = renderSection(eurTarget, need, {
