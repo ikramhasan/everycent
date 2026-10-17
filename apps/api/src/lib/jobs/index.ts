@@ -2,7 +2,7 @@ import { sql } from "@everycent/db";
 import { fromDrizzle, type JobOptions, PgBoss } from "pg-boss";
 import type { AppDeps } from "../../types";
 import type { Db } from "../ledger";
-import { type JobData, QUEUES, type QueueName } from "./queues";
+import { type JobData, QUEUES, type QueueName, SCHEDULES } from "./queues";
 
 export { type JobData, QUEUES, type QueueName } from "./queues";
 
@@ -75,9 +75,10 @@ export class Jobs {
     return this.#boss.send(queue, data, { ...options, db: fromDrizzle(db, sql) });
   }
 
-  /** Runs every queue's jobs in this process. Only for a worker. */
+  /** Runs every queue's jobs in this process and keeps the cron schedules. Only for a worker. */
   async work(handlers: JobHandlers, deps: AppDeps): Promise<void> {
     if (!this.#worker) throw new Error("Jobs.work needs a worker instance");
+    for (const { queue, cron } of SCHEDULES) await this.schedule(queue, cron);
     for (const queue of Object.keys(QUEUES) as QueueName[]) {
       const handler = handlers[queue] as JobHandler<QueueName>;
       await this.#boss.work<JobData[QueueName]>(queue, async ([job]) => {
@@ -89,7 +90,7 @@ export class Jobs {
   /** Sends `queue` a job on a cron schedule (UTC), replacing any schedule it had. Only for a worker. */
   async schedule<Q extends QueueName>(queue: Q, cron: string, data?: JobData[Q]): Promise<void> {
     if (!this.#worker) throw new Error("Jobs.schedule needs a worker instance");
-    // A daily job missed while the app was down (a deploy) runs once when it's back.
+    // Runs missed while the app was down (a deploy) catch up with one job when it is back.
     await this.#boss.schedule(queue, cron, data ?? null, { tz: "UTC", missed: "once" });
   }
 

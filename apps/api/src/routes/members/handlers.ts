@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from "node:crypto";
 import { newId, sql } from "@everycent/db";
 import { budget, budgetInvitation, budgetMember, user } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
@@ -7,6 +6,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { deliverEmail } from "../../lib/email/deliver";
 import { emails } from "../../lib/email/templates";
 import { AppError } from "../../lib/errors";
+import { hashToken, newInvitationToken as newToken } from "../../lib/invitations";
 import type { Db, Tx } from "../../lib/ledger";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -28,14 +28,6 @@ import {
 type Env = AppEnv & AuthedEnv;
 
 const MANAGE = { invitation: ["create"] } as const;
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
-
-/** A fresh link token (returned once, for the email) and its hash (stored). */
-function newToken() {
-  const token = randomBytes(32).toString("base64url");
-  return { token, tokenHash: hashToken(token) };
-}
-
 const expiry = () => new Date(Date.now() + INVITATION_DAYS * 24 * 60 * 60 * 1000);
 
 type InvitationRow = typeof budgetInvitation.$inferSelect;
@@ -221,7 +213,7 @@ export const resendInvitationHandler: RouteHandler<typeof resendInvitation, Env>
     }
     const [updated] = await tx
       .update(budgetInvitation)
-      .set({ tokenHash, expiresAt: expiry(), inviterId: c.var.user.id })
+      .set({ tokenHash, expiresAt: expiry(), inviterId: c.var.user.id, remindedAt: null })
       .where(eq(budgetInvitation.id, invitationId))
       .returning();
     if (!updated) throw new Error("Invitation update returned nothing");

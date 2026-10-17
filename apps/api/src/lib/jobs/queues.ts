@@ -16,6 +16,8 @@ export const QUEUES = {
     deleteAfterSeconds: 60,
     retentionSeconds: 7 * 24 * 60 * 60,
   },
+  /** Hourly: reminds invitees whose invitation has 3 days left (EVERYCENT-125). */
+  "invitations.remind": { retryLimit: 3, retryDelay: 60, expireInSeconds: 300 },
 } as const satisfies Record<string, QueueOptions>;
 
 export type QueueName = keyof typeof QUEUES;
@@ -23,4 +25,10 @@ export type QueueName = keyof typeof QUEUES;
 /** What each queue's jobs carry. */
 export interface JobData {
   "email.send": { sealed: string };
+  "invitations.remind": null;
 }
+
+/** Cron schedules (UTC) the worker keeps; each sends its queue a job. */
+export const SCHEDULES: { queue: QueueName; cron: string }[] = [
+  { queue: "invitations.remind", cron: "0 * * * *" },
+];
