@@ -9,6 +9,7 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "openapi:emit": "tsx src/scripts/emit-openapi.ts",
+    "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "papaparse": "catalog:",
+    "pg-boss": "catalog:",
     "rate-limiter-flexible": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"

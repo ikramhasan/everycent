@@ -31,7 +31,7 @@ async function share(budgetId: string, owner: string, invitee: { email: string; 
     name: "P",
     email: invitee.email,
   });
-  const token = linkToken(emailsTo(app, invitee.email, "budget-invitation").at(-1));
+  const token = linkToken((await emailsTo(app, invitee.email, "budget-invitation")).at(-1));
   await send("POST", "/v1/invitations/accept", invitee.cookie, { token });
 }
 

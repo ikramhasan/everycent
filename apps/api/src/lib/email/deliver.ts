@@ -1,13 +1,11 @@
 import type { AppDeps } from "../../types";
+import { enqueueEmail } from "./queue";
 import type { EmailMessage } from "./sender";
 
 /**
- * Sends an email without holding up the response; a failed send is logged, not retried
- * (EVERYCENT-124). Tests await it so they can read the outbox straight away.
+ * Queues an email from a request handler, in the request's transaction when it has one: the
+ * worker sends it and retries a failed send (EVERYCENT-124).
  */
 export async function deliverEmail(deps: AppDeps, message: EmailMessage) {
-  if (deps.env.NODE_ENV === "test") return deps.email.send(message);
-  void deps.email
-    .send(message)
-    .catch((e) => console.error(`[email] failed to send a ${message.kind} email`, e));
+  await enqueueEmail(deps.jobs, deps.db, deps.env, message);
 }

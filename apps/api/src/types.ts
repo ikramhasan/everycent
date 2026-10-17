@@ -4,6 +4,7 @@ import type { Auth } from "./lib/auth";
 import type { ChangeBus } from "./lib/change-bus";
 import type { EmailSender } from "./lib/email/sender";
 import type { FxProvider } from "./lib/fx/providers";
+import type { Jobs } from "./lib/jobs";
 import type { YnabClient } from "./lib/ynab/client";
 
 /** Everything a request handler may need. Injected once in createApp; read via c.var.deps. */
@@ -13,7 +14,10 @@ export interface AppDeps {
   auth: Auth;
   /** Budget change notifications for live updates (`GET …/events`). */
   changes: ChangeBus;
+  /** Sends an email now. Request code queues emails instead (`deliverEmail`); the worker calls this. */
   email: EmailSender;
+  /** Background jobs (pg-boss). */
+  jobs: Jobs;
   /** Exchange-rate providers, tried in order (tests use an in-memory fake). */
   fxProviders: FxProvider[];
   /**

@@ -54,7 +54,7 @@ describe("budget invitations", () => {
     ]);
     expect(listed.maxPeople).toBe(6);
 
-    const sent = emailsTo(app, email, "budget-invitation");
+    const sent = await emailsTo(app, email, "budget-invitation");
     expect(sent).toHaveLength(1);
     expect(sent[0]?.text).toContain(owner.email);
     // Free text (the budget's name) stays out of the email.
@@ -94,7 +94,7 @@ describe("budget invitations", () => {
     const { invite } = await setup();
     const email = `pat-${crypto.randomUUID()}@example.com`;
     await invite(email);
-    const token = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    const token = linkToken((await emailsTo(app, email, "budget-invitation"))[0]);
     const stranger = await signUp(app);
     const res = await send("POST", "/v1/invitations/accept", stranger.cookie, { token });
     expect(res.status).toBe(403);
@@ -118,12 +118,12 @@ describe("budget invitations", () => {
     const email = `pat-${crypto.randomUUID()}@example.com`;
     await invite(email);
     expect(await code(await invite(email))).toBe("ALREADY_INVITED");
-    const first = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    const first = linkToken((await emailsTo(app, email, "budget-invitation"))[0]);
     const { invitations } = await members();
     const id = invitations[0]?.id;
     const resent = await send("POST", `${base}/invitations/${id}/resend`, owner.cookie);
     expect(resent.status).toBe(200);
-    const sent = emailsTo(app, email, "budget-invitation");
+    const sent = await emailsTo(app, email, "budget-invitation");
     expect(sent).toHaveLength(2);
     const second = linkToken(sent[1]);
     expect(second).not.toBe(first);
@@ -136,7 +136,7 @@ describe("budget invitations", () => {
     const { base, owner, invite, members } = await setup();
     const email = `pat-${crypto.randomUUID()}@example.com`;
     await invite(email);
-    const token = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    const token = linkToken((await emailsTo(app, email, "budget-invitation"))[0]);
     const id = (await members()).invitations[0]?.id as string;
 
     await db
@@ -155,7 +155,7 @@ describe("budget invitations", () => {
     const canceled = await send("DELETE", `${base}/invitations/${fresh[0]?.id}`, owner.cookie);
     expect(canceled.status).toBe(204);
     expect((await members()).invitations).toEqual([]);
-    const latest = linkToken(emailsTo(app, email, "budget-invitation").at(-1));
+    const latest = linkToken((await emailsTo(app, email, "budget-invitation")).at(-1));
     expect((await send("POST", "/v1/invitations/view", null, { token: latest })).status).toBe(404);
   });
 
@@ -164,7 +164,7 @@ describe("budget invitations", () => {
     const email = `pat-${crypto.randomUUID()}@example.com`;
     await invite(email);
     const pat = await signUp(app, { email });
-    const token = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    const token = linkToken((await emailsTo(app, email, "budget-invitation"))[0]);
     await send("POST", "/v1/invitations/accept", pat.cookie, { token });
     const res = await invite(`x-${crypto.randomUUID()}@example.com`, "X", pat.cookie);
     expect(res.status).toBe(403);
@@ -179,7 +179,7 @@ describe("leaving, removing and transferring ownership", () => {
     const email = `m-${crypto.randomUUID()}@example.com`;
     await ctx.invite(email);
     const person = await signUp(app, { email });
-    const token = linkToken(emailsTo(app, email, "budget-invitation")[0]);
+    const token = linkToken((await emailsTo(app, email, "budget-invitation"))[0]);
     await send("POST", "/v1/invitations/accept", person.cookie, { token });
     const id = (await ctx.members()).members.find((m) => m.email === email)?.userId as string;
     return { ...person, id };

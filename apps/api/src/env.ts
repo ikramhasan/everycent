@@ -24,6 +24,11 @@ const EnvSchema = z
      * client IP from `x-forwarded-for`; with this set, the chain is trusted only through these hops.
      */
     TRUSTED_PROXIES: optional(z.string()),
+    /**
+     * `all` (default): the API process also runs background jobs. `api`: it only queues them, and
+     * a separate `node dist/worker.mjs` process runs them.
+     */
+    JOBS_MODE: z.enum(["all", "api"]).default("all"),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;

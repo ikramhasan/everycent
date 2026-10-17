@@ -35,10 +35,11 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
   const logFailure = (message: EmailMessage, e: unknown) =>
     console.error(`[email] failed to send a ${message.kind} email`, e);
   /**
-   * Sends without holding up the response, so an endpoint answers in the same time whether or not
-   * it sent anything (timing would otherwise reveal which addresses have accounts). Better Auth
-   * awaits some send callbacks itself (resend confirmation), so this can't be left to its
-   * background tasks. Tests await, so they can read the outbox straight away.
+   * Hands the email on (in the app, `QueuedEmailSender`: queued for the worker, which retries) without
+   * holding up the response, so an endpoint answers in the same time whether or not it sent
+   * anything (timing would otherwise reveal which addresses have accounts). Better Auth awaits some
+   * send callbacks itself (resend confirmation), so this can't be left to its background tasks.
+   * Tests await, so the job is queued before they read the outbox.
    */
   const deliver = async (message: EmailMessage) => {
     if (env.NODE_ENV === "test") return email.send(message);

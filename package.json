@@ -18,7 +18,7 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @everycent/db db:generate",
-    "db:migrate": "pnpm --filter @everycent/db db:migrate",
+    "db:migrate": "pnpm --filter @everycent/api db:migrate",
     "db:studio": "pnpm --filter @everycent/db db:studio",
     "db:seed": "pnpm --filter @everycent/api db:seed"
   },
