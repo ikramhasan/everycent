@@ -6,6 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
+import { serveWebApp } from "./lib/web-app";
 import { requestLog } from "./middleware/request-log";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
@@ -97,6 +98,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", exportsRouter);
 
   registerDocs(app);
+  if (deps.env.WEB_DIST_DIR) serveWebApp(app, deps.env.WEB_DIST_DIR);
   return app;
 }
 

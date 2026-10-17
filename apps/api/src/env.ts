@@ -29,6 +29,11 @@ const EnvSchema = z
      * a separate `node dist/worker.mjs` process runs them.
      */
     JOBS_MODE: z.enum(["all", "api"]).default("all"),
+    /**
+     * The built web app (`apps/web/dist`) for the API to serve on the same origin; the Docker
+     * image sets it. Unset, the API serves only the API (development runs Vite).
+     */
+    WEB_DIST_DIR: optional(z.string().min(1)),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;

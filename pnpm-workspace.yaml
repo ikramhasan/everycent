@@ -64,6 +64,7 @@ catalog:
   papaparse: ^5.7.0
   pg-boss: ^12.38.0
   postgres: ^3.4.9
+  railway: ^3.16.0
   rate-limiter-flexible: ^11.2.1
   react-day-picker: ^10.0.2
   react-qr-code: ^2.2.0

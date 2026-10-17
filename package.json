@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "railway": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:"
   }
