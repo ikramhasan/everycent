@@ -9,7 +9,7 @@ const payees = [
     name: "Corner Cafe",
     hidden: false,
   },
-] as Parameters<typeof PayeeField>[0]["payees"];
+] as unknown as Parameters<typeof PayeeField>[0]["payees"];
 
 describe("Bank Import Details (EVERYCENT-155/174)", () => {
   it("shows the payee as imported, the store link and Don't Rename", async () => {
