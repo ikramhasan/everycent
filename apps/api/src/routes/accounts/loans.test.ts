@@ -201,6 +201,76 @@ describe("loan activity (YNAB, 2026-10-13)", () => {
     });
   });
 
+  it("lists this month's upcoming payments, every occurrence (YNAB, 2026-10-17)", async () => {
+    const { cookie, base, checking, mortgage, payCategory } = await setup();
+    const record = async (date: string, amount: string, memo: string) => {
+      const res = await send(
+        "POST",
+        `${base}/accounts/${mortgage.id}/loan/payments?today=${TODAY}`,
+        cookie,
+        { fromAccountId: checking.id, amount, date, memo },
+      );
+      expect(res.status, await res.clone().text()).toBe(201);
+    };
+    await record("2026-10-20", "2000", "x-a");
+    await record("2026-10-28", "3000", "x-b");
+    // Next month's isn't listed (YNAB shows only the current month's).
+    await record("2026-11-05", "4000", "x-c");
+    // A weekly payment entered in the checking register: each occurrence left in October.
+    const weekly = await send("POST", `${base}/scheduled-transactions`, cookie, {
+      accountId: checking.id,
+      frequency: "weekly",
+      date: "2026-10-22",
+      amount: "-500",
+      transferAccountId: mortgage.id,
+      categoryId: payCategory.id,
+      memo: "x-w",
+      today: TODAY,
+    });
+    expect(weekly.status, await weekly.clone().text()).toBe(201);
+    // A transfer out of the loan isn't a payment.
+    const out = await send("POST", `${base}/scheduled-transactions`, cookie, {
+      accountId: mortgage.id,
+      date: "2026-10-25",
+      amount: "-700",
+      transferAccountId: checking.id,
+      memo: "x-out",
+      today: TODAY,
+    });
+    expect(out.status, await out.clone().text()).toBe(201);
+
+    const res = await send("GET", `${base}/accounts/${mortgage.id}/loan?today=${TODAY}`, cookie);
+    const body = (await res.json()) as {
+      months: LoanMonth[];
+      upcoming: Array<Record<string, string>>;
+    };
+    expect(
+      body.upcoming.map((u) => [u.date, u.amount, u.memo, u.accountName, u.payeeName]),
+    ).toEqual([
+      ["2026-10-29", "500", "x-w", "L7 Chk", "Transfer : L7 Mortgage"],
+      ["2026-10-28", "3000", "x-b", "L7 Mortgage", "Transfer : L7 Chk"],
+      ["2026-10-22", "500", "x-w", "L7 Chk", "Transfer : L7 Mortgage"],
+      ["2026-10-20", "2000", "x-a", "L7 Mortgage", "Transfer : L7 Chk"],
+    ]);
+    // Each jumps to the paying account's register row.
+    const recorded = body.upcoming.find((u) => u.memo === "x-a");
+    expect(recorded).toMatchObject({ payingAccountId: checking.id });
+    expect(recorded?.payingRowId).toBe(`${recorded?.scheduleId}~${checking.id}`);
+    const fromChecking = body.upcoming.find((u) => u.memo === "x-w");
+    expect(fromChecking?.payingRowId).toBe(fromChecking?.scheduleId);
+    // Not in the month's payments or balance.
+    expect(body.months.at(-1)).toMatchObject({ month: "2026-10", payments: "0" });
+
+    // Once today passes one, it's entered, and the rest stay upcoming.
+    const later = await send(
+      "GET",
+      `${base}/accounts/${mortgage.id}/loan?today=2026-10-23`,
+      cookie,
+    );
+    const after = (await later.json()) as { upcoming: Array<{ date: string }> };
+    expect(after.upcoming.map((u) => u.date)).toEqual(["2026-10-29", "2026-10-28"]);
+  });
+
   it("reports the account a credit card was last paid from, another card included", async () => {
     const { cookie, base, addAccount, checking, account } = await setup();
     const card = await addAccount({ name: "Visa", type: "credit_card", balance: "-5000" });

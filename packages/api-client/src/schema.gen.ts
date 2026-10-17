@@ -2423,6 +2423,27 @@ export interface components {
                     otherSideId: string | null;
                 }[];
             }[];
+            /** @description This month's scheduled payments still to come, every occurrence of a repeating one, newest first (YNAB's "N Upcoming Transactions"); not in the balances */
+            upcoming: {
+                scheduleId: string;
+                /**
+                 * Format: date
+                 * @description The occurrence's date, after today and in today's month
+                 */
+                date: string;
+                /** @description The account the schedule was entered in */
+                accountId: string;
+                accountName: string;
+                /** @description The schedule's own payee ("Transfer : <account>") */
+                payeeName: string;
+                memo: string;
+                /** @description What the loan receives (positive) */
+                amount: string;
+                /** @description The account the payment comes from */
+                payingAccountId: string;
+                /** @description The schedule's row in the paying account's register (to jump to it) */
+                payingRowId: string;
+            }[];
             /** @description The loan's interest rate, minimum payment and escrow from each month on, oldest first (months before the first entry use it), for the payoff planner */
             terms: {
                 /** @description YYYY-MM */
