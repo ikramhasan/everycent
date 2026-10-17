@@ -677,6 +677,26 @@ const LoanActivitySchema = z
         }),
       )
       .describe("From the loan's first month through today's, oldest first"),
+    upcoming: z
+      .array(
+        z.object({
+          scheduleId: z.string(),
+          date: IsoDate.describe("The occurrence's date, after today and in today's month"),
+          accountId: z.string().describe("The account the schedule was entered in"),
+          accountName: z.string(),
+          payeeName: z.string().describe('The schedule\'s own payee ("Transfer : <account>")'),
+          memo: z.string(),
+          amount: zMinorUnits.describe("What the loan receives (positive)"),
+          payingAccountId: z.string().describe("The account the payment comes from"),
+          payingRowId: z
+            .string()
+            .describe("The schedule's row in the paying account's register (to jump to it)"),
+        }),
+      )
+      .describe(
+        "This month's scheduled payments still to come, every occurrence of a repeating one, " +
+          'newest first (YNAB\'s "N Upcoming Transactions"); not in the balances',
+      ),
     terms: z
       .array(
         z.object({

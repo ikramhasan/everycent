@@ -38,6 +38,8 @@ async function copyPayeeCategories(
       categorization: payee.categorization,
       defaultCategoryId: payee.defaultCategoryId,
       carriedCategoryId: payee.carriedCategoryId,
+      autoCategoryId: payee.autoCategoryId,
+      autoCategorySaved: payee.autoCategorySaved,
     })
     .from(payee)
     .where(

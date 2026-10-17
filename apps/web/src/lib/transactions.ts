@@ -18,6 +18,22 @@ import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from ".
 export type Transaction = components["schemas"]["Transaction"];
 export type SubTransaction = components["schemas"]["SubTransaction"];
 export type Payee = components["schemas"]["Payee"];
+
+/**
+ * The payee's recent categories for the category list's "Suggested" (YNAB lists none for a payee
+ * set to "Do not auto-categorize", nor for transfers or a row without a known payee). A split
+ * line goes by its own payee only, never its transaction's (2026-10-17, EVERYCENT-182).
+ */
+export function payeeSuggestionIds(
+  payees: readonly Payee[],
+  row: { payeeName: string | null; transferAccountId: string | null },
+): readonly string[] | undefined {
+  if (row.transferAccountId) return undefined;
+  const name = row.payeeName?.trim().toLowerCase();
+  const payee = name ? payees.find((p) => p.name.toLowerCase() === name) : undefined;
+  return payee && payee.categorization !== "never" ? payee.recentCategoryIds : undefined;
+}
+
 type CreateBody = components["schemas"]["CreateTransaction"];
 type UpdateBody = components["schemas"]["UpdateTransaction"];
 type LineBody = components["schemas"]["SubTransactionInput"];

@@ -529,6 +529,15 @@ export function Register({
   const focused = useRef<string | null>(null);
   useEffect(() => {
     if (!focusId || focused.current === focusId) return;
+    // A scheduled row (from an Activity popover's upcoming list) is selected, as YNAB does
+    // (2026-10-17, EVERYCENT-176); it's at the top, so there's nothing to load. Until the
+    // scheduled rows are in, the id could be either.
+    if (scheduled.isPending) return;
+    if (scheduledRows.some((row) => row.id === focusId)) {
+      focused.current = focusId;
+      setScheduledSelection(new Set([focusId]));
+      return;
+    }
     const index = flat.findIndex((r) => r.key === focusId);
     if (index === -1) {
       // The other side of a transfer may be further back; load pages until it shows up.
@@ -540,7 +549,16 @@ export function Register({
     setHighlightId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => clearTimeout(timer);
-  }, [focusId, flat, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [
+    focusId,
+    flat,
+    virtualizer,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scheduledRows,
+    scheduled.isPending,
+  ]);
   const loadedIds = useMemo(() => loaded.map((t) => t.id), [loaded]);
   // The selection's filter is the register's, without the sort, and with the list's today so a
   // year-less `Income:` matches the same rows.

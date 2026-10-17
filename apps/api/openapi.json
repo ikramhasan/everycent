@@ -7699,6 +7699,61 @@
             },
             "description": "From the loan's first month through today's, oldest first"
           },
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduleId": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "The occurrence's date, after today and in today's month"
+                },
+                "accountId": {
+                  "type": "string",
+                  "description": "The account the schedule was entered in"
+                },
+                "accountName": {
+                  "type": "string"
+                },
+                "payeeName": {
+                  "type": "string",
+                  "description": "The schedule's own payee (\"Transfer : <account>\")"
+                },
+                "memo": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "What the loan receives (positive)"
+                },
+                "payingAccountId": {
+                  "type": "string",
+                  "description": "The account the payment comes from"
+                },
+                "payingRowId": {
+                  "type": "string",
+                  "description": "The schedule's row in the paying account's register (to jump to it)"
+                }
+              },
+              "required": [
+                "scheduleId",
+                "date",
+                "accountId",
+                "accountName",
+                "payeeName",
+                "memo",
+                "amount",
+                "payingAccountId",
+                "payingRowId"
+              ]
+            },
+            "description": "This month's scheduled payments still to come, every occurrence of a repeating one, newest first (YNAB's \"N Upcoming Transactions\"); not in the balances"
+          },
           "terms": {
             "type": "array",
             "items": {
@@ -7787,6 +7842,7 @@
         },
         "required": [
           "months",
+          "upcoming",
           "terms",
           "banners",
           "originalHistory"
@@ -10098,6 +10154,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "autoCategoryId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "autoCategorySaved": {
+                  "type": "boolean"
                 }
               },
               "required": [

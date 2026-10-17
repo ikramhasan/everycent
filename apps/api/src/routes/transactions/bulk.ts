@@ -8,6 +8,7 @@ import type { FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { type Db, transferPayeeId } from "../../lib/ledger";
+import { notePayeeCategorizations } from "../../lib/payee-categories";
 import { isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { assertTransactionVersions, transactionVersions } from "../../lib/versions";
@@ -322,6 +323,8 @@ async function categorize(tx: Db, budgetId: string, rows: SelectedRow[], categor
   const categorized = [...unsplit, ...plain];
   if (categorized.length > 0) {
     await tx.update(transaction).set({ categoryId }).where(selectedIds(categorized));
+    // Categorizing is an edit: it updates the payees' auto-categorization defaults.
+    await notePayeeCategorizations(tx, budgetId, categorized);
   }
   return [...keepSplit, ...categorized];
 }

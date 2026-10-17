@@ -1,12 +1,13 @@
 import { sql } from "@everycent/db";
-import { category, subTransaction, transaction } from "@everycent/db/schema";
+import { category, payee, subTransaction, transaction } from "@everycent/db/schema";
 import {
+  nextPayeeAutoCategory,
   type PayeeCategorization,
   payeeAutoCategory,
   payeePrefillCategory,
   payeeRecentCategories,
 } from "@everycent/engine";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { Db } from "./ledger";
 
 /** What a payee's transactions say about its category. */
@@ -24,6 +25,9 @@ export interface PayeeCategorySettings {
   categorization: PayeeCategorization;
   defaultCategoryId: string | null;
   carriedCategoryId: string | null;
+  /** The stored default (see the `payee` columns); replayed from the history until saved. */
+  autoCategoryId?: string | null;
+  autoCategorySaved?: boolean;
 }
 
 interface Use {
@@ -104,10 +108,12 @@ export async function payeeCategories(
 
   for (const p of payees) {
     const own = byPayee.get(p.id) ?? [];
-    const autoCategoryId = payeeAutoCategory(
-      own.filter((u) => u.line < 0).map((u) => u.categoryId),
-      p.carriedCategoryId,
-    );
+    const autoCategoryId = p.autoCategorySaved
+      ? (p.autoCategoryId ?? null)
+      : payeeAutoCategory(
+          own.filter((u) => u.line < 0).map((u) => u.categoryId),
+          p.carriedCategoryId,
+        );
     result.set(p.id, {
       autoCategoryId,
       prefillCategoryId: payeePrefillCategory({
@@ -119,4 +125,85 @@ export async function payeeCategories(
     });
   }
   return result;
+}
+
+/**
+ * Updates the stored auto-categorization default of these transactions' payees after an add or
+ * edit (YNAB's "This is updated when you add or edit a transaction"; see `nextPayeeAutoCategory`).
+ * Call it once the transactions are written. Deletes don't call it: YNAB keeps the default.
+ */
+export async function notePayeeCategorizations(
+  db: Db,
+  budgetId: string,
+  transactionIds: readonly string[],
+) {
+  if (transactionIds.length === 0) return;
+  const written = await db
+    .select({
+      payeeId: transaction.payeeId,
+      categoryId: transaction.categoryId,
+      internalKind: category.internalKind,
+    })
+    .from(transaction)
+    .leftJoin(category, eq(category.id, transaction.categoryId))
+    .where(
+      and(
+        eq(transaction.budgetId, budgetId),
+        inArray(transaction.id, [...transactionIds]),
+        isNotNull(transaction.payeeId),
+      ),
+    );
+  // Several rows of one payee (a bulk edit) apply in turn against the same last three.
+  const byPayee = new Map<string, (string | null)[]>();
+  for (const w of written) {
+    if (!w.payeeId) continue;
+    const counts = w.categoryId !== null && w.internalKind !== "uncategorized";
+    byPayee.set(w.payeeId, [...(byPayee.get(w.payeeId) ?? []), counts ? w.categoryId : null]);
+  }
+  if (byPayee.size === 0) return;
+  const rows = await db
+    .select({
+      id: payee.id,
+      categorization: payee.categorization,
+      defaultCategoryId: payee.defaultCategoryId,
+      carriedCategoryId: payee.carriedCategoryId,
+      autoCategoryId: payee.autoCategoryId,
+      autoCategorySaved: payee.autoCategorySaved,
+    })
+    .from(payee)
+    .where(and(eq(payee.budgetId, budgetId), inArray(payee.id, [...byPayee.keys()])));
+  const legacy = rows.filter((p) => !p.autoCategorySaved);
+  const replayed =
+    legacy.length > 0
+      ? await payeeCategories(db, budgetId, legacy)
+      : new Map<string, PayeeCategories>();
+  for (const p of rows) {
+    const lastThree = await db
+      .select({ categoryId: sql<string>`${transaction.categoryId}` })
+      .from(transaction)
+      .innerJoin(category, eq(category.id, transaction.categoryId))
+      .where(
+        and(
+          eq(transaction.budgetId, budgetId),
+          eq(transaction.payeeId, p.id),
+          sql`${category.internalKind} is distinct from 'uncategorized'`,
+        ),
+      )
+      .orderBy(desc(transaction.date), desc(transaction.createdAt), desc(transaction.id))
+      .limit(3);
+    let current = p.autoCategorySaved
+      ? p.autoCategoryId
+      : (replayed.get(p.id)?.autoCategoryId ?? null);
+    for (const categoryId of byPayee.get(p.id) ?? []) {
+      current = nextPayeeAutoCategory(
+        current,
+        lastThree.map((r) => r.categoryId),
+        categoryId,
+      );
+    }
+    await db
+      .update(payee)
+      .set({ autoCategoryId: current, autoCategorySaved: true })
+      .where(eq(payee.id, p.id));
+  }
 }

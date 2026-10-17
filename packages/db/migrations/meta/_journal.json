@@ -323,6 +323,13 @@
       "when": 1792206556824,
       "tag": "0045_budget_import_source",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792206597468,
+      "tag": "0046_payee_auto_category",
+      "breakpoints": true
     }
   ]
 }

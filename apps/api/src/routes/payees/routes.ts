@@ -93,6 +93,8 @@ const PayeeSnapshotSchema = z
           categorization: zPayeeCategorization.optional(),
           defaultCategoryId: z.string().nullable().optional(),
           carriedCategoryId: z.string().nullable().optional(),
+          autoCategoryId: z.string().nullable().optional(),
+          autoCategorySaved: z.boolean().optional(),
         }),
       )
       .max(1000)

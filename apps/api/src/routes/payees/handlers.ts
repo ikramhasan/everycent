@@ -68,6 +68,8 @@ interface SnapshotPayee {
   categorization?: PayeeCategorization;
   defaultCategoryId?: string | null;
   carriedCategoryId?: string | null;
+  autoCategoryId?: string | null;
+  autoCategorySaved?: boolean;
 }
 
 interface PayeeSnapshot {
@@ -106,6 +108,8 @@ function snapshotOf(p: typeof payee.$inferSelect): SnapshotPayee {
     categorization: p.categorization,
     defaultCategoryId: p.defaultCategoryId,
     carriedCategoryId: p.carriedCategoryId,
+    autoCategoryId: p.autoCategoryId,
+    autoCategorySaved: p.autoCategorySaved,
   };
 }
 
@@ -124,6 +128,8 @@ function payeeColumns() {
     categorization: payee.categorization,
     defaultCategoryId: payee.defaultCategoryId,
     carriedCategoryId: payee.carriedCategoryId,
+    autoCategoryId: payee.autoCategoryId,
+    autoCategorySaved: payee.autoCategorySaved,
   };
 }
 
@@ -134,10 +140,12 @@ async function withCategories<T extends PayeeCategorySettings>(
   rows: T[],
 ) {
   const categories = await payeeCategories(db, budgetId, rows);
-  return rows.map(({ carriedCategoryId: _, ...row }) => ({
-    ...row,
-    ...(categories.get(row.id) as PayeeCategories),
-  }));
+  return rows.map(
+    ({ carriedCategoryId: _, autoCategoryId: __, autoCategorySaved: ___, ...row }) => ({
+      ...row,
+      ...(categories.get(row.id) as PayeeCategories),
+    }),
+  );
 }
 
 /** People's payees: not a transfer payee or a built-in one like "Starting Balance". */
@@ -390,6 +398,13 @@ export const combinePayeesHandler: RouteHandler<typeof combinePayees, Env> = asy
         .set({ payeeId: target.id, position, updatedAt: sql`now()` })
         .where(eq(payeeRule.id, rule.id));
     }
+    // The target keeps its own Categorization and default (YNAB, x-c13-182 D into E,
+    // 2026-10-17): its default is saved as it stands, so the moved history doesn't change it.
+    const kept = (await payeeCategories(tx, budgetId, [target])).get(target.id);
+    await tx
+      .update(payee)
+      .set({ autoCategoryId: kept?.autoCategoryId ?? null, autoCategorySaved: true })
+      .where(eq(payee.id, target.id));
     await repoint(
       tx,
       budgetId,
@@ -450,7 +465,7 @@ export const deletePayeesHandler: RouteHandler<typeof deletePayees, Env> = async
  */
 async function restorableCategories(db: Db, budgetId: string, p: SnapshotPayee) {
   if (p.categorization === undefined) return {};
-  const ids = [p.defaultCategoryId, p.carriedCategoryId].filter(
+  const ids = [p.defaultCategoryId, p.carriedCategoryId, p.autoCategoryId].filter(
     (id): id is string => typeof id === "string",
   );
   const known =
@@ -465,7 +480,14 @@ async function restorableCategories(db: Db, budgetId: string, p: SnapshotPayee) 
   const defaultCategoryId = keep(p.defaultCategoryId);
   const categorization: PayeeCategorization =
     p.categorization === "always" && !defaultCategoryId ? "auto" : p.categorization;
-  return { categorization, defaultCategoryId, carriedCategoryId: keep(p.carriedCategoryId) };
+  return {
+    categorization,
+    defaultCategoryId,
+    carriedCategoryId: keep(p.carriedCategoryId),
+    // Snapshots from before the stored default leave it out: the history is replayed then.
+    autoCategoryId: keep(p.autoCategoryId),
+    autoCategorySaved: p.autoCategorySaved ?? false,
+  };
 }
 
 export const restorePayeesHandler: RouteHandler<typeof restorePayees, Env> = async (c) => {
