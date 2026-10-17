@@ -802,9 +802,9 @@ export function Register({
         });
       }
       await refresh();
-      // Flag and the cleared states leave the rows selected, as YNAB's do (2026-10-18), so C can
-      // toggle them back.
-      const keep = action.type === "flag" || action.type === "cleared";
+      // Actions that leave the rows in the register keep them selected, as YNAB's do
+      // (2026-10-18), so C can toggle them back.
+      const keep = ["flag", "cleared", "approve", "categorize", "memo"].includes(action.type);
       setSelection(keep ? sel : nextSelection);
       setScheduledSelection(keep ? sched : nextScheduled);
       const n = `${count} transaction${count === 1 ? "" : "s"}`;

@@ -32,6 +32,7 @@ import {
   Activity,
   ChartColumn,
   ChevronsUpDown,
+  Keyboard,
   Landmark,
   LayoutGrid,
   LogOut,
@@ -77,6 +78,7 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
   });
 
   const { theme, setTheme } = useTheme();
+  const [helpOpen, setHelpOpen] = useState(false);
   // The top bar's header slot, where each page puts its title and actions.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
@@ -96,7 +98,8 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
   return (
     // Narrower than the kit's 16rem, leaving the page more room (YNAB's is narrow too).
     <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
-      <GlobalShortcuts />
+      <GlobalShortcuts onHelp={() => setHelpOpen(true)} />
+      <KeyboardShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>
@@ -222,6 +225,10 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                       <UserCog /> Account settings
                     </Link>
                   </DropdownMenuItem>
+                  {/* YNAB's menu has Keyboard Shortcuts under Account (2026-10-18). */}
+                  <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
+                    <Keyboard /> Keyboard Shortcuts
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {/*
                    * Theme as a button group; picking one keeps the menu open. Text only, so the three
@@ -291,10 +298,9 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
 }
 
 /** YNAB's Universal shortcuts that belong to the shell: "?" for the list, Shift+. for the sidebar. */
-function GlobalShortcuts() {
-  const [helpOpen, setHelpOpen] = useState(false);
+function GlobalShortcuts({ onHelp }: { onHelp: () => void }) {
   const { toggleSidebar } = useSidebar();
-  useShortcut("help", () => setHelpOpen(true));
+  useShortcut("help", onHelp);
   useShortcut("sidebar", toggleSidebar);
-  return <KeyboardShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />;
+  return null;
 }

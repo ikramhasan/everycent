@@ -22,6 +22,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -416,12 +417,24 @@ export function SelectionBar({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
+            {/* YNAB lists Match and Unmatch here too, greyed when they don't apply (2026-10-18). */}
+            <DropdownMenuItem disabled={!onMatch} onSelect={() => onMatch?.()}>
+              <Link2 /> Match
+              <DropdownMenuShortcut>M</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!onUnmatch} onSelect={() => onUnmatch?.()}>
+              <Unlink /> Unmatch
+              <DropdownMenuShortcut>shift U</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => onAction({ type: "duplicate" })}>
               <Copy /> Duplicate
+              <DropdownMenuShortcut>shift D</DropdownMenuShortcut>
             </DropdownMenuItem>
             {onMakeRepeating && (
               <DropdownMenuItem onSelect={onMakeRepeating}>
                 <Repeat /> Make Repeating
+                <DropdownMenuShortcut>shift T</DropdownMenuShortcut>
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -462,6 +475,7 @@ export function SelectionBar({
                   onSelect={() => onAction({ type: "delete" })}
                 >
                   <Trash2 /> Delete
+                  <DropdownMenuShortcut>delete</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </>
             )}
