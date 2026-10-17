@@ -20,6 +20,13 @@ describe("evaluateAmount", () => {
     expect(usd("-(10+5)")).toBe(-1500n);
   });
 
+  it("takes x (and × ÷) for multiply and divide, as YNAB's help center lists", () => {
+    expect(evaluateAmount("12.50x3", "USD", "comma_dot").amount).toBe(3750n);
+    expect(evaluateAmount("12.50X3", "USD", "comma_dot").amount).toBe(3750n);
+    expect(evaluateAmount("10×2", "USD", "comma_dot").amount).toBe(2000n);
+    expect(evaluateAmount("10÷4", "USD", "comma_dot").amount).toBe(250n);
+  });
+
   it("is exact until the end, then rounds half away from zero", () => {
     // 0.1 + 0.2 is exactly 0.3; no float drift.
     expect(usd("0.1+0.2")).toBe(30n);

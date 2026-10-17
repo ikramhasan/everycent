@@ -30,7 +30,12 @@ export function evaluateAmount(
   numberFormat: NumberFormat,
 ): Money {
   const spec = NUMBER_FORMAT_SPECS[numberFormat];
-  let normalized = input.replace(spec.groupInput, "").replace(/\s/g, "");
+  // YNAB's help center lists "+ - x /"; its calculator's × and ÷ read the same.
+  let normalized = input
+    .replace(spec.groupInput, "")
+    .replace(/\s/g, "")
+    .replace(/[x×]/gi, "*")
+    .replace(/÷/g, "/");
   if (spec.decimal === ",") normalized = normalized.replaceAll(",", ".");
   // A lone leading sign is still a plain number.
   if (!OPERATOR.test(normalized.replace(/^[+-]/, ""))) {

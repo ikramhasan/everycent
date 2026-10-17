@@ -55,4 +55,18 @@ describe("AssignedCell", () => {
     await userEvent.type(input, "abc{Enter}");
     expect(actions.assign).not.toHaveBeenCalled();
   });
+
+  it("adds an operator from YNAB's calculator without saving, then keeps typing", async () => {
+    const actions = setup();
+    await userEvent.click(screen.getByRole("button", { name: "Assigned to Rent: $10" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open calculator" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Plus" }));
+    const input = screen.getByRole("textbox", { name: "Assigned to Rent" });
+    expect(input).toHaveValue("10+");
+    expect(actions.assign).not.toHaveBeenCalled();
+    await new Promise((r) => requestAnimationFrame(r));
+    expect(input).toHaveFocus();
+    await userEvent.type(input, "5{Enter}");
+    expect(actions.assign).toHaveBeenCalledWith("c1", 1500n);
+  });
 });
