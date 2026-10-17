@@ -226,6 +226,26 @@ export {
   payeeRuleMatches,
   zPayeeRuleOperator,
 } from "./payee-rules";
+export {
+  EXPORT_BOM,
+  EXPORT_NEWLINE,
+  type ExportCategory,
+  exportCategoryColumns,
+  exportCleared,
+  exportDateStamp,
+  exportFlag,
+  exportMonthLabel,
+  exportQuote,
+  exportSanitize,
+  exportSeparator,
+  exportSplitMemo,
+  exportText,
+  PLAN_EXPORT_HEADER,
+  planExportNames,
+  REGISTER_EXPORT_FX_HEADER,
+  REGISTER_EXPORT_HEADER,
+  selectedExportName,
+} from "./plan-export";
 export { type BarSection, type BarSegment, type ProgressBar, progressBar } from "./progress";
 export {
   type AmountOp,

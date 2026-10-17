@@ -6,6 +6,7 @@ import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/a
 import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
+import { deleteBudgetTransactions } from "./delete-budget";
 import type { EmailMessage, EmailSender } from "./email/sender";
 import { emails } from "./email/templates";
 import { seedInternalCategories } from "./starter-categories";
@@ -196,6 +197,10 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
           afterCreateOrganization: async ({ organization }) => {
             // Every budget needs these, however it was created.
             await seedInternalCategories(db, organization.id);
+          },
+          // Split lines would block the cascade from the budget to its categories.
+          beforeDeleteOrganization: async ({ organization }) => {
+            await deleteBudgetTransactions(db, organization.id);
           },
         },
         schema: {

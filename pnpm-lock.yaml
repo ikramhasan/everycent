@@ -440,6 +440,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.9
+      papaparse:
+        specifier: 'catalog:'
+        version: 5.7.0
       rate-limiter-flexible:
         specifier: 'catalog:'
         version: 11.2.1
@@ -459,6 +462,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.0
+      '@types/papaparse':
+        specifier: 'catalog:'
+        version: 5.5.2
       tsdown:
         specifier: 'catalog:'
         version: 0.23.0(tsx@4.23.15)(typescript@5.9.3)

@@ -4,6 +4,7 @@ import type { Auth } from "./lib/auth";
 import type { ChangeBus } from "./lib/change-bus";
 import type { EmailSender } from "./lib/email/sender";
 import type { FxProvider } from "./lib/fx/providers";
+import type { YnabClient } from "./lib/ynab/client";
 
 /** Everything a request handler may need. Injected once in createApp; read via c.var.deps. */
 export interface AppDeps {
@@ -20,6 +21,8 @@ export interface AppDeps {
    * transactions; null leaves it unbounded. Defaults to the real UTC date (tests set their own).
    */
   serverDate?: () => string | null;
+  /** Reads plans from YNAB's API for the importer; tests pass one over a fake `fetch`. */
+  ynab?: YnabClient;
 }
 
 export type AppEnv = {

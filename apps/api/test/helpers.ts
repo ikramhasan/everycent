@@ -34,8 +34,9 @@ const outboxes = new WeakMap<App, MemoryEmailSender>();
 export function createTestApp({
   serverDate = () => null,
   fxProviders = [new FakeFxProvider()],
+  ynab,
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders">> & AuthOptions = {}) {
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & AuthOptions = {}) {
   const env = testEnv();
   const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
@@ -50,6 +51,7 @@ export function createTestApp({
     changes: new ChangeBus(listen),
     serverDate,
     fxProviders,
+    ynab,
   });
   outboxes.set(app, outbox);
   return { app, db, env, outbox, fxProviders, close };

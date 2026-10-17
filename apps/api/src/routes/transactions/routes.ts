@@ -612,7 +612,7 @@ const RegisterFilterSchema = z
   .describe("The same filter as the register's query parameters")
   .openapi("RegisterFilter");
 
-const SelectionSchema = z
+export const SelectionSchema = z
   .union([
     z.strictObject({
       ids: z.array(z.string()).min(1).max(1000).describe("Transactions ticked one by one"),

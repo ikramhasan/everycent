@@ -40,9 +40,16 @@ const OUTSIDE = [
   /^\/v1\/me(\/|$)/,
   /^\/v1\/budgets\/?$/,
   /^\/v1\/budgets\/[^/]+\/fresh-start$/,
+  /^\/v1\/budgets\/import(\/|$)/,
 ] as const;
+/**
+ * POSTs that only read, with a body too big for a query string, and stream their answer after the
+ * handler returns (a request transaction would have ended by then).
+ */
+const READ_ONLY_POSTS = [/^\/v1\/budgets\/[^/]+\/export\//] as const;
 const outsideRequestTransaction = (method: string, path: string) =>
   OUTSIDE.some((re) => re.test(path)) ||
+  (method === "POST" && READ_ONLY_POSTS.some((re) => re.test(path))) ||
   (method === "DELETE" && /^\/v1\/budgets\/[^/]+\/?$/.test(path));
 
 class Rollback extends Error {}

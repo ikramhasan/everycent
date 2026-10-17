@@ -10,6 +10,7 @@ const VIEWER_ALLOWED = [
   /^leave$/,
   /^accounts\/[^/]+\/reconcile\/preview$/,
   /^transactions\/selection$/,
+  /^export\/transactions$/,
 ] as const;
 
 const BUDGET_PATH = /^\/v1\/budgets\/([^/]+)(?:\/(.*))?$/;

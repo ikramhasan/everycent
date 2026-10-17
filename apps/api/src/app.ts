@@ -7,10 +7,12 @@ import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
+import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
 import { eventsRouter } from "./routes/events";
+import { exportsRouter } from "./routes/exports";
 import { flagsRouter } from "./routes/flags";
 import { fxRatesRouter } from "./routes/fx-rates";
 import { healthRouter } from "./routes/health";
@@ -23,6 +25,7 @@ import { reportsRouter } from "./routes/reports";
 import { scheduledRouter } from "./routes/scheduled";
 import { transactionsRouter } from "./routes/transactions";
 import { viewsRouter } from "./routes/views";
+import { ynabImportRouter } from "./routes/ynab-import";
 import type { AppDeps } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -65,6 +68,8 @@ export function createApp(deps: AppDeps) {
 
   app.route("/v1", healthRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", ynabImportRouter);
+  app.route("/v1", backupsRouter);
   app.route("/v1", budgetsRouter);
   app.route("/v1", membersRouter);
   app.route("/v1", categoriesRouter);
@@ -81,6 +86,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", activityRouter);
   app.route("/v1", reportsRouter);
   app.route("/v1", eventsRouter);
+  app.route("/v1", exportsRouter);
 
   registerDocs(app);
   return app;
