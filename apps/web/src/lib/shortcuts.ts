@@ -123,7 +123,13 @@ export const SHORTCUTS = {
     caps: ["shift", "T"],
     keys: "shift+t",
   },
-  delete: { label: "Delete", section: "Account Actions", caps: ["delete"], keys: "delete" },
+  // A Mac keyboard's "delete" key is Backspace.
+  delete: {
+    label: "Delete",
+    section: "Account Actions",
+    caps: ["delete"],
+    keys: "delete, backspace",
+  },
   reconcile: {
     label: "Reconcile",
     section: "Account Actions",
