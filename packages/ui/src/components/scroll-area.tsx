@@ -2,18 +2,21 @@ import { cn } from "@everycent/ui/lib/utils";
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 import * as React from "react";
 
-// everycent: `viewportRef`/`viewportClassName` expose the scrolling element (for virtualized rows
-// and a sticky header), and `scrollbars` adds the horizontal bar for wide content.
+// everycent: `viewportRef`/`viewportClassName`/`viewportProps` expose the scrolling element (for
+// virtualized rows, a sticky header, the router's scroll reset), and `scrollbars` adds the
+// horizontal bar for wide content.
 function ScrollArea({
   className,
   children,
   viewportRef,
   viewportClassName,
   scrollbars = "vertical",
+  viewportProps,
   ...props
 }: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
   viewportRef?: React.Ref<HTMLDivElement>;
   viewportClassName?: string;
+  viewportProps?: React.HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, string>;
   scrollbars?: "vertical" | "horizontal" | "both";
 }) {
   return (
@@ -23,6 +26,7 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        {...viewportProps}
         ref={viewportRef}
         data-slot="scroll-area-viewport"
         className={cn(

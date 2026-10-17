@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
+import { ScrollArea } from "@everycent/ui/components/scroll-area";
 import { Separator } from "@everycent/ui/components/separator";
 import {
   Sidebar,
@@ -57,6 +58,9 @@ const THEMES: readonly { value: Theme; label: string }[] = [
  */
 const THEME_ITEM =
   "min-w-0 flex-1 justify-center rounded-none border-l px-1 py-1.5 text-xs first:border-l-0 data-[state=checked]:bg-muted data-[state=checked]:font-medium [&>[data-slot=dropdown-menu-radio-item-indicator]]:hidden";
+
+/** The page's scrolling element: the router resets it to the top on navigation and restores it. */
+export const APP_SCROLL_ID = "app-scroll";
 
 export function AppShell({ user }: { user: { name: string; email: string } }) {
   const queryClient = useQueryClient();
@@ -254,17 +258,29 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
+      {/*
+       * The page scrolls inside an overlay ScrollArea under a fixed top bar, never the window: the
+       * scrollbar matches the tables', the bar stays in view, and a dropdown's scroll lock (which
+       * hides the window's scrollbar) has nothing to hide.
+       */}
+      <SidebarInset className="h-svh overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4 data-vertical:self-center" />
           <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         </header>
-        <div className="flex-1 p-4 md:p-5">
-          <PageHeaderSlotProvider value={headerSlot}>
-            <Outlet />
-          </PageHeaderSlotProvider>
-        </div>
+        <ScrollArea
+          className="min-h-0 flex-1"
+          // Radix wraps the content in a `display: table` box, which stops long text truncating.
+          viewportClassName="[&>div]:block!"
+          viewportProps={{ id: APP_SCROLL_ID, "data-scroll-restoration-id": APP_SCROLL_ID }}
+        >
+          <div className="p-4 md:p-5">
+            <PageHeaderSlotProvider value={headerSlot}>
+              <Outlet />
+            </PageHeaderSlotProvider>
+          </div>
+        </ScrollArea>
       </SidebarInset>
     </SidebarProvider>
   );
