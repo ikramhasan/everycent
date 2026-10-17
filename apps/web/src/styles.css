@@ -44,3 +44,29 @@
   --bar-overspent: #912333;
   --bar-overspent-stripe: #4c0814;
 }
+
+/*
+ * On a phone's touch screen every button and checkbox is at least 44px to aim at (WCAG 2.5.5,
+ * EVERYCENT-93). A small control keeps its look; only its hit area grows, through a centred
+ * pseudo-element, so dense rows don't reflow.
+ */
+@media (pointer: coarse) and (max-width: 767px) {
+  [data-slot="button"],
+  [data-slot="checkbox"],
+  [data-slot="switch"],
+  [data-slot="dropdown-menu-trigger"] {
+    position: relative;
+  }
+  [data-slot="button"]::after,
+  [data-slot="checkbox"]::after,
+  [data-slot="switch"]::after,
+  [data-slot="dropdown-menu-trigger"]::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 2.75rem);
+    height: max(100%, 2.75rem);
+    transform: translate(-50%, -50%);
+  }
+}
