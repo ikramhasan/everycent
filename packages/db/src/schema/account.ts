@@ -162,6 +162,14 @@ export const payee = pgTable(
      * (which leaves the transactions behind). The history's two-of-three rule builds on it.
      */
     carriedCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    /**
+     * The auto-categorization default as stored state: YNAB updates it when one of the payee's
+     * transactions is added or edited and leaves it alone on a delete (EVERYCENT-182). Only read
+     * once `autoCategorySaved`; until a payee's first add or edit after this column arrived, the
+     * default is replayed from its history (with `carriedCategoryId`), as before.
+     */
+    autoCategoryId: text().references(() => category.id, { onDelete: "set null" }),
+    autoCategorySaved: boolean().notNull().default(false),
     ...timestamps,
   },
   (t) => [

@@ -2946,6 +2946,8 @@ export interface components {
                 categorization?: "auto" | "always" | "never";
                 defaultCategoryId?: string | null;
                 carriedCategoryId?: string | null;
+                autoCategoryId?: string | null;
+                autoCategorySaved?: boolean;
             }[];
             /** @description The rows that pointed at each payee */
             uses: components["schemas"]["PayeeUses"][];

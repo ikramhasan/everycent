@@ -13,6 +13,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
+import { notePayeeCategorizations } from "../../lib/payee-categories";
 import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
 import { setApproval } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
@@ -541,6 +542,8 @@ export async function applyUpdate(
     );
   }
   await syncBases(tx, transactionId);
+  // An edit updates the payee's auto-categorization default (EVERYCENT-182).
+  await notePayeeCategorizations(tx, budgetId, [transactionId]);
   return account.id;
 }
 

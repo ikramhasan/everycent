@@ -295,6 +295,13 @@
       "when": 1792179687361,
       "tag": "0041_huge_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792203913643,
+      "tag": "0042_cheerful_molly_hayes",
+      "breakpoints": true
     }
   ]
 }

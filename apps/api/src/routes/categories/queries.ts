@@ -5,6 +5,7 @@ import {
   categoryGroup,
   categoryTarget,
   moneyMove,
+  payee,
   scheduledSubTransaction,
   scheduledTransaction,
   subTransaction,
@@ -297,6 +298,12 @@ export async function reassignHistory(
     .update(transaction)
     .set({ categoryId: target.id })
     .where(inArray(transaction.categoryId, [...categoryIds]));
+  // A payee's stored auto-categorization default follows its transactions, as the replayed one
+  // did before it was stored (Uncategorized is never a default).
+  await db
+    .update(payee)
+    .set({ autoCategoryId: target.internalKind === "uncategorized" ? null : target.id })
+    .where(inArray(payee.autoCategoryId, [...categoryIds]));
   await db
     .update(subTransaction)
     .set({ categoryId: target.id })

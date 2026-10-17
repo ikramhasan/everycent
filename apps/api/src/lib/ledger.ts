@@ -13,6 +13,7 @@ import { type AccountType, isOnBudget } from "@everycent/engine";
 import { and, eq, isNull, lte, max } from "drizzle-orm";
 import { type BaseFields, baseFields, budgetCurrencyOf, type FxDeps } from "./base-amount";
 import { loanChargeBalances } from "./loans";
+import { notePayeeCategorizations } from "./payee-categories";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Db = Database | Tx;
@@ -171,6 +172,8 @@ export async function insertTransaction(db: Db, values: NewTransaction) {
     }
   }
   await db.insert(transaction).values({ id, ...row, ...base });
+  // An add updates the payee's auto-categorization default (EVERYCENT-182).
+  if (row.payeeId) await notePayeeCategorizations(db, row.budgetId, [id]);
   return id;
 }
 

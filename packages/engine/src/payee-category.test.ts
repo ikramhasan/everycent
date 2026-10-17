@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  nextPayeeAutoCategory,
   payeeAutoCategory,
   payeePrefillCategory,
   payeeRecentCategories,
@@ -83,5 +84,26 @@ describe("payee suggestions", () => {
     expect(payeeSuggestions(recent, "c")).toEqual(["b", "a", "d", "e", "f"]);
     expect(payeeSuggestions(recent, null)).toEqual(["c", "b", "a", "d", "e"]);
     expect(payeeSuggestions(["c", "b", "a"], "b")).toEqual(["c", "a"]);
+  });
+});
+
+describe("nextPayeeAutoCategory", () => {
+  it("takes the first categorization", () => {
+    expect(nextPayeeAutoCategory(null, ["a"], "a")).toBe("a");
+    expect(nextPayeeAutoCategory(null, [], null)).toBeNull();
+  });
+
+  it("switches when two of the last three agree", () => {
+    expect(nextPayeeAutoCategory("a", ["b", "b", "a"], "b")).toBe("b");
+    expect(nextPayeeAutoCategory("a", ["a", "b", "b"], "a")).toBe("b");
+  });
+
+  it("keeps the default when the last three don't agree (YNAB, x-c13-182 E)", () => {
+    // 10/01 a, 10/02 b, 10/03 b gave b; editing 10/03 to c keeps b (a replay would give a).
+    expect(nextPayeeAutoCategory("b", ["c", "b", "a"], "c")).toBe("b");
+  });
+
+  it("only reads three", () => {
+    expect(nextPayeeAutoCategory("a", ["b", "c", "d", "b"], "b")).toBe("a");
   });
 });

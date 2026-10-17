@@ -62,6 +62,7 @@ async function setup() {
       categoryId,
     });
     expect(res.status, await res.clone().text()).toBe(201);
+    return (await json<{ id: string }>(res)).id;
   };
   const split = async (payeeName: string, categoryIds: string[]) => {
     const res = await send("POST", `${base}/transactions`, owner.cookie, {
@@ -84,7 +85,15 @@ async function setup() {
   };
   const update = (id: string, body: unknown) =>
     send("PATCH", `${base}/payees/${id}`, owner.cookie, body);
-  return { owner, budget, base, a, b, c, d, payment, spend, split, payee, update };
+  const edit = async (id: string, body: unknown) => {
+    const res = await send("PATCH", `${base}/transactions/${id}`, owner.cookie, body);
+    expect(res.status, await res.clone().text()).toBe(200);
+  };
+  const remove = async (id: string) => {
+    const res = await send("DELETE", `${base}/transactions/${id}`, owner.cookie);
+    expect(res.status, await res.clone().text()).toBeLessThan(300);
+  };
+  return { owner, budget, base, a, b, c, d, payment, spend, split, payee, update, edit, remove };
 }
 
 describe("payee categorization", () => {
@@ -104,6 +113,49 @@ describe("payee categorization", () => {
     await spend("Market", c.id, "2026-09-12");
     await spend("Market", c.id, "2026-09-13");
     expect((await payee("Market")).prefillCategoryId).toBe(c.id);
+  });
+
+  it("keeps the default through an edit the last three don't agree on (YNAB, x-c13-182 E)", async () => {
+    const { a, b, c, spend, payee, edit } = await setup();
+    await spend("Market", a.id, "2026-09-01");
+    await spend("Market", b.id, "2026-09-02");
+    const last = await spend("Market", b.id, "2026-09-03");
+    expect((await payee("Market")).autoCategoryId).toBe(b.id);
+    // a, b, c don't agree, so b stays (replaying the history would give a).
+    await edit(last, { categoryId: c.id });
+    expect((await payee("Market")).autoCategoryId).toBe(b.id);
+    // An edit that makes two of the last three agree switches it.
+    await edit(last, { categoryId: a.id });
+    expect((await payee("Market")).autoCategoryId).toBe(a.id);
+  });
+
+  it("keeps the default when a transaction is deleted (YNAB, x-c13-182 D)", async () => {
+    const { a, b, spend, payee, remove } = await setup();
+    await spend("Market", a.id, "2026-09-01");
+    await spend("Market", b.id, "2026-09-02");
+    const last = await spend("Market", b.id, "2026-09-03");
+    expect((await payee("Market")).autoCategoryId).toBe(b.id);
+    await remove(last);
+    // a, b left: a replay would give a; YNAB keeps b.
+    expect((await payee("Market")).autoCategoryId).toBe(b.id);
+  });
+
+  it("keeps the combine target's setting and default (YNAB, x-c13-182 D into E)", async () => {
+    const { owner, base, a, b, c, spend, payee, update } = await setup();
+    await spend("Shop E", a.id, "2026-09-01");
+    await spend("Shop E", b.id, "2026-09-05");
+    await spend("Shop D", c.id, "2026-09-06");
+    await spend("Shop D", c.id, "2026-09-07");
+    const d = await payee("Shop D");
+    await update(d.id, { categorization: "always", defaultCategoryId: b.id });
+    const e = await payee("Shop E");
+    const res = await send("POST", `${base}/payees/combine`, owner.cookie, {
+      payeeIds: [d.id, e.id],
+      name: "Shop E",
+    });
+    expect(res.status).toBe(200);
+    // The merged history ends c, c; the target still says a.
+    expect(await payee("Shop E")).toMatchObject({ categorization: "auto", autoCategoryId: a.id });
   });
 
   it("leaves splits and Uncategorized out of the default but suggests split lines", async () => {

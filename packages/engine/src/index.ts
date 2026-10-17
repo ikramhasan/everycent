@@ -192,6 +192,7 @@ export {
   toDecimalString,
 } from "./parse-format";
 export {
+  nextPayeeAutoCategory,
   PAYEE_CATEGORIZATIONS,
   PAYEE_SUGGESTION_LIMIT,
   type PayeeCategorization,
