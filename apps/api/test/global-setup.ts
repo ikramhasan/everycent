@@ -1,4 +1,5 @@
 import { createDb, runMigrations, sql } from "@everycent/db";
+import { installJobs } from "../src/lib/jobs/install";
 import { loadRootEnv } from "../src/load-env";
 import { TEST_WORKERS, workerDatabaseUrl } from "./worker-db";
 
@@ -7,6 +8,7 @@ export default async function setup() {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) throw new Error("TEST_DATABASE_URL is not set (see .env.example)");
   await runMigrations(url);
+  await installJobs(url);
   // Each test worker gets a fresh copy of the migrated database, so files can run in parallel.
   // Connect to `postgres`: copying a database needs no other session on it.
   const admin = new URL(url);

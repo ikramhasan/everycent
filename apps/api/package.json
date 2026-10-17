@@ -1,6 +1,7 @@
 {
   "name": "@everycent/api",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
@@ -9,19 +10,26 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "openapi:emit": "tsx src/scripts/emit-openapi.ts",
+    "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@everycent/db": "workspace:*",
     "@everycent/engine": "workspace:*",
     "@hono/node-server": "catalog:",
+    "@hono/otel": "catalog:",
     "@hono/zod-openapi": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/api-logs": "catalog:",
+    "@opentelemetry/sdk-node": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
     "bowser": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "jose": "catalog:",
     "papaparse": "catalog:",
+    "pg-boss": "catalog:",
     "rate-limiter-flexible": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"

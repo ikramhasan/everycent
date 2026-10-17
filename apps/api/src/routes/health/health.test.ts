@@ -5,6 +5,7 @@ import { createApp } from "../../app";
 import { createAuth } from "../../lib/auth";
 import { ChangeBus } from "../../lib/change-bus";
 import { MemoryEmailSender } from "../../lib/email/sender";
+import { Jobs } from "../../lib/jobs";
 
 const { app, close } = createTestApp();
 afterAll(close);
@@ -25,6 +26,7 @@ describe("GET /v1/health", () => {
       db: broken.db,
       env,
       email,
+      jobs: new Jobs("postgres://nobody:nothing@127.0.0.1:1/none", { worker: false }),
       auth: createAuth(broken.db, env, email),
       changes: new ChangeBus(broken.listen),
       fxProviders: [],

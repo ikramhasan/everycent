@@ -1,14 +1,16 @@
-import { type Database, newId } from "@everycent/db";
+import { type Database, newId, sql } from "@everycent/db";
 import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
+import { jwtVerify } from "jose";
 import type { Env } from "../env";
 import { budgetAc, budgetRoles } from "./budget-access-control";
 import { deleteBudgetTransactions } from "./delete-budget";
 import type { EmailMessage, EmailSender } from "./email/sender";
 import { emails } from "./email/templates";
+import { log } from "./log";
 import { seedInternalCategories } from "./starter-categories";
 import { tryPasswordCheck } from "./throttle";
 
@@ -30,15 +32,54 @@ function tokenRequestType(token: string): string | undefined {
   }
 }
 
+/**
+ * The addresses a change-email link moves between, from a token whose signature checks out (so a
+ * made-up token can't ask whether an address has an account). Undefined for any other token.
+ */
+async function changeEmailTarget(token: string, secret: string) {
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
+      algorithms: ["HS256"],
+    });
+    const { email, updateTo, requestType } = payload as Record<string, unknown>;
+    if (
+      typeof email === "string" &&
+      typeof updateTo === "string" &&
+      (requestType === "change-email-confirmation" || requestType === "change-email-verification")
+    ) {
+      return { from: email, to: updateTo };
+    }
+  } catch {
+    // Expired or invalid: Better Auth answers that itself.
+  }
+  return undefined;
+}
+
+/**
+ * Whether another account has `to` while the account changing from `from` still exists. Once the
+ * change is done, `from` is gone and `to` is the account's own: a replayed link is then left to
+ * Better Auth ("isn't valid any more"), not reported as taken.
+ */
+async function addressTakenByOther(db: Database, from: string, to: string) {
+  const rows = await db
+    .select({ id: schema.user.id, email: schema.user.email })
+    .from(schema.user)
+    .where(sql`lower(${schema.user.email}) in (${from.toLowerCase()}, ${to.toLowerCase()})`);
+  const owner = rows.find((r) => r.email.toLowerCase() === from.toLowerCase());
+  const holder = rows.find((r) => r.email.toLowerCase() === to.toLowerCase());
+  return owner !== undefined && holder !== undefined && holder.id !== owner.id;
+}
+
 export function createAuth(db: Database, env: Env, email: EmailSender, options: AuthOptions = {}) {
   const web = env.WEB_ORIGIN;
   const logFailure = (message: EmailMessage, e: unknown) =>
-    console.error(`[email] failed to send a ${message.kind} email`, e);
+    log.error("Email not queued", { kind: message.kind }, e);
   /**
-   * Sends without holding up the response, so an endpoint answers in the same time whether or not
-   * it sent anything (timing would otherwise reveal which addresses have accounts). Better Auth
-   * awaits some send callbacks itself (resend confirmation), so this can't be left to its
-   * background tasks. Tests await, so they can read the outbox straight away.
+   * Hands the email on (in the app, `QueuedEmailSender`: queued for the worker, which retries) without
+   * holding up the response, so an endpoint answers in the same time whether or not it sent
+   * anything (timing would otherwise reveal which addresses have accounts). Better Auth awaits some
+   * send callbacks itself (resend confirmation), so this can't be left to its background tasks.
+   * Tests await, so the job is queued before they read the outbox.
    */
   const deliver = async (message: EmailMessage) => {
     if (env.NODE_ENV === "test") return email.send(message);
@@ -141,6 +182,15 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
               message: "Sign in to your account on this device, then open the link again.",
             });
           }
+          // Someone may have signed up with the new address since the change was asked for.
+          // Confirming would then fail on the taken address with a generic error; say why.
+          const change = await changeEmailTarget(token, env.BETTER_AUTH_SECRET);
+          if (change && (await addressTakenByOther(db, change.from, change.to))) {
+            throw new APIError("CONFLICT", {
+              code: "EMAIL_TAKEN",
+              message: "That address now belongs to another account, so your email wasn't changed.",
+            });
+          }
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
@@ -169,6 +219,7 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
     advanced: {
       database: { generateId: () => newId() },
       ipAddress: {
+        ...(env.CLIENT_IP_HEADER ? { ipAddressHeaders: [env.CLIENT_IP_HEADER] } : {}),
         trustedProxies: env.TRUSTED_PROXIES?.split(",")
           .map((s) => s.trim())
           .filter(Boolean),

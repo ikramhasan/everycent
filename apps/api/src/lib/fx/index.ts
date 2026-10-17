@@ -1,10 +1,11 @@
 import { newId } from "@everycent/db";
-import { budget, fxRate, fxRateOverride } from "@everycent/db/schema";
+import { budget, budgetAccount, fxRate, fxRateOverride } from "@everycent/db/schema";
 import { type CurrencyCode, crossRate, invertRate, normalizeRate } from "@everycent/engine";
-import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
 import type { AppDeps } from "../../types";
 import { shiftDay } from "../dates";
 import { AppError } from "../errors";
+import type { JobHandler } from "../jobs";
 import { type Db, serverToday } from "../ledger";
 import type { FxProvider, FxRates } from "./providers";
 
@@ -15,6 +16,8 @@ export {
   type FxProvider,
   type FxRates,
 } from "./providers";
+
+import { log } from "../log";
 
 export type FxRateSourceKind = "identity" | "override" | "market";
 
@@ -245,7 +248,7 @@ function fetchOnce(
     try {
       fetched = await provider.fetchRates(date, base, []);
     } catch (error) {
-      console.warn(`FX provider ${provider.name} failed for ${base} on ${date}:`, error);
+      log.warn("FX provider failed", { provider: provider.name, base, date }, error);
       failures.set(key, Date.now());
       return null;
     }
@@ -291,6 +294,34 @@ function fetchOnce(
   pending.set(key, run);
   return run;
 }
+
+/**
+ * The `fx.prefetch` job (EVERYCENT-192), a few times a day: fetches today's market rates once per
+ * budget currency that has a foreign account, so reads find them cached. A base that already has
+ * today's own rate is skipped. Early in the day a provider may only have yesterday's (currency-api
+ * 404s until the day's file is out, Frankfurter has no weekend rates); that answer is cached as
+ * usual and the next run tries again.
+ */
+export const prefetchFxRates: JobHandler<"fx.prefetch"> = async (deps) => {
+  const today = deps.serverDate?.() ?? serverToday();
+  const bases = await deps.db
+    .selectDistinct({ base: budget.currency })
+    .from(budget)
+    .innerJoin(budgetAccount, eq(budgetAccount.budgetId, budget.id))
+    .where(and(ne(budgetAccount.currency, budget.currency), eq(budgetAccount.closed, false)));
+  for (const { base } of bases) {
+    const [published] = await deps.db
+      .select({ id: fxRate.id })
+      .from(fxRate)
+      .where(and(eq(fxRate.base, base), eq(fxRate.date, today), eq(fxRate.rateDate, today)))
+      .limit(1);
+    if (published) continue;
+    for (const provider of deps.fxProviders) {
+      const fetched = await fetchOnce(deps.db, provider, today, base, false);
+      if (fetched?.date === today) break;
+    }
+  }
+};
 
 /** The most recent cached market rate or override for the pair before `date` (override on a tie). */
 async function nearestEarlier(

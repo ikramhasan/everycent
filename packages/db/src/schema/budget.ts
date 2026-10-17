@@ -113,6 +113,8 @@ export const budgetInvitation = pgTable(
     /** SHA-256 of the emailed link's token; a resend replaces it. */
     tokenHash: text().unique(),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
+    /** When the expiry reminder went out (EVERYCENT-125); a resend clears it. */
+    remindedAt: timestamp({ withTimezone: true }),
     inviterId: text()
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

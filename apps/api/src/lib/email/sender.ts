@@ -4,6 +4,7 @@ import { throttle } from "@everycent/db/schema";
 import { RateLimiterDrizzle, RateLimiterRes } from "rate-limiter-flexible";
 import { Resend } from "resend";
 import type { Env } from "../../env";
+import { log } from "../log";
 
 export type EmailKind =
   | "verify-email"
@@ -12,7 +13,8 @@ export type EmailKind =
   | "reset-password"
   | "existing-account"
   | "password-changed"
-  | "budget-invitation";
+  | "budget-invitation"
+  | "budget-invitation-reminder";
 
 export interface EmailMessage {
   kind: EmailKind;
@@ -87,14 +89,22 @@ export class ThrottledEmailSender implements EmailSender {
   async send(message: EmailMessage) {
     // Hashed so the throttle table never holds email addresses.
     const address = createHash("sha256").update(message.to.trim().toLowerCase()).digest("hex");
+    const key = `${message.kind}:${address}`;
     try {
-      await this.#limiter.consume(`${message.kind}:${address}`);
+      await this.#limiter.consume(key);
     } catch (e) {
       if (!(e instanceof RateLimiterRes)) throw e;
-      console.warn(`[email] dropped a ${message.kind} email: hourly limit for one address reached`);
+      log.warn("Email dropped: hourly limit for one address reached", { kind: message.kind });
       return;
     }
-    await this.#inner.send(message);
+    try {
+      await this.#inner.send(message);
+    } catch (e) {
+      // Only emails the provider took count: a failed attempt is retried by the queue, and
+      // keeping its point would use up the limit during an outage and drop the email.
+      await this.#limiter.reward(key, 1);
+      throw e;
+    }
   }
 }
 

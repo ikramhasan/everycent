@@ -4,6 +4,7 @@ import { createApp } from "../src/app";
 import { type Env, parseEnv } from "../src/env";
 import { type AuthOptions, createAuth } from "../src/lib/auth";
 import { ChangeBus } from "../src/lib/change-bus";
+import { QueuedEmailSender } from "../src/lib/email/queue";
 import {
   type EmailKind,
   type EmailMessage,
@@ -11,6 +12,8 @@ import {
   ThrottledEmailSender,
 } from "../src/lib/email/sender";
 import { FakeFxProvider } from "../src/lib/fx/fake";
+import { Jobs } from "../src/lib/jobs";
+import { jobHandlers } from "../src/lib/jobs/handlers";
 import { loadRootEnv } from "../src/load-env";
 import type { AppDeps } from "../src/types";
 import { workerDatabaseUrl } from "./worker-db";
@@ -30,37 +33,64 @@ export function testEnv(): Env {
 }
 
 const outboxes = new WeakMap<App, MemoryEmailSender>();
+const appDeps = new WeakMap<App, AppDeps>();
 
 export function createTestApp({
   serverDate = () => null,
   fxProviders = [new FakeFxProvider()],
   ynab,
+  envOverrides = {},
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & AuthOptions = {}) {
-  const env = testEnv();
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> &
+  AuthOptions & { envOverrides?: Partial<Env> } = {}) {
+  const env = { ...testEnv(), ...envOverrides };
   const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
   const outbox = new MemoryEmailSender();
   const email = new ThrottledEmailSender(outbox, db);
+  // The real queue, without a worker: tests run queued jobs on demand (`runJobs`).
+  const jobs = new Jobs(env.DATABASE_URL, { worker: false, max: 2 });
   // Tests pick their own `today`, so the server's date doesn't bound it unless a test sets one.
-  const app = createApp({
+  const deps: AppDeps = {
     db,
     env,
     email,
-    auth: createAuth(db, env, email, authOptions),
+    jobs,
+    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env), authOptions),
     changes: new ChangeBus(listen),
     serverDate,
     fxProviders,
     ynab,
-  });
+  };
+  const app = createApp(deps);
   outboxes.set(app, outbox);
-  return { app, db, env, outbox, fxProviders, close };
+  appDeps.set(app, deps);
+  return {
+    app,
+    db,
+    env,
+    outbox,
+    fxProviders,
+    jobs,
+    close: async () => {
+      await jobs.stop();
+      await close();
+    },
+  };
 }
 
-/** Every email `app` sent to `to` (optionally of one kind), oldest first. */
-export function emailsTo(app: App, to: string, kind?: EmailKind): EmailMessage[] {
+/** Runs the jobs `app` has queued that are due now (sending its emails into the outbox). */
+export async function runJobs(app: App): Promise<number> {
+  const deps = appDeps.get(app);
+  if (!deps) throw new Error("not an app from createTestApp");
+  return deps.jobs.runQueued(jobHandlers, deps);
+}
+
+/** Every email `app` sent to `to` (optionally of one kind), oldest first, once queued ones ran. */
+export async function emailsTo(app: App, to: string, kind?: EmailKind): Promise<EmailMessage[]> {
   const outbox = outboxes.get(app);
   if (!outbox) throw new Error("not an app from createTestApp");
+  await runJobs(app);
   return outbox.outbox.filter((m) => m.to === to && (!kind || m.kind === kind));
 }
 
@@ -130,7 +160,7 @@ export async function signUp(
     body: JSON.stringify({ email, password, name: input.name ?? "Test User" }),
   });
   if (res.status !== 200) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`);
-  const sent = emailsTo(app, email, "verify-email").at(-1);
+  const sent = (await emailsTo(app, email, "verify-email")).at(-1);
   if (!sent) throw new Error(`no verification email for ${email}`);
   const verified = await app.request(
     `/api/auth/verify-email?token=${encodeURIComponent(linkToken(sent))}`,
@@ -193,7 +223,7 @@ export async function shareBudget(
   });
   if (invited.status !== 201) throw new Error(`invite failed: ${invited.status}`);
   const person = await signUp(app, { email, name });
-  const token = linkToken(emailsTo(app, email, "budget-invitation").at(-1));
+  const token = linkToken((await emailsTo(app, email, "budget-invitation")).at(-1));
   const accepted = await app.request("/v1/invitations/accept", {
     method: "POST",
     headers: { cookie: person.cookie, "content-type": "application/json" },

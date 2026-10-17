@@ -85,11 +85,9 @@ export interface RegisterPage {
 }
 
 /**
- * Every transaction of the budget (or of one account) with its running balance. The window runs
- * over the whole account, oldest first, so filtering and paging happen outside it and every row
- * keeps the account's real balance at that point. Within a day it runs inflows first, then
- * outflows from smallest to largest: the reverse of the register's default order (YNAB puts the
- * largest outflow of a day on top and the largest inflow at the bottom).
+ * Every transaction of the budget (or of one account), with the columns the register filters,
+ * sorts and shows. Simple enough for Postgres to flatten into each query, so a query only builds
+ * the columns it uses. Running balances come separately, for the rows shown (`runningBalances`).
  */
 function registerCte(db: Db, budgetId: string, accountId?: string) {
   return db.$with("register").as(
@@ -146,11 +144,6 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         changed: sql<boolean>`${transaction.updatedAt} > ${transaction.createdAt}`.as("changed"),
         // As text, so the cursor keeps Postgres's microseconds.
         createdAt: sql<string>`${transaction.createdAt}::text`.as("created_at"),
-        runningBalance: sql<string>`sum(${transaction.amount}) over (
-          partition by ${transaction.accountId}
-          order by ${transaction.date}, ${transaction.amount} desc, ${transaction.createdAt},
-            ${transaction.id}
-        )`.as("running_balance"),
       })
       .from(transaction)
       .innerJoin(budgetAccount, eq(budgetAccount.id, transaction.accountId))
@@ -178,9 +171,10 @@ function likePattern(q: string) {
  * the split's.
  */
 interface Unit {
-  payee: SQL;
-  category: SQL;
-  memo: SQL;
+  /** Its payee's name `ilike` the pattern (null without a payee). */
+  payeeLike: (pattern: string) => SQL;
+  categoryLike: (pattern: string) => SQL;
+  memoLike: (pattern: string) => SQL;
   amount: SQL;
   isSplit: SQL;
   /** In Ready to Assign (YNAB's `Income:`). */
@@ -193,18 +187,18 @@ function termWhere(r: Register, unit: Unit, term: SearchTerm, budgetId: string):
   switch (term.kind) {
     case "text": {
       const pattern = likePattern(term.text);
-      return sql`(${unit.payee} ilike ${pattern} or ${unit.category} ilike ${pattern}
-        or ${unit.memo} ilike ${pattern} or ${r.accountName} ilike ${pattern}
+      return sql`(${unit.payeeLike(pattern)} or ${unit.categoryLike(pattern)}
+        or ${unit.memoLike(pattern)} or ${accountLike(r, budgetId, pattern)}
         ${term.amount === null ? sql`` : sql`or abs(${unit.amount}) = ${term.amount}`})`;
     }
     case "payee":
-      return sql`coalesce(${unit.payee} ilike ${likePattern(term.text)}, false)`;
+      return sql`coalesce(${unit.payeeLike(likePattern(term.text))}, false)`;
     case "category":
-      return sql`coalesce(${unit.category} ilike ${likePattern(term.text)}, false)`;
+      return sql`coalesce(${unit.categoryLike(likePattern(term.text))}, false)`;
     case "memo":
-      return sql`coalesce(${unit.memo} ilike ${likePattern(term.text)}, false)`;
+      return sql`coalesce(${unit.memoLike(likePattern(term.text))}, false)`;
     case "account":
-      return sql`${r.accountName} ilike ${likePattern(term.text)}`;
+      return accountLike(r, budgetId, likePattern(term.text));
     case "split":
       return unit.isSplit;
     case "flag": {
@@ -264,12 +258,28 @@ function allTerms(r: Register, unit: Unit, terms: readonly SearchTerm[], budgetI
   );
 }
 
+/**
+ * The account's name `ilike` the pattern. Names are matched once in their own table rather than on
+ * every row (a search that matches nothing reads every row: EVERYCENT-33); the same for payees
+ * and categories below.
+ */
+function accountLike(r: Register, budgetId: string, pattern: string) {
+  return sql`${r.accountId} in (select ${budgetAccount.id} from ${budgetAccount}
+    where ${budgetAccount.budgetId} = ${budgetId} and ${budgetAccount.name} ilike ${pattern})`;
+}
+
 /** The transaction as a search unit. */
-function parentUnit(r: Register): Unit {
+function parentUnit(r: Register, budgetId: string): Unit {
   return {
-    payee: sql`${r.payeeName}`,
-    category: sql`${r.categoryName}`,
-    memo: sql`${r.memo}`,
+    // Null (no match either way) without a payee or category, as the name's `ilike` would be.
+    payeeLike: (p) => sql`case when ${r.payeeId} is null then null else ${r.payeeId} in (
+      select ${payee.id} from ${payee} where ${payee.budgetId} = ${budgetId} and ${payee.name} ilike ${p}
+    ) end`,
+    categoryLike: (p) => sql`case when ${r.categoryId} is null then null else ${r.categoryId} in (
+      select ${category.id} from ${category}
+      where ${category.budgetId} = ${budgetId} and ${category.name} ilike ${p}
+    ) end`,
+    memoLike: (p) => sql`${r.memo} ilike ${p}`,
     amount: sql`${r.amount}`,
     isSplit: sql`exists (select 1 from ${subTransaction} where ${subTransaction.transactionId} = ${r.id})`,
     income: sql`${r.income}`,
@@ -280,9 +290,9 @@ function parentUnit(r: Register): Unit {
 /** A split line (`st`, its payee `sp` and category `sc`) as a search unit. */
 function lineUnit(r: Register): Unit {
   return {
-    payee: sql`coalesce(sp.name, ${r.payeeName})`,
-    category: sql`sc.name`,
-    memo: sql`st.memo`,
+    payeeLike: (p) => sql`coalesce(sp.name, ${r.payeeName}) ilike ${p}`,
+    categoryLike: (p) => sql`sc.name ilike ${p}`,
+    memoLike: (p) => sql`st.memo ilike ${p}`,
     amount: sql`st.amount`,
     isSplit: sql`false`,
     income: sql`coalesce(sc.internal_kind = 'ready_to_assign', false)`,
@@ -293,8 +303,14 @@ function lineUnit(r: Register): Unit {
 }
 
 /** `condition` over a split line of the register row, joined as `st`, `sp` and `sc`. */
-function lineMatches(r: Register, condition: SQL) {
-  return sql`exists (
+function lineMatches(r: Register, budgetId: string, condition: SQL) {
+  // Most transactions aren't splits: the budget's split ids, gathered once, rule them out before
+  // their lines are looked at row by row.
+  return sql`${r.id} in (
+    select ${subTransaction.transactionId} from ${subTransaction}
+    join ${transaction} on ${transaction.id} = ${subTransaction.transactionId}
+    where ${transaction.budgetId} = ${budgetId}
+  ) and exists (
     select 1 from ${subTransaction} st
     left join ${payee} sp on sp.id = st.payee_id
     left join ${category} sc on sc.id = st.category_id
@@ -366,8 +382,8 @@ function filterWhere(
   const sets = termSets(filter, settings);
   if (sets.length > 0) {
     conditions.push(sql`(
-      (${setsWhere(r, parentUnit(r), sets, budgetId)})
-      or ${lineMatches(r, setsWhere(r, lineUnit(r), sets, budgetId))}
+      (${setsWhere(r, parentUnit(r, budgetId), sets, budgetId)})
+      or ${lineMatches(r, budgetId, setsWhere(r, lineUnit(r), sets, budgetId))}
     )`);
   }
   if (filter.from) conditions.push(sql`${r.date} >= ${filter.from}`);
@@ -648,7 +664,6 @@ function columns(r: Register) {
     version: r.version,
     changed: r.changed,
     createdAt: r.createdAt,
-    runningBalance: r.runningBalance,
   };
 }
 
@@ -673,6 +688,10 @@ async function toJson(
     rows.map((row) => row.id),
   );
   const sides = await queryTransferSides(db, rows);
+  const balances = await runningBalances(
+    db,
+    rows.map((row) => row.id),
+  );
   const member = await memberRefs(
     db,
     budgetId,
@@ -715,12 +734,15 @@ async function toJson(
       })),
       matchingLineIds: matching ? (matching.get(row.id) ?? []) : null,
       // Postgres returns numeric sums as strings; BigInt normalizes them exactly.
-      runningBalance: BigInt(row.runningBalance).toString(),
+      runningBalance: BigInt(balanceOf(balances, row.id)).toString(),
     }),
   );
 }
 
-/** The query for one page (one row more than the limit, to know if there's another page). */
+/**
+ * The rows of one page in order (one more than the limit, to know if there's another page): only
+ * their ids and cursor keys, so Postgres builds the shown columns for the page alone.
+ */
 export function registerPageQuery(
   db: Db,
   budgetId: string,
@@ -741,7 +763,9 @@ export function registerPageQuery(
   return db
     .with(r)
     .select({
-      ...columns(r),
+      id: r.id,
+      date: r.date,
+      createdAt: r.createdAt,
       sortKeys: sql<string[]>`array[${sql.join(
         keys.map(({ key }) => sql`(${key})::text`),
         sql`, `,
@@ -768,10 +792,18 @@ export async function queryRegister(
   page: RegisterPage,
   settings: RegisterSearch,
 ) {
-  const rows = await registerPageQuery(db, budgetId, filter, page, settings);
-  const more = rows.length > page.limit;
-  const pageRows = rows.slice(0, page.limit);
-  const last = pageRows.at(-1);
+  const keys = await registerPageQuery(db, budgetId, filter, page, settings);
+  const more = keys.length > page.limit;
+  const ids = keys.slice(0, page.limit).map((k) => k.id);
+  const last = keys[ids.length - 1];
+  const r = registerCte(db, budgetId, filter.accountId);
+  const byId = new Map(
+    (ids.length ? await selectPage(db, r).where(inArray(r.id, ids)) : []).map((row) => [
+      row.id,
+      row,
+    ]),
+  );
+  const pageRows = ids.flatMap((id) => byId.get(id) ?? []);
   const sets = termSets(filter, settings);
   const matching =
     sets.length > 0
@@ -843,6 +875,48 @@ async function someHidden(
     .where(sql`not coalesce((${where}), false)`)
     .limit(1);
   return Boolean(row);
+}
+
+/**
+ * Each transaction's running balance in its account: the account's total up to it in the
+ * register's order (date, then inflows first and outflows from smallest to largest, then
+ * creation). The sum before the earliest of the rows' dates comes from one index range, and the
+ * window runs over the dates the rows span only, so a page of recent rows costs the same however
+ * long the account's history is (EVERYCENT-33).
+ */
+async function runningBalances(db: Db, ids: readonly string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const list = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const rows = (await db.execute(sql`
+    with bounds as materialized (
+      select account_id, min(date) as lo, max(date) as hi
+      from ${transaction} where id in (${list}) group by account_id
+    )
+    select w.id, w.balance::text as balance
+    from bounds b
+    cross join lateral (
+      select coalesce(sum(e.amount), 0) as before from ${transaction} e
+      where e.account_id = b.account_id and e.date < b.lo
+    ) o
+    cross join lateral (
+      select t.id, o.before + sum(t.amount) over (
+        order by t.date, t.amount desc, t.created_at, t.id
+      ) as balance
+      from ${transaction} t
+      where t.account_id = b.account_id and t.date between b.lo and b.hi
+    ) w
+    where w.id in (${list})
+  `)) as unknown as { id: string; balance: string }[];
+  return new Map(rows.map((r) => [r.id, r.balance]));
+}
+
+function balanceOf(balances: ReadonlyMap<string, string>, id: string) {
+  const balance = balances.get(id);
+  if (balance === undefined) throw new Error(`No running balance for transaction ${id}`);
+  return balance;
 }
 
 /** Transactions as the register shows them (with each account's running balance). */

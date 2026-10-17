@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   PASSWORD_COMPROMISED:
     "That password has appeared in a data breach. Choose one you haven't used anywhere else.",
   INVALID_PASSWORD: "That password isn't right.",
+  EMAIL_TAKEN:
+    "Someone has signed up with that address since you asked for the change, so your email wasn't changed. Your current address still works; you can try another one in Settings.",
   SIGN_IN_REQUIRED:
     "Sign in to your account in this browser, then open the link from the email again.",
 };

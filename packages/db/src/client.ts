@@ -12,7 +12,13 @@ export interface CreateDbOptions {
  * until the first query (the OpenAPI emit script relies on that).
  */
 export function createDb(url: string, { max = 10 }: CreateDbOptions = {}) {
-  const client = postgres(url, { max, onnotice: () => {} });
+  const client = postgres(url, {
+    max,
+    onnotice: () => {},
+    // The app runs short queries; JIT compiling them cost more than it saved (300 ms on a big
+    // account's register page against a few ms of execution, EVERYCENT-33).
+    connection: { jit: "off" },
+  });
   const db = drizzle({ client, schema, casing: "snake_case" });
   /**
    * LISTEN on a channel over a connection of its own, which postgres.js reconnects (and

@@ -6,6 +6,7 @@ import { createAuth } from "./lib/auth";
 import { ChangeBus } from "./lib/change-bus";
 import { buildOpenApiDocument } from "./lib/docs";
 import { MemoryEmailSender } from "./lib/email/sender";
+import { Jobs } from "./lib/jobs";
 
 export const OPENAPI_FILE = fileURLToPath(new URL("../openapi.json", import.meta.url));
 
@@ -28,6 +29,8 @@ export function generateOpenApiDocument() {
       db,
       env,
       email,
+      // Never started: building the document sends no jobs.
+      jobs: new Jobs(env.DATABASE_URL, { worker: false }),
       auth: createAuth(db, env, email),
       changes: new ChangeBus(listen),
       fxProviders: [],

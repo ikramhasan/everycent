@@ -61,6 +61,27 @@
           "error"
         ]
       },
+      "ClientError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "stack": {
+            "type": "string",
+            "maxLength": 8000
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
       "User": {
         "type": "object",
         "properties": {
@@ -15896,6 +15917,40 @@
           },
           "503": {
             "description": "The database is unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client-errors": {
+      "post": {
+        "operationId": "reportClientError",
+        "tags": [
+          "System"
+        ],
+        "summary": "Report an error from the web app",
+        "description": "Logs an uncaught error from the browser with the API's own logs (and OpenTelemetry, when configured). No session needed: errors before sign-in count too. Limited per client.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientError"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Logged (or dropped past the limit)"
+          },
+          "400": {
+            "description": "The report isn't valid",
             "content": {
               "application/json": {
                 "schema": {

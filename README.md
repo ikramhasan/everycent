@@ -324,7 +324,13 @@ Off by default, per-user toggle, clear data-usage notice, no data sent unless en
 - [ ] Webhooks for transaction / budget changes **(extra)**
 - [x] Audit log / change history per budget
 - [ ] Automated backups and point-in-time restore
-- [ ] Observability: structured logs, metrics, error tracking
-- [ ] Deployment: Docker images, production config, migrations on deploy
+- [x] Observability: structured logs, metrics, error tracking
+- [x] Deployment: Docker images, production config, migrations on deploy
 - [ ] Native mobile apps (or Capacitor wrapper around the PWA)
 - [ ] Billing / subscriptions (if hosted as a service)
+
+## License
+
+everycent is free software under the [GNU Affero General Public License v3.0 only](LICENSE)
+(`AGPL-3.0-only`). You can use, change and self-host it; if you run a changed version as a service
+for others, you have to offer them its source under the same licence.

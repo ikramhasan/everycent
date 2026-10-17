@@ -1,0 +1,5 @@
+{
+  "extends": "../packages/tsconfig/node.json",
+  "compilerOptions": { "noEmit": true, "types": [] },
+  "include": ["railway.ts"]
+}

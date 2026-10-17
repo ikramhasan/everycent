@@ -124,4 +124,14 @@ export const emails = {
       outro:
         "The invitation expires in 14 days. If you don't know who sent it, you can ignore this email.",
     }),
+
+  /** Three days before a pending invitation expires (EVERYCENT-125). Replaces the earlier link. */
+  invitationReminder: (to: string, inviterEmail: string, webOrigin: string, token: string) =>
+    render("budget-invitation-reminder", to, {
+      subject: "Your everycent invitation expires soon",
+      intro: `${inviterEmail} invited you to share a budget on everycent. The invitation expires in 3 days.`,
+      action: { label: "View invitation", url: link(webOrigin, "/invitation", { token }) },
+      outro:
+        "This link replaces the one in the first email. If you don't know who sent it, you can ignore this email.",
+    }),
 };

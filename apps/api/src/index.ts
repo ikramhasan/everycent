@@ -1,35 +1,27 @@
-import { createDb } from "@everycent/db";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { parseEnv } from "./env";
-import { createAuth } from "./lib/auth";
-import { ChangeBus } from "./lib/change-bus";
-import { createEmailSender } from "./lib/email/sender";
-import { defaultFxProviders } from "./lib/fx/providers";
+import { log } from "./lib/log";
 import { loadRootEnv } from "./load-env";
+import { createRuntime } from "./runtime";
+import { startTelemetry } from "./telemetry";
 
 if (process.env.NODE_ENV !== "production") loadRootEnv();
 
 const env = parseEnv();
-const { db, listen, close } = createDb(env.DATABASE_URL);
-const email = createEmailSender(env, db);
-const app = createApp({
-  db,
-  env,
-  email,
-  auth: createAuth(db, env, email),
-  changes: new ChangeBus(listen),
-  fxProviders: defaultFxProviders(),
-});
+const telemetry = startTelemetry("everycent-api");
+const runtime = await createRuntime(env, { worker: env.JOBS_MODE === "all" });
+const app = createApp(runtime.deps);
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`everycent API on http://localhost:${info.port} — docs at /docs`);
+  log.info(`everycent API on http://localhost:${info.port} — docs at /docs`, { port: info.port });
 });
 
 function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down`);
+  log.info("Shutting down", { signal });
   server.close(async () => {
-    await close();
+    await runtime.close();
+    await telemetry.shutdown();
     process.exit(0);
   });
 }

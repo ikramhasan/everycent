@@ -52,3 +52,19 @@ export async function consumePasswordCheck(db: Database, userId: string) {
     });
   }
 }
+
+/** Web app error reports per client per 10 minutes, and in all per hour. */
+export const CLIENT_ERRORS_PER_CLIENT = 20;
+export const CLIENT_ERRORS_PER_HOUR = 600;
+
+/** Counts one web app error report; false once the client's or everyone's limit is spent. */
+export async function tryClientErrorReport(db: Database, client: string): Promise<boolean> {
+  try {
+    await limiter(db, "client-error", CLIENT_ERRORS_PER_CLIENT, 10 * 60).consume(client);
+    await limiter(db, "client-errors-all", CLIENT_ERRORS_PER_HOUR, 60 * 60).consume("all");
+    return true;
+  } catch (e) {
+    if (!(e instanceof RateLimiterRes)) throw e;
+    return false;
+  }
+}

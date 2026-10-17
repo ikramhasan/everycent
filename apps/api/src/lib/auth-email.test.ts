@@ -7,6 +7,7 @@ import {
   linkToken,
   one,
   resetDatabase,
+  runJobs,
   signIn,
   signUp,
 } from "../../test/helpers";
@@ -55,7 +56,7 @@ describe("email verification (EVERYCENT-44)", () => {
     expect(res.status).toBe(200);
     expect(res.headers.getSetCookie().some((c) => c.includes("session_token="))).toBe(false);
 
-    const sent = emailsTo(app, email);
+    const sent = await emailsTo(app, email);
     expect(sent.map((m) => m.kind)).toEqual(["verify-email"]);
     const url = new URL(sent[0]?.text.match(/https?:\/\/\S+#\S+/)?.[0] ?? "");
     expect(url.origin).toBe(ORIGIN);
@@ -73,20 +74,20 @@ describe("email verification (EVERYCENT-44)", () => {
     const res = await signInRaw(email, "correct-horse-battery");
     expect(res.status).toBe(403);
     expect(((await res.json()) as { code: string }).code).toBe("EMAIL_NOT_VERIFIED");
-    expect(emailsTo(app, email, "verify-email")).toHaveLength(2);
+    expect(await emailsTo(app, email, "verify-email")).toHaveLength(2);
   });
 
   it("doesn't resend on a wrong password, so sign-in can't be used to spam an inbox", async () => {
     const email = fresh();
     await signUpOnly(email);
     expect((await signInRaw(email, "wrong-password-123")).status).toBe(401);
-    expect(emailsTo(app, email, "verify-email")).toHaveLength(1);
+    expect(await emailsTo(app, email, "verify-email")).toHaveLength(1);
   });
 
   it("confirms the address without signing in; signing in then works", async () => {
     const email = fresh();
     await signUpOnly(email);
-    const res = await verify(linkToken(emailsTo(app, email)[0]));
+    const res = await verify(linkToken((await emailsTo(app, email))[0]));
     expect(res.status).toBe(200);
     expect(res.headers.getSetCookie().some((c) => c.includes("session_token="))).toBe(false);
     const row = await db.query.user.findFirst({ where: eq(user.email, email) });
@@ -97,7 +98,7 @@ describe("email verification (EVERYCENT-44)", () => {
   it("does nothing for a used link: no session, no change", async () => {
     const email = fresh();
     await signUpOnly(email);
-    const token = linkToken(emailsTo(app, email)[0]);
+    const token = linkToken((await emailsTo(app, email))[0]);
     await verify(token);
     const again = await verify(token);
     expect(again.status).toBe(200);
@@ -107,7 +108,7 @@ describe("email verification (EVERYCENT-44)", () => {
   it("rejects a forged or tampered token", async () => {
     const email = fresh();
     await signUpOnly(email);
-    const token = linkToken(emailsTo(app, email)[0]);
+    const token = linkToken((await emailsTo(app, email))[0]);
     const [h, p, sig] = token.split(".");
     const forgedPayload = Buffer.from(
       JSON.stringify({ email: "someone-else@example.com", exp: 9_999_999_999 }),
@@ -129,6 +130,7 @@ describe("email verification (EVERYCENT-44)", () => {
     expect(Object.keys((await dup.json()) as object).sort()).toEqual(
       Object.keys((await newOne.json()) as object).sort(),
     );
+    await runJobs(app);
     const sentForDup = outbox.outbox.slice(before).filter((m) => m.to === email);
     expect(sentForDup.map((m) => m.kind)).toEqual(["existing-account"]);
     expect((await signInRaw(email, "another-password-456")).status).toBe(401);
@@ -144,8 +146,8 @@ describe("email verification (EVERYCENT-44)", () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ status: true });
     }
-    expect(emailsTo(app, unverified, "verify-email")).toHaveLength(2);
-    expect(emailsTo(app, verified, "verify-email")).toHaveLength(1);
+    expect(await emailsTo(app, unverified, "verify-email")).toHaveLength(2);
+    expect(await emailsTo(app, verified, "verify-email")).toHaveLength(1);
   });
 
   it(`sends one address at most ${EMAILS_PER_ADDRESS_PER_HOUR} links an hour, however often it's asked`, async () => {
@@ -157,13 +159,13 @@ describe("email verification (EVERYCENT-44)", () => {
       const res = await post("/api/auth/send-verification-email", { email });
       expect(res.status).toBe(200);
     }
-    expect(emailsTo(app, email, "verify-email")).toHaveLength(EMAILS_PER_ADDRESS_PER_HOUR);
+    expect(await emailsTo(app, email, "verify-email")).toHaveLength(EMAILS_PER_ADDRESS_PER_HOUR);
   });
 
   it("puts no user-entered name in emails", async () => {
     const email = fresh();
     await signUpOnly(email, "correct-horse-battery", '<a href="https://evil.test">Win</a>');
-    const sent = one(emailsTo(app, email)[0]);
+    const sent = one((await emailsTo(app, email))[0]);
     expect(sent.html).not.toContain("evil.test");
     expect(sent.text).not.toContain("evil.test");
   });
@@ -188,7 +190,7 @@ describe("password reset (EVERYCENT-45)", () => {
     const unknown = await requestReset(fresh());
     expect(known.status).toBe(200);
     expect(await known.json()).toEqual(await unknown.json());
-    const sent = emailsTo(app, email, "reset-password");
+    const sent = await emailsTo(app, email, "reset-password");
     expect(sent).toHaveLength(1);
     const url = new URL(sent[0]?.text.match(/https?:\/\/\S+#\S+/)?.[0] ?? "");
     expect(`${url.origin}${url.pathname}${url.search}`).toBe(`${ORIGIN}/reset-password`);
@@ -197,13 +199,13 @@ describe("password reset (EVERYCENT-45)", () => {
   it("resets once, signs out every device and tells the owner", async () => {
     const { email, cookie } = await signUp(app);
     await requestReset(email);
-    const token = linkToken(emailsTo(app, email, "reset-password")[0]);
+    const token = linkToken((await emailsTo(app, email, "reset-password"))[0]);
 
     expect((await reset(token, "brand-new-password-1")).status).toBe(200);
     expect((await app.request("/v1/me", { headers: { cookie } })).status).toBe(401);
     expect((await signInRaw(email, "correct-horse-battery")).status).toBe(401);
     expect(await signIn(app, email, "brand-new-password-1")).toContain("session_token=");
-    expect(emailsTo(app, email, "password-changed")).toHaveLength(1);
+    expect(await emailsTo(app, email, "password-changed")).toHaveLength(1);
 
     const again = await reset(token, "another-password-2");
     expect(again.status).toBe(400);
@@ -213,7 +215,7 @@ describe("password reset (EVERYCENT-45)", () => {
   it("stores only a hash of the token", async () => {
     const { email } = await signUp(app);
     await requestReset(email);
-    const token = linkToken(emailsTo(app, email, "reset-password")[0]);
+    const token = linkToken((await emailsTo(app, email, "reset-password"))[0]);
     const rows = await db.select().from(verification);
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row.identifier).not.toContain(token);
@@ -222,7 +224,7 @@ describe("password reset (EVERYCENT-45)", () => {
   it("refuses an expired link", async () => {
     const { email, password } = await signUp(app);
     await requestReset(email);
-    const token = linkToken(emailsTo(app, email, "reset-password")[0]);
+    const token = linkToken((await emailsTo(app, email, "reset-password"))[0]);
     await db.update(verification).set({ expiresAt: new Date(Date.now() - 1000) });
     expect((await reset(token, "brand-new-password-1")).status).toBe(400);
     expect(await signIn(app, email, password)).toContain("session_token=");
@@ -231,7 +233,7 @@ describe("password reset (EVERYCENT-45)", () => {
   it("refuses a too-short password and leaves the link usable", async () => {
     const { email } = await signUp(app);
     await requestReset(email);
-    const token = linkToken(emailsTo(app, email, "reset-password")[0]);
+    const token = linkToken((await emailsTo(app, email, "reset-password"))[0]);
     expect((await reset(token, "short")).status).toBe(400);
     expect((await reset(token, "long-enough-password")).status).toBe(200);
   });
@@ -248,20 +250,20 @@ describe("change email (EVERYCENT-46)", () => {
     const wrong = await changeEmail(cookie, next, "not-my-password");
     expect(wrong.status).toBe(403);
     expect(await errorCode(wrong)).toBe("INVALID_PASSWORD");
-    expect(emailsTo(app, email, "change-email-confirm")).toHaveLength(0);
+    expect(await emailsTo(app, email, "change-email-confirm")).toHaveLength(0);
 
     const res = await changeEmail(cookie, next, password);
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ status: "approval_sent" });
-    const approval = emailsTo(app, email, "change-email-confirm");
+    const approval = await emailsTo(app, email, "change-email-confirm");
     expect(approval).toHaveLength(1);
     expect(approval[0]?.text).toContain(next);
-    expect(emailsTo(app, next)).toHaveLength(0);
+    expect(await emailsTo(app, next)).toHaveLength(0);
 
     // Approving (from any browser: the link holder owns the current inbox) emails the new address.
     expect((await verify(linkToken(approval[0]))).status).toBe(200);
     expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
-    const confirm = emailsTo(app, next, "change-email-verify");
+    const confirm = await emailsTo(app, next, "change-email-verify");
     expect(confirm).toHaveLength(1);
 
     // Opened where nobody is signed in (another device, a forwarded link): no session, no change.
@@ -287,6 +289,56 @@ describe("change email (EVERYCENT-46)", () => {
     expect(await db.query.user.findFirst({ where: eq(user.email, next) })).toBeTruthy();
   });
 
+  it("says the new address is taken when someone signed up with it before the change was confirmed", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    expect((await verify(linkToken(approval[0]))).status).toBe(200);
+    const confirm = await emailsTo(app, next, "change-email-verify");
+
+    // Someone signs up with the pending address (unconfirmed, but it's theirs now).
+    expect((await signUpOnly(next, "another-password-456", "Newcomer")).status).toBe(200);
+
+    const res = await verify(linkToken(confirm[0]), cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "EMAIL_TAKEN" });
+    expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
+  });
+
+  it("doesn't call the address taken when a finished change's link is opened again", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    expect((await verify(linkToken(approval[0]))).status).toBe(200);
+    const confirm = await emailsTo(app, next, "change-email-verify");
+    expect((await verify(linkToken(confirm[0]), cookie)).status).toBe(200);
+    const signedIn = await signIn(app, next, password);
+
+    for (const replay of [
+      verify(linkToken(confirm[0]), signedIn),
+      verify(linkToken(approval[0])),
+    ]) {
+      const res = await replay;
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(await res.json()).not.toMatchObject({ code: "EMAIL_TAKEN" });
+    }
+  });
+
+  it("says so at the approval step too", async () => {
+    const { cookie, email, password } = await signUp(app);
+    const next = fresh();
+    expect((await changeEmail(cookie, next, password)).status).toBe(202);
+    const approval = await emailsTo(app, email, "change-email-confirm");
+    await signUpOnly(next, "another-password-456", "Newcomer");
+
+    const res = await verify(linkToken(approval[0]));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "EMAIL_TAKEN" });
+    expect(await emailsTo(app, next, "change-email-verify")).toHaveLength(0);
+  });
+
   it("answers the same when the new address already has an account, and sends nothing", async () => {
     const { cookie, email, password } = await signUp(app);
     const { email: taken } = await signUp(app);
@@ -294,6 +346,7 @@ describe("change email (EVERYCENT-46)", () => {
     const res = await changeEmail(cookie, taken, password);
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ status: "approval_sent" });
+    await runJobs(app);
     expect(outbox.outbox.slice(before)).toHaveLength(0);
     expect((await db.query.user.findFirst({ where: eq(user.email, email) }))?.email).toBe(email);
   });
@@ -338,7 +391,7 @@ describe("change password (EVERYCENT-46)", () => {
       cookie,
     );
     expect(wrong.status).toBe(400);
-    expect(emailsTo(app, email, "password-changed")).toHaveLength(0);
+    expect(await emailsTo(app, email, "password-changed")).toHaveLength(0);
 
     const res = await post(
       "/api/auth/change-password",
@@ -356,7 +409,7 @@ describe("change password (EVERYCENT-46)", () => {
       .join("; ");
     expect((await app.request("/v1/me", { headers: { cookie: other } })).status).toBe(401);
     expect((await app.request("/v1/me", { headers: { cookie: newCookie } })).status).toBe(200);
-    expect(emailsTo(app, email, "password-changed")).toHaveLength(1);
+    expect(await emailsTo(app, email, "password-changed")).toHaveLength(1);
     expect(await signIn(app, email, "brand-new-password-1")).toContain("session_token=");
   });
 });

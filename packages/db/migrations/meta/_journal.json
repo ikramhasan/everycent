@@ -330,6 +330,13 @@
       "when": 1792206597468,
       "tag": "0046_payee_auto_category",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792265285160,
+      "tag": "0047_invitation_reminded_at",
+      "breakpoints": true
     }
   ]
 }

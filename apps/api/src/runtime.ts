@@ -1,0 +1,43 @@
+import { createDb } from "@everycent/db";
+import type { Env } from "./env";
+import { createAuth } from "./lib/auth";
+import { ChangeBus } from "./lib/change-bus";
+import { QueuedEmailSender } from "./lib/email/queue";
+import { createEmailSender } from "./lib/email/sender";
+import { defaultFxProviders } from "./lib/fx/providers";
+import { Jobs } from "./lib/jobs";
+import { jobHandlers } from "./lib/jobs/handlers";
+import { observeJobs } from "./telemetry";
+import type { AppDeps } from "./types";
+
+/**
+ * Wires the app's dependencies for a server or worker process. `worker` runs background jobs in
+ * this process. Resolves once the job queue is connected.
+ */
+export async function createRuntime(env: Env, { worker }: { worker: boolean }) {
+  const { db, listen, close: closeDb } = createDb(env.DATABASE_URL);
+  const jobs = new Jobs(env.DATABASE_URL, { worker });
+  await jobs.start();
+  const deps: AppDeps = {
+    db,
+    env,
+    email: createEmailSender(env, db),
+    jobs,
+    // Better Auth's emails are queued like every other, so a failed send is retried.
+    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env)),
+    changes: new ChangeBus(listen),
+    fxProviders: defaultFxProviders(),
+  };
+  if (worker) {
+    await jobs.work(jobHandlers, deps);
+    observeJobs(jobs);
+  }
+  return {
+    deps,
+    /** Stops taking jobs, lets running ones finish, then closes the database. */
+    close: async () => {
+      await jobs.stop();
+      await closeDb();
+    },
+  };
+}

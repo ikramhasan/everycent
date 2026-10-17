@@ -1,0 +1,1 @@
+ALTER TABLE "budget_invitation" ADD COLUMN "reminded_at" timestamp with time zone;

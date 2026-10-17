@@ -24,6 +24,27 @@ const EnvSchema = z
      * client IP from `x-forwarded-for`; with this set, the chain is trusted only through these hops.
      */
     TRUSTED_PROXIES: optional(z.string()),
+    /**
+     * A header the host's edge sets to the client's IP and overwrites on every request, read
+     * instead of `x-forwarded-for` (Railway: `x-real-ip`; it publishes no proxy ranges for
+     * TRUSTED_PROXIES). Only safe when clients can't reach the API except through that edge.
+     */
+    CLIENT_IP_HEADER: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9-]+$/)
+        .toLowerCase(),
+    ),
+    /**
+     * `all` (default): the API process also runs background jobs. `api`: it only queues them, and
+     * a separate `node dist/worker.mjs` process runs them.
+     */
+    JOBS_MODE: z.enum(["all", "api"]).default("all"),
+    /**
+     * The built web app (`apps/web/dist`) for the API to serve on the same origin; the Docker
+     * image sets it. Unset, the API serves only the API (development runs Vite).
+     */
+    WEB_DIST_DIR: optional(z.string().min(1)),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
