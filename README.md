@@ -236,18 +236,18 @@ Done (8a–8f, and loan debt targets with 7g) — what's left is in Plane (cycle
 
 - [x] Payee management: rename, combine/merge, delete, hide
 - [x] Payee default category / auto-categorization
-- [ ] Renaming rules for imported payees (contains / is; rules and their screen are built, applying them on import is next)
+- [x] Renaming rules for imported payees (contains / is)
 - [ ] Payee location (lat/long) for mobile suggestions
 - [ ] Advanced rules engine: match on payee/amount/account/memo → set category, flag, tags, memo **(extra)**
 
 ### 13. File import & export
 
-- [ ] Import CSV (column mapping, date/amount format detection), OFX, QFX, QIF
-- [ ] Duplicate detection and match-to-existing (import ID + fuzzy date/amount)
-- [ ] Imported transactions land as unapproved, with suggested category from payee
-- [ ] Import from YNAB (API token or exported budget) **(extra)**
-- [ ] Export budget + registers to CSV
-- [ ] Full data export (JSON) and re-import / backup
+- [x] Import CSV (column mapping, date/amount format detection), OFX, QFX, QIF
+- [x] Duplicate detection and match-to-existing (import ID + fuzzy date/amount)
+- [x] Imported transactions land as unapproved, with suggested category from payee
+- [x] Import from YNAB (API token or exported budget) **(extra)**
+- [x] Export budget + registers to CSV
+- [x] Full data export (JSON) and re-import / backup
 
 ### 14. Bank sync (direct import)
 
