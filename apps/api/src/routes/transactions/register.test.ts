@@ -99,6 +99,48 @@ describe("register search, filters, sort and paging", () => {
     ]);
   });
 
+  it("gives every row the same running balance on any page, sort or filter (EVERYCENT-33)", async () => {
+    const { base, cookie, add, list } = await setup();
+    // Days with several rows (inflows, outflows, equal amounts) and a gap, so the balance window
+    // has ties to order and pages that start mid-day.
+    const amounts = ["-500", "-500", "2500", "-1200", "-300", "700", "-500", "-9900", "40"];
+    for (const [i, amount] of amounts.entries()) {
+      await add({
+        date: `2026-03-0${1 + Math.floor(i / 3) * 3}`,
+        amount,
+        payeeName: i % 2 ? "Odd" : "Even",
+      });
+    }
+    const all = await list({ limit: "100" });
+    const reference = new Map(all.transactions.map((t) => [t.id, t.runningBalance]));
+    const total = all.transactions.reduce((sum, t) => sum + BigInt(t.amount), 0n);
+    expect(all.transactions[0]?.runningBalance).toBe(total.toString());
+
+    const pages = async (query: Record<string, string>) => {
+      const seen: Txn[] = [];
+      let cursor: string | null | undefined;
+      do {
+        const page = await list({ limit: "2", ...query, ...(cursor ? { cursor } : {}) });
+        seen.push(...page.transactions);
+        cursor = page.nextCursor;
+      } while (cursor);
+      return seen;
+    };
+    for (const query of [{}, { sort: "payee:asc" }, { sort: "outflow:desc" }, { q: "odd" }]) {
+      const rows = await pages(query);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows)
+        expect([query, row.runningBalance]).toEqual([query, reference.get(row.id)]);
+    }
+    // The all-accounts register too.
+    const everything = await json<Page>(
+      await send("GET", `${base}/transactions?limit=100`, cookie),
+    );
+    for (const row of everything.transactions) {
+      expect(row.runningBalance).toBe(reference.get(row.id));
+    }
+  });
+
   it("searches payees, memos, split lines and amounts", async () => {
     const { add, list, groceries, household } = await setup();
     await add({ date: "2026-02-01", amount: "-4510", payeeName: "Market", memo: "eggs" });
