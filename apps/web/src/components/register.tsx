@@ -146,10 +146,13 @@ import { MemberAvatar } from "./member-avatar";
 import {
   COLUMN_SPECS,
   type ColumnId,
+  columnWidth,
   isEditable,
   PINNED_BG,
   pinned,
+  RESIZABLE,
   registerColumns,
+  useColumnWidths,
 } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
 import { RegisterViewMenu } from "./register-view-menu";
@@ -408,6 +411,7 @@ export function Register({
   }
 
   const allAccounts = accountId === undefined;
+  const { widths, setWidth } = useColumnWidths(accountId ?? "all");
   const columnIds = useMemo(
     () =>
       registerColumns(allAccounts).filter(
@@ -2037,7 +2041,7 @@ export function Register({
           // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
           style={{
             minWidth: `calc(${MEMO_MIN_WIDTH}${columnIds
-              .map((id) => COLUMN_SPECS[id].width)
+              .map((id) => columnWidth(widths, id))
               .filter(Boolean)
               .map((w) => ` + ${w}`)
               .join("")})`,
@@ -2045,7 +2049,7 @@ export function Register({
         >
           <colgroup>
             {columnIds.map((id) => (
-              <col key={id} style={{ width: COLUMN_SPECS[id].width }} />
+              <col key={id} style={{ width: columnWidth(widths, id) }} />
             ))}
           </colgroup>
           <TableHeader className="sticky top-0 z-10">
@@ -2067,6 +2071,7 @@ export function Register({
                       style={pin?.style}
                       className={cn(
                         "bg-muted text-muted-foreground text-xs uppercase",
+                        RESIZABLE.includes(id) && "relative",
                         pin && [pin.className, PINNED_BG.head],
                         spec.align === "right" && "text-right",
                         // Centred like the column's cells (the flag and cleared icons).
@@ -2123,6 +2128,9 @@ export function Register({
                         </button>
                       ) : (
                         <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
+                      )}
+                      {RESIZABLE.includes(id) && (
+                        <ColumnResizer label={spec.header} onWidth={(px) => setWidth(id, px)} />
                       )}
                     </TableHead>
                   );
@@ -2399,4 +2407,44 @@ function BalanceHeader({ sorted, onResetSort }: { sorted: boolean; onResetSort: 
 /** Accounts a transaction can move to: open ones, plus the one it's in. */
 function editorAccounts(accounts: readonly Account[], current: string) {
   return accounts.filter((a) => !a.closed || a.id === current);
+}
+
+/**
+ * A header cell's right edge, dragged to widen or narrow its column as in YNAB's register (Memo,
+ * which takes what's left, gives or takes the difference). Arrow keys move it 8px.
+ * Hand-rolled: the register is a plain table with a colgroup, not a table library's columns.
+ */
+function ColumnResizer({ label, onWidth }: { label: string; onWidth: (px: number) => void }) {
+  const start = useRef<{ x: number; width: number } | null>(null);
+  const cellWidth = (el: HTMLElement) => el.closest("th")?.getBoundingClientRect().width ?? 0;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable splitter has no element of its own
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${label}`}
+      tabIndex={0}
+      className="absolute inset-y-1 right-0 w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border/0 hover:after:bg-border focus-visible:after:bg-ring"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, width: cellWidth(e.currentTarget) };
+      }}
+      onPointerMove={(e) => {
+        if (!start.current || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        onWidth(start.current.width + e.clientX - start.current.x);
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        start.current = null;
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        onWidth(cellWidth(e.currentTarget) + (e.key === "ArrowRight" ? 8 : -8));
+      }}
+    />
+  );
 }

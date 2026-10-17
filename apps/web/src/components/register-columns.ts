@@ -1,3 +1,5 @@
+import { useCallback, useState } from "react";
+
 export type ColumnId =
   | "select"
   | "review"
@@ -128,3 +130,67 @@ export const pinnedWidth = (columns: readonly ColumnId[]) =>
   `calc(0rem${pinnedColumns(columns)
     .map((c) => ` + ${COLUMN_SPECS[c].width}`)
     .join("")})`;
+
+/**
+ * Columns whose width can be dragged, as YNAB's can (2026-10-18). Memo takes what's left, so it
+ * grows and shrinks as the others are dragged; the icon columns stay as they are.
+ */
+export const RESIZABLE: readonly ColumnId[] = [
+  "account",
+  "date",
+  "payee",
+  "category",
+  "outflow",
+  "inflow",
+  "balance",
+];
+/** YNAB lets a column shrink to about 30px. */
+export const MIN_COLUMN_PX = 30;
+
+export type ColumnWidths = Partial<Record<ColumnId, number>>;
+
+/** A column's CSS width: the one dragged to, else its default. */
+export function columnWidth(widths: ColumnWidths, id: ColumnId): string | undefined {
+  const dragged = widths[id];
+  return dragged === undefined ? COLUMN_SPECS[id].width : `${dragged}px`;
+}
+
+/** Dragged widths per register (an account's, or All Accounts'), kept in this browser as YNAB's are. */
+export function useColumnWidths(register: string) {
+  const key = `everycent:register-columns:${register}`;
+  const [widths, setWidths] = useState<ColumnWidths>(() => readWidths(key));
+  const [loadedKey, setLoadedKey] = useState(key);
+  if (loadedKey !== key) {
+    setLoadedKey(key);
+    setWidths(readWidths(key));
+  }
+  const setWidth = useCallback(
+    (id: ColumnId, px: number) =>
+      setWidths((current) => {
+        const next = { ...current, [id]: Math.max(MIN_COLUMN_PX, Math.round(px)) };
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          // Storage can be unavailable (private windows); the width still holds for this visit.
+        }
+        return next;
+      }),
+    [key],
+  );
+  return { widths, setWidth };
+}
+
+function readWidths(key: string): ColumnWidths {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([id, px]) =>
+          RESIZABLE.includes(id as ColumnId) && typeof px === "number" && px >= MIN_COLUMN_PX,
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
