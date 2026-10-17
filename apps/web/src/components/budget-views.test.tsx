@@ -165,7 +165,7 @@ describe("ManageViewsDialog", () => {
 });
 
 describe("BudgetFilterBar with custom views", () => {
-  it("puts All and Overspent first, then the plan's order", async () => {
+  it("puts All and Overspent first, then the plan's order, four on the bar", async () => {
     const onChange = vi.fn();
     render(
       <BudgetFilterBar
@@ -182,25 +182,17 @@ describe("BudgetFilterBar with custom views", () => {
       within(group)
         .getAllByRole("radio")
         .map((b) => b.textContent),
-    ).toEqual([
-      "All",
-      "2 Overspent",
-      "Bills",
-      "Underfunded",
-      "Overfunded",
-      "Money Available",
-      "Snoozed",
-    ]);
+    ).toEqual(["All", "2 Overspent", "Bills", "Underfunded"]);
     await userEvent.click(screen.getByRole("radio", { name: "Bills" }));
     expect(onChange).toHaveBeenCalledWith("v1");
-    expect(screen.getByRole("button", { name: "Views Menu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
   });
 });
 
 // YNAB, 2026-10-15 (EVERYCENT-164): views past the window's breakpoints move into the Views Menu,
-// except the selected one.
+// except the selected one. everycent's bar also stops at four views; the rest are under "More".
 describe("BudgetFilterBar overflow", () => {
-  it("moves the views that don't fit into the Views Menu", async () => {
+  it("moves the views past the first four into More, keeping the selected one", async () => {
     const onChange = vi.fn();
     const custom = Array.from({ length: 6 }, (_, i) => ({ id: `v${i + 1}`, name: `V${i + 1}` }));
     render(
@@ -222,20 +214,20 @@ describe("BudgetFilterBar overflow", () => {
         )}
       />,
     );
-    // 1000px = 62.5rem: views 0 to 6 fit, and the selected V6.
+    // The first four, and the selected V6.
     expect(screen.getAllByRole("radio").map((b) => b.textContent)).toEqual([
       "All",
       "Underfunded",
       "Overfunded",
       "Money Available",
+      "V6",
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
       "Snoozed",
       "V1",
       "V2",
-      "V6",
-    ]);
-    await userEvent.click(screen.getByRole("button", { name: "Views Menu" }));
-    const items = await screen.findAllByRole("menuitem");
-    expect(items.map((i) => i.textContent?.trim())).toEqual([
       "V3",
       "V4",
       "V5",

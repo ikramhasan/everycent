@@ -295,21 +295,7 @@ export function CategoryList({
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {!readOnly && (
-          <NamePopover
-            title="New category group"
-            submitLabel="Add"
-            onSubmit={({ name }) => actions.createGroup(name)}
-            trigger={
-              <Button variant="outline" size="sm" disabled={addGroupDisabled}>
-                <Plus /> Category Group
-              </Button>
-            }
-          />
-        )}
-        {toolbar}
-      </div>
+      {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
 
       <div className="overflow-x-auto rounded-lg border">
         <div className="min-w-fit">
@@ -345,6 +331,26 @@ export function CategoryList({
                 </span>
               )}
               <span className="truncate px-2">Category</span>
+              {/* A new group is added from the column it belongs to. */}
+              {!readOnly && (
+                <NamePopover
+                  title="New category group"
+                  submitLabel="Add"
+                  onSubmit={({ name }) => actions.createGroup(name)}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Add a category group"
+                      title="Add a category group"
+                      disabled={addGroupDisabled}
+                      className="-ml-1 text-muted-foreground"
+                    >
+                      <Plus />
+                    </Button>
+                  }
+                />
+              )}
             </div>
             {figures && (
               <>

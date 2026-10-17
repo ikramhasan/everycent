@@ -306,7 +306,7 @@ describe("CategoryList", () => {
 
   it("adds a category group", async () => {
     const actions = renderList();
-    await userEvent.click(screen.getByRole("button", { name: "Category Group" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a category group" }));
     await userEvent.type(screen.getByLabelText("New category group"), "Kids");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(actions.createGroup).toHaveBeenCalledWith("Kids");
@@ -525,7 +525,7 @@ describe("CategoryList", () => {
         />,
       );
       expect(screen.getByText("There are no categories selected for Bills.")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Category Group" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Add a category group" })).toBeDisabled();
       await userEvent.click(screen.getByRole("button", { name: "Edit View" }));
       expect(onEdit).toHaveBeenCalled();
       await userEvent.click(screen.getByRole("button", { name: "View All" }));

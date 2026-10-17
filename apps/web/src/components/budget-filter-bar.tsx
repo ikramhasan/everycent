@@ -1,4 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from "@everycent/ui/components/toggle-group";
+import { cn } from "@everycent/ui/lib/utils";
 import type { ReactNode } from "react";
 import { type BudgetFilter, fitsViewsBar, isPresetFilter } from "@/lib/budget-view";
 
@@ -7,6 +8,13 @@ export interface OverflowView {
   key: string;
   label: string;
 }
+
+/** A view as a text tab; the trigger of the Views Menu ("More") matches it. */
+export const TAB =
+  "h-9 rounded-none border-transparent border-b-2 bg-transparent px-2 font-medium text-muted-foreground text-sm transition-colors duration-150 hover:bg-transparent hover:text-foreground data-[state=on]:border-current data-[state=on]:bg-transparent data-[state=on]:text-foreground";
+
+/** How many views the bar shows before the rest go into "More". */
+const BAR_VIEWS = 4;
 
 /** The views Manage Views can't move: always first, in this order. */
 const FIXED: readonly BudgetFilter[] = ["all", "overspent"];
@@ -58,16 +66,20 @@ export function BudgetFilterBar({
       (key !== "overspent" || overspent > 0 || filter === key),
   );
   const label = (key: string) => (isPresetFilter(key) ? labels[key] : (names.get(key) ?? key));
-  const onBar = keys.filter((key, i) => key === filter || fitsViewsBar(i, viewportWidth));
+  // Four views on the bar (fewer if the window is narrow); the rest, and Manage Views, in "More".
+  const onBar = keys.filter(
+    (key, i) => key === filter || (i < BAR_VIEWS && fitsViewsBar(i, viewportWidth)),
+  );
   const overflow = keys
     .filter((key) => !onBar.includes(key))
     .map((key) => ({ key, label: label(key) }));
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      {/* Text tabs: the chosen view in full colour and weight with an underline, the rest muted. */}
       <ToggleGroup
         type="single"
-        variant="outline"
         size="sm"
+        spacing={1}
         aria-label="Budget view"
         value={filter}
         onValueChange={(value) => {
@@ -79,13 +91,14 @@ export function BudgetFilterBar({
           <ToggleGroupItem
             key={f}
             value={f}
-            className={
+            className={cn(
+              TAB,
               f === "overspent" && overspent > 0
                 ? onlyCredit
-                  ? "text-yellow-700 data-[state=on]:text-yellow-700 dark:text-yellow-400 dark:data-[state=on]:text-yellow-400"
-                  : "text-destructive data-[state=on]:text-destructive"
-                : undefined
-            }
+                  ? "text-yellow-700 hover:text-yellow-700 data-[state=on]:text-yellow-700 dark:text-yellow-400 dark:data-[state=on]:text-yellow-400"
+                  : "text-destructive hover:text-destructive data-[state=on]:text-destructive"
+                : undefined,
+            )}
           >
             {label(f)}
           </ToggleGroupItem>

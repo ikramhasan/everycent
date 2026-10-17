@@ -77,14 +77,16 @@ export function RecentMoves({
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <History /> Recent Moves
+            <Button variant="ghost" size="icon-sm" aria-label="Recent Moves">
+              <History />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Previous 34 days of assigning and moving money</TooltipContent>
+        <TooltipContent>
+          Recent Moves: the previous 34 days of assigning and moving money
+        </TooltipContent>
       </Tooltip>
-      <PopoverContent align="start" className="w-[min(26rem,calc(100vw-2rem))] p-0">
+      <PopoverContent align="end" className="w-[min(26rem,calc(100vw-2rem))] p-0">
         <div className="flex items-center justify-between gap-2 border-b p-3">
           <div className="grid gap-1">
             <h2 className="font-semibold">Recent Moves</h2>
