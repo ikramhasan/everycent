@@ -176,7 +176,10 @@ export const matchTransactions = createRoute({
         },
       },
     },
-    400: jsonError("Not one imported and one entered transaction in one account"),
+    400: jsonError(
+      "Not one imported and one entered transaction in one account, either is reconciled, or " +
+        "the imported one is a transfer or split",
+    ),
     401: jsonError("Not signed in"),
     403: jsonError(
       "The caller's role can't change transactions, or the account's email address isn't confirmed",
@@ -193,6 +196,9 @@ export const unmatchTransaction = createRoute({
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   summary: "Split a matched transaction back into the entered and the imported one",
+  description:
+    "The entered transaction gets back its amount, cleared state and approval from before the " +
+    "match; a transfer or split keeps its current amount, so its other sides still add up.",
   request: {
     params: BudgetParams.extend({
       transactionId: z.string().openapi({ param: { name: "transactionId", in: "path" } }),
@@ -214,7 +220,8 @@ export const unmatchTransaction = createRoute({
         },
       },
     },
-    400: jsonError("The transaction isn't matched"),
+    400: jsonError("The transaction isn't matched, or its account is closed"),
+    409: jsonError("The transaction is reconciled (`TRANSACTION_RECONCILED`)"),
     401: jsonError("Not signed in"),
     403: jsonError(
       "The caller's role can't change transactions, or the account's email address isn't confirmed",

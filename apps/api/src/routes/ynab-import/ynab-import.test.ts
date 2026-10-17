@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, resetDatabase, signUp, type TestBudget } from "../../../test/helpers";
 import { httpYnabClient } from "../../lib/ynab/client";
 import { YNAB_ACCOUNT_TYPES } from "../../lib/ynab/convert";
-import type { YnabPlan } from "../../lib/ynab/types";
+import { type YnabPlan, YnabPlanSchema } from "../../lib/ynab/types";
 
 /**
  * A real YNAB test plan ("ihni7's Plan", read through YNAB's API on 2026-10-17, renamed and
@@ -145,6 +145,12 @@ const KNOWN = [
 ];
 
 describe("import from YNAB's API", () => {
+  it("keeps the currency format's example, which tells Indian grouping apart", () => {
+    const format = { ...PLAN.currency_format, example_format: "1,23,456.78" };
+    const parsed = YnabPlanSchema.parse({ ...PLAN, currency_format: format });
+    expect(parsed.currency_format?.example_format).toBe("1,23,456.78");
+  });
+
   it("lists the token's plans", async () => {
     const { cookie } = await signUp(app);
     const res = await send("POST", "/v1/budgets/import/ynab/plans", cookie, { token: TOKEN });

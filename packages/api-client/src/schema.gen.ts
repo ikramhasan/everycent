@@ -1407,7 +1407,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Split a matched transaction back into the entered and the imported one */
+        /**
+         * Split a matched transaction back into the entered and the imported one
+         * @description The entered transaction gets back its amount, cleared state and approval from before the match; a transfer or split keeps its current amount, so its other sides still add up.
+         */
         post: operations["unmatchTransaction"];
         delete?: never;
         options?: never;
@@ -10169,7 +10172,7 @@ export interface operations {
                     "application/json": components["schemas"]["MatchResult"];
                 };
             };
-            /** @description Not one imported and one entered transaction in one account */
+            /** @description Not one imported and one entered transaction in one account, either is reconciled, or the imported one is a transfer or split */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10228,7 +10231,7 @@ export interface operations {
                     "application/json": components["schemas"]["UnmatchResult"];
                 };
             };
-            /** @description The transaction isn't matched */
+            /** @description The transaction isn't matched, or its account is closed */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10257,6 +10260,15 @@ export interface operations {
             };
             /** @description No such budget or transaction, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The transaction is reconciled (`TRANSACTION_RECONCILED`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

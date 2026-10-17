@@ -146,6 +146,7 @@ export const YnabPlanSchema = z.object({
       group_separator: z.string(),
       symbol_first: z.boolean(),
       display_symbol: z.boolean(),
+      example_format: z.string().optional(),
     })
     .nullable(),
   accounts: z.array(Account),

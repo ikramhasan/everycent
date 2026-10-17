@@ -28,14 +28,20 @@ export const exportBackupHandler: RouteHandler<typeof exportBackup, Env> = async
     `attachment; filename*=UTF-8''${encodeURIComponent(backupFileName(budget.name, now))}`,
   );
   const { db } = c.var.deps;
+  // One read-only snapshot, so every reference in the file resolves inside it even while the
+  // budget is being edited.
   return stream(c, async (s) => {
-    await writeBackup(
-      db,
-      budget,
-      async (chunk) => {
-        await s.write(chunk);
-      },
-      now,
+    await db.transaction(
+      (tx) =>
+        writeBackup(
+          tx,
+          budget,
+          async (chunk) => {
+            await s.write(chunk);
+          },
+          now,
+        ),
+      { isolationLevel: "repeatable read", accessMode: "read only" },
     );
   }) as never;
 };

@@ -135,6 +135,14 @@ describe("file import (EVERYCENT-66)", () => {
     expect(await rows()).toHaveLength(3);
   });
 
+  it("takes in each row once when the same file is imported twice at once", async () => {
+    const { importFile, rows } = await setup();
+    const [a, b] = await Promise.all([importFile([coffee, pay]), importFile([coffee, pay])]);
+    expect((a?.imported ?? 0) + (b?.imported ?? 0)).toBe(2);
+    expect((a?.duplicates ?? 0) + (b?.duplicates ?? 0)).toBe(2);
+    expect(await rows()).toHaveLength(2);
+  });
+
   it("keeps each account's import ids to itself", async () => {
     const { importFile, addAccount } = await setup();
     const savings = await addAccount("Savings", "savings");
@@ -409,6 +417,67 @@ describe("matching imports (EVERYCENT-68)", () => {
       transactionIds: [other.id, c.id],
     });
     expect(twoEntered.status).toBe(400);
+  });
+
+  it("refuses to match an imported row made into a transfer, which would orphan its other side", async () => {
+    const s = await setup();
+    const savings = await s.addAccount("Savings", "savings");
+    const c = await entered(s, { date: "2026-10-12", amount: "-900", payeeName: "Mine", memo: "" });
+    const [imported] = (
+      await s.importFile([{ date: "2026-10-01", amount: "-900", payee: "BANK", memo: "" }])
+    ).transactionIds;
+    // Eleven days apart, so the import didn't match it.
+    const toTransfer = await send("PATCH", `${s.base}/transactions/${imported}`, s.owner.cookie, {
+      transferAccountId: savings.id,
+      payeeName: null,
+      categoryId: null,
+    });
+    expect(toTransfer.status, await toTransfer.clone().text()).toBe(200);
+    const match = await send("POST", `${s.base}/transactions/match`, s.owner.cookie, {
+      transactionIds: [imported, c.id],
+    });
+    expect(match.status).toBe(400);
+    expect(await s.rows(savings.id)).toHaveLength(1);
+  });
+
+  it("unmatches a transfer edited after the match without breaking its two sides", async () => {
+    const s = await setup();
+    const savings = await s.addAccount("Savings", "savings");
+    const t = await entered(s, {
+      date: "2026-10-12",
+      amount: "-2000",
+      transferAccountId: savings.id,
+      categoryId: null,
+      memo: "",
+    });
+    const result = await s.importFile([
+      { date: "2026-10-13", amount: "-2000", payee: "BANK XFER", memo: "" },
+    ]);
+    expect(result.matchedIds).toEqual([t.id]);
+    const edit = await send("PATCH", `${s.base}/transactions/${t.id}`, s.owner.cookie, {
+      amount: "-2500",
+    });
+    expect(edit.status, await edit.clone().text()).toBe(200);
+    const unmatch = await send("POST", `${s.base}/transactions/${t.id}/unmatch`, s.owner.cookie);
+    expect(unmatch.status, await unmatch.clone().text()).toBe(200);
+    expect((await list(s)).find((r) => r.id === t.id)?.amount).toBe("-2500");
+    expect((await s.rows(savings.id)).map((r) => r.amount)).toEqual(["2500"]);
+  });
+
+  it("refuses to unmatch a reconciled transaction", async () => {
+    const s = await setup();
+    const c = await entered(s, { date: "2026-10-12", amount: "-300", payeeName: "Mine", memo: "" });
+    await s.importFile([{ date: "2026-10-12", amount: "-300", payee: "BANK", memo: "" }]);
+    const reconcile = await send(
+      "POST",
+      `${s.base}/accounts/${s.checking.id}/reconcile`,
+      s.owner.cookie,
+      { balance: "-300", date: "2026-10-17" },
+    );
+    expect(reconcile.status, await reconcile.clone().text()).toBe(200);
+    const unmatch = await send("POST", `${s.base}/transactions/${c.id}/unmatch`, s.owner.cookie);
+    expect(unmatch.status).toBe(409);
+    expect(await list(s)).toHaveLength(1);
   });
 });
 

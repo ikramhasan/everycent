@@ -10,7 +10,13 @@ import {
 } from "@everycent/db/schema";
 import { type ImportRow, importIds, isOnBudget, matchPayeeRule } from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, max, min, ne } from "drizzle-orm";
-import { type AccountRow, resolveCategory, usesCategory } from "../routes/transactions/rules";
+import {
+  type AccountRow,
+  assertOpen,
+  reconciledStays,
+  resolveCategory,
+  usesCategory,
+} from "../routes/transactions/rules";
 import { budgetCurrencyOf, type FxDeps, syncBases, toBase } from "./base-amount";
 import { AppError } from "./errors";
 import { type Db, findOrCreatePayee, insertTransaction, internalCategoryId } from "./ledger";
@@ -58,25 +64,23 @@ export async function importTransactions(
   rows: readonly ImportRow[],
 ): Promise<ImportResult> {
   const ids = importIds(rows);
-  const seen = new Set(
-    ids.length === 0
+  // Claim the ids before adding anything: a concurrent import of the same rows waits on this
+  // transaction's insert and then conflicts, so each id is taken in once.
+  const unique = [...new Set(ids)];
+  const claimed = new Set(
+    unique.length === 0
       ? []
       : (
           await tx
-            .select({ id: accountImportId.importId })
-            .from(accountImportId)
-            .where(
-              and(
-                eq(accountImportId.accountId, account.id),
-                inArray(accountImportId.importId, ids),
-              ),
-            )
+            .insert(accountImportId)
+            .values(unique.map((importId) => ({ accountId: account.id, importId })))
+            .onConflictDoNothing()
+            .returning({ id: accountImportId.importId })
         ).map((r) => r.id),
   );
   const fresh = rows.flatMap((row, i) => {
     const importId = ids[i] as string;
-    if (seen.has(importId)) return [];
-    seen.add(importId);
+    if (!claimed.delete(importId)) return [];
     return [{ row, importId }];
   });
   if (fresh.length === 0) return { transactionIds: [], matchedIds: [], duplicates: rows.length };
@@ -167,10 +171,6 @@ export async function importTransactions(
     await syncBases(tx, id);
     transactionIds.push(id);
   }
-  await tx
-    .insert(accountImportId)
-    .values(fresh.map(({ importId }) => ({ accountId: account.id, importId })))
-    .onConflictDoNothing();
   return { transactionIds, matchedIds, duplicates: rows.length - fresh.length };
 }
 
@@ -230,6 +230,15 @@ function pickMatch(candidates: readonly TransactionRow[], row: ImportRow, taken:
   return best;
 }
 
+async function isSplit(tx: Db, transactionId: string) {
+  const lines = await tx
+    .select({ id: subTransaction.id })
+    .from(subTransaction)
+    .where(eq(subTransaction.transactionId, transactionId))
+    .limit(1);
+  return lines.length > 0;
+}
+
 /**
  * Folds an imported transaction into an entered one (YNAB's match, 2026-10-17): the entered date,
  * payee, memo and category stay, the bank's amount is taken, and the result is cleared and
@@ -238,12 +247,11 @@ function pickMatch(candidates: readonly TransactionRow[], row: ImportRow, taken:
 async function foldImport(tx: Db, target: TransactionRow, imported: ImportedSide) {
   const amountChanges = imported.amount !== target.amount;
   if (amountChanges) {
-    const split = await tx
-      .select({ id: subTransaction.id })
-      .from(subTransaction)
-      .where(eq(subTransaction.transactionId, target.id))
-      .limit(1);
-    if (target.transferTransactionId || target.transferSubTransactionId || split.length > 0) {
+    if (
+      target.transferTransactionId ||
+      target.transferSubTransactionId ||
+      (await isSplit(tx, target.id))
+    ) {
       throw new AppError(
         400,
         "MATCH_AMOUNT",
@@ -304,8 +312,21 @@ export async function matchTransactions(tx: Db, budgetId: string, ids: readonly 
   if (source.accountId !== target.accountId) {
     throw new AppError(400, "NOT_MATCHABLE", "Matched transactions must be in the same account");
   }
-  if (target.cleared === "reconciled") {
+  if (target.cleared === "reconciled" || source.cleared === "reconciled") {
     throw new AppError(400, "NOT_MATCHABLE", "A reconciled transaction can't be matched");
+  }
+  // Match removes the imported row outright, so it has to be a plain one: deleting a transfer or
+  // a split here would leave its other sides behind.
+  if (
+    source.transferTransactionId ||
+    source.transferSubTransactionId ||
+    (await isSplit(tx, source.id))
+  ) {
+    throw new AppError(
+      400,
+      "NOT_MATCHABLE",
+      "An imported transfer or split can't be matched; undo the transfer or split first",
+    );
   }
   const [named] = source.payeeId
     ? await tx.select({ name: payee.name }).from(payee).where(eq(payee.id, source.payeeId))
@@ -340,13 +361,23 @@ export async function unmatchTransaction(tx: Db, budgetId: string, id: string) {
     .from(budgetAccount)
     .where(eq(budgetAccount.id, target.accountId));
   if (!account) throw new AppError(404, "NOT_FOUND", "No such account");
-  const previousAmount = BigInt(matched.previousAmount);
+  assertOpen(account);
+  if (target.cleared === "reconciled") reconciledStays();
+  // A transfer or split was only ever matched at its own amount (foldImport), so it keeps the
+  // amount it has now: putting back an older one would undo a later edit on one side only.
+  const keepsAmount =
+    target.transferTransactionId !== null ||
+    target.transferSubTransactionId !== null ||
+    (await isSplit(tx, target.id));
+  const previousAmount = keepsAmount ? target.amount : BigInt(matched.previousAmount);
   const budgetCurrency = await budgetCurrencyOf(tx, budgetId);
   await tx
     .update(transaction)
     .set({
       amount: previousAmount,
-      baseAmount: toBase(previousAmount, target.currency, target.fxRate, budgetCurrency),
+      baseAmount: keepsAmount
+        ? target.baseAmount
+        : toBase(previousAmount, target.currency, target.fxRate, budgetCurrency),
       cleared: matched.previousCleared,
       approved: matched.previousApproved,
       importId: null,

@@ -23794,7 +23794,7 @@
             }
           },
           "400": {
-            "description": "Not one imported and one entered transaction in one account",
+            "description": "Not one imported and one entered transaction in one account, either is reconciled, or the imported one is a transfer or split",
             "content": {
               "application/json": {
                 "schema": {
@@ -23848,6 +23848,7 @@
           }
         ],
         "summary": "Split a matched transaction back into the entered and the imported one",
+        "description": "The entered transaction gets back its amount, cleared state and approval from before the match; a transfer or split keeps its current amount, so its other sides still add up.",
         "parameters": [
           {
             "schema": {
@@ -23878,7 +23879,7 @@
             }
           },
           "400": {
-            "description": "The transaction isn't matched",
+            "description": "The transaction isn't matched, or its account is closed",
             "content": {
               "application/json": {
                 "schema": {
@@ -23909,6 +23910,16 @@
           },
           "404": {
             "description": "No such budget or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The transaction is reconciled (`TRANSACTION_RECONCILED`)",
             "content": {
               "application/json": {
                 "schema": {
