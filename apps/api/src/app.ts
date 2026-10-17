@@ -11,6 +11,7 @@ import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
 import { categoryTemplatesRouter } from "./routes/category-templates";
 import { eventsRouter } from "./routes/events";
+import { exportsRouter } from "./routes/exports";
 import { flagsRouter } from "./routes/flags";
 import { fxRatesRouter } from "./routes/fx-rates";
 import { healthRouter } from "./routes/health";
@@ -79,6 +80,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", activityRouter);
   app.route("/v1", reportsRouter);
   app.route("/v1", eventsRouter);
+  app.route("/v1", exportsRouter);
 
   registerDocs(app);
   return app;

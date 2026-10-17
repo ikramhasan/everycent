@@ -63,6 +63,14 @@ async function categorizeAs(group: string, category: string) {
 }
 
 describe("SelectionBar", () => {
+  it("offers YNAB's Export # Transactions in More", async () => {
+    const onExport = vi.fn();
+    bar(summary({ count: 2 }), { onExport });
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Export 2 Transactions" }));
+    expect(onExport).toHaveBeenCalledOnce();
+  });
+
   it("offers Approve and Reject with unapproved rows, Flag and Clear moving into More", async () => {
     const { onAction } = bar(summary({ unapproved: 1, uncleared: 2 }));
     expect(screen.queryByRole("button", { name: /Flag/ })).toBeNull();

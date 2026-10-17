@@ -40,6 +40,7 @@ import {
   CircleCheck,
   CircleX,
   Copy,
+  FileDown,
   MoreHorizontal,
   NotebookPen,
   Repeat,
@@ -93,6 +94,7 @@ export function SelectionBar({
   scheduledCount = 0,
   scheduledSplits = NO_SPLITS,
   onMakeRepeating,
+  onExport,
 }: {
   /** The selected transactions' summary; undefined while it loads. */
   summary: Summary | undefined;
@@ -114,6 +116,8 @@ export function SelectionBar({
   scheduledSplits?: { splits: number; splitsWithTransfers: number };
   /** Set when exactly one plain transaction is selected. */
   onMakeRepeating?: () => void;
+  /** YNAB's "Export # Transactions": downloads the selected transactions. */
+  onExport?: () => void;
 }) {
   const [flagOpen, setFlagOpen] = useState(false);
   const [unsplitFor, setUnsplitFor] = useState<string | null>(null);
@@ -349,6 +353,11 @@ export function SelectionBar({
             >
               <NotebookPen /> Memo…
             </DropdownMenuItem>
+            {onExport && s && s.count > 0 && (
+              <DropdownMenuItem onSelect={onExport}>
+                <FileDown /> Export {plural(s.count, "Transaction")}
+              </DropdownMenuItem>
+            )}
             {moveTargets.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

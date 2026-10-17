@@ -11481,6 +11481,17 @@
           "thirtyDaysAgo",
           "months"
         ]
+      },
+      "ExportSelection": {
+        "type": "object",
+        "properties": {
+          "selection": {
+            "$ref": "#/components/schemas/TransactionSelection"
+          }
+        },
+        "required": [
+          "selection"
+        ]
       }
     },
     "parameters": {}
@@ -21469,6 +21480,263 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/export/plan": {
+      "get": {
+        "operationId": "exportPlan",
+        "tags": [
+          "Export"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The plan file of YNAB's Export Plan: every category's month, from the first month on",
+        "description": "Columns: Month, Category Group/Category, Category Group, Category, Assigned, Activity, Available; one row per category and month, visible categories first, then hidden ones (group \"Hidden Categories\"). Starts with a UTF-8 byte-order mark. Comma-separated, or tab-separated when the budget's number format uses a comma as its decimal mark (YNAB). Text cells are quoted; amounts are bare, in the budget's number format with no group separator. Lines end with CRLF. Streamed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "The user's today: the plan's months run up to it. Defaults to the server's UTC date."
+            },
+            "required": false,
+            "description": "The user's today: the plan's months run up to it. Defaults to the server's UTC date.",
+            "name": "today",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The plan file",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/tab-separated-values": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/export/register": {
+      "get": {
+        "operationId": "exportRegister",
+        "tags": [
+          "Export"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The register file of YNAB's Export Plan: every transaction, newest first",
+        "description": "Columns: Account, Flag, Date, Payee, Category Group/Category, Category Group, Category, Memo, Outflow, Inflow, Cleared, plus Currency, FX Rate, Base Outflow and Base Inflow when the budget has an account in another currency. A split is one row per line, memo \"Split (i/n) …\". Starts with a UTF-8 byte-order mark. Comma-separated, or tab-separated when the budget's number format uses a comma as its decimal mark (YNAB). Text cells are quoted; amounts are bare, in the budget's number format with no group separator. Lines end with CRLF. Streamed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The register file",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/tab-separated-values": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/export/transactions": {
+      "post": {
+        "operationId": "exportSelectedTransactions",
+        "tags": [
+          "Export"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "YNAB's \"Export # Transactions\": the register file for the selected transactions",
+        "description": "The register file's layout for a selection, with no byte-order mark. Comma-separated, or tab-separated when the budget's number format uses a comma as its decimal mark (YNAB). Text cells are quoted; amounts are bare, in the budget's number format with no group separator. Lines end with CRLF. Streamed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportSelection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The selected transactions",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/tab-separated-values": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

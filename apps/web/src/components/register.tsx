@@ -76,6 +76,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { categoryNotNeeded } from "@/lib/category-cell";
 import { useCollapsedSplits } from "@/lib/collapsed-splits";
 import { todayIso } from "@/lib/dates";
+import { exportSelected } from "@/lib/exports";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
 import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
@@ -1729,6 +1730,11 @@ export function Register({
             scheduledRows.filter((row) => scheduledSelection.has(row.id)),
           )}
           onMakeRepeating={repeatable ? () => makeRepeating(repeatable) : undefined}
+          onExport={() => {
+            exportSelected(budget, selectionBody(selection, selectionFilter)).catch(() =>
+              toast.error("Couldn't export the selected transactions."),
+            );
+          }}
         />
       )}
 

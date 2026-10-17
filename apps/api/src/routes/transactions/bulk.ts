@@ -33,10 +33,10 @@ import {
 
 type Env = AppEnv & AuthedEnv;
 
-type Selection = { ids: string[] } | { filter: RegisterFilter; exclude: string[] };
+export type Selection = { ids: string[] } | { filter: RegisterFilter; exclude: string[] };
 
 /** The selected transactions' ids, as a condition on `transaction.id`. */
-function selectedWhere(
+export function selectedWhere(
   db: Db,
   budgetId: string,
   selection: Selection,
@@ -54,7 +54,7 @@ function selectedWhere(
 }
 
 /** The filtered register's account (checked to be the budget's), or null for all accounts. */
-async function checkFilterAccount(db: Db, budgetId: string, selection: Selection) {
+export async function checkFilterAccount(db: Db, budgetId: string, selection: Selection) {
   if ("filter" in selection && selection.filter.accountId) {
     return findAccount(db, budgetId, selection.filter.accountId);
   }

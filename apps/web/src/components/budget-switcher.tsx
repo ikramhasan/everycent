@@ -8,9 +8,19 @@ import {
 } from "@everycent/ui/components/dropdown-menu";
 import { SidebarMenuButton } from "@everycent/ui/components/sidebar";
 import { Link } from "@tanstack/react-router";
-import { Bookmark, CheckIcon, ChevronsUpDown, LayoutGrid, Plus, Wallet } from "lucide-react";
+import {
+  Bookmark,
+  CheckIcon,
+  ChevronsUpDown,
+  FileDown,
+  LayoutGrid,
+  Plus,
+  Wallet,
+} from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import type { Budget } from "@/lib/budgets";
+import { exportPlan } from "@/lib/exports";
 import { EditFlagsDialog } from "./edit-flags-dialog";
 
 export function BudgetSwitcher({
@@ -69,6 +79,13 @@ export function BudgetSwitcher({
               </DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => setEditingFlags(true)}>
                 <Bookmark /> Edit Flags
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  exportPlan(current).catch(() => toast.error("Couldn't export the budget."));
+                }}
+              >
+                <FileDown /> Export Plan
               </DropdownMenuItem>
             </>
           )}
