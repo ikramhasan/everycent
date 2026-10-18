@@ -2,7 +2,12 @@ import { BUDGET_ROLES, MEMBER_ROLES } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { zAvatarColor, zPicture } from "../../lib/member-colors";
-import { requireAuth } from "../../middleware/require-auth";
+import {
+  authSecurity,
+  requireAuth,
+  requireSession,
+  sessionSecurity,
+} from "../../middleware/require-auth";
 
 /** YNAB Together: a group is the manager and up to five others. */
 export const MAX_BUDGET_PEOPLE = 6;
@@ -65,7 +70,7 @@ export const listMembers = createRoute({
   path: "/budgets/{budgetId}/members",
   operationId: "listBudgetMembers",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Who the budget is shared with, and its pending invitations",
   request: { params: BudgetParams },
@@ -82,8 +87,8 @@ export const createInvitation = createRoute({
   path: "/budgets/{budgetId}/invitations",
   operationId: "createBudgetInvitation",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Invite someone by email to share the budget (owner only)",
   description:
     `They get an email with a link that works for ${INVITATION_DAYS} days. A budget has at most ` +
@@ -122,8 +127,8 @@ export const resendInvitation = createRoute({
   path: "/budgets/{budgetId}/invitations/{invitationId}/resend",
   operationId: "resendBudgetInvitation",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: `Send the invitation again with a new link, good for another ${INVITATION_DAYS} days`,
   request: { params: InvitationParams },
   responses: {
@@ -139,8 +144,8 @@ export const cancelInvitation = createRoute({
   path: "/budgets/{budgetId}/invitations/{invitationId}",
   operationId: "cancelBudgetInvitation",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Cancel a pending invitation; its link stops working",
   request: { params: InvitationParams },
   responses: {
@@ -189,8 +194,8 @@ export const acceptInvitation = createRoute({
   path: "/invitations/accept",
   operationId: "acceptInvitation",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Join the budget an invitation is for",
   description:
     "The signed-in account's email must be the invited address (`INVITATION_EMAIL_MISMATCH`), so " +
@@ -218,8 +223,8 @@ export const removeMember = createRoute({
   path: "/budgets/{budgetId}/members/{userId}",
   operationId: "removeBudgetMember",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Stop sharing the budget with someone (owner only)",
   description:
     "They lose access at once. The owner can't be removed (`CANNOT_REMOVE_OWNER`): transfer " +
@@ -239,8 +244,8 @@ export const changeMemberRole = createRoute({
   path: "/budgets/{budgetId}/members/{userId}",
   operationId: "changeBudgetMemberRole",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Make someone an editor or a viewer (owner only)",
   description:
     "A viewer (an everycent extra, EVERYCENT-88) sees everything but can't change anything. The " +
@@ -264,8 +269,8 @@ export const leaveBudget = createRoute({
   path: "/budgets/{budgetId}/leave",
   operationId: "leaveBudget",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Leave a budget shared with you",
   description:
     "The owner can't leave (`OWNER_CANNOT_LEAVE`): transfer ownership to someone else first, or " +
@@ -285,8 +290,8 @@ export const transferOwnership = createRoute({
   path: "/budgets/{budgetId}/transfer-ownership",
   operationId: "transferBudgetOwnership",
   tags: ["Sharing"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Make someone else the budget's owner (owner only)",
   description:
     "The new owner must already share the budget. The old owner keeps access as a member, as " +

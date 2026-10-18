@@ -50,7 +50,7 @@ describe("GET /v1/me", () => {
     expect(res.status).toBe(401);
   });
 
-  it("is documented as cookie-authenticated", async () => {
+  it("is documented as cookie- or API-key-authenticated", async () => {
     const doc = (await (await app.request("/openapi.json")).json()) as {
       components: { securitySchemes: Record<string, { type: string; in: string }> };
       paths: Record<string, { get: { security?: unknown; operationId?: string } }>;
@@ -59,7 +59,9 @@ describe("GET /v1/me", () => {
       type: "apiKey",
       in: "cookie",
     });
-    expect(doc.paths["/v1/me"]?.get.security).toEqual([{ cookieAuth: [] }]);
+    expect(doc.components.securitySchemes.apiKeyAuth).toMatchObject({ type: "http" });
+    expect(doc.paths["/v1/me"]?.get.security).toEqual([{ cookieAuth: [] }, { apiKeyAuth: [] }]);
+    expect(doc.paths["/v1/me/sessions"]?.get.security).toEqual([{ cookieAuth: [] }]);
     expect(doc.paths["/v1/me"]?.get.operationId).toBe("getMe");
   });
 });

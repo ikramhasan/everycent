@@ -10,7 +10,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate, TodayQuery } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
 const InterestRate = z
@@ -191,7 +191,7 @@ export const listAccounts = createRoute({
   path: "/budgets/{budgetId}/accounts",
   operationId: "listAccounts",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The budget's accounts with their balances",
   request: {
@@ -218,7 +218,7 @@ export const createAccount = createRoute({
   path: "/budgets/{budgetId}/accounts",
   operationId: "createAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Add an account with its starting balance",
   description:
@@ -268,7 +268,7 @@ export const updateAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}",
   operationId: "updateAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Rename an account, edit its note, type or loan details, or set its working balance",
   description:
@@ -358,7 +358,7 @@ export const previewReconcileAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/reconcile/preview",
   operationId: "previewReconcileAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Work out a reconcile's balance adjustment without saving",
   description:
@@ -388,7 +388,7 @@ export const reconcileAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/reconcile",
   operationId: "reconcileAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Reconcile an account against the bank's balance",
   description:
@@ -421,7 +421,7 @@ export const moveAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/move",
   operationId: "moveAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Move an account before another one, or to the end",
   request: {
@@ -458,7 +458,7 @@ export const closeAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/close",
   operationId: "closeAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Close an account",
   description:
@@ -484,7 +484,7 @@ export const revalueAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/revalue",
   operationId: "revalueAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Book a foreign-currency account's unrealized FX gain or loss",
   description:
@@ -545,7 +545,7 @@ export const reopenAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/reopen",
   operationId: "reopenAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Reopen a closed account (and show its payment category again)",
   description:
@@ -568,7 +568,7 @@ export const deleteAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}",
   operationId: "deleteAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete an account that has no history beyond its starting balance",
   request: { params: AccountParams },
@@ -588,7 +588,7 @@ export const updateToLoanAccount = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/update-to-loan",
   operationId: "updateToLoanAccount",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
   description:
@@ -737,7 +737,7 @@ export const getLoanActivity = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/loan",
   operationId: "getLoanActivity",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "A loan's month-by-month activity: payments, interest, escrow and balances",
   description:
@@ -762,7 +762,7 @@ export const setLoanCharge = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/loan/charges",
   operationId: "setLoanCharge",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Set a loan month's total interest or escrow",
   description:
@@ -798,7 +798,7 @@ export const recordLoanPayment = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/loan/payments",
   operationId: "recordLoanPayment",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Record a loan payment (YNAB's Record Payment)",
   description:
@@ -835,7 +835,7 @@ export const dismissLoanBanner = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/loan/banners/dismiss",
   operationId: "dismissLoanBanner",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Dismiss a loan page banner for the whole plan",
   description:

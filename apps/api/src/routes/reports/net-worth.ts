@@ -13,7 +13,7 @@ import { serverToday } from "../../lib/ledger";
 import { type NetWorthBalance, netWorthReport } from "../../lib/net-worth";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 
 const Month = z.string().regex(BUDGET_MONTH_PATTERN, "Expected a month as YYYY-MM");
@@ -104,7 +104,7 @@ export const getNetWorthReport = createRoute({
   path: "/budgets/{budgetId}/reports/net-worth",
   operationId: "getNetWorthReport",
   tags: ["Reports"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Month-end balances of every account and the net worth they add up to",
   description:

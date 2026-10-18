@@ -1,7 +1,7 @@
 import { BUDGET_MONTH_PATTERN, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import { CategoryListSchema } from "../categories/routes";
 
 const TemplateSchema = z
@@ -41,7 +41,7 @@ export const listCategoryTemplates = createRoute({
   path: "/budgets/{budgetId}/category-templates",
   operationId: "listCategoryTemplates",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "YNAB's category template gallery, with amounts in the budget's currency",
   request: { params: BudgetParams },
@@ -65,7 +65,7 @@ export const importCategoryTemplate = createRoute({
   path: "/budgets/{budgetId}/category-templates/{templateId}/import",
   operationId: "importCategoryTemplate",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Add a template's picked categories to the budget (YNAB's Import Category Template)",
   description:

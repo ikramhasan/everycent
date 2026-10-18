@@ -7,7 +7,12 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import {
+  authSecurity,
+  requireAuth,
+  requireSession,
+  sessionSecurity,
+} from "../../middleware/require-auth";
 
 const BudgetName = z.string().trim().min(1).max(100);
 
@@ -71,7 +76,7 @@ export const listBudgets = createRoute({
   path: "/budgets",
   operationId: "listBudgets",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Budgets the signed-in user belongs to",
   responses: {
@@ -89,8 +94,8 @@ export const createBudget = createRoute({
   path: "/budgets",
   operationId: "createBudget",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Create a budget (the caller becomes its owner)",
   request: {
     body: { required: true, content: { "application/json": { schema: CreateBudgetSchema } } },
@@ -108,7 +113,7 @@ export const getBudget = createRoute({
   path: "/budgets/{budgetId}",
   operationId: "getBudget",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "One budget (also records it as the caller's last-used budget)",
   request: { params: BudgetParams },
@@ -125,7 +130,7 @@ export const updateBudget = createRoute({
   path: "/budgets/{budgetId}",
   operationId: "updateBudget",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Rename a budget or change its formats",
   request: {
@@ -148,8 +153,8 @@ export const deleteBudget = createRoute({
   path: "/budgets/{budgetId}",
   operationId: "deleteBudget",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Delete a budget and everything in it (owner only)",
   request: { params: BudgetParams },
   responses: {
@@ -167,8 +172,8 @@ export const freshStartBudget = createRoute({
   path: "/budgets/{budgetId}/fresh-start",
   operationId: "freshStartBudget",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Fresh start: archive this budget and continue in a copy without transactions",
   description:
     "Owner only. The new budget is named `name` and keeps the settings, partners, categories " +

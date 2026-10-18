@@ -6,7 +6,7 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const PayeeName = z.string().trim().min(1, "Payee name cannot be empty").max(200);
 const PayeeIds = z.array(z.string()).min(1).max(1000);
@@ -128,7 +128,7 @@ const forbidden = jsonError(
 
 export const listPayees = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/payees",
@@ -156,7 +156,7 @@ export const listPayees = createRoute({
 
 export const updatePayee = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "patch",
   path: "/budgets/{budgetId}/payees/{payeeId}",
@@ -199,7 +199,7 @@ export const updatePayee = createRoute({
 
 export const setPayeesHidden = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/payees/hide",
@@ -227,7 +227,7 @@ const ChangeResult = z
 
 export const combinePayees = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/payees/combine",
@@ -253,7 +253,7 @@ export const combinePayees = createRoute({
 
 export const deletePayees = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/payees/delete",
@@ -283,7 +283,7 @@ export const deletePayees = createRoute({
 
 export const restorePayees = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/payees/restore",
@@ -323,7 +323,7 @@ export const listPayeeTransactions = createRoute({
   path: "/budgets/{budgetId}/payees/transactions",
   operationId: "listPayeeTransactions",
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Everything using these payees: transactions, split lines and scheduled ones",
   description: 'Newest first, as Manage Payees\' "Show N Transactions" lists them.',
@@ -356,7 +356,7 @@ const ruleNotFound = jsonError("No such budget or rule, or the caller isn't a me
 
 export const listPayeeRules = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/payees/rules",
@@ -384,7 +384,7 @@ export const listPayeeRules = createRoute({
 
 export const createPayeeRule = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/payees/{payeeId}/rules",
@@ -422,7 +422,7 @@ export const createPayeeRule = createRoute({
 
 export const updatePayeeRule = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "patch",
   path: "/budgets/{budgetId}/payees/rules/{ruleId}",
@@ -447,7 +447,7 @@ export const updatePayeeRule = createRoute({
 
 export const deletePayeeRule = createRoute({
   tags: ["Payees"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "delete",
   path: "/budgets/{budgetId}/payees/rules/{ruleId}",

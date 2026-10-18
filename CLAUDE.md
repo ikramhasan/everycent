@@ -83,7 +83,11 @@ behaviour you haven't confirmed.
 - Every API router comes from `createRouter()` (shared validation error shape). Errors are thrown
   as `AppError(status, CODE, message)` and rendered as `{ error: { code, message, details? } }`.
 - Every route has an `operationId`, a response schema and documented error responses (`jsonError`).
-- Authed routes use `middleware: [requireAuth] as const` and `security: [{ cookieAuth: [] }]`.
+- Authed routes use `middleware: [requireAuth] as const` and `security: authSecurity` (a session
+  cookie or a personal API key). Account, security, sharing and budget create/delete/import routes
+  use `requireSession` + `sessionSecurity` instead, so an API key can't reach them
+  (`apps/api/src/lib/api-keys.ts`). A key's scope is enforced in `requireAuth` and
+  `loadBudgetAccess`; check `c.var.apiKey` before adding side effects a script shouldn't trigger.
 - Handlers read dependencies from `c.var.deps` — never import a global db/auth.
 - Budget-scoped routes live under `/v1/budgets/{budgetId}/…` and authorize through
   `loadBudgetAccess(c, budgetId, permission?)` (`apps/api/src/lib/budget-access.ts`): non-members

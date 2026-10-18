@@ -1,3 +1,4 @@
+import { apiKey } from "@better-auth/api-key";
 import { type Database, newId, sql } from "@everycent/db";
 import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
@@ -6,6 +7,12 @@ import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/a
 import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
 import { jwtVerify } from "jose";
 import type { Env } from "../env";
+import {
+  API_KEY_MAX_DAYS,
+  API_KEY_NAME_MAX,
+  API_KEY_PREFIX,
+  API_KEY_START_LENGTH,
+} from "./api-keys";
 import { budgetAc, budgetRoles } from "./budget-access-control";
 import { deleteBudgetTransactions } from "./delete-budget";
 import type { EmailMessage, EmailSender } from "./email/sender";
@@ -243,6 +250,17 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       },
     },
     telemetry: { enabled: false },
+    logger: {
+      // Through our structured log. A wrong or expired API key is an expected 401
+      // (`requireAuth`), not an error: the api-key plugin would log one for every bad request.
+      log: (level, message, ...args) => {
+        if (message.startsWith("Failed to validate API key")) return;
+        const text = `Better Auth: ${message}`;
+        if (level === "error") log.error(text, undefined, args[0]);
+        else if (level === "warn") log.warn(text, undefined, args[0]);
+        else log.info(text);
+      },
+    },
     plugins: [
       // Refuses passwords found in known breaches (sign-up, change, reset). Only the first five
       // characters of the password's SHA-1 leave the server. Off in tests: it calls the network.
@@ -254,6 +272,20 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
         issuer: "everycent",
         backupCodeOptions: { amount: 1, length: 10 },
         schema: { twoFactor: { modelName: "twoFactor" } },
+      }),
+      // Personal API keys (EVERYCENT-230, `lib/api-keys.ts`). Its HTTP endpoints are blocked in
+      // app.ts: keys are managed through /v1/me/api-keys and checked by `requireAuth`. Keys never
+      // become sessions (`enableSessionForAPIKeys` stays off), so they can't reach /api/auth/*.
+      apiKey({
+        defaultPrefix: API_KEY_PREFIX,
+        requireName: true,
+        maximumNameLength: API_KEY_NAME_MAX,
+        startingCharactersConfig: { shouldStore: true, charactersLength: API_KEY_START_LENGTH },
+        keyExpiration: { defaultExpiresIn: null, minExpiresIn: 1, maxExpiresIn: API_KEY_MAX_DAYS },
+        // Our own per-key limit (`consumeApiKeyRequest`) replaces this one.
+        rateLimit: { enabled: false },
+        enableMetadata: false,
+        schema: { apikey: { modelName: "apiKey" } },
       }),
       // Budgets are organizations. Its HTTP endpoints are blocked in app.ts; our /v1/budgets
       // routes call auth.api.* instead so everything goes through our validation.

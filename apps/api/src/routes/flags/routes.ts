@@ -1,7 +1,7 @@
 import { FLAG_COLORS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const FlagSchema = z
   .object({
@@ -28,7 +28,7 @@ export const listFlags = createRoute({
   path: "/budgets/{budgetId}/flags",
   operationId: "listFlags",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The six flag colors and the budget's names for them",
   request: { params: BudgetParams },
@@ -45,7 +45,7 @@ export const renameFlag = createRoute({
   path: "/budgets/{budgetId}/flags/{color}",
   operationId: "renameFlag",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Name a flag color for everyone on the budget (an empty name clears it)",
   request: {

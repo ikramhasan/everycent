@@ -1,6 +1,7 @@
 import type { Database } from "@everycent/db";
 import { throttle } from "@everycent/db/schema";
 import { RateLimiterDrizzle, RateLimiterRes } from "rate-limiter-flexible";
+import { API_KEY_REQUESTS_PER_HOUR } from "./api-keys";
 import { AppError } from "./errors";
 
 const limiters = new WeakMap<Database, Map<string, RateLimiterDrizzle>>();
@@ -66,5 +67,25 @@ export async function tryClientErrorReport(db: Database, client: string): Promis
   } catch (e) {
     if (!(e instanceof RateLimiterRes)) throw e;
     return false;
+  }
+}
+
+/**
+ * Counts one request made with API key `keyId`: 429 RATE_LIMITED (with `Retry-After`) once its
+ * hourly allowance is spent. A fixed window per key, rather than the api-key plugin's own limit,
+ * whose window only restarts after an hour without requests, so steady use would lock a key out.
+ */
+export async function consumeApiKeyRequest(db: Database, keyId: string) {
+  try {
+    await limiter(db, "api-key", API_KEY_REQUESTS_PER_HOUR, 60 * 60).consume(keyId);
+  } catch (e) {
+    if (!(e instanceof RateLimiterRes)) throw e;
+    const retryAfterSeconds = Math.ceil(e.msBeforeNext / 1000);
+    throw new AppError(
+      429,
+      "RATE_LIMITED",
+      `This API key has made ${API_KEY_REQUESTS_PER_HOUR} requests this hour. Try again later.`,
+      { retryAfterSeconds },
+    );
   }
 }

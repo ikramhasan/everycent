@@ -10,7 +10,7 @@ import {
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { serverToday } from "../../lib/ledger";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const Name = z.string().trim().min(1).max(100);
 const Note = z.string().max(10_000);
@@ -259,7 +259,7 @@ export const listCategories = createRoute({
   path: "/budgets/{budgetId}/categories",
   operationId: "listCategories",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Category groups with their categories, in display order",
   request: { params: BudgetParams },
@@ -279,7 +279,7 @@ export const createCategoryGroup = createRoute({
   path: "/budgets/{budgetId}/category-groups",
   operationId: "createCategoryGroup",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Add a category group at the end of the list",
   request: {
@@ -306,7 +306,7 @@ export const updateCategoryGroup = createRoute({
   path: "/budgets/{budgetId}/category-groups/{groupId}",
   operationId: "updateCategoryGroup",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Rename, hide or unhide a category group",
   request: {
@@ -337,7 +337,7 @@ export const deleteCategoryGroup = createRoute({
   path: "/budgets/{budgetId}/category-groups/{groupId}",
   operationId: "deleteCategoryGroup",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete a category group and its categories",
   request: { params: GroupParams, query: ReassignQuery },
@@ -358,7 +358,7 @@ export const moveCategoryGroup = createRoute({
   path: "/budgets/{budgetId}/category-groups/{groupId}/move",
   operationId: "moveCategoryGroup",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Move a category group before another one, or to the end",
   request: {
@@ -394,7 +394,7 @@ export const createCategory = createRoute({
   path: "/budgets/{budgetId}/categories",
   operationId: "createCategory",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Add a category at the end of a group",
   request: {
@@ -418,7 +418,7 @@ export const updateCategory = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}",
   operationId: "updateCategory",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Rename a category, change its note, or hide/unhide it",
   request: {
@@ -450,7 +450,7 @@ export const deleteCategory = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}",
   operationId: "deleteCategory",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete a category, moving its history to another category",
   request: { params: CategoryParams, query: ReassignQuery },
@@ -471,7 +471,7 @@ export const moveCategory = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}/move",
   operationId: "moveCategory",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Move a category within its group or into another group",
   request: {
@@ -510,7 +510,7 @@ export const setCategoryTarget = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}/target",
   operationId: "setCategoryTarget",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Create or replace a category's target",
   description:
@@ -547,7 +547,7 @@ export const restoreCategoryTarget = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}/target/restore",
   operationId: "restoreCategoryTarget",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Put a category's target back as it was (undo and redo)",
   description:
@@ -577,7 +577,7 @@ export const deleteCategoryTarget = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}/target",
   operationId: "deleteCategoryTarget",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Remove a category's target",
   request: { params: CategoryParams },
@@ -596,7 +596,7 @@ export const snoozeCategoryTarget = createRoute({
   path: "/budgets/{budgetId}/categories/{categoryId}/target/snooze",
   operationId: "snoozeCategoryTarget",
   tags: ["Categories"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Snooze a category's target for this month, or wake it",
   description:

@@ -51,6 +51,11 @@ const STATUS_CODES: Partial<Record<number, string>> = {
 
 export function onError(err: Error, c: Context) {
   if (err instanceof AppError) {
+    const retryAfter = (err.details as { retryAfterSeconds?: unknown } | undefined)
+      ?.retryAfterSeconds;
+    if (err.status === 429 && typeof retryAfter === "number") {
+      c.header("Retry-After", String(retryAfter));
+    }
     return c.json(errorBody(err.code, err.message, err.details), err.status);
   }
   if (err instanceof APIError) {

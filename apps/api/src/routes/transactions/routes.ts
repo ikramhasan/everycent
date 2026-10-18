@@ -6,7 +6,7 @@ import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
 import { zMemberRef } from "../../lib/member-colors";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES } from "../../lib/storage/file-type";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import { attachmentBodyLimit } from "./attachments";
 import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
@@ -364,7 +364,7 @@ export const listTransactions = createRoute({
   path: "/budgets/{budgetId}/transactions",
   operationId: "listTransactions",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "One account's register, or every account's, a page at a time",
   description:
@@ -415,7 +415,7 @@ export const createTransaction = createRoute({
   path: "/budgets/{budgetId}/transactions",
   operationId: "createTransaction",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Add a transaction, a transfer or a split",
   description: `${categoryRules} ${transferRules} ${splitRules}`,
@@ -503,7 +503,7 @@ export const updateTransaction = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}",
   operationId: "updateTransaction",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Edit a transaction, move it to another account, or toggle cleared",
   description:
@@ -588,7 +588,7 @@ export const deleteTransaction = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}",
   operationId: "deleteTransaction",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete a transaction",
   description:
@@ -626,7 +626,7 @@ export const uploadAttachment = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
   operationId: "uploadAttachment",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth, attachmentBodyLimit] as const,
   summary: "Attach a photo or PDF to a transaction",
   description:
@@ -671,7 +671,7 @@ export const getAttachment = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
   operationId: "getAttachment",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Open or download a transaction's attachment",
   description:
@@ -708,7 +708,7 @@ export const deleteAttachment = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
   operationId: "deleteAttachment",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete a transaction's attachment",
   description: "From both sides of a transfer. Its file is deleted from storage soon after.",
@@ -766,7 +766,7 @@ export const summarizeSelection = createRoute({
   path: "/budgets/{budgetId}/transactions/selection",
   operationId: "summarizeSelection",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "How many transactions a selection holds and their total",
   request: { params: BudgetParams, body: json(z.object({ selection: SelectionSchema })) },
@@ -829,7 +829,7 @@ export const bulkUpdateTransactions = createRoute({
   path: "/budgets/{budgetId}/transactions/bulk",
   operationId: "bulkUpdateTransactions",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Apply one action to every selected transaction it applies to",
   description:

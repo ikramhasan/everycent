@@ -171,6 +171,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The account's active API keys, newest first */
+        get: operations["listApiKeys"];
+        put?: never;
+        /**
+         * Create an API key
+         * @description The answer holds the key itself. It's shown only this once: store it somewhere safe.
+         */
+        post: operations["createApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/api-keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an API key */
+        delete: operations["deleteApiKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/picture": {
         parameters: {
             query?: never;
@@ -2115,6 +2153,48 @@ export interface components {
         };
         DeleteAccount: {
             password: string;
+        };
+        ApiKeyList: {
+            apiKeys: components["schemas"]["ApiKey"][];
+        };
+        ApiKey: {
+            id: string;
+            name: string;
+            /** @description The key's first characters, to tell keys apart */
+            start: string;
+            /**
+             * @description `read`: GET requests only. `write`: reads and changes.
+             * @enum {string}
+             */
+            access: "read" | "write";
+            /** @description The budgets the key may use; null for every budget, including future ones */
+            budgetIds: string[] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Null: never expires
+             */
+            expiresAt: string | null;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+        };
+        CreatedApiKey: {
+            apiKey: components["schemas"]["ApiKey"];
+            /** @description The key. Shown only once. */
+            key: string;
+        };
+        CreateApiKey: {
+            name: string;
+            /**
+             * @description `read`: GET requests only. `write`: reads and changes.
+             * @enum {string}
+             */
+            access: "read" | "write";
+            /** @description Budgets the key may use (ones you belong to); null for every budget */
+            budgetIds: string[] | null;
+            /** @description Days until the key stops working; null for never */
+            expiresInDays: number | null;
         };
         Picture: {
             /** @description Where the image is (an API path with its version) */
@@ -5336,6 +5416,142 @@ export interface operations {
             };
             /** @description Too many attempts (`RATE_LIMITED`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listApiKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active keys (the keys themselves are never shown again) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiKey"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedApiKey"];
+                };
+            };
+            /** @description Invalid input, or a budget you don't belong to (UNKNOWN_BUDGET) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked: the key stops working at once */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such key for this account */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
