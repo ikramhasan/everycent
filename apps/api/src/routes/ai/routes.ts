@@ -1,3 +1,4 @@
+import { zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import {
@@ -6,6 +7,7 @@ import {
   requireSession,
   sessionSecurity,
 } from "../../middleware/require-auth";
+import { aiFileBodyLimit } from "./attachments";
 
 export const AiSettingsSchema = z
   .object({
@@ -227,5 +229,179 @@ export const hydrateAiChat = createRoute({
     },
     ...aiErrors,
     404: jsonError("No such budget, or the conversation isn't the caller's"),
+  },
+});
+
+export const AiAttachmentSchema = z
+  .object({
+    id: z.string(),
+    fileName: z.string(),
+    contentType: z.string().describe("Read from the file, not from what the browser said"),
+    byteSize: z.number().int(),
+    createdAt: z.iso.datetime(),
+  })
+  .openapi("AiAttachment");
+
+const AttachmentParams = BudgetParams.extend({
+  attachmentId: z.string().openapi({ param: { name: "attachmentId", in: "path" } }),
+});
+
+const fileBody = <T extends z.ZodRawShape>(extra: T) => ({
+  required: true,
+  content: {
+    "multipart/form-data": {
+      schema: z.object({
+        file: z
+          .custom<File>((v) => v instanceof File, { message: "Expected a file" })
+          .openapi({ type: "string", format: "binary" }),
+        ...extra,
+      }),
+    },
+  },
+});
+
+const fileErrors = {
+  413: jsonError("Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)"),
+  415: jsonError(
+    "Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`)",
+  ),
+};
+
+const storageOff = jsonError(
+  "AI_UNAVAILABLE: the server has no AI set up; ATTACHMENTS_DISABLED: it has no file storage",
+);
+
+export const uploadAiAttachment = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/ai/attachments",
+  operationId: "uploadAiAttachment",
+  tags: ["AI"],
+  security: sessionSecurity,
+  middleware: [requireSession, aiFileBodyLimit] as const,
+  summary: "Upload a file to send to the AI assistant",
+  description:
+    "Kept in object storage, private to the caller. Send it by putting a pointer to it in a chat " +
+    'message: an image or document part whose source is `{ type: "url", value: ' +
+    '"everycent-attachment:<id>" }`. A file that isn\'t sent within a day is deleted.',
+  request: { params: BudgetParams, body: fileBody({}) },
+  responses: {
+    201: {
+      description: "Uploaded",
+      content: { "application/json": { schema: AiAttachmentSchema } },
+    },
+    400: jsonError("No file, or an empty one"),
+    ...aiErrors,
+    404: notFound,
+    ...fileErrors,
+    503: storageOff,
+  },
+});
+
+export const getAiAttachment = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/ai/attachments/{attachmentId}",
+  operationId: "getAiAttachment",
+  tags: ["AI"],
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
+  summary: "Open or download a file sent to the AI assistant",
+  description:
+    "Redirects to a short-lived link to the file in object storage, or (storage on the API's " +
+    "own disk) sends the file. Only the person who uploaded it can open it.",
+  request: {
+    params: AttachmentParams,
+    query: z.object({
+      download: z
+        .enum(["true", "false"])
+        .optional()
+        .describe("`true`: saved as a download (its file name) rather than shown"),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The file",
+      content: { "application/octet-stream": { schema: z.string().openapi({ format: "binary" }) } },
+    },
+    302: { description: "Where to fetch the file (valid for a few minutes)" },
+    ...aiErrors,
+    404: jsonError("No such budget or file, or it isn't the caller's"),
+    503: storageOff,
+  },
+});
+
+export const deleteAiAttachment = createRoute({
+  method: "delete",
+  path: "/budgets/{budgetId}/ai/attachments/{attachmentId}",
+  operationId: "deleteAiAttachment",
+  tags: ["AI"],
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
+  summary: "Remove a file before sending it",
+  description: "A file already sent stays with its conversation (deleted with it).",
+  request: { params: AttachmentParams },
+  responses: {
+    204: { description: "Deleted" },
+    ...aiErrors,
+    404: jsonError("No such budget or file, or it isn't the caller's"),
+    409: jsonError("ATTACHMENT_SENT: it's part of a conversation"),
+  },
+});
+
+const DraftLineSchema = z.object({
+  categoryId: z.string(),
+  memo: z.string().nullable(),
+  amount: zMinorUnits.describe("In the account's currency; negative for an outflow"),
+});
+
+export const TransactionDraftSchema = z
+  .object({
+    found: z.boolean().describe("False when the file didn't look like a receipt, invoice or bill"),
+    date: z.iso.date().nullable(),
+    payeeId: z
+      .string()
+      .nullable()
+      .describe("An existing payee the file matched; null for a new one (`payeeName`) or none"),
+    payeeName: z.string().nullable(),
+    categoryId: z.string().nullable().describe("Null when unsure, or when it's a split"),
+    memo: z.string().nullable(),
+    amount: zMinorUnits
+      .nullable()
+      .describe("The total in the account's currency, negative for an outflow; null if unread"),
+    lines: z
+      .array(DraftLineSchema)
+      .describe("A split by category, adding up to `amount`; empty when it isn't one"),
+    note: z.string().nullable().describe("Something the person should check"),
+  })
+  .openapi("TransactionDraft");
+
+export const draftTransactionFromFile = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/ai/transaction-draft",
+  operationId: "draftTransactionFromFile",
+  tags: ["AI"],
+  security: sessionSecurity,
+  middleware: [requireSession, aiFileBodyLimit] as const,
+  summary: "Fill in a new transaction from a receipt",
+  description:
+    "One AI request (not a conversation): reads the file and fills in a transaction for the " +
+    "account, choosing from the budget's own categories and payees. Nothing is saved, and the " +
+    "file isn't kept: the app puts the result in its new-transaction row for the person to check.",
+  request: {
+    params: BudgetParams,
+    body: fileBody({
+      accountId: z.string().describe("The account the transaction goes in"),
+      today: z.iso.date().optional().describe("The person's date, for a receipt without a year"),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The filled-in transaction",
+      content: { "application/json": { schema: TransactionDraftSchema } },
+    },
+    400: jsonError("No file, an empty one, or no such account"),
+    ...aiErrors,
+    404: notFound,
+    ...fileErrors,
+    502: jsonError("AI_FAILED: the AI couldn't read the file"),
   },
 });

@@ -2,6 +2,7 @@ import { isCurrencyCode, money } from "@everycent/engine";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { accountsQueryOptions } from "@/lib/accounts";
+import { aiAttachmentUrl } from "@/lib/ai";
 import { useBudget } from "@/lib/budget-context";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { payeesQueryOptions } from "@/lib/transactions";
@@ -89,6 +90,20 @@ export function AiChangePreview({ toolName, args }: { toolName: string; args: un
   };
 
   const rows: Array<[string, ReactNode]> = [];
+  // A file from the conversation going onto a transaction: show the file itself.
+  if (toolName === "attachFileToTransaction" && typeof fields.attachmentId === "string") {
+    rows.push([
+      "File",
+      <img
+        src={aiAttachmentUrl(budget.id, fields.attachmentId)}
+        alt=""
+        className="max-h-24 rounded-sm bg-muted object-contain"
+        onError={(e) => {
+          e.currentTarget.hidden = true;
+        }}
+      />,
+    ]);
+  }
   for (const [key, value] of Object.entries(fields)) {
     if (value === null || value === undefined || value === "" || HIDDEN.has(key)) continue;
     if (key in MONEY && (typeof value === "string" || typeof value === "number")) {

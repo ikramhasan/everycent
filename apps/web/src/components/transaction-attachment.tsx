@@ -29,9 +29,9 @@ import { type Transaction, transactionsQueryPrefix } from "@/lib/transactions";
 type Attachment = NonNullable<Transaction["attachment"]>;
 
 /** The API's limit (YNAB's for a photo). */
-const MAX_BYTES = 15 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 /** What the file picker offers: YNAB's photo types, HEIC from phones, and PDFs. */
-const ACCEPT =
+export const ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml,image/heic,image/heif,.heic,.heif,application/pdf";
 
 const isPdf = (a: Attachment) => a.contentType === "application/pdf";
@@ -64,7 +64,7 @@ function useAttachment(budgetId: string, t: Transaction) {
   const params = { path: { budgetId, transactionId: t.id } };
 
   async function upload(file: File) {
-    if (file.size > MAX_BYTES) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
       toast.error("That file is too big: attachments can be at most 15 MB.");
       return;
     }
@@ -116,7 +116,7 @@ function useFilePicker(onPick: (file: File) => void) {
     <input
       ref={input}
       type="file"
-      accept={ACCEPT}
+      accept={ATTACHMENT_ACCEPT}
       className="hidden"
       tabIndex={-1}
       aria-hidden

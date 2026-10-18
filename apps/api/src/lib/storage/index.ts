@@ -45,6 +45,10 @@ export const attachmentKey = (budgetId: string, attachmentId: string) =>
 export const accountLogoKey = (budgetId: string, accountId: string, logoId: string) =>
   `budgets/${budgetId}/accounts/${accountId}/logo/${logoId}`;
 
+/** A file attached in a conversation with the AI assistant. */
+export const aiAttachmentKey = (budgetId: string, attachmentId: string) =>
+  `budgets/${budgetId}/ai-attachments/${attachmentId}`;
+
 /** A profile picture's object key (each version its own). */
 export const userAvatarKey = (userId: string, avatarId: string) =>
   `users/${userId}/avatar/${avatarId}`;

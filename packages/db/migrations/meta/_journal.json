@@ -379,6 +379,13 @@
       "when": 1792328989680,
       "tag": "0053_sticky_mariko_yashida",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792331143901,
+      "tag": "0054_ai_attachment",
+      "breakpoints": true
     }
   ]
 }

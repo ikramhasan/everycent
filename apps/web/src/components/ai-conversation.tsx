@@ -19,11 +19,13 @@ import { Skeleton } from "@everycent/ui/components/skeleton";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@everycent/ui/components/trace";
 import { fetchServerSentEvents, type UIMessage, useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Check, CircleAlert, CircleDashed, Square, X } from "lucide-react";
-import { type FormEvent, useMemo, useRef, useState } from "react";
+import { ArrowUp, Check, CircleAlert, CircleDashed, Paperclip, Square, X } from "lucide-react";
+import { type DragEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { PickedFiles, SentFileCard, sentFile, usePickedFiles } from "@/components/ai-attachments";
 import { AiChangePreview } from "@/components/ai-change-preview";
 import { AiChart, chartSpec } from "@/components/ai-chart";
+import { AI_FILE_ACCEPT } from "@/lib/ai";
 import { apiBaseUrl } from "@/lib/api";
 import { todayIso } from "@/lib/dates";
 import { CLIENT_ID } from "@/lib/live-updates";
@@ -47,6 +49,7 @@ const VERBS: Record<string, [doing: string, done: string]> = {
   set: ["Setting", "Set"],
   calculate: ["Calculating", "Calculated"],
   present: ["Drawing", "Drew"],
+  attach: ["Attaching", "Attached"],
 };
 
 /** What a tool call did, for people: `listAccounts` → "Looked at accounts". */
@@ -101,6 +104,9 @@ export function AiConversation({
     onFinish: () => void refreshHistory(),
   });
   const [draft, setDraft] = useState("");
+  const picked = usePickedFiles(budgetId);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const busy = chat.isLoading || chat.resuming;
   // Changes the assistant wants to make. The tools are the server's, so the client can't bind
   // them as typed tool approvals; they arrive as generic interrupts whose descriptor the server
@@ -137,9 +143,33 @@ export function AiConversation({
 
   function send(text: string) {
     const content = text.trim();
-    if (!content || busy || approvals.length > 0) return;
+    const files = picked.ready;
+    if ((!content && files.length === 0) || busy || picked.uploading || approvals.length > 0) {
+      return;
+    }
     setDraft("");
-    void chat.sendMessage(content);
+    picked.clear();
+    // Files go as pointers to what was uploaded (the server never keeps a file in the transcript).
+    void chat.sendMessage(
+      files.length === 0
+        ? content
+        : {
+            content: [
+              ...(content ? [{ type: "text" as const, content }] : []),
+              ...files.map((f) => ({
+                type: f.contentType.startsWith("image/")
+                  ? ("image" as const)
+                  : ("document" as const),
+                source: {
+                  type: "url" as const,
+                  value: `everycent-attachment:${f.id}`,
+                  mimeType: f.contentType,
+                },
+                metadata: { attachmentId: f.id, fileName: f.fileName, byteSize: f.byteSize },
+              })),
+            ],
+          },
+    );
     if (!started.current) {
       started.current = true;
       onStarted?.(threadId);
@@ -179,6 +209,7 @@ export function AiConversation({
               {chat.messages.map((m) => (
                 <MessageScrollerItem key={m.id} messageId={m.id} scrollAnchor={m.role === "user"}>
                   <ChatMessage
+                    budgetId={budgetId}
                     message={m}
                     streaming={chat.isLoading && m.id === chat.messages.at(-1)?.id}
                   />
@@ -268,8 +299,46 @@ export function AiConversation({
           <MessageScrollerButton />
         </MessageScroller>
       </MessageScrollerProvider>
-      <form onSubmit={onSubmit} className="border-t p-3">
+      <form
+        onSubmit={onSubmit}
+        className="relative border-t p-3"
+        onDragOver={(e: DragEvent) => {
+          if (!e.dataTransfer.types.includes("Files") || approvals.length > 0) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e: DragEvent) => {
+          setDragging(false);
+          if (!e.dataTransfer.files.length || approvals.length > 0) return;
+          e.preventDefault();
+          picked.add(e.dataTransfer.files);
+        }}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-primary border-dashed bg-background/90 font-medium text-sm">
+            Drop files to attach them
+          </div>
+        )}
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          accept={AI_FILE_ACCEPT}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => {
+            if (e.target.files) picked.add(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <InputGroup>
+          {picked.files.length > 0 && (
+            <InputGroupAddon align="block-start" className="px-0 pt-1 pb-0">
+              <PickedFiles files={picked.files} onRemove={picked.remove} />
+            </InputGroupAddon>
+          )}
           <InputGroupTextarea
             aria-label="Message"
             placeholder={
@@ -280,6 +349,12 @@ export function AiConversation({
             disabled={approvals.length > 0}
             className="max-h-32 min-h-10"
             onChange={(e) => setDraft(e.target.value)}
+            onPaste={(e) => {
+              // A screenshot or copied file pastes as an attachment.
+              if (e.clipboardData.files.length === 0) return;
+              e.preventDefault();
+              picked.add(e.clipboardData.files);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -288,6 +363,17 @@ export function AiConversation({
             }}
           />
           <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Attach files"
+              title="Attach a receipt, statement or spreadsheet"
+              disabled={approvals.length > 0 || picked.full}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Paperclip />
+            </InputGroupButton>
             {chat.isLoading ? (
               <InputGroupButton
                 type="button"
@@ -304,7 +390,12 @@ export function AiConversation({
                 size="icon-xs"
                 variant="default"
                 aria-label="Send"
-                disabled={!draft.trim() || busy || approvals.length > 0}
+                disabled={
+                  (!draft.trim() && picked.ready.length === 0) ||
+                  busy ||
+                  picked.uploading ||
+                  approvals.length > 0
+                }
               >
                 <ArrowUp />
               </InputGroupButton>
@@ -316,7 +407,15 @@ export function AiConversation({
   );
 }
 
-function ChatMessage({ message, streaming }: { message: UIMessage; streaming: boolean }) {
+function ChatMessage({
+  budgetId,
+  message,
+  streaming,
+}: {
+  budgetId: string;
+  message: UIMessage;
+  streaming: boolean;
+}) {
   const mine = message.role === "user";
   const results = new Map(
     message.parts.flatMap((p) => (p.type === "tool-result" ? [[p.toolCallId, p] as const] : [])),
@@ -344,6 +443,8 @@ function ChatMessage({ message, streaming }: { message: UIMessage; streaming: bo
               </Bubble>
             );
           }
+          const file = mine ? sentFile(part) : null;
+          if (file) return <SentFileCard key={key} budgetId={budgetId} file={file} />;
           if (part.type === "tool-call") {
             // The model's own tool for loading other tools' schemas isn't worth showing.
             if (part.name.startsWith("__")) return null;

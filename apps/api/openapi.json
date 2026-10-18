@@ -12020,6 +12020,131 @@
         ],
         "additionalProperties": {}
       },
+      "AiAttachment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "Read from the file, not from what the browser said"
+          },
+          "byteSize": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "fileName",
+          "contentType",
+          "byteSize",
+          "createdAt"
+        ]
+      },
+      "TransactionDraft": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "False when the file didn't look like a receipt, invoice or bill"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "payeeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An existing payee the file matched; null for a new one (`payeeName`) or none"
+          },
+          "payeeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categoryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null when unsure, or when it's a split"
+          },
+          "memo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(0|-?[1-9]\\d*)$",
+            "description": "The total in the account's currency, negative for an outflow; null if unread"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "categoryId": {
+                  "type": "string"
+                },
+                "memo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|-?[1-9]\\d*)$",
+                  "description": "In the account's currency; negative for an outflow"
+                }
+              },
+              "required": [
+                "categoryId",
+                "memo",
+                "amount"
+              ]
+            },
+            "description": "A split by category, adding up to `amount`; empty when it isn't one"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Something the person should check"
+          }
+        },
+        "required": [
+          "found",
+          "date",
+          "payeeId",
+          "payeeName",
+          "categoryId",
+          "memo",
+          "amount",
+          "lines",
+          "note"
+        ]
+      },
       "ImportContext": {
         "type": "object",
         "properties": {
@@ -26239,6 +26364,467 @@
           },
           "404": {
             "description": "No such budget, or the conversation isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/attachments": {
+      "post": {
+        "operationId": "uploadAiAttachment",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Upload a file to send to the AI assistant",
+        "description": "Kept in object storage, private to the caller. Send it by putting a pointer to it in a chat message: an image or document part whose source is `{ type: \"url\", value: \"everycent-attachment:<id>\" }`. A file that isn't sent within a day is deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAttachment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file, or an empty one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up; ATTACHMENTS_DISABLED: it has no file storage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/attachments/{attachmentId}": {
+      "get": {
+        "operationId": "getAiAttachment",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open or download a file sent to the AI assistant",
+        "description": "Redirects to a short-lived link to the file in object storage, or (storage on the API's own disk) sends the file. Only the person who uploaded it can open it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "attachmentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "`true`: saved as a download (its file name) rather than shown"
+            },
+            "required": false,
+            "description": "`true`: saved as a download (its file name) rather than shown",
+            "name": "download",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Where to fetch the file (valid for a few minutes)"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or file, or it isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up; ATTACHMENTS_DISABLED: it has no file storage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAiAttachment",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Remove a file before sending it",
+        "description": "A file already sent stays with its conversation (deleted with it).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "attachmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or file, or it isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ATTACHMENT_SENT: it's part of a conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/transaction-draft": {
+      "post": {
+        "operationId": "draftTransactionFromFile",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Fill in a new transaction from a receipt",
+        "description": "One AI request (not a conversation): reads the file and fills in a transaction for the account, choosing from the budget's own categories and payees. Nothing is saved, and the file isn't kept: the app puts the result in its new-transaction row for the person to check.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "accountId": {
+                    "type": "string",
+                    "description": "The account the transaction goes in"
+                  },
+                  "today": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The person's date, for a receipt without a year"
+                  }
+                },
+                "required": [
+                  "file",
+                  "accountId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The filled-in transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file, an empty one, or no such account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AI_FAILED: the AI couldn't read the file",
             "content": {
               "application/json": {
                 "schema": {
