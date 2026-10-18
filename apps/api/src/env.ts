@@ -80,8 +80,31 @@ const EnvSchema = z
 
 export type Env = z.infer<typeof EnvSchema>;
 
-export function parseEnv(source: Record<string, string | undefined> = process.env): Env {
-  const result = EnvSchema.safeParse(source);
+type EnvSource = Record<string, string | undefined>;
+
+/**
+ * A Railway PR environment: a deploy Railway made from a git branch other than `main`, the only
+ * branch production deploys (`.railway/railway.ts`). Railway sets RAILWAY_GIT_BRANCH only on
+ * deploys it triggered from GitHub, so a manual redeploy, CI or any other host reads as false.
+ */
+export function isPreviewDeploy(source: EnvSource = process.env): boolean {
+  const branch = source.RAILWAY_GIT_BRANCH;
+  return Boolean(source.RAILWAY_ENVIRONMENT_ID && branch && branch !== "main");
+}
+
+/**
+ * A PR environment copies production's variables, URLs included, but is served only on its own
+ * Railway domain (custom domains aren't copied), so there that domain is the public URL.
+ */
+function withPreviewUrl(source: EnvSource): EnvSource {
+  const domain = source.RAILWAY_PUBLIC_DOMAIN;
+  if (!isPreviewDeploy(source) || !domain) return source;
+  const url = `https://${domain}`;
+  return { ...source, BETTER_AUTH_URL: url, WEB_ORIGIN: url };
+}
+
+export function parseEnv(source: EnvSource = process.env): Env {
+  const result = EnvSchema.safeParse(withPreviewUrl(source));
   if (!result.success) {
     throw new Error(`Invalid environment configuration:\n${z.prettifyError(result.error)}`);
   }

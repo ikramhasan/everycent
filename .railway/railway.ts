@@ -15,8 +15,12 @@ import {
  * bucket for transaction attachments (EVERYCENT-31). The
  * image is the same one any host runs; nothing here changes how it behaves.
  */
-// biome-ignore lint/suspicious/noTemplateCurlyInString: Railway's reference syntax, not a JS template.
-const PUBLIC_URL = "https://${{RAILWAY_PUBLIC_DOMAIN}}";
+/**
+ * The service has the custom domain and a Railway one, so RAILWAY_PUBLIC_DOMAIN could name either.
+ * PR environments (a copy of this one, served only on their own Railway domain) don't use this:
+ * the API takes their URL from RAILWAY_PUBLIC_DOMAIN (`isPreviewDeploy` in apps/api/src/env.ts).
+ */
+const PUBLIC_URL = "https://everycent.ikramhasan.com";
 
 export default defineRailway(() => {
   const db = postgres("postgres");
@@ -33,7 +37,7 @@ export default defineRailway(() => {
     healthcheckTimeout: 60,
     env: {
       DATABASE_URL: db.env.DATABASE_URL,
-      // The service's own generated domain; one origin serves the web app and the API.
+      // One origin serves the web app and the API.
       BETTER_AUTH_URL: PUBLIC_URL,
       WEB_ORIGIN: PUBLIC_URL,
       // Railway's edge overwrites X-Real-IP on every request and publishes no proxy ranges, so

@@ -1,10 +1,13 @@
 import { runMigrations } from "@everycent/db";
+import { isPreviewDeploy, parseEnv } from "../env";
+import { seedDemoUser } from "../lib/demo-user";
 import { installJobs } from "../lib/jobs/install";
 import { loadRootEnv } from "../load-env";
 
 /**
  * The deploy step: database migrations, then the job queue's schema and queues. Run it once per
  * release before the new version starts (`pnpm db:migrate`; in the image, `node dist/migrate.mjs`).
+ * A Railway PR environment starts with an empty database, so there it also adds the demo user.
  */
 if (process.env.NODE_ENV !== "production") loadRootEnv();
 const url = process.env.DATABASE_URL;
@@ -16,3 +19,9 @@ if (!url) {
 await runMigrations(url);
 await installJobs(url);
 console.log("Migrations applied");
+
+if (isPreviewDeploy()) {
+  const env = parseEnv();
+  await seedDemoUser(env);
+  console.log(`Preview: demo user ready (${env.WEB_ORIGIN})`);
+}
