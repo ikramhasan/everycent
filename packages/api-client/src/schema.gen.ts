@@ -12080,7 +12080,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`) */
+            /** @description Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`) */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -12314,7 +12314,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`) */
+            /** @description Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`) */
             413: {
                 headers: {
                     [name: string]: unknown;

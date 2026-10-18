@@ -26479,7 +26479,7 @@
             }
           },
           "413": {
-            "description": "Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)",
+            "description": "Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -26804,7 +26804,7 @@
             }
           },
           "413": {
-            "description": "Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)",
+            "description": "Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`)",
             "content": {
               "application/json": {
                 "schema": {

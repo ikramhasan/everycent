@@ -15,6 +15,7 @@ import {
   attachmentIds,
   attachmentMiddleware,
   claimAttachments,
+  usableAttachments,
   withStoredAttachments,
 } from "../../lib/ai/attachments";
 import { chatPersistence } from "../../lib/ai/persistence";
@@ -167,6 +168,12 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
   // otherwise be merged in again and break the model's tool-call pairing.
   const sent = params.resume ? [] : newUserMessage(params.messages);
   const ids = sent.flatMap(attachmentIds);
+  // Checked before the conversation is written, so a refused send leaves nothing behind.
+  const attachments = await usableAttachments(
+    db,
+    { budgetId, userId: c.var.user.id, conversationId: params.threadId },
+    ids,
+  );
   const existing = await conversationFor(c, budgetId, params.threadId);
   if (existing) {
     // Most recently used first in the history.
@@ -184,11 +191,7 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
     });
   }
   // Files it carries become this conversation's; the transcript keeps pointers to them.
-  const attachments = await claimAttachments(
-    db,
-    { budgetId, userId: c.var.user.id, conversationId: params.threadId },
-    ids,
-  );
+  await claimAttachments(db, params.threadId, ids);
   const messages = sent.map((m) => withStoredAttachments(m, attachments));
 
   const adapter = c.var.deps.aiAdapter ?? anthropicAdapter(env);

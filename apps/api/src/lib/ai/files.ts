@@ -36,8 +36,11 @@ const TEXT_TYPES: Record<string, string> = {
 
 /** The largest file the assistant takes (the same as a transaction attachment). */
 export const MAX_AI_FILE_BYTES = 15 * 1024 * 1024;
-/** Claude's limit on one image; the app shrinks bigger photos before uploading them. */
-export const MAX_AI_IMAGE_BYTES = 5 * 1024 * 1024;
+/**
+ * Claude's limit on one image is 5 MB of base64, so 3.75 MB of file; the app shrinks bigger
+ * photos before uploading them.
+ */
+export const MAX_AI_IMAGE_BYTES = (5 * 1024 * 1024 * 3) / 4;
 /** Text past this many characters (about 50k tokens) is cut off, with a note saying so. */
 const MAX_TEXT_CHARS = 200_000;
 
@@ -86,7 +89,7 @@ export async function readAiFile(file: File) {
   const type = await aiFileType(bytes, file.name);
   if (!type) throw new AppError(415, "UNSUPPORTED_FILE_TYPE", AI_FILE_TYPES_MESSAGE);
   if (type.kind === "image" && bytes.byteLength > MAX_AI_IMAGE_BYTES) {
-    throw new AppError(413, "FILE_TOO_LARGE", "Photos for the assistant can be at most 5 MB");
+    throw new AppError(413, "FILE_TOO_LARGE", "Photos for the assistant can be at most 3.75 MB");
   }
   return { bytes, ...type, fileName: cleanFileName(file.name) };
 }

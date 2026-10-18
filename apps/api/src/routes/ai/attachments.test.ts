@@ -161,6 +161,11 @@ describe("AI attachments", () => {
     expect(await json<Uploaded>(xlsx)).toMatchObject({
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
+    // Claude's 5 MB image limit is on the base64, so a photo's file can be at most 3.75 MB.
+    const big = new Uint8Array(4 * 1024 * 1024);
+    big.set(PNG);
+    const tooBig = await upload(`${ai}/attachments`, owner.cookie, { bytes: big, name: "big.png" });
+    expect(tooBig.status).toBe(413);
     const zip = await upload(`${ai}/attachments`, owner.cookie, { bytes: ZIP, name: "a.zip" });
     expect(zip.status).toBe(415);
     expect(await errorCode(zip)).toBe("UNSUPPORTED_FILE_TYPE");
@@ -240,6 +245,38 @@ describe("AI attachments", () => {
     expect(removed.status).toBe(409);
   });
 
+  it("send text files within a budget per model call, naming the rest", async () => {
+    const { owner, budget, ai } = await setup();
+    const statement = async (n: number) =>
+      json<Uploaded>(
+        await upload(`${ai}/attachments`, owner.cookie, {
+          bytes: new TextEncoder().encode(
+            `Statement ${n}\n${"2026-10-03,Grocer,-42.17\n".repeat(7000)}`,
+          ),
+          name: `statement-${n}.csv`,
+        }),
+      );
+    const files = [await statement(1), await statement(2), await statement(3)];
+    let texts: string[] = [];
+    model.setResponses([
+      ({ request }) => {
+        texts = request.messages.flatMap((m) =>
+          Array.isArray(m.content)
+            ? m.content.flatMap((p) => (p.type === "text" ? [p.content] : []))
+            : [],
+        );
+        return { text: "Read them." };
+      },
+    ]);
+    await chat(owner.cookie, budget.id, {
+      threadId: crypto.randomUUID(),
+      parts: files.map((f) => pointer(f, "document")),
+    });
+    // About 175k characters each: two fit, the third is named instead of sent.
+    expect(texts.filter((t) => t.startsWith("Statement "))).toHaveLength(2);
+    expect(texts.at(-1)).toMatch(/"statement-3\.csv" is left out of this request/);
+  });
+
   it("can't send a file that wasn't uploaded, or someone else's", async () => {
     const { owner, budget, ai } = await setup();
     const inline = await chat(owner.cookie, budget.id, {
@@ -261,6 +298,11 @@ describe("AI attachments", () => {
     });
     expect(borrowed.status).toBe(400);
     expect(await errorCode(borrowed.res)).toBe("ATTACHMENT_NOT_FOUND");
+    // A refused send leaves no conversation behind.
+    const list = await json<{ conversations: unknown[] }>(
+      await send("GET", `${ai}/conversations`, owner.cookie),
+    );
+    expect(list.conversations).toEqual([]);
   });
 
   it("attaches a receipt to the transaction it records, once approved", async () => {

@@ -261,7 +261,7 @@ const fileBody = <T extends z.ZodRawShape>(extra: T) => ({
 });
 
 const fileErrors = {
-  413: jsonError("Bigger than 15 MB, or a photo bigger than 5 MB (`FILE_TOO_LARGE`)"),
+  413: jsonError("Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`)"),
   415: jsonError(
     "Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`)",
   ),

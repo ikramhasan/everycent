@@ -52,9 +52,9 @@ export type TransactionDraft = components["schemas"]["TransactionDraft"];
 /** What the assistant can read (the API's list): photos, PDFs, Excel workbooks, text files. */
 export const AI_FILE_ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif,application/pdf,.xlsx,.csv,.tsv,.ofx,.qfx,.qif,.json,.xml,.txt,text/plain,text/csv";
-/** The API's limits: 15 MB a file, 5 MB a photo (Claude's own limit). */
+/** The API's limits: 15 MB a file, 3.75 MB a photo (Claude's 5 MB, once in base64). */
 export const MAX_AI_FILE_BYTES = 15 * 1024 * 1024;
-const MAX_AI_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_AI_IMAGE_BYTES = (5 * 1024 * 1024 * 3) / 4;
 /** Claude reads images at up to about this many pixels on the long side. */
 const IMAGE_EDGE = 2048;
 
@@ -65,7 +65,7 @@ export function aiAttachmentUrl(budgetId: string, attachmentId: string, download
 }
 
 /**
- * A photo small enough for the AI: one over its 5 MB limit (a phone's camera) is redrawn as a
+ * A photo small enough for the AI: one over its 3.75 MB limit (a phone's camera) is redrawn as a
  * JPEG at most 2048 px on its long side, which is all the model looks at anyway. Anything else,
  * and a photo this browser can't decode (HEIC outside Safari), is returned as it is.
  */

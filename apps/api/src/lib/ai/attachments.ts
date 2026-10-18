@@ -81,10 +81,10 @@ export function withStoredAttachments<T>(message: T, rows: ReadonlyMap<string, A
 }
 
 /**
- * Claims the attachments a new message carries for its conversation: they must be the caller's,
- * in this budget, and not already in another conversation. Returns their rows.
+ * The attachments a new message carries, checked before anything is written: they must be the
+ * caller's, in this budget, and not already in another conversation. Returns their rows.
  */
-export async function claimAttachments(
+export async function usableAttachments(
   db: Database,
   scope: { budgetId: string; userId: string; conversationId: string },
   ids: readonly string[],
@@ -110,18 +110,30 @@ export async function claimAttachments(
       "An attached file is missing. Attach it again.",
     );
   }
+  return new Map(usable.map((r) => [r.id, r]));
+}
+
+/** Makes checked attachments (`usableAttachments`) the conversation's, once it exists. */
+export async function claimAttachments(
+  db: Database,
+  conversationId: string,
+  ids: readonly string[],
+): Promise<void> {
+  if (ids.length === 0) return;
   await db
     .update(aiAttachment)
-    .set({ conversationId: scope.conversationId })
+    .set({ conversationId })
     .where(inArray(aiAttachment.id, [...ids]));
-  return new Map(usable.map((r) => [r.id, { ...r, conversationId: scope.conversationId }]));
 }
 
 /**
- * Files past this many bytes in one model call (newest first) are named instead of sent: Claude
- * takes 32 MB per request, and base64 adds a third.
+ * What one model call carries of the conversation's files, newest first; older files past these
+ * are named instead of sent. Photos and PDFs by bytes: Claude takes 32 MB per request, and base64
+ * adds a third. Text and workbooks by characters (about 100k tokens), to leave room in the
+ * context window for the conversation itself.
  */
 const MAX_MEDIA_BYTES_PER_CALL = 20 * 1024 * 1024;
+const MAX_TEXT_CHARS_PER_CALL = 400_000;
 
 /**
  * Swaps the transcript's attachment pointers for the files themselves in what the model is sent
@@ -133,7 +145,10 @@ export function attachmentMiddleware(deps: {
   storage: ObjectStorage | null;
   conversationId: string;
 }): ChatMiddleware {
-  const loaded = new Map<string, Promise<{ parts: ContentPart[]; bytes: number } | null>>();
+  const loaded = new Map<
+    string,
+    Promise<{ parts: ContentPart[]; mediaBytes: number; textChars: number } | null>
+  >();
   async function load(id: string) {
     const [row] = await deps.db
       .select()
@@ -148,7 +163,12 @@ export function attachmentMiddleware(deps: {
       kind: kindOf(row.contentType),
       bytes,
     });
-    return { parts, bytes: bytes.byteLength };
+    const media = parts.some((p) => p.type !== "text");
+    return {
+      parts,
+      mediaBytes: media ? bytes.byteLength : 0,
+      textChars: parts.reduce((n, p) => n + (p.type === "text" ? p.content.length : 0), 0),
+    };
   }
   const file = (id: string) => {
     let entry = loaded.get(id);
@@ -165,7 +185,8 @@ export function attachmentMiddleware(deps: {
       const ids = new Set(config.messages.flatMap((m) => (partsOf(m) ?? []).map(pointedAt)));
       ids.delete(null);
       if (ids.size === 0) return;
-      let budget = MAX_MEDIA_BYTES_PER_CALL;
+      let mediaLeft = MAX_MEDIA_BYTES_PER_CALL;
+      let textLeft = MAX_TEXT_CHARS_PER_CALL;
       const resolved: ModelMessage[] = [];
       // Newest first, so a long conversation drops its oldest files, not the one just sent.
       for (const message of [...config.messages].reverse()) {
@@ -185,13 +206,14 @@ export function attachmentMiddleware(deps: {
           const found = await file(id);
           if (!found) {
             content.push({ type: "text", content: `[The file "${name}" is no longer available.]` });
-          } else if (found.bytes > budget && found.parts.some((p) => p.type !== "text")) {
+          } else if (found.mediaBytes > mediaLeft || found.textChars > textLeft) {
             content.push({
               type: "text",
-              content: `[The file "${name}" was attached earlier; it's left out now to keep the request small. Ask the person to attach it again if you need it.]`,
+              content: `[The file "${name}" is left out of this request to keep it small. Ask the person to attach it again if you need it.]`,
             });
           } else {
-            if (found.parts.some((p) => p.type !== "text")) budget -= found.bytes;
+            mediaLeft -= found.mediaBytes;
+            textLeft -= found.textChars;
             content.push(...found.parts);
           }
         }

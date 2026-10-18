@@ -133,6 +133,14 @@ function minorUnits(text: string | null, currency: CurrencyCode): bigint | null 
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A real calendar date (not Feb 30, which `Date.parse` takes as Mar 2), not after `today`. */
+function paymentDate(text: string | null, today: string): string | null {
+  if (!text || !ISO_DATE.test(text)) return null;
+  const date = new Date(`${text}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) return null;
+  return text <= today ? text : null;
+}
+
 /**
  * Keeps only what checks out: a real date, a payee and categories from the budget's lists, an
  * amount in the account's currency, and a split only when its lines add up to the total.
@@ -143,6 +151,8 @@ export function checkDraft(
     categories: readonly { id: string }[];
     payees: readonly { id: string; name: string }[];
     currency: CurrencyCode;
+    /** The person's date: a payment can't be after it. */
+    today: string;
   },
 ): TransactionDraft {
   const categoryIds = new Set(lists.categories.map((c) => c.id));
@@ -177,10 +187,7 @@ export function checkDraft(
 
   return {
     found: read.found,
-    date:
-      read.date && ISO_DATE.test(read.date) && !Number.isNaN(Date.parse(read.date))
-        ? read.date
-        : null,
+    date: paymentDate(read.date, lists.today),
     payeeId: existing?.id ?? null,
     payeeName: existing?.name ?? typed,
     categoryId:
@@ -238,5 +245,5 @@ export async function draftTransaction(input: {
     ],
     outputSchema: ReadSchema,
   });
-  return checkDraft(read, { categories, payees, currency: account.currency });
+  return checkDraft(read, { categories, payees, currency: account.currency, today });
 }
