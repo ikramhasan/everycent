@@ -39,7 +39,9 @@ function MessageScrollerViewport({
     <MessageScrollerPrimitive.Viewport
       data-slot="message-scroller-viewport"
       className={cn(
-        "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain contain-content data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent data-pending-scroll:invisible",
+        // The Scroll Area's thin thumb (muted-foreground at 50%); keyboard
+        // focus is a 2px ring outline inset 2px, so it paints over the rows.
+        "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain scrollbar-thumb-muted-foreground/50 scrollbar-track-transparent outline-none contain-content focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring data-autoscrolling:scrollbar-thumb-transparent data-pending-scroll:invisible",
         className,
       )}
       {...props}
@@ -96,7 +98,10 @@ function MessageScrollerButton({
       data-size={size}
       direction={direction}
       className={cn(
-        "absolute inset-s-1/2 -translate-x-1/2 border-border bg-background text-foreground transition-[translate,scale,opacity] duration-200 hover:bg-muted hover:text-foreground data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-full data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-full rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
+        // A round raised key, 16px from the edge, with a 40px hit area. It
+        // rises in from 8px past its spot at 0.95 scale (200ms) and drops
+        // back out (150ms). Reduced motion keeps the fade.
+        "absolute inset-s-1/2 -translate-x-1/2 rounded-full after:absolute after:-inset-1.5 after:rounded-full transition-[color,background-color,border-color,box-shadow,filter,translate,scale,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-150 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-2 data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-2 motion-reduce:data-[active=false]:translate-y-0 motion-reduce:data-[active=false]:scale-100 rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
         className,
       )}
       render={render ?? <Button variant={variant} size={size} />}

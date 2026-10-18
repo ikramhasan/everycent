@@ -2126,7 +2126,10 @@ export function Register({
           className="rounded-lg border"
         >
           <Table
-            containerClassName="overflow-visible"
+            // The ScrollArea's border is the frame: no tray inside it (its padding would throw off
+            // the column widths and the pinned Cleared/Actions columns). Cells take px-2, not the
+            // table's px-3: the widths in register-columns are sized for it.
+            containerClassName="overflow-visible rounded-none bg-transparent p-0 ring-0 not-has-[>table>thead]:pt-0 dark:bg-transparent"
             className="table-fixed"
             // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
             // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
@@ -2143,7 +2146,7 @@ export function Register({
                 <col key={id} style={{ width: columnWidth(widths, id) }} />
               ))}
             </colgroup>
-            <TableHeader className="sticky top-0 z-10">
+            <TableHeader className="sticky top-0 z-10 [&_th]:border-b">
               {table.getHeaderGroups().map((group) => (
                 <TableRow key={group.id} className="hover:bg-transparent">
                   {group.headers.map((header) => {
@@ -2169,6 +2172,7 @@ export function Register({
                         }
                         style={pin?.style}
                         className={cn(
+                          "px-2",
                           "bg-muted text-muted-foreground text-xs uppercase",
                           RESIZABLE.includes(id) && "relative",
                           pin && [pin.className, PINNED_BG.head],
@@ -2246,7 +2250,7 @@ export function Register({
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody ref={measureScheduled}>
+            <TableBody ref={measureScheduled} className="before:hidden">
               {adding && defaultAccountId && (
                 <TransactionEditor
                   transferCategory={transferCategory}
@@ -2285,7 +2289,7 @@ export function Register({
                 onChanged={refresh}
               />
             </TableBody>
-            <TableBody>
+            <TableBody className="before:hidden">
               {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
               {items.map((item) => {
                 const row = flat[item.index];
@@ -2337,6 +2341,7 @@ export function Register({
                             key={id}
                             style={pin?.style}
                             className={cn(
+                              "px-2",
                               "truncate py-1.5",
                               pin && [pin.className, PINNED_BG.row],
                               spec.align === "right" && "text-right tabular-nums",
@@ -2409,6 +2414,7 @@ export function Register({
                           key={id}
                           style={pin?.style}
                           className={cn(
+                            "px-2",
                             "truncate",
                             pin && [pin.className, PINNED_BG.row],
                             spec.align === "right" && "text-right tabular-nums",

@@ -29,8 +29,9 @@ function ScrollArea({
         {...viewportProps}
         ref={viewportRef}
         data-slot="scroll-area-viewport"
+        // An outline, not a ring: it paints above the scrolled content.
         className={cn(
-          "size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
+          "size-full rounded-[inherit] outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring",
           viewportClassName,
         )}
       >
@@ -54,14 +55,18 @@ function ScrollBar({
       data-orientation={orientation}
       orientation={orientation}
       className={cn(
-        "flex touch-none p-px transition-colors select-none data-horizontal:h-2.5 data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:h-full data-vertical:w-2.5 data-vertical:border-l data-vertical:border-l-transparent",
+        // A 6px thumb centered in a 10px track; it widens to 8px while hovered
+        // or dragged. The 2px end gap keeps its round ends inside a rounded-lg
+        // corner. everycent: Radix marks the axis with data-orientation="…", not the bare
+        // data-horizontal / data-vertical attributes.
+        "group/scrollbar flex touch-none p-0.5 transition-[padding] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] select-none data-[orientation=horizontal]:h-2.5 data-[orientation=horizontal]:flex-col data-[orientation=vertical]:h-full data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:hover:py-px data-[orientation=horizontal]:has-active:py-px data-[orientation=vertical]:hover:px-px data-[orientation=vertical]:has-active:px-px motion-reduce:transition-none",
         className,
       )}
       {...props}
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
-        className="relative flex-1 rounded-full bg-border"
+        className="relative flex-1 rounded-full bg-[color-mix(in_oklch,var(--muted-foreground),transparent_50%)] transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/scrollbar:bg-[color-mix(in_oklch,var(--muted-foreground),transparent_25%)] active:bg-[color-mix(in_oklch,var(--muted-foreground),transparent_25%)]"
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   );

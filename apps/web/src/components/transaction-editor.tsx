@@ -731,7 +731,7 @@ export function TransactionEditor({
           <TableCell
             key={column}
             style={pinned(columns, column)?.style}
-            className={cn(pinned(columns, column)?.className, PINNED_BG.editor)}
+            className={cn("px-2", pinned(columns, column)?.className, PINNED_BG.editor)}
           />
         ))}
       </TableRow>

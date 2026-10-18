@@ -386,7 +386,7 @@ export function ScheduledSection({
   return (
     <>
       <TableRow className="bg-muted hover:bg-muted">
-        <TableCell colSpan={span} className="py-1.5">
+        <TableCell colSpan={span} className="px-2 py-1.5">
           <button
             type="button"
             aria-expanded={!collapsed}
@@ -449,6 +449,7 @@ export function ScheduledSection({
                     key={id}
                     style={pin?.style}
                     className={cn(
+                      "px-2",
                       "truncate",
                       pin && [pin.className, PINNED_BG.scheduled],
                       spec.align === "right" && "text-right tabular-nums",
@@ -496,6 +497,7 @@ export function ScheduledSection({
                       key={id}
                       style={pinned(columns, id)?.style}
                       className={cn(
+                        "px-2",
                         "truncate py-1.5",
                         pinned(columns, id) && [
                           pinned(columns, id)?.className,

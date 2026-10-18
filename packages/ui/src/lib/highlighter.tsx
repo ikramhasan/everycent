@@ -33,9 +33,15 @@ const aliases: Record<string, keyof typeof languages> = {
 
 let highlighter: Promise<HighlighterCore> | undefined;
 
+// The "default" GitHub themes: every token is at least 4.5:1 on
+// `background` (the older github-light orange is 3.5:1).
+
 function getHighlighter() {
   highlighter ??= createHighlighterCore({
-    themes: [import("shiki/themes/github-light.mjs"), import("shiki/themes/github-dark.mjs")],
+    themes: [
+      import("shiki/themes/github-light-default.mjs"),
+      import("shiki/themes/github-dark-default.mjs"),
+    ],
     langs: [],
     engine: createJavaScriptRegexEngine({ forgiving: true }),
   });
@@ -79,7 +85,7 @@ export async function loadHighlighter(language: string) {
       const tokenize = (text: string) =>
         shiki.codeToTokens(text, {
           lang,
-          themes: { light: "github-light", dark: "github-dark" },
+          themes: { light: "github-light-default", dark: "github-dark-default" },
           defaultColor: false,
           grammarState: state,
         }).tokens;

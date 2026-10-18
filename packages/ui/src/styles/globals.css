@@ -25,6 +25,26 @@
   }
 }
 
+/* everycent: the scrollbar-* utilities message-scroller uses (ui.ikramhasan.com defines the same
+   ones); small enough to write here rather than add a plugin. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+@utility scrollbar-thumb-* {
+  --tw-scrollbar-thumb: --value(--color, [color], "transparent");
+  --tw-scrollbar-thumb: --alpha(--value(--color, [color]) / calc(--modifier(integer) * 1%));
+  scrollbar-color: var(--tw-scrollbar-thumb) var(--tw-scrollbar-track, transparent);
+}
+
+@utility scrollbar-track-* {
+  --tw-scrollbar-track: --value(--color, [color], "transparent");
+}
+
 /* scroll-fade */
 @property --scroll-fade-t {
   syntax: "<length-percentage>";
@@ -534,7 +554,7 @@
 }
 
 @utility shimmer-color-* {
-  --shimmer-color: --value(--color, [color]);
+  --shimmer-color: --value(--color, [color], "transparent");
   --shimmer-color: color-mix(
     in oklch,
     --value(--color, [color]) calc(--modifier(integer) * 1%),
