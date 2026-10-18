@@ -309,10 +309,10 @@ function PairWithLoan({ categoryId, onPaired }: { categoryId: string; onPaired: 
         className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 p-3 text-left text-sm"
       >
         <span className="grid flex-1 gap-0.5">
-          <span className="font-medium text-primary">Pair with a Loan</span>
+          <span className="font-medium text-primary-text">Pair with a Loan</span>
           <span>See your payoff progress, interest payments, and payoff date</span>
         </span>
-        <ChevronRight className="size-4 shrink-0 text-primary" aria-hidden />
+        <ChevronRight className="size-4 shrink-0 text-primary-text" aria-hidden />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">

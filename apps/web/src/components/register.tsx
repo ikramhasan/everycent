@@ -1893,7 +1893,7 @@ export function Register({
       case "cleared":
         if (readOnly && t.cleared !== "reconciled") {
           return t.cleared === "cleared" ? (
-            <CircleCheck className="mx-auto size-4 text-primary" aria-label="Cleared" />
+            <CircleCheck className="mx-auto size-4 text-primary-text" aria-label="Cleared" />
           ) : (
             <Circle className="mx-auto size-4 text-muted-foreground" aria-label="Uncleared" />
           );
@@ -1909,7 +1909,7 @@ export function Register({
             onClick={() => void toggleCleared(t)}
           >
             {t.cleared === "cleared" ? (
-              <CircleCheck className="text-primary" />
+              <CircleCheck className="text-primary-text" />
             ) : (
               <Circle className="text-muted-foreground" />
             )}
@@ -2826,7 +2826,7 @@ function PhoneTransactions({
                   {formatDate(t.date)} · {category(t)}
                   {t.memo ? ` · ${t.memo}` : ""}
                 </span>
-                {!t.approved && <span className="text-primary text-xs">Needs approval</span>}
+                {!t.approved && <span className="text-primary-text text-xs">Needs approval</span>}
               </button>
               {onToggleCleared && t.cleared !== "reconciled" ? (
                 <Button
@@ -2838,7 +2838,7 @@ function PhoneTransactions({
                   onClick={() => onToggleCleared(t)}
                 >
                   {t.cleared === "cleared" ? (
-                    <CircleCheck className="text-primary" />
+                    <CircleCheck className="text-primary-text" />
                   ) : (
                     <Circle className="text-muted-foreground" />
                   )}

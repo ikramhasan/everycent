@@ -398,7 +398,7 @@ export function PayeeField({
             {create && (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary text-sm hover:bg-accent"
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-primary-text text-sm hover:bg-accent"
                 // Keep focus in the field: the row goes on with the new name.
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
@@ -463,7 +463,7 @@ export function PayeeField({
             {managePayees && (
               <button
                 type="button"
-                className="w-full border-t px-2 py-1.5 text-left text-primary text-sm hover:underline"
+                className="w-full border-t px-2 py-1.5 text-left text-primary-text text-sm hover:underline"
                 // Keep focus in the field until the dialog takes it.
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
@@ -525,7 +525,7 @@ function BankImportDetails({ details, onClose }: { details: ImportDetails; onClo
         <p className="break-words">{details.statement}</p>
         <button
           type="button"
-          className="justify-self-start text-primary text-xs hover:underline"
+          className="justify-self-start text-primary-text text-xs hover:underline"
           onClick={() => copy(details.statement)}
         >
           Copy
@@ -536,7 +536,7 @@ function BankImportDetails({ details, onClose }: { details: ImportDetails; onClo
         <p className="break-words">{details.imported}</p>
         <button
           type="button"
-          className="justify-self-start text-primary text-xs hover:underline"
+          className="justify-self-start text-primary-text text-xs hover:underline"
           onClick={() => copy(details.imported)}
         >
           Copy
@@ -544,7 +544,7 @@ function BankImportDetails({ details, onClose }: { details: ImportDetails; onClo
         {details.renamedTo && details.onDontRename && (
           <button
             type="button"
-            className="justify-self-start text-left text-primary text-xs hover:underline"
+            className="justify-self-start text-left text-primary-text text-xs hover:underline"
             onClick={details.onDontRename}
           >
             Don't Rename as {details.renamedTo}
@@ -559,7 +559,7 @@ function BankImportDetails({ details, onClose }: { details: ImportDetails; onClo
               href={details.orderLink.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-primary hover:underline"
+              className="flex items-center gap-1 text-primary-text hover:underline"
             >
               {details.orderLink.label}
               <ExternalLink className="size-3.5" />

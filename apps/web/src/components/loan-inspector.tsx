@@ -171,7 +171,7 @@ export function PairedWith({ loan }: { loan: Account }) {
       <Link
         to="/budgets/$budgetId/accounts/$accountId"
         params={{ budgetId: budget.id, accountId: loan.id }}
-        className="text-primary hover:underline"
+        className="text-primary-text hover:underline"
       >
         {loan.name}
       </Link>{" "}

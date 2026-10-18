@@ -563,7 +563,7 @@ export function RecordInterestDialog({
       {typeof parsed !== "string" && parsed > 0n && (
         <p className="rounded-md bg-muted p-3 text-center text-sm">
           After saving, the {shortMonth(month)} interest charge will be{" "}
-          <strong className="text-primary">{format(current + parsed)}</strong>
+          <strong className="text-primary-text">{format(current + parsed)}</strong>
         </p>
       )}
     </LoanDialog>

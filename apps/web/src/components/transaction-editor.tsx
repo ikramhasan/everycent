@@ -429,7 +429,7 @@ export function TransactionEditor({
             onClick={() => set({ cleared: draft.cleared === "cleared" ? "uncleared" : "cleared" })}
           >
             {draft.cleared === "cleared" ? (
-              <CircleCheck className="text-primary" />
+              <CircleCheck className="text-primary-text" />
             ) : (
               <Circle className="text-muted-foreground" />
             )}

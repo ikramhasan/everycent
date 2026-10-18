@@ -30,6 +30,19 @@ import { apiBaseUrl } from "@/lib/api";
 import { todayIso } from "@/lib/dates";
 import { CLIENT_ID } from "@/lib/live-updates";
 
+/**
+ * Streamdown's tables in the shared Table's look: a muted tray holding a raised body, small muted
+ * headings and px-3 cells. Styled through its data-streamdown hooks rather than its `components`
+ * prop, which would replace the table along with its copy, download and fullscreen controls.
+ */
+const MARKDOWN_TABLE = [
+  "[&_[data-streamdown=table-wrapper]]:my-2 [&_[data-streamdown=table-wrapper]]:gap-1 [&_[data-streamdown=table-wrapper]]:rounded-xl [&_[data-streamdown=table-wrapper]]:border-0 [&_[data-streamdown=table-wrapper]]:bg-muted [&_[data-streamdown=table-wrapper]]:p-[5px] [&_[data-streamdown=table-wrapper]]:ring-1 [&_[data-streamdown=table-wrapper]]:ring-border dark:[&_[data-streamdown=table-wrapper]]:bg-[color-mix(in_oklch,var(--background),black_20%)]",
+  "[&_[data-streamdown=table-wrapper]>div:has(>table)]:rounded-[10px] [&_[data-streamdown=table-wrapper]>div:has(>table)]:shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:[&_[data-streamdown=table-wrapper]>div:has(>table)]:shadow-[0_1px_2px_rgb(0_0_0/0.4)]",
+  "[&_[data-streamdown=table]]:tabular-nums [&_[data-streamdown=table-header]]:bg-muted/50",
+  "[&_[data-streamdown=table-header-cell]]:px-3 [&_[data-streamdown=table-header-cell]]:text-[13px] [&_[data-streamdown=table-header-cell]]:font-medium [&_[data-streamdown=table-header-cell]]:text-muted-foreground",
+  "[&_[data-streamdown=table-cell]]:px-3",
+].join(" ");
+
 const SUGGESTIONS = [
   "What's left to spend this month?",
   "Where did my money go last month?",
@@ -439,7 +452,7 @@ function ChatMessage({
                   // asks before opening a link.
                   <BubbleContent className="[&_li]:py-0">
                     {/* Tighter than Streamdown's page-sized defaults (space-y-4, py-1 items). */}
-                    <Streamdown className="space-y-2" isAnimating={streaming}>
+                    <Streamdown className={`space-y-2 ${MARKDOWN_TABLE}`} isAnimating={streaming}>
                       {part.content}
                     </Streamdown>
                   </BubbleContent>

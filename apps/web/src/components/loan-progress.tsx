@@ -104,7 +104,7 @@ function Banner({
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3 pr-8 sm:gap-4 sm:pr-0">
-        <span className="shrink-0 text-primary [&_svg]:size-6 sm:[&_svg]:size-8" aria-hidden>
+        <span className="shrink-0 text-primary-text [&_svg]:size-6 sm:[&_svg]:size-8" aria-hidden>
           {icon}
         </span>
         <div className="grid min-w-0 gap-0.5">
@@ -410,7 +410,11 @@ function PastBalancePopover({
           <span className="tabular-nums">{format(past)}</span>
         </p>
       )}
-      <button type="button" className="text-left text-primary hover:underline" onClick={onBase}>
+      <button
+        type="button"
+        className="text-left text-primary-text hover:underline"
+        onClick={onBase}
+      >
         Base the Original Payment Schedule on this Past Balance
       </button>
     </div>

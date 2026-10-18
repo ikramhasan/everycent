@@ -68,8 +68,9 @@ export function ReportPage({
   className?: string;
 }) {
   return (
-    // The app shell already pads the page; this only centres and spaces the report.
-    <div className={cn("mx-auto grid w-full max-w-6xl content-start gap-4", className)}>
+    // The app shell already pads the page; this only spaces the report. Full width, like the
+    // budget and account pages.
+    <div className={cn("grid w-full content-start gap-4", className)}>
       <PageTitle name={title} />
       <PageHeader title={title} actions={actions} />
       <ReportsNav />

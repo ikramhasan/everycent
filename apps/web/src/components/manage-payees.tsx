@@ -407,7 +407,7 @@ function ManagePayeesDialog({ onClose }: { onClose: () => void }) {
               {unused.length > 0 && (
                 <button
                   type="button"
-                  className="px-3 py-1 text-primary text-sm underline underline-offset-4 hover:no-underline"
+                  className="px-3 py-1 text-primary-text text-sm underline underline-offset-4 hover:no-underline"
                   onClick={() => {
                     setError(null);
                     setSelected(unused.map((p) => p.id));
@@ -561,7 +561,7 @@ function PayeeEditor({
     uses > 0 ? (
       <button
         type="button"
-        className="w-fit text-primary text-sm underline underline-offset-4 hover:no-underline"
+        className="w-fit text-primary-text text-sm underline underline-offset-4 hover:no-underline"
         onClick={() => setShowing(true)}
       >
         Show {uses} {uses === 1 ? "Transaction" : "Transactions"}

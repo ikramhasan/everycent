@@ -171,7 +171,7 @@ export function SpendingBreakdownBody({
           <nav aria-label="Breadcrumb" className="flex items-center gap-1 font-medium text-lg">
             <button
               type="button"
-              className="text-primary hover:underline"
+              className="text-primary-text hover:underline"
               onClick={() => update({ group: undefined })}
             >
               All Groups

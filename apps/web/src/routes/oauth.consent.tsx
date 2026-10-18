@@ -74,7 +74,7 @@ function ConsentPage() {
           {client.isError && <FieldError>This app isn't registered (any more).</FieldError>}
           <ul className="grid gap-2 text-sm">
             <li className="flex gap-2">
-              <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <Check className="mt-0.5 size-4 shrink-0 text-primary-text" aria-hidden />
               See your budgets, accounts, transactions, attachments and reports
             </li>
           </ul>
