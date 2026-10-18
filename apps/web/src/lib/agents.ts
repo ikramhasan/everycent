@@ -53,3 +53,25 @@ export async function authGet<T>(path: string): Promise<T> {
 
 /** The MCP server's URL, for connecting a client (same origin as the API). */
 export const mcpServerUrl = () => `${apiBaseUrl}/mcp`;
+
+/**
+ * What a person pastes into their agent to connect it: the MCP server to add (with the Claude
+ * Code command, the most common client), the sign-in it should expect, and a first call that
+ * proves it works. Agent Auth agents get the discovery document instead.
+ */
+export function agentSetupPrompt(origin: string = apiBaseUrl): string {
+  const mcp = `${origin}/mcp`;
+  return [
+    "Connect yourself to my everycent budget so you can help me with it.",
+    "",
+    `1. Add everycent as a remote MCP server (Streamable HTTP, OAuth sign-in) named "everycent" at ${mcp}`,
+    `   - Claude Code: run \`claude mcp add --transport http everycent ${mcp}\`, then open /mcp and authenticate.`,
+    "   - Other clients: add it to your MCP settings as a remote/HTTP server with that URL.",
+    "2. When a browser opens, I'll sign in to everycent and choose whether you can make changes.",
+    "3. Then call listBudgets and tell me which budgets you can see.",
+    "",
+    `If you support the Agent Auth protocol instead of MCP, start from ${origin}/.well-known/agent-configuration and send me the approval link it gives you.`,
+    "",
+    'Money amounts in everycent are integer strings in the currency\'s minor units ("-1250" is -12.50). Your changes show as yours, made on my behalf.',
+  ].join("\n");
+}
