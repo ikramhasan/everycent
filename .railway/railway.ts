@@ -37,6 +37,8 @@ export default defineRailway(() => {
     healthcheckTimeout: 60,
     env: {
       DATABASE_URL: db.env.DATABASE_URL,
+      // The hosted everycent: email is required (`isCloud` in apps/api/src/env.ts).
+      EVERYCENT_DEPLOYMENT: "cloud",
       // One origin serves the web app and the API.
       BETTER_AUTH_URL: PUBLIC_URL,
       WEB_ORIGIN: PUBLIC_URL,

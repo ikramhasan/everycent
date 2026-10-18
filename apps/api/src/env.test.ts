@@ -33,14 +33,33 @@ describe("parseEnv: email", () => {
     expect(env.FROM_EMAIL).toBeUndefined();
   });
 
-  it("requires the Resend key and sender in production", () => {
-    expect(() => parseEnv({ ...valid, NODE_ENV: "production" })).toThrow(
-      /RESEND_API_KEY[\s\S]*FROM_EMAIL/,
+  it("is self-hosted unless told otherwise", () => {
+    expect(parseEnv(valid).EVERYCENT_DEPLOYMENT).toBe("self-hosted");
+    expect(parseEnv({ ...valid, EVERYCENT_DEPLOYMENT: "" }).EVERYCENT_DEPLOYMENT).toBe(
+      "self-hosted",
     );
-    expect(
-      parseEnv({ ...valid, NODE_ENV: "production", RESEND_API_KEY: "re_x", FROM_EMAIL: "a.dev" })
-        .NODE_ENV,
-    ).toBe("production");
+    expect(parseEnv({ ...valid, EVERYCENT_DEPLOYMENT: "cloud" }).EVERYCENT_DEPLOYMENT).toBe(
+      "cloud",
+    );
+    expect(() => parseEnv({ ...valid, EVERYCENT_DEPLOYMENT: "hosted" })).toThrow(
+      /EVERYCENT_DEPLOYMENT/,
+    );
+  });
+
+  it("leaves email optional for a self-hosted production server", () => {
+    expect(parseEnv({ ...valid, NODE_ENV: "production" }).RESEND_API_KEY).toBeUndefined();
+  });
+
+  it("requires the Resend key and sender in cloud production", () => {
+    const cloud = { ...valid, NODE_ENV: "production", EVERYCENT_DEPLOYMENT: "cloud" };
+    expect(() => parseEnv(cloud)).toThrow(/RESEND_API_KEY[\s\S]*FROM_EMAIL/);
+    expect(parseEnv({ ...cloud, RESEND_API_KEY: "re_x", FROM_EMAIL: "a.dev" }).NODE_ENV).toBe(
+      "production",
+    );
+  });
+
+  it("requires a sender with a Resend key", () => {
+    expect(() => parseEnv({ ...valid, RESEND_API_KEY: "re_x" })).toThrow(/FROM_EMAIL/);
   });
 
   it("rejects a key that isn't a Resend key", () => {

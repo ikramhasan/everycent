@@ -4,6 +4,7 @@ import {
   cancelInvitationHandler,
   changeMemberRoleHandler,
   createInvitationHandler,
+  createInvitationLinkHandler,
   leaveBudgetHandler,
   listMembersHandler,
   removeMemberHandler,
@@ -16,6 +17,7 @@ import {
   cancelInvitation,
   changeMemberRole,
   createInvitation,
+  createInvitationLink,
   leaveBudget,
   listMembers,
   removeMember,
@@ -28,6 +30,7 @@ export const membersRouter = createRouter()
   .openapi(listMembers, listMembersHandler)
   .openapi(createInvitation, createInvitationHandler)
   .openapi(resendInvitation, resendInvitationHandler)
+  .openapi(createInvitationLink, createInvitationLinkHandler)
   .openapi(cancelInvitation, cancelInvitationHandler)
   .openapi(viewInvitation, viewInvitationHandler)
   .openapi(acceptInvitation, acceptInvitationHandler)

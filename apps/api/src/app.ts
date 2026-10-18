@@ -30,6 +30,7 @@ import { flagsRouter } from "./routes/flags";
 import { fxRatesRouter } from "./routes/fx-rates";
 import { healthRouter } from "./routes/health";
 import { importsRouter } from "./routes/imports";
+import { instanceRouter } from "./routes/instance";
 import { meRouter } from "./routes/me";
 import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
@@ -121,6 +122,7 @@ export function createApp(deps: AppDeps) {
   });
 
   app.route("/v1", healthRouter);
+  app.route("/v1", instanceRouter);
   app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
   app.route("/v1", agentsRouter);

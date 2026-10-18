@@ -8,6 +8,7 @@ import { AuthCard } from "@/components/auth-card";
 import { PageTitle } from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { useInstance } from "@/lib/instance";
 
 export const Route = createFileRoute("/forgot-password")({
   component: () => (
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/forgot-password")({
 });
 
 function ForgotPasswordPage() {
+  const { email: sendsEmail } = useInstance();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -40,6 +42,19 @@ function ForgotPasswordPage() {
     </Link>
   );
 
+  if (!sendsEmail) {
+    return (
+      <AuthCard
+        title="Reset your password"
+        description="This server doesn't send email, so it can't send you a reset link."
+        footer={footer}
+      >
+        <p className="text-muted-foreground text-sm">
+          Ask the person who runs this everycent server to reset your password.
+        </p>
+      </AuthCard>
+    );
+  }
   if (sentTo) {
     // The same answer whether or not the address has an account.
     return (

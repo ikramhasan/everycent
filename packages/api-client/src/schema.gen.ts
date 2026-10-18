@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/instance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How this server is set up
+         * @description Public: the web app reads it before anyone signs in.
+         */
+        get: operations["getInstance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/client-errors": {
         parameters: {
             query?: never;
@@ -69,7 +89,7 @@ export interface paths {
         put?: never;
         /**
          * Start changing the account's email address
-         * @description Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link).
+         * @description Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link). On a server that sends no email (`GET /v1/instance`), the address changes at once instead (200), unless another account has it (`EMAIL_TAKEN`).
          */
         post: operations["changeEmail"];
         delete?: never;
@@ -516,8 +536,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Invite someone by email to share the budget (owner only)
-         * @description They get an email with a link that works for 14 days. A budget has at most 6 people, pending invitations included (`BUDGET_FULL`). Someone already in the budget (`ALREADY_MEMBER`) or already invited (`ALREADY_INVITED`) can't be invited.
+         * Invite someone to share the budget (owner only)
+         * @description They get an email with a link that works for 14 days, or, with `sendEmail: false`, the answer carries the link for the owner to share. Either way, joining needs an account with the invited address. A server that sends no email (`GET /v1/instance`) only makes links (`EMAIL_DISABLED`). A budget has at most 6 people, pending invitations included (`BUDGET_FULL`). Someone already in the budget (`ALREADY_MEMBER`) or already invited (`ALREADY_INVITED`) can't be invited.
          */
         post: operations["createBudgetInvitation"];
         delete?: never;
@@ -537,6 +557,26 @@ export interface paths {
         put?: never;
         /** Send the invitation again with a new link, good for another 14 days */
         post: operations["resendBudgetInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/invitations/{invitationId}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A new link to share for the invitation, good for another 14 days
+         * @description Nothing is emailed. The earlier link, emailed or shared, stops working, and the invitation gets no reminder email (its new link would replace this one).
+         */
+        post: operations["createBudgetInvitationLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2134,6 +2174,15 @@ export interface components {
                 details?: unknown;
             };
         };
+        Instance: {
+            /**
+             * @description `cloud` is the hosted everycent; anything else is a self-hosted server
+             * @enum {string}
+             */
+            deployment: "self-hosted" | "cloud";
+            /** @description Whether the server sends email. Without it, addresses aren't confirmed, there's no password reset link, an email change applies at once, and invitations are shared as links */
+            email: boolean;
+        };
         ClientError: {
             message: string;
             stack?: string;
@@ -2150,6 +2199,11 @@ export interface components {
             image: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        ChangeEmailDone: {
+            /** @enum {string} */
+            status: "changed";
+            email: string;
         };
         ChangeEmailResult: {
             /** @enum {string} */
@@ -2821,6 +2875,15 @@ export interface components {
             createdAt: string;
             expiresAt: string;
             expired: boolean;
+            /**
+             * @description `email`: we emailed the link; `link`: the owner shares it themselves
+             * @enum {string}
+             */
+            delivery: "email" | "link";
+        };
+        BudgetInvitationWithLink: components["schemas"]["BudgetInvitation"] & {
+            /** @description The invitation link to share, shown only here (the server keeps only its hash); null when it was emailed */
+            link: string | null;
         };
         CreateBudgetInvitation: {
             /** @description First name */
@@ -2833,6 +2896,8 @@ export interface components {
              * @enum {string}
              */
             role: "editor" | "viewer";
+            /** @description Email the link (the default when the server sends email), or return it to share */
+            sendEmail?: boolean;
         };
         InvitationView: {
             /** @description The address it was sent to */
@@ -5071,6 +5136,26 @@ export interface operations {
             };
         };
     };
+    getInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This server's setup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Instance"];
+                };
+            };
+        };
+    };
     reportClientError: {
         parameters: {
             query?: never;
@@ -5153,6 +5238,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Changed (a server that sends no email) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeEmailDone"];
+                };
+            };
             /** @description Approval link sent to the current address */
             202: {
                 headers: {
@@ -5182,6 +5276,15 @@ export interface operations {
             };
             /** @description Wrong password (INVALID_PASSWORD), or the account's email address isn't confirmed */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Another account has the new address (EMAIL_TAKEN; only without email) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6937,7 +7040,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetInvitation"];
+                    "application/json": components["schemas"]["BudgetInvitationWithLink"];
                 };
             };
             /** @description Invalid input */
@@ -6976,7 +7079,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `BUDGET_FULL`, `ALREADY_MEMBER` or `ALREADY_INVITED` */
+            /** @description `BUDGET_FULL`, `ALREADY_MEMBER`, `ALREADY_INVITED` or `EMAIL_DISABLED` (asked to email it) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7028,6 +7131,74 @@ export interface operations {
             };
             /** @description No such budget or invitation, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `EMAIL_DISABLED`: the server sends no email (make a new link instead); `BUDGET_FULL`: an expired invitation no longer fits */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createBudgetInvitationLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation and its new link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetInvitationWithLink"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Only the budget's owner can manage sharing, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or invitation, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `BUDGET_FULL`: an expired invitation no longer fits */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

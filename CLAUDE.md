@@ -122,6 +122,12 @@ behaviour you haven't confirmed.
 - shadcn components: `pnpm dlx shadcn@latest add <name> -c apps/web` (lands in `packages/ui`).
 - Web imports: app code via `@/…`, shared UI via `@everycent/ui/components/<name>`.
 
+- **Self-hosted vs cloud.** `EVERYCENT_DEPLOYMENT` (`self-hosted` default, `cloud` = the hosted
+  service; `isCloud(env)`). Self-hosted must work without what only the hosted service needs:
+  email is optional there (`deps.email` is null without Resend), so anything that sends email
+  needs a path without it. The web app reads `GET /v1/instance` (`useInstance()`). Hosted-only
+  code goes in a `cloud/` folder (`apps/api/src/cloud/`, `apps/web/src/cloud/`).
+
 ## Gotchas / conventions
 
 - **pnpm & supply-chain policy.** pnpm 12.6.0 is pinned via `packageManager`; root `.npmrc` sets

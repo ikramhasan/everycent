@@ -1,0 +1,1 @@
+ALTER TABLE "budget_invitation" ADD COLUMN "delivery" text DEFAULT 'email' NOT NULL;

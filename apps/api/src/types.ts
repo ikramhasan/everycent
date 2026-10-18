@@ -15,8 +15,11 @@ export interface AppDeps {
   auth: Auth;
   /** Budget change notifications for live updates (`GET …/events`). */
   changes: ChangeBus;
-  /** Sends an email now. Request code queues emails instead (`deliverEmail`); the worker calls this. */
-  email: EmailSender;
+  /**
+   * Sends an email now. Request code queues emails instead (`deliverEmail`); the worker calls this.
+   * Null when the server sends no email (`createEmailSender`).
+   */
+  email: EmailSender | null;
   /** Background jobs (pg-boss). */
   jobs: Jobs;
   /** Exchange-rate providers, tried in order (tests use an in-memory fake). */
