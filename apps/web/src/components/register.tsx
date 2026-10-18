@@ -173,10 +173,10 @@ import { AttachmentCell, AttachmentField } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
-/** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
 /** The tray's colour, on the scroll area and its sticky header cells (which must be opaque). */
 const REGISTER_TRAY = "bg-muted dark:bg-[color-mix(in_oklch,var(--background),black_20%)]";
 
+/** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
   flag: "flag",
   account: "account",
@@ -2186,7 +2186,7 @@ export function Register({
             </colgroup>
             <TableHeader className="sticky top-0 z-10">
               {table.getHeaderGroups().map((group) => (
-                <RegisterRow key={group.id} className="hover:bg-transparent">
+                <RegisterRow key={group.id} still>
                   {group.headers.map((header) => {
                     const id = header.column.id as ColumnId;
                     const spec = COLUMN_SPECS[id];

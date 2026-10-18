@@ -13,8 +13,11 @@ function RegisterBody({ className, ...props }: React.ComponentProps<"tbody">) {
     <tbody
       className={cn(
         "relative before:pointer-events-none before:absolute before:-inset-px before:-z-1 before:rounded-[10px] before:border before:border-border before:bg-background before:shadow-[0_1px_2px_rgb(0_0_0/0.04)] empty:before:hidden dark:before:shadow-[0_1px_2px_rgb(0_0_0/0.4)]",
-        // Two bodies (scheduled, then transactions) read as one card.
-        "[&:has(+tbody:not(:empty))]:before:rounded-b-none [tbody:not(:empty)+&]:before:rounded-t-none [tbody:not(:empty)+&]:before:border-t-0",
+        // Corner cells round with the card, so opaque cells (pinned, hovered, selected) don't
+        // cover its corners.
+        "[&>tr:first-child>:first-child]:rounded-tl-[9px] [&>tr:first-child>:last-child]:rounded-tr-[9px] [&>tr:last-child>:first-child]:rounded-bl-[9px] [&>tr:last-child>:last-child]:rounded-br-[9px]",
+        // Two bodies (scheduled, then transactions) read as one card: square where they join.
+        "[&:has(+tbody:not(:empty))]:before:rounded-b-none [tbody:not(:empty)+&]:before:rounded-t-none [tbody:not(:empty)+&]:before:border-t-0 [&:has(+tbody:not(:empty))>tr:last-child>*]:rounded-b-none [tbody:not(:empty)+&>tr:first-child>*]:rounded-t-none",
         className,
       )}
       {...props}

@@ -43,19 +43,19 @@ import { ScheduledAttachmentCell } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 
 /**
- * YNAB's "Scheduled Transactions" section at the top of a register: one row per schedule (its
- * next occurrence), newest first, plus the other account's side of scheduled transfers. It
- * collapses (remembered per register), and each row can be edited (it and every later
- * occurrence), entered now or deleted. A split's transfer line in the other account is only
- * entered from there; it's edited and deleted through its split, as YNAB does.
- */
-/**
  * A scheduled row's tint, on every cell (as RegisterRow paints its states), and its selected tint,
  * which also holds on hover.
  */
 const SCHEDULED_ROW =
   "*:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] data-selected:*:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] data-selected:hover:*:bg-[color-mix(in_oklab,var(--primary)_14%,var(--background))]";
 
+/**
+ * YNAB's "Scheduled Transactions" section at the top of a register: one row per schedule (its
+ * next occurrence), newest first, plus the other account's side of scheduled transfers. It
+ * collapses (remembered per register), and each row can be edited (it and every later
+ * occurrence), entered now or deleted. A split's transfer line in the other account is only
+ * entered from there; it's edited and deleted through its split, as YNAB does.
+ */
 export function ScheduledSection({
   rows,
   columns,

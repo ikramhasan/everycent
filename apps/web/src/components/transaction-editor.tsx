@@ -729,7 +729,7 @@ export function TransactionEditor({
       <RegisterRow
         still
         aria-label={label}
-        className="*:border-b-0 bg-muted/50"
+        className="not-last:*:border-b-0 bg-muted/50"
         onKeyDown={handleKeyDown}
       >
         {columns.map((column) => (
@@ -752,7 +752,7 @@ export function TransactionEditor({
           still
           key={line.key}
           aria-label={`Split line ${index + 1}`}
-          className="*:border-b-0 bg-muted/50"
+          className="not-last:*:border-b-0 bg-muted/50"
           onKeyDown={handleKeyDown}
         >
           {columns.map((column) => (
