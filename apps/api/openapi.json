@@ -30978,10 +30978,10 @@
             "schema": {
               "type": "string",
               "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
-              "description": "Last month, YYYY-MM (inclusive)"
+              "description": "Last month, YYYY-MM (inclusive); at most 1200 months after `from`"
             },
             "required": true,
-            "description": "Last month, YYYY-MM (inclusive)",
+            "description": "Last month, YYYY-MM (inclusive); at most 1200 months after `from`",
             "name": "to",
             "in": "query"
           },
@@ -31019,7 +31019,7 @@
             }
           },
           "400": {
-            "description": "Invalid query, or `from` after `to`",
+            "description": "Invalid query, `from` after `to`, or a range over 1200 months",
             "content": {
               "application/json": {
                 "schema": {

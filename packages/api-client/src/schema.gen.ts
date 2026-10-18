@@ -14430,7 +14430,7 @@ export interface operations {
             query: {
                 /** @description First month, YYYY-MM */
                 from: string;
-                /** @description Last month, YYYY-MM (inclusive) */
+                /** @description Last month, YYYY-MM (inclusive); at most 1200 months after `from` */
                 to: string;
                 /** @description Comma-separated account ids; all accounts when left out */
                 accountIds?: string;
@@ -14454,7 +14454,7 @@ export interface operations {
                     "application/json": components["schemas"]["NetWorthReport"];
                 };
             };
-            /** @description Invalid query, or `from` after `to` */
+            /** @description Invalid query, `from` after `to`, or a range over 1200 months */
             400: {
                 headers: {
                     [name: string]: unknown;

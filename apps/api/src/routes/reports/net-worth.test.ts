@@ -313,4 +313,34 @@ describe("net worth report", () => {
     const hidden = await send("GET", `${base}/reports/net-worth?from=2026-10&to=2026-10`, other);
     expect(hidden.status).toBe(404);
   });
+
+  // EVERYCENT-244: the work a request asks for stays bounded however wide or far its range is.
+  it("caps the range and bounds the walk", async () => {
+    const { cookie, base, account, add, report } = await setup();
+    const a = await account({ name: "A", type: "checking", balance: "1000" });
+    await add({ accountId: a.id, date: "2026-09-05", amount: "2000", payeeName: "Job" });
+
+    const huge = await send("GET", `${base}/reports/net-worth?from=0000-01&to=9999-12`, cookie);
+    expect(huge.status).toBe(400);
+    const over = await send("GET", `${base}/reports/net-worth?from=2026-10&to=2126-10`, cookie);
+    expect(over.status).toBe(400);
+    const longest = await report("from=2026-10&to=2126-09");
+    expect(longest.months).toHaveLength(1200);
+    expect(longest.months.at(-1)?.netWorth).toBe("3000");
+
+    // Far after the transactions: the balances they left, carried over the skipped months.
+    const later = await report("from=9000-01&to=9000-02");
+    expect(later.firstMonth).toBe("2026-07");
+    expect(later.opening.netWorth).toBe("3000");
+    expect(later.months.map((m) => [m.netWorth, m.allTimeHigh])).toEqual([
+      ["3000", false],
+      ["3000", false],
+    ]);
+    expect(later.accounts[0]?.opening.native).toBe("3000");
+    expectPartsAddUp(later);
+
+    // Far before them: nothing yet.
+    const earlier = await report("from=1000-01&to=1000-02");
+    expect(earlier.months.map((m) => m.netWorth)).toEqual(["0", "0"]);
+  });
 });

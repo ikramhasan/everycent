@@ -1,6 +1,7 @@
 import {
   BUDGET_MONTH_PATTERN,
   type BudgetMonth,
+  monthsBetween,
   zAccountType,
   zCurrencyCode,
   zMinorUnits,
@@ -10,7 +11,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError, jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
 import { serverToday } from "../../lib/ledger";
-import { type NetWorthBalance, netWorthReport } from "../../lib/net-worth";
+import { NET_WORTH_MAX_MONTHS, type NetWorthBalance, netWorthReport } from "../../lib/net-worth";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import { authSecurity, requireAuth } from "../../middleware/require-auth";
@@ -118,7 +119,9 @@ export const getNetWorthReport = createRoute({
     }),
     query: z.object({
       from: Month.describe("First month, YYYY-MM"),
-      to: Month.describe("Last month, YYYY-MM (inclusive)"),
+      to: Month.describe(
+        `Last month, YYYY-MM (inclusive); at most ${NET_WORTH_MAX_MONTHS} months after \`from\``,
+      ),
       accountIds: z
         .string()
         .transform((v) => v.split(",").filter(Boolean))
@@ -137,7 +140,9 @@ export const getNetWorthReport = createRoute({
       description: "The report",
       content: { "application/json": { schema: NetWorthSchema } },
     },
-    400: jsonError("Invalid query, or `from` after `to`"),
+    400: jsonError(
+      `Invalid query, \`from\` after \`to\`, or a range over ${NET_WORTH_MAX_MONTHS} months`,
+    ),
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, or the caller isn't a member"),
@@ -158,6 +163,13 @@ export const getNetWorthReportHandler: RouteHandler<
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.from > query.to) throw new AppError(400, "BAD_REQUEST", "`from` is after `to`");
+  if (monthsBetween(query.from, query.to) >= NET_WORTH_MAX_MONTHS) {
+    throw new AppError(
+      400,
+      "BAD_REQUEST",
+      `The range is over ${NET_WORTH_MAX_MONTHS} months; ask for a shorter one`,
+    );
+  }
   const today = query.today ?? serverToday();
   if (query.today) {
     await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, query.today));
