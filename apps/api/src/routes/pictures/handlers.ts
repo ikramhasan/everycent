@@ -1,7 +1,7 @@
 import { newId } from "@everycent/db";
 import { accountLogo, budgetAccount, budgetMember, user, userAvatar } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -190,13 +190,3 @@ export const getAccountLogoHandler: RouteHandler<typeof getAccountLogo, Env> = a
     maxAgeSeconds: PICTURE_CACHE_SECONDS,
   });
 };
-
-/** Profile pictures as URLs by user id (`user.image`), for member refs. */
-export async function pictureUrls(db: Db, userIds: readonly string[]) {
-  if (userIds.length === 0) return new Map<string, string | null>();
-  const rows = await db
-    .select({ id: user.id, image: user.image })
-    .from(user)
-    .where(inArray(user.id, [...userIds]));
-  return new Map(rows.map((r) => [r.id, r.image]));
-}
