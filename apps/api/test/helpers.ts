@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createDb, type Database, sql } from "@everycent/db";
 import type { App } from "../src/app";
 import { createApp } from "../src/app";
@@ -32,6 +33,26 @@ export function testEnv(): Env {
   });
 }
 
+/**
+ * Better Auth's scrypt hash with a tiny work factor. The real one (N=16384, r=16) takes ~70 ms per
+ * hash, and nearly every test hashes twice (sign-up, sign-in); a wrong password still fails.
+ */
+function cheapScrypt(password: string, salt: string): Buffer {
+  return scryptSync(password.normalize("NFKC"), salt, 64, { N: 16, r: 1, p: 1 });
+}
+const testPassword = {
+  hash: async (password: string) => {
+    const salt = randomBytes(16).toString("hex");
+    return `${salt}:${cheapScrypt(password, salt).toString("hex")}`;
+  },
+  verify: async ({ hash, password }: { hash: string; password: string }) => {
+    const [salt = "", key = ""] = hash.split(":");
+    const expected = Buffer.from(key, "hex");
+    const actual = cheapScrypt(password, salt);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  },
+};
+
 const outboxes = new WeakMap<App, MemoryEmailSender>();
 const appDeps = new WeakMap<App, AppDeps>();
 
@@ -56,7 +77,10 @@ export function createTestApp({
     env,
     email,
     jobs,
-    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env), authOptions),
+    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env), {
+      password: testPassword,
+      ...authOptions,
+    }),
     changes: new ChangeBus(listen),
     serverDate,
     fxProviders,
@@ -127,19 +151,20 @@ export async function signIn(app: App, email: string, password: string): Promise
 }
 
 /**
- * Empties every table in the public schema (future tables included automatically). One TRUNCATE
- * over all tables: a statement per table costs ~10x as much (each one locks and swaps files alone).
+ * Empties every table in the public schema (future tables included automatically). DELETE, not
+ * TRUNCATE: a test leaves a few rows, and TRUNCATE swaps every table's files (~55 ms for all of
+ * them against ~10 ms). The replica role skips foreign-key triggers, so the order doesn't matter
+ * (it needs a superuser, which the compose and CI test user is).
  */
 export async function resetDatabase(db: Database): Promise<void> {
   await db.execute(sql`
     DO $$
-    DECLARE tables text;
+    DECLARE t text;
     BEGIN
-      SELECT string_agg(quote_ident(tablename), ', ') INTO tables
-        FROM pg_tables WHERE schemaname = 'public';
-      IF tables IS NOT NULL THEN
-        EXECUTE 'TRUNCATE TABLE ' || tables || ' CASCADE';
-      END IF;
+      PERFORM set_config('session_replication_role', 'replica', true);
+      FOR t IN SELECT quote_ident(tablename) FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE 'DELETE FROM ' || t;
+      END LOOP;
     END $$;
   `);
 }

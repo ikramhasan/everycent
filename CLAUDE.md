@@ -105,9 +105,14 @@ behaviour you haven't confirmed.
   open-issue health), bundle size and license first. Hand-roll only domain logic (budgeting rules,
   money math) or when no suitable library exists, and say why in a comment.
 - API tests use `createTestApp()` + `resetDatabase()` against the real test DB. No DB mocks.
-  Test files run in parallel: the global setup migrates `TEST_DATABASE_URL` and copies it to one
-  database per worker (`<name>_w1`, `_w2`, …). `API_TEST_WORKERS` sets the count (default
-  cores − 1; turbo passes it through).
+  Test files run in parallel: the global setup migrates `TEST_DATABASE_URL` and gives each worker
+  a database of its own (`<name>_w1`, `_w2`, …), copied once, then migrated in place on later runs
+  (dropping one forces a slow checkpoint). `API_TEST_WORKERS` sets the count (default
+  cores − 1; turbo passes it through). Files share a worker's modules (`isolate: false`), so
+  module-level state must be keyed by something a test app owns (its db, its fx provider), never
+  global. In tests, passwords hash with a cheap scrypt (`createTestApp`); production keeps
+  Better Auth's. Web test files that `vi.mock`/`vi.hoisted` run isolated; the rest share modules
+  (`apps/web/vitest.config.ts` sorts them).
   CI (`.github/workflows/check.yml`) runs `pnpm check` and the image check on each
   push to main, not on PRs; Railway deploys only once it passes. Run `pnpm check` locally before a PR.
 - shadcn components: `pnpm dlx shadcn@latest add <name> -c apps/web` (lands in `packages/ui`).
