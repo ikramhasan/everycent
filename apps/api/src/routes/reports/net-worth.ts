@@ -118,7 +118,7 @@ export const getNetWorthReport = createRoute({
       budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
     }),
     query: z.object({
-      from: Month.describe("First month, YYYY-MM"),
+      from: Month.describe("First month, YYYY-MM (0001-01 or later)"),
       to: Month.describe(
         `Last month, YYYY-MM (inclusive); at most ${NET_WORTH_MAX_MONTHS} months after \`from\``,
       ),
@@ -131,7 +131,8 @@ export const getNetWorthReport = createRoute({
         .date()
         .optional()
         .describe(
-          "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+          "The user's today, held within a day of the server's UTC date (the default); later " +
+            "transactions don't count.",
         ),
     }),
   },
@@ -141,7 +142,7 @@ export const getNetWorthReport = createRoute({
       content: { "application/json": { schema: NetWorthSchema } },
     },
     400: jsonError(
-      `Invalid query, \`from\` after \`to\`, or a range over ${NET_WORTH_MAX_MONTHS} months`,
+      `Invalid query, \`from\` after \`to\` or before 0001-01, or a range over ${NET_WORTH_MAX_MONTHS} months`,
     ),
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),
@@ -163,6 +164,8 @@ export const getNetWorthReportHandler: RouteHandler<
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.from > query.to) throw new AppError(400, "BAD_REQUEST", "`from` is after `to`");
+  // The month before `from` opens the report, so it has to be a month too.
+  if (query.from < "0001-01") throw new AppError(400, "BAD_REQUEST", "`from` is before 0001-01");
   if (monthsBetween(query.from, query.to) >= NET_WORTH_MAX_MONTHS) {
     throw new AppError(
       400,
@@ -170,10 +173,10 @@ export const getNetWorthReportHandler: RouteHandler<
       `The range is over ${NET_WORTH_MAX_MONTHS} months; ask for a shorter one`,
     );
   }
-  const today = query.today ?? serverToday();
-  if (query.today) {
-    await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, query.today));
-  }
+  // Held within a day of the server's date, like entering schedules: `today` sets how far a
+  // loan's month-by-month charges run, so a made-up one mustn't walk thousands of years.
+  const today = query.today ? entryDate(c.var.deps, query.today) : serverToday();
+  if (query.today) await enterDueScheduled(db, c.var.deps, budgetId, today);
   const report = await netWorthReport(db, c.var.deps, {
     budgetId,
     budgetCurrency: budget.currency,

@@ -8,6 +8,7 @@ import {
   isOnBudget,
   money,
   monthBounds,
+  monthsBetween,
   type NetWorthParts,
   type NetWorthTotals,
   netWorthGroup,
@@ -174,7 +175,10 @@ export async function netWorthReport(
     (a, m) => (a === null || m < a ? m : a),
     null,
   );
-  const floor = addMonths(before, -NET_WORTH_MAX_MONTHS);
+  const floor =
+    monthsBetween("0000-01", before) > NET_WORTH_MAX_MONTHS
+      ? addMonths(before, -NET_WORTH_MAX_MONTHS)
+      : "0000-01";
   const wanted = earliest !== null && earliest < before ? earliest : before;
   const start = wanted < floor ? floor : wanted;
   const months: BudgetMonth[] = [];

@@ -320,8 +320,11 @@ describe("net worth report", () => {
     const a = await account({ name: "A", type: "checking", balance: "1000" });
     await add({ accountId: a.id, date: "2026-09-05", amount: "2000", payeeName: "Job" });
 
-    const huge = await send("GET", `${base}/reports/net-worth?from=0000-01&to=9999-12`, cookie);
+    const huge = await send("GET", `${base}/reports/net-worth?from=0001-01&to=9999-12`, cookie);
     expect(huge.status).toBe(400);
+    // Its opening (the month before) has to be a month too.
+    const first = await send("GET", `${base}/reports/net-worth?from=0000-01&to=0000-02`, cookie);
+    expect(first.status).toBe(400);
     const over = await send("GET", `${base}/reports/net-worth?from=2026-10&to=2126-10`, cookie);
     expect(over.status).toBe(400);
     const longest = await report("from=2026-10&to=2126-09");
@@ -342,5 +345,45 @@ describe("net worth report", () => {
     // Far before them: nothing yet.
     const earlier = await report("from=1000-01&to=1000-02");
     expect(earlier.months.map((m) => m.netWorth)).toEqual(["0", "0"]);
+  });
+});
+
+describe("net worth report's today", () => {
+  const bounded = createTestApp({ serverDate: () => TODAY });
+  afterAll(bounded.close);
+
+  // EVERYCENT-244: `today` sets how far a loan's charges run, so it's held near the server's date.
+  it("is held within a day of the server's date", async () => {
+    const { cookie } = await signUp(bounded.app);
+    const budget = await createBudget(bounded.app, cookie);
+    const base = `/v1/budgets/${budget.id}`;
+    const call = (method: string, path: string, body?: unknown) =>
+      bounded.app.request(path, {
+        method,
+        headers: { cookie, "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    // A rate from far in the future: it applies only if the report's today reaches it.
+    (bounded.fxProviders[0] as FakeFxProvider)
+      .reset()
+      .seed("2026-07-01", "EUR", { USD: "1.1" })
+      .seed("3000-01-01", "EUR", { USD: "2" });
+    const created = await call("POST", `${base}/accounts`, {
+      name: "Euros",
+      type: "savings",
+      currency: "EUR",
+      balance: "10000",
+      date: "2026-07-01",
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const res = await call(
+      "GET",
+      `${base}/reports/net-worth?from=9999-01&to=9999-02&today=9999-12-31`,
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    const r = await json<Report>(res);
+    // The made-up today counts as the server's (it also sets how far a loan's charges run).
+    expect(r.months.map((m) => m.netWorth)).toEqual(["11000", "11000"]);
+    expect(r.rates.every((x) => x.rateDate !== null && x.rateDate <= "2026-10-21")).toBe(true);
   });
 });

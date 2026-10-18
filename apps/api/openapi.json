@@ -30967,10 +30967,10 @@
             "schema": {
               "type": "string",
               "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$",
-              "description": "First month, YYYY-MM"
+              "description": "First month, YYYY-MM (0001-01 or later)"
             },
             "required": true,
-            "description": "First month, YYYY-MM",
+            "description": "First month, YYYY-MM (0001-01 or later)",
             "name": "from",
             "in": "query"
           },
@@ -30999,10 +30999,10 @@
             "schema": {
               "type": "string",
               "format": "date",
-              "description": "The user's today; later transactions don't count. Defaults to the server's UTC date."
+              "description": "The user's today, held within a day of the server's UTC date (the default); later transactions don't count."
             },
             "required": false,
-            "description": "The user's today; later transactions don't count. Defaults to the server's UTC date.",
+            "description": "The user's today, held within a day of the server's UTC date (the default); later transactions don't count.",
             "name": "today",
             "in": "query"
           }
@@ -31019,7 +31019,7 @@
             }
           },
           "400": {
-            "description": "Invalid query, `from` after `to`, or a range over 1200 months",
+            "description": "Invalid query, `from` after `to` or before 0001-01, or a range over 1200 months",
             "content": {
               "application/json": {
                 "schema": {
