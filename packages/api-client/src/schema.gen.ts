@@ -5562,7 +5562,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description An agent's request, or the account's email address isn't confirmed */
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5600,7 +5600,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description An agent's request, or the account's email address isn't confirmed */
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5661,7 +5661,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description An agent's request, or the account's email address isn't confirmed */
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
             403: {
                 headers: {
                     [name: string]: unknown;

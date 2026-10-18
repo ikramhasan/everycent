@@ -45,7 +45,9 @@ export const listConnectedAgents = createRoute({
       },
     },
     401: jsonError("Not signed in"),
-    403: jsonError("An agent's request, or the account's email address isn't confirmed"),
+    403: jsonError(
+      "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+    ),
   },
 });
 
@@ -68,7 +70,9 @@ export const revokeConnectedAgent = createRoute({
   responses: {
     204: { description: "Disconnected" },
     401: jsonError("Not signed in"),
-    403: jsonError("An agent's request, or the account's email address isn't confirmed"),
+    403: jsonError(
+      "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+    ),
     404: jsonError("No such agent of yours"),
   },
 });
@@ -119,7 +123,9 @@ export const getAgentApproval = createRoute({
     },
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
-    403: jsonError("An agent's request, or the account's email address isn't confirmed"),
+    403: jsonError(
+      "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+    ),
     404: jsonError("No pending request with that code (wrong, expired or already answered)"),
   },
 });

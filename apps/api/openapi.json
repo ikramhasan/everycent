@@ -16926,7 +16926,7 @@
             }
           },
           "403": {
-            "description": "An agent's request, or the account's email address isn't confirmed",
+            "description": "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -16976,7 +16976,7 @@
             }
           },
           "403": {
-            "description": "An agent's request, or the account's email address isn't confirmed",
+            "description": "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -17065,7 +17065,7 @@
             }
           },
           "403": {
-            "description": "An agent's request, or the account's email address isn't confirmed",
+            "description": "An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
             "content": {
               "application/json": {
                 "schema": {
