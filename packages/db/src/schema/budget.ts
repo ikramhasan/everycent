@@ -8,8 +8,10 @@ import {
   bigint,
   boolean,
   char,
+  date,
   index,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -153,5 +155,44 @@ export const userPreference = pgTable("user_preference", {
    * null is each budget's own currency.
    */
   displayCurrency: char({ length: 3 }).$type<CurrencyCode>(),
+  /** The monthly summary email (EVERYCENT-241), for every budget the person is on. */
+  monthlySummaryEmail: boolean().notNull().default(true),
+  /** The summary's AI overview, on budgets that have AI on. */
+  monthlySummaryAi: boolean().notNull().default(true),
   ...timestamps,
 });
+
+/**
+ * One person's email options for one budget they're on; no row is every option on. Kept apart
+ * from `budget_member`, which the organization plugin owns.
+ */
+export const budgetEmailPreference = pgTable(
+  "budget_email_preference",
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    monthlySummary: boolean().notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.budgetId] })],
+);
+
+/**
+ * A budget's monthly summary, claimed once it has been queued to its members, so a retried or
+ * overlapping run doesn't send it twice. `month` is its first day.
+ */
+export const budgetMonthlySummary = pgTable(
+  "budget_monthly_summary",
+  {
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    month: date({ mode: "string" }).notNull(),
+    sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.budgetId, t.month] })],
+);

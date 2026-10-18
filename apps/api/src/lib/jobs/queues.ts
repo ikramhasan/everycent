@@ -1,3 +1,4 @@
+import type { BudgetMonth } from "@everycent/engine";
 import type { QueueOptions } from "pg-boss";
 
 /**
@@ -22,6 +23,15 @@ export const QUEUES = {
   "fx.prefetch": { retryLimit: 2, retryDelay: 300, expireInSeconds: 300 },
   /** Deletes the files of deleted attachments from object storage (`storage_deletion`). */
   "storage.purge": { retryLimit: 3, retryDelay: 60, expireInSeconds: 300 },
+  /** Monthly: queues each budget's summary for the month just ended (EVERYCENT-241). */
+  "summaries.monthly": { retryLimit: 3, retryDelay: 300, expireInSeconds: 600 },
+  /** One budget's monthly summary: its numbers, its AI overview, an email to each member. */
+  "summaries.budget": {
+    retryLimit: 3,
+    retryDelay: 300,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  },
 } as const satisfies Record<string, QueueOptions>;
 
 export type QueueName = keyof typeof QUEUES;
@@ -32,6 +42,9 @@ export interface JobData {
   "invitations.remind": null;
   "fx.prefetch": null;
   "storage.purge": null;
+  /** `month` is for running it by hand; the schedule sends none and gets last month's. */
+  "summaries.monthly": { month?: BudgetMonth } | null;
+  "summaries.budget": { budgetId: string; month: BudgetMonth };
 }
 
 /** Cron schedules (UTC) the worker keeps; each sends its queue a job. */
@@ -41,4 +54,6 @@ export const SCHEDULES: { queue: QueueName; cron: string }[] = [
   { queue: "fx.prefetch", cron: "0 1,7,13,19 * * *" },
   // A delete queues a run straight away; this catches cascades (an account or budget deleted).
   { queue: "storage.purge", cron: "*/15 * * * *" },
+  // The 1st at 14:00 UTC: the month has ended in every time zone (it's 02:00 at UTC−12).
+  { queue: "summaries.monthly", cron: "0 14 1 * *" },
 ];

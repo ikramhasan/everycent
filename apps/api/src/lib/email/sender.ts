@@ -14,7 +14,8 @@ export type EmailKind =
   | "existing-account"
   | "password-changed"
   | "budget-invitation"
-  | "budget-invitation-reminder";
+  | "budget-invitation-reminder"
+  | "monthly-summary";
 
 export interface EmailMessage {
   kind: EmailKind;
@@ -22,6 +23,8 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html: string;
+  /** Extra headers, e.g. `List-Unsubscribe` on notification emails. */
+  headers?: Record<string, string>;
 }
 
 /** Delivers one email. Injected through `c.var.deps` so tests can read what was sent. */
@@ -39,8 +42,15 @@ export class ResendEmailSender implements EmailSender {
     this.#from = from;
   }
 
-  async send({ to, subject, text, html }: EmailMessage) {
-    const { error } = await this.#resend.emails.send({ from: this.#from, to, subject, text, html });
+  async send({ to, subject, text, html, headers }: EmailMessage) {
+    const { error } = await this.#resend.emails.send({
+      from: this.#from,
+      to,
+      subject,
+      text,
+      html,
+      headers,
+    });
     if (error) throw new Error(`Resend refused the email: ${error.name}: ${error.message}`);
   }
 }
@@ -60,6 +70,12 @@ export class MemoryEmailSender implements EmailSender {
     this.outbox.push(message);
   }
 }
+
+/**
+ * Kinds nobody but the app can trigger, sent on a schedule: the hourly cap would drop the
+ * summaries of someone on more budgets than it allows.
+ */
+const UNTHROTTLED: ReadonlySet<EmailKind> = new Set(["monthly-summary"]);
 
 /** The most emails of one kind one address receives per hour; the rest are dropped. */
 export const EMAILS_PER_ADDRESS_PER_HOUR = 5;
@@ -87,6 +103,7 @@ export class ThrottledEmailSender implements EmailSender {
   }
 
   async send(message: EmailMessage) {
+    if (UNTHROTTLED.has(message.kind)) return this.#inner.send(message);
     // Hashed so the throttle table never holds email addresses.
     const address = createHash("sha256").update(message.to.trim().toLowerCase()).digest("hex");
     const key = `${message.kind}:${address}`;

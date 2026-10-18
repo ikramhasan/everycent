@@ -31,6 +31,7 @@ import { ApiKeysCard } from "@/components/api-keys-card";
 import { ConnectedAgentsCard } from "@/components/connected-agents-card";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { NotificationsCard } from "@/components/notifications-card";
 import { PictureField } from "@/components/picture-field";
 import { SettingsLayout, SettingsSection } from "@/components/settings-layout";
 import { TwoFactorCard } from "@/components/two-factor-card";
@@ -97,6 +98,11 @@ function AccountPage() {
       <TabsContent value="preferences" className="grid gap-6">
         <SettingsSection id="options">
           <OptionsCard />
+        </SettingsSection>
+      </TabsContent>
+      <TabsContent value="notifications" className="grid gap-6">
+        <SettingsSection id="notifications">
+          <NotificationsCard />
         </SettingsSection>
       </TabsContent>
       <TabsContent value="developer" className="grid gap-6">

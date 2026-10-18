@@ -9,6 +9,7 @@ export const ACCOUNT_TABS = [
   { id: "profile", label: "Profile" },
   { id: "security", label: "Security" },
   { id: "preferences", label: "Preferences" },
+  { id: "notifications", label: "Notifications" },
   { id: "developer", label: "API & agents" },
 ] as const;
 
@@ -115,6 +116,21 @@ export const SETTINGS: readonly Entry[] = [
     section: "options",
     title: "Show account totals in",
     keywords: ["display currency", "net worth", "convert"],
+  },
+  // Account › Notifications
+  {
+    page: "account",
+    tab: "notifications",
+    section: "notifications",
+    title: "Monthly summary email",
+    keywords: ["notifications", "email", "unsubscribe", "summary", "report"],
+  },
+  {
+    page: "account",
+    tab: "notifications",
+    section: "notifications",
+    title: "AI overview in summaries",
+    keywords: ["notifications", "email", "ai"],
   },
   // Account › API & agents
   {
