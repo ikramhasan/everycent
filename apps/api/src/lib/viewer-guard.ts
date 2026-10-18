@@ -5,15 +5,21 @@ import type { AuthedEnv } from "../middleware/require-auth";
 import type { AppEnv } from "../types";
 import { AppError } from "./errors";
 
-/** Budget-scoped writes a viewer may still make: they change nothing in the budget. */
-const VIEWER_ALLOWED = [
-  /^leave$/,
+/** Budget-scoped POSTs that only read (path after the budget id). */
+const READ_ONLY_POSTS = [
   /^accounts\/[^/]+\/reconcile\/preview$/,
   /^transactions\/selection$/,
   /^export\/transactions$/,
 ] as const;
 
-const BUDGET_PATH = /^\/v1\/budgets\/([^/]+)(?:\/(.*))?$/;
+/** Budget-scoped writes a viewer may still make: they change nothing in the budget. */
+const VIEWER_ALLOWED = [/^leave$/, ...READ_ONLY_POSTS] as const;
+
+/** A budget-scoped path: the budget id, then the rest of the path. */
+export const BUDGET_PATH = /^\/v1\/budgets\/([^/]+)(?:\/(.*))?$/;
+
+/** Whether a budget-scoped POST only reads (`rest` is the path after the budget id). */
+export const onlyReads = (rest: string) => READ_ONLY_POSTS.some((re) => re.test(rest));
 
 /**
  * Refuses every write a viewer (EVERYCENT-88) sends to their budget: 403 READ_ONLY, before the

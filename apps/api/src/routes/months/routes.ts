@@ -8,7 +8,7 @@ import {
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { zAvatarColor, zPicture } from "../../lib/member-colors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const zBudgetMonth = z
   .string()
@@ -331,7 +331,7 @@ export const getBudgetMonth = createRoute({
   path: "/budgets/{budgetId}/months/{month}",
   operationId: "getBudgetMonth",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Assigned, activity and available for each category in a month",
   description:
@@ -359,7 +359,7 @@ export const setMonthNote = createRoute({
   path: "/budgets/{budgetId}/months/{month}/note",
   operationId: "setMonthNote",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Set the month's note",
   description:
@@ -399,7 +399,7 @@ export const assignCategory = createRoute({
   path: "/budgets/{budgetId}/months/{month}/categories/{categoryId}",
   operationId: "assignCategory",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Set the money assigned to a category in a month",
   description:
@@ -449,7 +449,7 @@ export const moveMoney = createRoute({
   path: "/budgets/{budgetId}/months/{month}/moves",
   operationId: "moveMoney",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Move assigned money between categories, or to and from Ready to Assign",
   description:
@@ -522,7 +522,7 @@ export const listMonthActivity = createRoute({
   path: "/budgets/{budgetId}/months/{month}/activity",
   operationId: "listMonthActivity",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The transactions behind a category's, a group's or Uncategorized's Activity",
   description:
@@ -560,7 +560,7 @@ export const autoAssign = createRoute({
   path: "/budgets/{budgetId}/months/{month}/auto-assign",
   operationId: "autoAssign",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Set categories' Assigned from one of YNAB's Auto-Assign options",
   description:
@@ -668,7 +668,7 @@ export const listMoves = createRoute({
   path: "/budgets/{budgetId}/moves",
   operationId: "listMoves",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Recent changes to assigned money, newest first",
   description:
@@ -699,7 +699,7 @@ export const listMonthMoves = createRoute({
   path: "/budgets/{budgetId}/months/{month}/moves",
   operationId: "listMonthMoves",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Every change to assigned money in a month, newest first",
   description:
@@ -722,7 +722,7 @@ export const setExpectedIncome = createRoute({
   path: "/budgets/{budgetId}/expected-income",
   operationId: "setExpectedIncome",
   tags: ["Budget months"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Set the budget's expected monthly income",
   description:

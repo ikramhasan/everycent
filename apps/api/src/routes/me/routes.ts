@@ -1,7 +1,12 @@
 import { zCurrencyCode } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import {
+  authSecurity,
+  requireAuth,
+  requireSession,
+  sessionSecurity,
+} from "../../middleware/require-auth";
 
 export const UserSchema = z
   .object({
@@ -23,7 +28,7 @@ export const getMe = createRoute({
   operationId: "getMe",
   tags: ["Users"],
   summary: "The signed-in user",
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   responses: {
     200: {
@@ -43,8 +48,8 @@ export const changeEmail = createRoute({
   summary: "Start changing the account's email address",
   description:
     "Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link).",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   request: {
     body: {
       required: true,
@@ -99,8 +104,8 @@ export const listSessions = createRoute({
   operationId: "listSessions",
   tags: ["Users"],
   summary: "Devices signed in to the account, current one first",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   responses: {
     200: {
       description: "Active sessions",
@@ -125,8 +130,8 @@ export const revokeSession = createRoute({
   operationId: "revokeSession",
   tags: ["Users"],
   summary: "Sign out another device",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   request: { params: SessionParams },
   responses: {
     204: { description: "Signed out" },
@@ -143,8 +148,8 @@ export const revokeOtherSessions = createRoute({
   operationId: "revokeOtherSessions",
   tags: ["Users"],
   summary: "Sign out every device except this one",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   responses: {
     204: { description: "Signed out" },
     401: jsonError("Not signed in"),
@@ -161,8 +166,8 @@ export const disableTwoFactor = createRoute({
   description:
     'As YNAB\'s "Turn Off" asks: the current 6-digit code (`INVALID_CODE` when wrong). Attempts ' +
     "share the password-check limit (`RATE_LIMITED`).",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   request: {
     body: {
       required: true,
@@ -205,8 +210,8 @@ export const getPreferences = createRoute({
   operationId: "getPreferences",
   tags: ["Users"],
   summary: "The account's options (YNAB's Account Settings → Options)",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   responses: {
     200: { description: "Options", content: { "application/json": { schema: PreferencesSchema } } },
     401: jsonError("Not signed in"),
@@ -220,8 +225,8 @@ export const updatePreferences = createRoute({
   operationId: "updatePreferences",
   tags: ["Users"],
   summary: "Change the account's options",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   request: {
     body: {
       required: true,
@@ -249,8 +254,8 @@ export const deleteAccount = createRoute({
     "password-check limit), it deletes every budget the account owns, shared ones included, and " +
     "removes the account from budgets others shared with it. Logins, sessions, options and " +
     "two-step verification go too. Can't be undone.",
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   request: {
     body: {
       required: true,

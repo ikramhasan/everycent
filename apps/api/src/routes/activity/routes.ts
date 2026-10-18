@@ -2,7 +2,7 @@ import { AUDIT_OPS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { zMemberRef } from "../../lib/member-colors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const RowValues = z
   .record(z.string(), z.string().nullable())
@@ -53,7 +53,7 @@ export const listActivity = createRoute({
   path: "/budgets/{budgetId}/activity",
   operationId: "listBudgetActivity",
   tags: ["Activity"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The budget's change history, newest first",
   description:
@@ -90,7 +90,7 @@ export const transactionHistory = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/history",
   operationId: "getTransactionHistory",
   tags: ["Activity"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "One transaction's change history, oldest first",
   description:

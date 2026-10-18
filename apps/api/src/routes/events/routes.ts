@@ -1,13 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 export const budgetEvents = createRoute({
   method: "get",
   path: "/budgets/{budgetId}/events",
   operationId: "streamBudgetEvents",
   tags: ["Activity"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Live changes to the budget (server-sent events)",
   description:

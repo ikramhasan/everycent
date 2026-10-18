@@ -9,7 +9,7 @@ type Json = Record<string, unknown>;
 
 /**
  * Left out for agents: account security (email, password, sessions, two-step verification,
- * deleting the account), managing agents themselves, the live event stream (agents can't hold
+ * deleting the account, API keys), managing agents themselves, the live event stream (agents can't hold
  * it open through a tool call) and the web app's own error reports.
  */
 const AGENT_EXCLUDED = new Set([
@@ -21,6 +21,9 @@ const AGENT_EXCLUDED = new Set([
   "revokeSession",
   "disableTwoFactor",
   "deleteMyAccount",
+  "listApiKeys",
+  "createApiKey",
+  "deleteApiKey",
   "streamBudgetEvents",
   "listConnectedAgents",
   "revokeConnectedAgent",

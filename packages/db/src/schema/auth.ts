@@ -107,3 +107,44 @@ export const twoFactor = pgTable(
     index("two_factor_secret_idx").on(t.secret),
   ],
 );
+
+/**
+ * The api-key plugin's keys (personal API keys, EVERYCENT-230). `key` is the SHA-256 hash; the key
+ * itself is shown once, on creation. `start` is its first characters, so a list can tell keys
+ * apart. `permissions` (JSON) holds the key's scope, written and read by `lib/api-keys.ts`.
+ * Better Auth's per-key rate limit is off (`rateLimitEnabled` false): ours is in `lib/throttle.ts`.
+ */
+export const apiKey = pgTable(
+  "api_key",
+  {
+    id: text().primaryKey(),
+    configId: text().notNull().default("default"),
+    name: text(),
+    start: text(),
+    prefix: text(),
+    key: text().notNull(),
+    /** The owning user's id (`references: "user"`). */
+    referenceId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    refillInterval: integer(),
+    refillAmount: integer(),
+    lastRefillAt: timestamp({ withTimezone: true }),
+    enabled: boolean().default(true),
+    rateLimitEnabled: boolean().default(true),
+    rateLimitTimeWindow: integer(),
+    rateLimitMax: integer(),
+    requestCount: integer().default(0),
+    remaining: integer(),
+    lastRequest: timestamp({ withTimezone: true }),
+    expiresAt: timestamp({ withTimezone: true }),
+    permissions: text(),
+    metadata: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("api_key_key_idx").on(t.key),
+    index("api_key_reference_id_idx").on(t.referenceId),
+    index("api_key_config_id_idx").on(t.configId),
+  ],
+);

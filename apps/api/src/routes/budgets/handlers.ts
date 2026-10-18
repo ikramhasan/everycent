@@ -2,6 +2,7 @@ import { newId, sql } from "@everycent/db";
 import { budget, budgetMember, userPreference } from "@everycent/db/schema";
 import type { RouteHandler } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
+import { keyAllowsBudget } from "../../lib/api-keys";
 import { setAuditContext } from "../../lib/audit-context";
 import { type BudgetAccess, loadBudgetAccess, rememberLastBudget } from "../../lib/budget-access";
 import { ARCHIVED_STAMP, copyIntoFreshStart } from "../../lib/fresh-start";
@@ -39,7 +40,7 @@ export function toBudgetJson({ budget: b, role, lastUsedAt }: BudgetAccess) {
 export const listBudgetsHandler: RouteHandler<typeof listBudgets, Env> = async (c) => {
   const { db } = c.var.deps;
   const userId = c.var.user.id;
-  const rows = await db
+  const allRows = await db
     .select({ budget, role: budgetMember.role, lastUsedAt: budgetMember.lastUsedAt })
     .from(budgetMember)
     .innerJoin(budget, eq(budget.id, budgetMember.budgetId))
@@ -50,6 +51,8 @@ export const listBudgetsHandler: RouteHandler<typeof listBudgets, Env> = async (
       sql`lower(${budget.name})`,
       budget.id,
     );
+  // An API key limited to some budgets sees only those.
+  const rows = allRows.filter((r) => keyAllowsBudget(c.var.apiKey, r.budget.id));
   const [pref] = await db
     .select({ lastBudgetId: userPreference.lastBudgetId })
     .from(userPreference)
@@ -89,7 +92,10 @@ export const createBudgetHandler: RouteHandler<typeof createBudget, Env> = async
 export const getBudgetHandler: RouteHandler<typeof getBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const access = await loadBudgetAccess(c, budgetId);
-  const lastUsedAt = await rememberLastBudget(c.var.deps.db, c.var.user.id, budgetId);
+  // Opening a budget in the app makes it the one to come back to; a script's read doesn't.
+  const lastUsedAt = c.var.apiKey
+    ? access.lastUsedAt
+    : await rememberLastBudget(c.var.deps.db, c.var.user.id, budgetId);
   return c.json(toBudgetJson({ ...access, lastUsedAt }), 200);
 };
 

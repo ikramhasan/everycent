@@ -1,7 +1,7 @@
 import { MAX_CUSTOM_VIEWS, PRESET_BUDGET_VIEWS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const ViewSchema = z
   .object({
@@ -52,7 +52,7 @@ const listResponse = {
 
 export const listViews = createRoute({
   tags: ["Views"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/views",
@@ -69,7 +69,7 @@ export const listViews = createRoute({
 
 export const createView = createRoute({
   tags: ["Views"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "post",
   path: "/budgets/{budgetId}/views",
@@ -94,7 +94,7 @@ export const createView = createRoute({
 
 export const updateView = createRoute({
   tags: ["Views"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "patch",
   path: "/budgets/{budgetId}/views/{viewId}",
@@ -120,7 +120,7 @@ export const updateView = createRoute({
 
 export const deleteView = createRoute({
   tags: ["Views"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "delete",
   path: "/budgets/{budgetId}/views/{viewId}",
@@ -137,7 +137,7 @@ export const deleteView = createRoute({
 
 export const reorderViews = createRoute({
   tags: ["Views"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "put",
   path: "/budgets/{budgetId}/views/order",

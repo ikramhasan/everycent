@@ -2,7 +2,7 @@ import { FLAG_COLORS } from "@everycent/db/schema";
 import { SCHEDULE_FREQUENCIES, zCurrencyCode, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import { TransactionSchema } from "../transactions/routes";
 
 const IsoDate = z.iso.date().describe("Calendar date, YYYY-MM-DD");
@@ -133,7 +133,7 @@ export const listScheduledTransactions = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions",
   operationId: "listScheduledTransactions",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The register's Scheduled Transactions section, newest first",
   description:
@@ -172,7 +172,7 @@ export const createScheduledTransaction = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions",
   operationId: "createScheduledTransaction",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Schedule a transaction (a future one-off or a repeating one)",
   description:
@@ -228,7 +228,7 @@ export const updateScheduledTransaction = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
   operationId: "updateScheduledTransaction",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Edit a scheduled transaction (it and all of its future occurrences)",
   description:
@@ -281,7 +281,7 @@ export const deleteScheduledTransaction = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}",
   operationId: "deleteScheduledTransaction",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Delete a scheduled transaction and all of its future occurrences",
   request: { params: ScheduleParams },
@@ -298,7 +298,7 @@ export const enterScheduledTransaction = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions/{scheduledTransactionId}/enter",
   operationId: "enterScheduledTransaction",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Enter Now: the next occurrence, dated today",
   description:
@@ -344,7 +344,7 @@ export const bulkUpdateScheduledTransactions = createRoute({
   path: "/budgets/{budgetId}/scheduled-transactions/bulk",
   operationId: "bulkUpdateScheduledTransactions",
   tags: ["Scheduled transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Apply one action to every selected scheduled row it applies to",
   description:

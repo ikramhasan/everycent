@@ -1,7 +1,7 @@
 import { CONNECTED_AGENT_KINDS } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { requireSession, sessionSecurity } from "../../middleware/require-auth";
 
 const AgentSchema = z
   .object({
@@ -29,8 +29,8 @@ export const listConnectedAgents = createRoute({
   path: "/me/agents",
   operationId: "listConnectedAgents",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "The agents acting for you",
   description:
     "MCP clients and Agent Auth agents you've connected, newest first. Their changes show as " +
@@ -58,8 +58,8 @@ export const revokeConnectedAgent = createRoute({
   path: "/me/agents/{agentId}",
   operationId: "revokeConnectedAgent",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Disconnect an agent",
   description:
     "Ends its access at once: an MCP client's tokens and consent, or an Agent Auth agent and its " +
@@ -87,8 +87,8 @@ export const getAgentApproval = createRoute({
   path: "/me/agent-approvals/{agentId}",
   operationId: "getAgentApproval",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "An agent's request for your approval",
   description:
     "What an Agent Auth agent asks to do, for the approval page it sends you to. Shown only with " +

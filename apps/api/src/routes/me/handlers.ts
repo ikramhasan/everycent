@@ -18,7 +18,7 @@ import { pauseAudit } from "../../lib/audit-context";
 import { deleteBudgetTransactions } from "../../lib/delete-budget";
 import { AppError } from "../../lib/errors";
 import { consumePasswordCheck } from "../../lib/throttle";
-import type { AuthedEnv } from "../../middleware/require-auth";
+import { type AuthedEnv, sessionOf } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type {
   changeEmail,
@@ -89,7 +89,7 @@ function describeDevice(userAgent: string | null): {
 }
 
 export const listSessionsHandler: Handler<typeof listSessions> = async (c) => {
-  const currentId = c.var.session?.id;
+  const currentId = sessionOf(c).id;
   const rows = await c.var.deps.db
     .select()
     .from(session)
@@ -113,7 +113,7 @@ export const listSessionsHandler: Handler<typeof listSessions> = async (c) => {
 
 export const revokeSessionHandler: Handler<typeof revokeSession> = async (c) => {
   const { sessionId } = c.req.valid("param");
-  if (sessionId === c.var.session?.id) {
+  if (sessionId === sessionOf(c).id) {
     throw new AppError(400, "CURRENT_SESSION", "That's this device: sign out instead");
   }
   const row = await c.var.deps.db.query.session.findFirst({

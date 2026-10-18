@@ -3,7 +3,7 @@
   "info": {
     "title": "everycent API",
     "version": "0.1.0",
-    "description": "Zero-based budgeting API. Money amounts are integer strings in the currency's minor units."
+    "description": "Zero-based budgeting API. Money amounts are integer strings in the currency's minor units.\n\n**Authentication:** create a personal API key in the web app (Account settings → API Keys) and send it as `Authorization: Bearer ec_…`. Choose it under *Authentication* to try requests here."
   },
   "components": {
     "securitySchemes": {
@@ -12,6 +12,11 @@
         "in": "cookie",
         "name": "better-auth.session_token",
         "description": "Session cookie set by the Better Auth endpoints under /api/auth"
+      },
+      "apiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A personal API key (`ec_…`), created in the web app under Account → API keys and sent as `Authorization: Bearer <key>` (or an `x-api-key` header). A key acts as its owner within its scope: read-only or read & write, on every budget or chosen ones. It can't reach account or security routes, create, delete or import budgets, or manage sharing; those take a signed-in session. Each key may make 500 requests an hour."
       }
     },
     "schemas": {
@@ -749,6 +754,143 @@
           "title",
           "readOnly",
           "reason"
+        ]
+      },
+      "ApiKeyList": {
+        "type": "object",
+        "properties": {
+          "apiKeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKey"
+            }
+          }
+        },
+        "required": [
+          "apiKeys"
+        ]
+      },
+      "ApiKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "The key's first characters, to tell keys apart"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "`read`: GET requests only. `write`: reads and changes."
+          },
+          "budgetIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The budgets the key may use; null for every budget, including future ones"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Null: never expires"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "start",
+          "access",
+          "budgetIds",
+          "createdAt",
+          "expiresAt",
+          "lastUsedAt"
+        ]
+      },
+      "CreatedApiKey": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/ApiKey"
+          },
+          "key": {
+            "type": "string",
+            "description": "The key. Shown only once."
+          }
+        },
+        "required": [
+          "apiKey",
+          "key"
+        ]
+      },
+      "CreateApiKey": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "`read`: GET requests only. `write`: reads and changes."
+          },
+          "budgetIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "description": "Budgets the key may use (ones you belong to); null for every budget"
+          },
+          "expiresInDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 1825,
+            "description": "Days until the key stops working; null for never"
+          }
+        },
+        "required": [
+          "name",
+          "access",
+          "budgetIds",
+          "expiresInDays"
         ]
       },
       "Picture": {
@@ -16231,6 +16373,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "responses": {
@@ -16942,6 +17087,176 @@
         }
       }
     },
+    "/v1/me/api-keys": {
+      "get": {
+        "operationId": "listApiKeys",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "The account's active API keys, newest first",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active keys (the keys themselves are never shown again)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApiKey",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "Create an API key",
+        "description": "The answer holds the key itself. It's shown only this once: store it somewhere safe.",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedApiKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, or a budget you don't belong to (UNKNOWN_BUDGET)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/api-keys/{keyId}": {
+      "delete": {
+        "operationId": "deleteApiKey",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "Revoke an API key",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "keyId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked: the key stops working at once"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such key for this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/me/picture": {
       "put": {
         "operationId": "setProfilePicture",
@@ -17074,6 +17389,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "A user's profile picture",
@@ -17156,6 +17474,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set or replace an account's logo",
@@ -17288,6 +17609,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Remove an account's logo",
@@ -17353,6 +17677,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "An account's logo",
@@ -17790,6 +18117,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The whole budget as everycent's versioned JSON backup (streamed)",
@@ -17938,6 +18268,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Budgets the signed-in user belongs to",
@@ -18048,6 +18381,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "One budget (also records it as the caller's last-used budget)",
@@ -18112,6 +18448,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Rename a budget or change its formats",
@@ -18342,6 +18681,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Who the budget is shared with, and its pending invitations",
@@ -19146,6 +19488,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Category groups with their categories, in display order",
@@ -19210,6 +19555,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Add a category at the end of a group",
@@ -19306,6 +19654,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Add a category group at the end of the list",
@@ -19402,6 +19753,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Rename, hide or unhide a category group",
@@ -19504,6 +19858,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete a category group and its categories",
@@ -19601,6 +19958,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Move a category group before another one, or to the end",
@@ -19705,6 +20065,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Rename a category, change its note, or hide/unhide it",
@@ -19807,6 +20170,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete a category, moving its history to another category",
@@ -19904,6 +20270,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Move a category within its group or into another group",
@@ -20008,6 +20377,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Create or replace a category's target",
@@ -20121,6 +20493,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Remove a category's target",
@@ -20195,6 +20570,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Put a category's target back as it was (undo and redo)",
@@ -20308,6 +20686,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Snooze a category's target for this month, or wake it",
@@ -20413,6 +20794,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "YNAB's category template gallery, with amounts in the budget's currency",
@@ -20479,6 +20863,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Add a template's picked categories to the budget (YNAB's Import Category Template)",
@@ -20574,6 +20961,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The budget's accounts with their balances",
@@ -20818,6 +21208,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Add an account with its starting balance",
@@ -20915,6 +21308,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Rename an account, edit its note, type or loan details, or set its working balance",
@@ -21019,6 +21415,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete an account that has no history beyond its starting balance",
@@ -21096,6 +21495,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Move an account before another one, or to the end",
@@ -21201,6 +21603,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Work out a reconcile's balance adjustment without saving",
@@ -21286,6 +21691,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Reconcile an account against the bank's balance",
@@ -21381,6 +21789,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Close an account",
@@ -21476,6 +21887,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Reopen a closed account (and show its payment category again)",
@@ -21562,6 +21976,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Book a foreign-currency account's unrealized FX gain or loss",
@@ -21667,6 +22084,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Update a tracking liability to a new loan account (YNAB's Update to a Loan Account)",
@@ -21772,6 +22192,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "A loan's month-by-month activity: payments, interest, escrow and balances",
@@ -21868,6 +22291,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set a loan month's total interest or escrow",
@@ -21963,6 +22389,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Record a loan payment (YNAB's Record Payment)",
@@ -22069,6 +22498,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Dismiss a loan page banner for the whole plan",
@@ -22164,6 +22596,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "One account's register, or every account's, a page at a time",
@@ -22334,6 +22769,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Add a transaction, a transfer or a split",
@@ -22442,6 +22880,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "How many transactions a selection holds and their total",
@@ -22536,6 +22977,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Apply one action to every selected transaction it applies to",
@@ -22652,6 +23096,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Edit a transaction, move it to another account, or toggle cleared",
@@ -22776,6 +23223,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete a transaction",
@@ -22867,6 +23317,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Attach a photo or PDF to a transaction",
@@ -23009,6 +23462,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Open or download a transaction's attachment",
@@ -23111,6 +23567,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete a transaction's attachment",
@@ -23178,6 +23637,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "listPayees",
@@ -23258,6 +23720,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Everything using these payees: transactions, split lines and scheduled ones",
@@ -23345,6 +23810,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "listPayeeRules",
@@ -23412,6 +23880,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "updatePayeeRule",
@@ -23504,6 +23975,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "deletePayeeRule",
@@ -23571,6 +24045,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "setPayeesHidden",
@@ -23660,6 +24137,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "combinePayees",
@@ -23757,6 +24237,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "deletePayees",
@@ -23854,6 +24337,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "restorePayees",
@@ -23944,6 +24430,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "createPayeeRule",
@@ -24049,6 +24538,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "updatePayee",
@@ -24155,6 +24647,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The register's Scheduled Transactions section, newest first",
@@ -24274,6 +24769,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Schedule a transaction (a future one-off or a repeating one)",
@@ -24381,6 +24879,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Apply one action to every selected scheduled row it applies to",
@@ -24468,6 +24969,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Edit a scheduled transaction (it and all of its future occurrences)",
@@ -24571,6 +25075,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Delete a scheduled transaction and all of its future occurrences",
@@ -24638,6 +25145,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Enter Now: the next occurrence, dated today",
@@ -24723,6 +25233,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The six flag colors and the budget's names for them",
@@ -24789,6 +25302,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Name a flag color for everyone on the budget (an empty name clears it)",
@@ -24891,6 +25407,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "What a file import into the account needs: its start date and remembered CSV settings",
@@ -24965,6 +25484,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Import a bank file's transactions into the account (cleared, unapproved)",
@@ -25071,6 +25593,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Match an imported transaction to an entered one (YNAB's Match)",
@@ -25158,6 +25683,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Split a matched transaction back into the entered and the imported one",
@@ -25253,6 +25781,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
@@ -25337,6 +25868,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "listViews",
@@ -25401,6 +25935,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "createView",
@@ -25497,6 +26034,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "reorderViews",
@@ -25583,6 +26123,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "updateView",
@@ -25685,6 +26228,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "deleteView",
@@ -25753,6 +26299,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Assigned, activity and available for each category in a month",
@@ -25852,6 +26401,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set the money assigned to a category in a month",
@@ -25968,6 +26520,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set the month's note",
@@ -26066,6 +26621,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Move assigned money between categories, or to and from Ready to Assign",
@@ -26162,6 +26720,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Every change to assigned money in a month, newest first",
@@ -26240,6 +26801,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set categories' Assigned from one of YNAB's Auto-Assign options",
@@ -26338,6 +26902,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The transactions behind a category's, a group's or Uncategorized's Activity",
@@ -26461,6 +27028,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Recent changes to assigned money, newest first",
@@ -26528,6 +27098,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Set the budget's expected monthly income",
@@ -26614,6 +27187,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "getFxRate",
@@ -27060,6 +27636,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "listFxRateOverrides",
@@ -27124,6 +27703,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "putFxRateOverride",
@@ -27210,6 +27792,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "operationId": "deleteFxRateOverride",
@@ -27278,6 +27863,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The budget's change history, newest first",
@@ -27394,6 +27982,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "One transaction's change history, oldest first",
@@ -27469,6 +28060,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Spending or income summed by month, group, category, payee, account or flag",
@@ -27676,6 +28270,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The transactions behind a report's sums (drill-down and export)",
@@ -27896,6 +28493,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Month-end balances of every account and the net worth they add up to",
@@ -28016,6 +28616,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Age of Money now, 30 days ago, and at each month's end",
@@ -28094,6 +28697,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "Live changes to the budget (server-sent events)",
@@ -28161,6 +28767,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The plan file of YNAB's Export Plan: every category's month, from the first month on",
@@ -28254,6 +28863,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "The register file of YNAB's Export Plan: every transaction, newest first",
@@ -28326,6 +28938,9 @@
         "security": [
           {
             "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
           }
         ],
         "summary": "YNAB's \"Export # Transactions\": the register file for the selected transactions",

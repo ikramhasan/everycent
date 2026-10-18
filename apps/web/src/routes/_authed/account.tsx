@@ -25,6 +25,7 @@ import { Monitor, Smartphone, Tablet } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { NameCard, OptionsCard } from "@/components/account-options";
+import { ApiKeysCard } from "@/components/api-keys-card";
 import { ConnectedAgentsCard } from "@/components/connected-agents-card";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
@@ -61,6 +62,7 @@ function AccountPage() {
       <PasswordCard />
       <TwoFactorCard />
       <DevicesCard />
+      <ApiKeysCard />
       <ConnectedAgentsCard />
       <OptionsCard />
       <DeleteAccountCard />

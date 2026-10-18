@@ -350,6 +350,22 @@ describe("MCP server", () => {
   });
 });
 
+describe("connected agents routes", () => {
+  it("take a signed-in session: an API key can't list or disconnect agents", async () => {
+    const { owner } = await setup();
+    const created = await send("POST", "/v1/me/api-keys", owner.cookie, {
+      name: "Script",
+      access: "write",
+      budgetIds: null,
+      expiresInDays: 90,
+    });
+    const { key } = await json<{ key: string }>(created);
+    const res = await app.request("/v1/me/agents", { headers: { authorization: `Bearer ${key}` } });
+    expect(res.status).toBe(403);
+    expect((await json<{ error: { code: string } }>(res)).error.code).toBe("SESSION_REQUIRED");
+  });
+});
+
 async function getMe(cookie: string) {
   return json<{ id: string }>(await send("GET", "/v1/me", cookie));
 }

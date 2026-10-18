@@ -2,7 +2,7 @@ import { CSV_DATE_FORMATS, zMinorUnits } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const AccountParams = z.object({
   budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
@@ -85,7 +85,7 @@ export const getImportContext = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/import-context",
   operationId: "getImportContext",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "What a file import into the account needs: its start date and remembered CSV settings",
   request: { params: AccountParams },
@@ -105,7 +105,7 @@ export const importTransactions = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/import",
   operationId: "importTransactions",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Import a bank file's transactions into the account (cleared, unapproved)",
   description:
@@ -144,7 +144,7 @@ export const matchTransactions = createRoute({
   path: "/budgets/{budgetId}/transactions/match",
   operationId: "matchTransactions",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Match an imported transaction to an entered one (YNAB's Match)",
   description:
@@ -193,7 +193,7 @@ export const unmatchTransaction = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/unmatch",
   operationId: "unmatchTransaction",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Split a matched transaction back into the entered and the imported one",
   description:
@@ -235,7 +235,7 @@ export const dontRenameTransaction = createRoute({
   path: "/budgets/{budgetId}/transactions/{transactionId}/dont-rename",
   operationId: "dontRenameTransaction",
   tags: ["Transactions"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
   description:

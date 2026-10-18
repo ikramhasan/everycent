@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import { SelectionSchema } from "../transactions/routes";
 
 const BudgetParams = z.object({
@@ -38,7 +38,7 @@ export const exportPlan = createRoute({
   path: "/budgets/{budgetId}/export/plan",
   operationId: "exportPlan",
   tags: ["Export"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The plan file of YNAB's Export Plan: every category's month, from the first month on",
   description:
@@ -54,7 +54,7 @@ export const exportRegister = createRoute({
   path: "/budgets/{budgetId}/export/register",
   operationId: "exportRegister",
   tags: ["Export"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The register file of YNAB's Export Plan: every transaction, newest first",
   description:
@@ -71,7 +71,7 @@ export const exportSelectedTransactions = createRoute({
   path: "/budgets/{budgetId}/export/transactions",
   operationId: "exportSelectedTransactions",
   tags: ["Export"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: 'YNAB\'s "Export # Transactions": the register file for the selected transactions',
   description: `The register file's layout for a selection, with no byte-order mark. ${FORMAT}`,

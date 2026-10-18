@@ -17,6 +17,7 @@
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@better-auth/agent-auth": "catalog:",
+    "@better-auth/api-key": "catalog:",
     "@better-auth/cimd": "catalog:",
     "@better-auth/mcp": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
