@@ -47,7 +47,7 @@ import {
   withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
-import { NewTransactionAttachment } from "./new-transaction-attachment";
+import { NewAttachmentCell } from "./new-transaction-attachment";
 import { type ColumnId, PINNED_BG, pinned, pinnedColumns, pinnedWidth } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 
@@ -65,6 +65,7 @@ const STACKED_ROWS: ColumnId[][] = [
   ["memo"],
   ["outflow", "inflow"],
   ["flag", "cleared"],
+  ["attachment"],
 ];
 const STACKED_LABEL: Partial<Record<ColumnId, string>> = {
   account: "Account",
@@ -76,6 +77,7 @@ const STACKED_LABEL: Partial<Record<ColumnId, string>> = {
   inflow: "Inflow",
   flag: "Flag",
   cleared: "Cleared",
+  attachment: "Attachment",
 };
 
 export function TransactionEditor({
@@ -254,7 +256,19 @@ export function TransactionEditor({
       case "select":
         return null;
       case "attachment":
-        return attachment ?? null;
+        return newAttachment ? (
+          <NewAttachmentCell
+            file={file}
+            onFile={setFile}
+            aiEnabled={newAttachment.aiEnabled}
+            // Reading it, or uploading it with the saved transaction.
+            busy={filling || (pending && file !== null)}
+            onFill={(receipt) => void fillFrom(receipt)}
+            className={layout === "stacked" ? "justify-start" : "justify-center"}
+          />
+        ) : (
+          (attachment ?? null)
+        );
       case "flag":
         return (
           <FlagMenu
@@ -519,15 +533,6 @@ export function TransactionEditor({
 
   const footerItems = (
     <>
-      {newAttachment && (
-        <NewTransactionAttachment
-          file={file}
-          onFile={setFile}
-          aiEnabled={newAttachment.aiEnabled}
-          filling={filling}
-          onFill={(receipt) => void fillFrom(receipt)}
-        />
-      )}
       {lines && (
         <>
           <Button
@@ -668,7 +673,11 @@ export function TransactionEditor({
   // A phone edits in a drawer: the same fields, one under another, with their names (EVERYCENT-93).
   if (layout === "stacked") {
     const stacked = STACKED_ROWS.flat().filter(
-      (c) => columns.includes(c) || c === "flag" || c === "cleared",
+      (c) =>
+        columns.includes(c) ||
+        c === "flag" ||
+        c === "cleared" ||
+        (c === "attachment" && newAttachment !== undefined),
     );
     return (
       <form

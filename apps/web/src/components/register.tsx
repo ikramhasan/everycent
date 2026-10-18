@@ -378,6 +378,7 @@ export function Register({
   // A new transaction can take an attachment as it's entered; with AI on, a receipt fills it in.
   const aiEnabled = useAiSettings(budget.id).data?.enabled ?? false;
   const newAttachment = useMemo(() => ({ budgetId: budget.id, aiEnabled }), [budget.id, aiEnabled]);
+  const [attaching, setAttaching] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
   const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
   // Make Repeating opens the date picker on its row; Record Payment doesn't.
@@ -1274,8 +1275,9 @@ export function Register({
           await refresh();
         },
       });
-      afterNewSaved(draft, another);
+      // Uploaded before the row closes, so its spinner shows while it goes.
       if (file) await attachToNew(created.id, file);
+      afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
@@ -1284,6 +1286,7 @@ export function Register({
 
   /** A new transaction's attachment, uploaded once the transaction exists. */
   async function attachToNew(transactionId: string, file: File) {
+    setAttaching(true);
     try {
       const { error } = await apiClient.POST(
         "/v1/budgets/{budgetId}/transactions/{transactionId}/attachment",
@@ -1302,6 +1305,8 @@ export function Register({
       }
     } catch {
       toast.error("Saved, but the attachment couldn't be added. Add it from the register.");
+    } finally {
+      setAttaching(false);
     }
   }
 
@@ -2298,7 +2303,7 @@ export function Register({
                   settings={budget}
                   flags={flags}
                   onRenameFlags={renameFlags}
-                  pending={create.isPending || createScheduled.isPending}
+                  pending={create.isPending || createScheduled.isPending || attaching}
                   error={newError}
                   onSave={(draft, file) => void saveNew(draft, false, file)}
                   onSaveAndAddAnother={(draft, file) => void saveNew(draft, true, file)}
@@ -2509,7 +2514,7 @@ export function Register({
                   settings={budget}
                   flags={flags}
                   onRenameFlags={renameFlags}
-                  pending={create.isPending || createScheduled.isPending}
+                  pending={create.isPending || createScheduled.isPending || attaching}
                   error={newError}
                   onSave={(draft, file) => void saveNew(draft, false, file)}
                   onCancel={() => setAdding(false)}

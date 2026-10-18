@@ -23,12 +23,6 @@ import {
 /** At most this many files go with one message. */
 const MAX_FILES = 5;
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 const isImage = (type: string) => type.startsWith("image/");
 const isSheet = (type: string) => /spreadsheet|csv|tab-separated/.test(type);
 
@@ -36,7 +30,6 @@ const isSheet = (type: string) => /spreadsheet|csv|tab-separated/.test(type);
 interface PickedFile {
   key: string;
   name: string;
-  size: number;
   /** A local preview of a photo, until it's sent. */
   preview: string | null;
   state: "uploading" | "done" | "error";
@@ -62,7 +55,6 @@ export function usePickedFiles(budgetId: string) {
       const entry: PickedFile = {
         key,
         name: file.name,
-        size: file.size,
         preview: isImage(file.type) ? URL.createObjectURL(file) : null,
         state: "uploading",
       };
@@ -127,13 +119,10 @@ export function PickedFiles({
           </AttachmentMedia>
           <AttachmentContent>
             <AttachmentTitle>{f.name}</AttachmentTitle>
-            <AttachmentDescription role={f.state === "error" ? "alert" : undefined}>
-              {f.state === "error"
-                ? f.error
-                : f.state === "uploading"
-                  ? "Uploading…"
-                  : formatSize(f.size)}
-            </AttachmentDescription>
+            {/* Uploading shows as a shimmer on the name; only a refusal needs words. */}
+            {f.state === "error" && (
+              <AttachmentDescription role="alert">{f.error}</AttachmentDescription>
+            )}
           </AttachmentContent>
           <AttachmentActions>
             <AttachmentAction aria-label={`Remove ${f.name}`} onClick={() => onRemove(f.key)}>
@@ -155,7 +144,6 @@ export interface SentFile {
   attachmentId: string;
   fileName: string;
   contentType: string;
-  byteSize?: number;
 }
 
 /** A sent message's file part, read back: null for parts that aren't the app's files. */
@@ -164,7 +152,7 @@ export function sentFile(part: unknown): SentFile | null {
   const p = part as {
     type?: unknown;
     source?: { value?: unknown; mimeType?: unknown };
-    metadata?: { attachmentId?: unknown; fileName?: unknown; byteSize?: unknown };
+    metadata?: { attachmentId?: unknown; fileName?: unknown };
   };
   if (p.type !== "image" && p.type !== "document") return null;
   const id = p.metadata?.attachmentId;
@@ -173,7 +161,6 @@ export function sentFile(part: unknown): SentFile | null {
     attachmentId: id,
     fileName: typeof p.metadata?.fileName === "string" ? p.metadata.fileName : "File",
     contentType: typeof p.source?.mimeType === "string" ? p.source.mimeType : "",
-    byteSize: typeof p.metadata?.byteSize === "number" ? p.metadata.byteSize : undefined,
   };
 }
 
@@ -199,9 +186,6 @@ export function SentFileCard({ budgetId, file }: { budgetId: string; file: SentF
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle>{file.fileName}</AttachmentTitle>
-        {file.byteSize !== undefined && (
-          <AttachmentDescription>{formatSize(file.byteSize)}</AttachmentDescription>
-        )}
       </AttachmentContent>
       <AttachmentTrigger asChild>
         <a href={url} target="_blank" rel="noreferrer">

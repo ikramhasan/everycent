@@ -362,7 +362,8 @@ export function AiConversation({
               }
             }}
           />
-          <InputGroupAddon align="inline-end">
+          {/* A toolbar under the message: attach on the left, send on the right. */}
+          <InputGroupAddon align="block-end" className="justify-between">
             <InputGroupButton
               type="button"
               size="icon-xs"
@@ -423,7 +424,14 @@ function ChatMessage({
   return (
     <Message align={mine ? "end" : "start"}>
       <MessageContent>
-        {message.parts.map((part, i) => {
+        {/* A person's files sit above what they wrote, as they're read first. */}
+        {(mine
+          ? [
+              ...message.parts.filter((p) => sentFile(p)),
+              ...message.parts.filter((p) => !sentFile(p)),
+            ]
+          : message.parts
+        ).map((part, i) => {
           const key = `${message.id}-${i}`;
           if (part.type === "text" && part.content) {
             return (

@@ -14,6 +14,10 @@ vi.mock("@/lib/ai", async (original) => ({
   draftTransactionFromFile,
 }));
 
+// jsdom has no object URLs; the cell makes one for the photo's thumbnail.
+URL.createObjectURL = () => "blob:preview";
+URL.revokeObjectURL = () => {};
+
 const usd: MoneySettings = {
   currency: "USD",
   numberFormat: "comma_dot",
@@ -112,6 +116,26 @@ describe("A new transaction's receipt", () => {
     );
   });
 
+  it("opens once picked, to delete it or have the AI fill the row in after all", async () => {
+    const user = userEvent.setup();
+    draftTransactionFromFile.mockClear();
+    draftTransactionFromFile.mockResolvedValue(read);
+    const { onSave } = renderEditor(true);
+    await user.upload(picker(), receipt());
+    await user.click(screen.getByRole("button", { name: "Just attach it" }));
+
+    await user.click(screen.getByRole("button", { name: "Open the attachment receipt.jpg" }));
+    await user.click(screen.getByRole("button", { name: "Fill in with AI" }));
+    expect(draftTransactionFromFile).toHaveBeenCalledTimes(1);
+    expect(await screen.findByDisplayValue("Weekly shop")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open the attachment receipt.jpg" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("button", { name: "Add a photo or PDF" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(expect.anything(), null);
+  });
+
   it("can just be attached", async () => {
     const user = userEvent.setup();
     draftTransactionFromFile.mockClear();
@@ -126,10 +150,11 @@ describe("A new transaction's receipt", () => {
   it("doesn't offer AI while it's off for the budget", async () => {
     const user = userEvent.setup();
     renderEditor(false);
-    expect(screen.getByRole("button", { name: "Add attachment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add a photo or PDF" })).toBeInTheDocument();
     await user.upload(picker(), receipt());
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open the attachment receipt.jpg" }));
+    expect(screen.getByRole("dialog", { name: "receipt.jpg" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Fill in with AI" })).not.toBeInTheDocument();
-    expect(screen.getByText("receipt.jpg")).toBeInTheDocument();
   });
 });
