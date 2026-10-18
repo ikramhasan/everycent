@@ -84,7 +84,12 @@ export class S3Storage implements ObjectStorage {
         Bucket: this.#bucket,
         Key: key,
         ResponseContentType: contentType,
-        ResponseContentDisposition: contentDisposition(fileName, download),
+        // An SVG opened as a page would run its scripts on the bucket's origin; `<img>` ignores
+        // the disposition, so thumbnails and the viewer still show it.
+        ResponseContentDisposition: contentDisposition(
+          fileName,
+          download || contentType === "image/svg+xml",
+        ),
       }),
       { expiresIn: expiresInSeconds },
     );

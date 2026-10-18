@@ -75,7 +75,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { resolveRate } from "../../lib/fx";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
-import { memberAvatarColors } from "../../lib/member-colors";
+import { memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
 import {
   type CategoryUpcoming,
   enterDueScheduled,
@@ -1286,7 +1286,7 @@ async function movesJson(
       autoAssignMethod: moneyMove.autoAssignMethod,
       userId: moneyMove.userId,
       userName: user.name,
-      userPicture: user.image,
+      userPicture: pictureUrlSql(user.id),
       memberRole: budgetMember.role,
     })
     .from(moneyMove)

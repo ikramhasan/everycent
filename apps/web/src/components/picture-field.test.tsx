@@ -42,6 +42,15 @@ describe("PictureField", () => {
   });
 });
 
+describe("pictureSrc", () => {
+  it("only takes our own API paths", () => {
+    expect(pictureSrc("/v1/users/u1/picture?v=1")).toMatch(/\/v1\/users\/u1\/picture\?v=1$/);
+    expect(pictureSrc("https://x.test/p.png")).toBeUndefined();
+    expect(pictureSrc(".evil.test/p.png")).toBeUndefined();
+    expect(pictureSrc(null)).toBeUndefined();
+  });
+});
+
 describe("pictures where people and accounts show", () => {
   it("shows an account's logo over its initial", () => {
     const { container, rerender } = render(<AccountLogo name="Brac Bank" logo={null} />);

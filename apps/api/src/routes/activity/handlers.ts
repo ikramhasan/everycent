@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
-import { memberAvatarColors } from "../../lib/member-colors";
+import { memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type { listActivity, transactionHistory } from "./routes";
@@ -35,7 +35,7 @@ async function events(
       atText: sql<string>`${auditEvent.createdAt}::text`,
       actorUserId: auditEvent.actorUserId,
       actorName: user.name,
-      actorPicture: user.image,
+      actorPicture: pictureUrlSql(user.id),
       source: auditEvent.source,
       entity: auditEvent.tableName,
       rowId: auditEvent.rowId,

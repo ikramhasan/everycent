@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
@@ -83,6 +83,27 @@ describe("AttachmentCell", () => {
     expect(await screen.findByRole("alertdialog")).toHaveTextContent(
       "Are you sure you want to delete this attachment?",
     );
+  });
+});
+
+describe("a photo this browser can't decode", () => {
+  it("shows as a file in the register and offers the download in the viewer", async () => {
+    const heic: Transaction = {
+      ...withPhoto,
+      attachment: {
+        ...(withPhoto.attachment as NonNullable<Transaction["attachment"]>),
+        contentType: "image/heic",
+      },
+    };
+    const { container } = wrap(<AttachmentCell budgetId="b1" transaction={heic} />);
+    const thumb = container.querySelector("img");
+    if (!thumb) throw new Error("no thumbnail");
+    fireEvent.error(thumb);
+    expect(container.querySelector("img")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Open the attachment of Market" }));
+    fireEvent.error(screen.getByRole("img", { name: "receipt.jpg" }));
+    expect(await screen.findByText(/can't show this photo/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download" })).toBeInTheDocument();
   });
 });
 

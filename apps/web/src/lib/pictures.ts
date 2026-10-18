@@ -6,9 +6,12 @@ import { apiErrorMessage } from "./budgets";
 export const PROFILE_PICTURE_PX = 512;
 export const ACCOUNT_LOGO_PX = 256;
 
-/** The `<img>` source for a picture URL from the API (an API path), or undefined without one. */
+/**
+ * The `<img>` source for a picture URL from the API, or undefined without one. Only our own API
+ * paths are used: anything else (a URL that would point the browser at another host) is ignored.
+ */
 export function pictureSrc(url: string | null | undefined): string | undefined {
-  return url ? `${apiBaseUrl}${url}` : undefined;
+  return url && /^\/v1\/[\w/?=&.-]+$/.test(url) ? `${apiBaseUrl}${url}` : undefined;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

@@ -19,7 +19,7 @@ import {
 import { Spinner } from "@everycent/ui/components/spinner";
 import { cn } from "@everycent/ui/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, FileText, ImagePlus, Trash2 } from "lucide-react";
+import { Download, ExternalLink, FileText, ImageOff, ImagePlus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiBaseUrl, apiClient } from "@/lib/api";
@@ -141,23 +141,31 @@ function Thumbnail({
   className?: string;
 }) {
   const attachment = transaction.attachment;
+  // A photo this browser can't decode (HEIC outside Safari) shows as a file instead.
+  const [brokenId, setBrokenId] = useState<string | null>(null);
   if (!attachment) return null;
-  return isPdf(attachment) ? (
-    <span
-      className={cn(
-        "flex items-center justify-center rounded-sm bg-muted text-muted-foreground",
-        className,
-      )}
-    >
-      <FileText className="size-4" />
-    </span>
-  ) : (
+  const broken = brokenId === attachment.id;
+  if (isPdf(attachment) || broken) {
+    const Icon = isPdf(attachment) ? FileText : ImageOff;
+    return (
+      <span
+        className={cn(
+          "flex items-center justify-center rounded-sm bg-muted text-muted-foreground",
+          className,
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+    );
+  }
+  return (
     <img
       src={attachmentUrl(budgetId, transaction)}
       alt=""
       loading="lazy"
       decoding="async"
       className={cn("rounded-sm bg-muted object-cover", className)}
+      onError={() => setBrokenId(attachment.id)}
     />
   );
 }
@@ -184,8 +192,10 @@ function AttachmentViewer({
   deleting: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [brokenId, setBrokenId] = useState<string | null>(null);
   const attachment = transaction.attachment;
   if (!attachment) return null;
+  const broken = brokenId === attachment.id;
   const url = attachmentUrl(budgetId, transaction);
   return (
     <>
@@ -209,11 +219,17 @@ function AttachmentViewer({
                 <ExternalLink /> Open PDF
               </a>
             </div>
+          ) : broken ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-10 text-center text-muted-foreground text-sm">
+              <ImageOff className="size-10" />
+              <p>This browser can't show this photo. Download it to open it.</p>
+            </div>
           ) : (
             <img
               src={url}
               alt={attachment.fileName}
               className="mx-auto max-h-[70svh] w-auto max-w-full rounded-md object-contain"
+              onError={() => setBrokenId(attachment.id)}
             />
           )}
           <DialogFooter className="flex-row flex-wrap justify-end gap-2">

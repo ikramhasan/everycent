@@ -90,6 +90,16 @@ describe("S3Storage", () => {
       contentDisposition("Receipt é.pdf", true),
     );
     expect(url.searchParams.get("X-Amz-Expires")).toBe("300");
+
+    // An SVG is never served as a page from the bucket's origin.
+    const svg = new URL(
+      (await s3.signedUrl("k", {
+        fileName: "logo.svg",
+        contentType: "image/svg+xml",
+        download: false,
+      })) ?? "",
+    );
+    expect(svg.searchParams.get("response-content-disposition")).toMatch(/^attachment;/);
   });
 });
 

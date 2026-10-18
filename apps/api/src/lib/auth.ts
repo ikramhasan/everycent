@@ -154,6 +154,17 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
         },
       },
     },
+    // `user.image` is ours: the profile picture's API path, set by PUT /v1/me/picture through the
+    // database (EVERYCENT-229). Better Auth's sign-up and update-user would take any string, which
+    // the user's own browser then loads, so they can't set it.
+    databaseHooks: {
+      user: {
+        create: { before: async (user) => ({ data: { ...user, image: null } }) },
+        // Better Auth merges what this returns over its input, so the field is cleared to
+        // undefined (left unchanged) rather than left out.
+        update: { before: async (data) => ({ data: { ...data, image: undefined } }) },
+      },
+    },
     // Reset tokens are stored as hashes: a leaked database row can't be used to reset a password.
     verification: { storeIdentifier: "hashed" },
     rateLimit: {

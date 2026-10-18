@@ -1,6 +1,6 @@
-import { budgetMember, user } from "@everycent/db/schema";
+import { budgetMember, user, userAvatar } from "@everycent/db/schema";
 import { z } from "@hono/zod-openapi";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { Db } from "./ledger";
 
 /**
@@ -24,6 +24,18 @@ export const zPicture = z
   .nullable()
   .describe("Their profile picture's URL (an API path); null without one");
 
+/**
+ * A user's profile picture URL, built from their `user_avatar` row (`/v1/users/{id}/picture?v=`,
+ * as `profilePictureUrl` writes it). Never `user.image`: Better Auth's own endpoints accept any
+ * string there, and other members' browsers would load it (PR #19 review).
+ */
+export function pictureUrlSql(userId: SQL | typeof user.id): SQL<string | null> {
+  return sql<
+    string | null
+  >`(select '/v1/users/' || ${userAvatar.userId} || '/picture?v=' || ${userAvatar.id}
+    from ${userAvatar} where ${userAvatar.userId} = ${userId})`;
+}
+
 /** Someone who made a change: an audit event's actor, who entered or changed a transaction. */
 export const zMemberRef = z
   .object({
@@ -40,7 +52,7 @@ export async function memberRefs(db: Db, budgetId: string, userIds: Iterable<str
   const colors = await memberAvatarColors(db, budgetId);
   const names = ids.length
     ? await db
-        .select({ id: user.id, name: user.name, picture: user.image })
+        .select({ id: user.id, name: user.name, picture: pictureUrlSql(user.id) })
         .from(user)
         .where(inArray(user.id, ids))
     : [];

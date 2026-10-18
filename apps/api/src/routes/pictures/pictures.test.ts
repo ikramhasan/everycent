@@ -113,6 +113,35 @@ describe("profile pictures", () => {
     expect(account.id).toBeTruthy();
   });
 
+  it("can't be pointed elsewhere through Better Auth's own endpoints", async () => {
+    const owner = await signUp(app, { name: "Owner" });
+    const budget = await createBudget(app, owner.cookie);
+    const pat = await shareBudget(app, owner.cookie, budget.id, { name: "Pat" });
+    const update = await app.request("/api/auth/update-user", {
+      method: "POST",
+      headers: {
+        cookie: pat.cookie,
+        "content-type": "application/json",
+        origin: "http://localhost:5173",
+      },
+      body: JSON.stringify({ image: "https://x.test/p.png", name: "Pat" }),
+    });
+    expect(update.status).toBe(200);
+    const pictureOf = async () =>
+      (
+        await json<{ members: { name: string; picture: string | null }[] }>(
+          await send("GET", `/v1/budgets/${budget.id}/members`, owner.cookie),
+        )
+      ).members.find((m) => m.name === "Pat")?.picture;
+    expect(await pictureOf()).toBeNull();
+    expect(
+      (await json<{ image: string | null }>(await send("GET", "/v1/me", pat.cookie))).image,
+    ).toBe(null);
+    // A real picture still shows, as its API path.
+    const { url } = await json<{ url: string }>(await put("/v1/me/picture", pat.cookie, PNG));
+    expect(await pictureOf()).toBe(url);
+  });
+
   it("goes with its user", async () => {
     const { cookie, password } = await signUp(app);
     await put("/v1/me/picture", cookie, PNG);
