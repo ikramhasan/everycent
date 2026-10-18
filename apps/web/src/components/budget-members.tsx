@@ -368,7 +368,6 @@ function InviteDialog({
     event.preventDefault();
     // Without email, only links.
     const viaLink = !sendsEmail || linkAsked.current;
-    linkAsked.current = false;
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
@@ -425,8 +424,11 @@ function InviteDialog({
                 variant="outline"
                 disabled={invite.isPending}
                 onClick={(e) => {
+                  // requestSubmit dispatches submit synchronously, and not at all when the
+                  // form is invalid, so the flag is cleared either way.
                   linkAsked.current = true;
                   e.currentTarget.form?.requestSubmit();
+                  linkAsked.current = false;
                 }}
               >
                 Get Link
