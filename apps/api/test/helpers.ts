@@ -62,10 +62,11 @@ export function createTestApp({
   fxProviders = [new FakeFxProvider()],
   ynab,
   storage = new MemoryStorage(),
+  aiAdapter,
   envOverrides = {},
   sendsEmail = true,
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & {
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab" | "aiAdapter">> & {
   storage?: ObjectStorage | null;
   /** False: a server that sends no email (self-hosted production without Resend). */
   sendsEmail?: boolean;
@@ -92,6 +93,7 @@ export function createTestApp({
     fxProviders,
     ynab,
     storage,
+    aiAdapter,
   };
   const app = createApp(deps);
   outboxes.set(app, outbox);

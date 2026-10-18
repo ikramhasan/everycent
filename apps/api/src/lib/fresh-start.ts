@@ -296,6 +296,11 @@ export async function copyIntoFreshStart(
   await copyPayeeCategories(tx, old.id, { categoryIds, payeeIds });
   await copySchedules(tx, old.id, newBudgetId, { accountIds, categoryIds, payeeIds });
   await copyViews(tx, old, newBudgetId, categoryIds);
+  // The budget's settings carry over, its AI settings with them.
+  await tx
+    .update(budget)
+    .set({ aiEnabled: old.aiEnabled, aiAssistantButton: old.aiAssistantButton })
+    .where(eq(budget.id, newBudgetId));
 
   await tx
     .update(budget)

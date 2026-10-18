@@ -372,6 +372,13 @@
       "when": 1792317386688,
       "tag": "0052_invitation_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792328989680,
+      "tag": "0053_sticky_mariko_yashida",
+      "breakpoints": true
     }
   ]
 }

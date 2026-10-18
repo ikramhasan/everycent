@@ -1,4 +1,5 @@
 import type { Database } from "@everycent/db";
+import type { AnyTextAdapter } from "@tanstack/ai";
 import type { Env } from "./env";
 import type { Auth } from "./lib/auth";
 import type { ChangeBus } from "./lib/change-bus";
@@ -33,6 +34,11 @@ export interface AppDeps {
   serverDate?: () => string | null;
   /** Reads plans from YNAB's API for the importer; tests pass one over a fake `fetch`. */
   ynab?: YnabClient;
+  /**
+   * The model behind the in-app AI assistant. Unset, it's Claude through the Anthropic adapter
+   * (`AI_API_KEY`, `AI_MODEL`); tests pass TanStack AI's scripted `fakeText()`.
+   */
+  aiAdapter?: AnyTextAdapter;
 }
 
 export type AppEnv = {

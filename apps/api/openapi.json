@@ -690,7 +690,8 @@
             "type": "string",
             "enum": [
               "mcp",
-              "agent_auth"
+              "agent_auth",
+              "in_app"
             ],
             "description": "`mcp`: an MCP client (Claude, Cursor, …); `agent_auth`: an Agent Auth agent"
           },
@@ -2010,6 +2011,14 @@
               },
               "loanSimulatorBannerDismissed": {
                 "type": "boolean"
+              },
+              "aiEnabled": {
+                "type": "boolean",
+                "default": false
+              },
+              "aiAssistantButton": {
+                "type": "boolean",
+                "default": false
               },
               "viewOrder": {
                 "type": [
@@ -9317,7 +9326,8 @@
             "type": "string",
             "enum": [
               "mcp",
-              "agent_auth"
+              "agent_auth",
+              "in_app"
             ]
           }
         },
@@ -11881,6 +11891,134 @@
         "required": [
           "name"
         ]
+      },
+      "AiSettings": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "The server has AI set up, so the budget can turn it on"
+          },
+          "unavailableReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "NOT_CONFIGURED",
+              null
+            ],
+            "description": "Why AI can't be turned on (NOT_CONFIGURED: the server has no AI key); null if it can"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "In-app AI features are on for this budget (false while unavailable)"
+          },
+          "assistantButton": {
+            "type": "boolean",
+            "description": "The floating AI chat button shows on this budget (only while `enabled`)"
+          }
+        },
+        "required": [
+          "available",
+          "unavailableReason",
+          "enabled",
+          "assistantButton"
+        ]
+      },
+      "UpdateAiSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Turning it off also hides the chat button"
+          },
+          "assistantButton": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiConversationList": {
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiConversationSummary"
+            }
+          }
+        },
+        "required": [
+          "conversations"
+        ]
+      },
+      "AiConversationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "The start of the first message"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the last message was added"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AiChatRun": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string",
+            "pattern": "^[\\w-]{8,100}$",
+            "description": "The conversation's id"
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "messages": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "threadId",
+          "runId",
+          "messages"
+        ],
+        "additionalProperties": {}
+      },
+      "AiChatState": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {}
+          },
+          "activeRun": {},
+          "interrupts": {}
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": {}
       },
       "ImportContext": {
         "type": "object",
@@ -25598,6 +25736,519 @@
           },
           "404": {
             "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai": {
+      "get": {
+        "operationId": "getAiSettings",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "summary": "The budget's AI settings, and whether the server can run AI",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAiSettings",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Turn the budget's AI features or its chat button on or off",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change the budget's settings, NOT_FOR_AGENTS: an agent can't, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up; AI_DISABLED: the chat button needs AI turned on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/conversations": {
+      "get": {
+        "operationId": "listAiConversations",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The caller's conversations with the budget's AI assistant, newest first",
+        "description": "Conversations are private: each member sees only their own.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiConversationList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/conversations/{conversationId}": {
+      "delete": {
+        "operationId": "deleteAiConversation",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete one of the caller's conversations",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "conversationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget or conversation, or it isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/ai/chat": {
+      "post": {
+        "operationId": "aiChat",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Run the budget's AI assistant on a conversation (server-sent events)",
+        "description": "TanStack AI's chat protocol (AG-UI): the body is a run input with the conversation's `threadId` (made by the client; a new one starts a conversation), a `runId`, the new `messages`, and a `resume` batch answering pending approvals. The response is the run's event stream. The assistant reads the budget freely; every change waits for the person's approval (a tool-approval interrupt) and runs as their in-app agent.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiChatRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The run's events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the conversation isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "hydrateAiChat",
+        "tags": [
+          "AI"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "A conversation as the chat client shows it after a reload",
+        "description": "TanStack AI's `reconstructChat`: `{ messages, activeRun, interrupts }` for `threadId`, including approvals still waiting on the person. An unknown thread is an empty conversation.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "before",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiChatState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, or the conversation isn't the caller's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_UNAVAILABLE: the server has no AI set up",
             "content": {
               "application/json": {
                 "schema": {

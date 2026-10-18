@@ -429,6 +429,8 @@ export async function writeBackup(
       expectedIncome: str(budget.expectedIncome),
       expectedIncomeCurrency: budget.expectedIncomeCurrency,
       loanSimulatorBannerDismissed: budget.loanSimulatorBannerDismissed,
+      aiEnabled: budget.aiEnabled,
+      aiAssistantButton: budget.aiAssistantButton,
       viewOrder: budget.viewOrder,
     },
   };

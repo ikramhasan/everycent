@@ -18,6 +18,7 @@ import { requestLog } from "./middleware/request-log";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
 import { agentsRouter } from "./routes/agents";
+import { aiRouter } from "./routes/ai";
 import { apiKeysRouter } from "./routes/api-keys";
 import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
@@ -139,6 +140,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", payeesRouter);
   app.route("/v1", scheduledRouter);
   app.route("/v1", flagsRouter);
+  app.route("/v1", aiRouter);
   app.route("/v1", importsRouter);
   app.route("/v1", viewsRouter);
   app.route("/v1", monthsRouter);

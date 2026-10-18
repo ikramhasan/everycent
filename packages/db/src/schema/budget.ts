@@ -67,6 +67,14 @@ export const budget = pgTable("budget", {
    * same plan again finds it instead of making a copy. Null for budgets made here.
    */
   importSource: text(),
+  /**
+   * In-app AI features (chat with the budget, receipts, forecasting) are on for this budget, for
+   * everyone on it. Off by default; they only work while the server has AI configured. External
+   * agents (MCP, Agent Auth) don't depend on it.
+   */
+  aiEnabled: boolean().notNull().default(false),
+  /** The floating AI chat button shows on this budget's pages. Only on while `aiEnabled` is. */
+  aiAssistantButton: boolean().notNull().default(false),
   ...timestamps,
 });
 

@@ -10,7 +10,7 @@ import {
   oauthRefreshToken,
 } from "@everycent/db/schema";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
 import { markDisconnected } from "../../lib/agents/principal";
 import { AppError } from "../../lib/errors";
@@ -35,7 +35,14 @@ export const listConnectedAgentsHandler: Handler<typeof listConnectedAgents> = a
   const rows = await db
     .select()
     .from(connectedAgent)
-    .where(and(eq(connectedAgent.userId, userId), isNull(connectedAgent.revokedAt)))
+    .where(
+      and(
+        eq(connectedAgent.userId, userId),
+        isNull(connectedAgent.revokedAt),
+        // everycent's own assistant acts through the signed-in session, not a connection.
+        ne(connectedAgent.kind, "in_app"),
+      ),
+    )
     .orderBy(desc(connectedAgent.createdAt));
   const mcpIds = rows.filter((r) => r.kind === "mcp").map((r) => r.externalId);
   const agentIds = rows.filter((r) => r.kind === "agent_auth").map((r) => r.externalId);

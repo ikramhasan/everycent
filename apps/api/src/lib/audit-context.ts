@@ -50,9 +50,16 @@ const OUTSIDE = [
  * handler returns (a request transaction would have ended by then).
  */
 const READ_ONLY_POSTS = [/^\/v1\/budgets\/[^/]+\/export\//] as const;
+/**
+ * The AI assistant's chat stream runs long after its handler returns. It writes only the
+ * conversation's own (unaudited) records; each change it makes is a request of its own, with its
+ * own transaction and audit context (`AgentRuntime.run`).
+ */
+const STREAMING_POSTS = [/^\/v1\/budgets\/[^/]+\/ai\/chat$/] as const;
 const outsideRequestTransaction = (method: string, path: string) =>
   OUTSIDE.some((re) => re.test(path)) ||
   (method === "POST" && READ_ONLY_POSTS.some((re) => re.test(path))) ||
+  (method === "POST" && STREAMING_POSTS.some((re) => re.test(path))) ||
   (method === "DELETE" && /^\/v1\/budgets\/[^/]+\/?$/.test(path));
 
 class Rollback extends Error {}
