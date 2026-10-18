@@ -28,6 +28,7 @@ import { NameCard, OptionsCard } from "@/components/account-options";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -44,6 +45,7 @@ function AccountPage() {
   return (
     // The page edge matches the other pages; the settings keep a readable column.
     <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
+      <PageTitle name="Account settings" />
       <PageHeader title="Account settings" />
       <NameCard name={session.user.name} />
       <EmailCard email={session.user.email} />

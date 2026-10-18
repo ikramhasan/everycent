@@ -7,6 +7,7 @@ import { format as formatDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { ActivityList } from "@/components/activity-list";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { ACTIVITY_ENTITIES, type ActivityEvent, activityQueryPrefix } from "@/lib/activity";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
@@ -55,6 +56,7 @@ function ActivityPage() {
   return (
     // The app shell pads the page; the page width matches the others, the feed stays readable.
     <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,48rem)] content-start gap-4">
+      <PageTitle name="Activity" />
       <PageHeader
         title="Activity"
         meta={

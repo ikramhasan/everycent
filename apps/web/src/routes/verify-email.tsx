@@ -6,13 +6,19 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthCard } from "@/components/auth-card";
 import { CheckInbox } from "@/components/check-inbox";
+import { PageTitle } from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { useLinkParams } from "@/lib/link-params";
 import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/verify-email")({
-  component: VerifyEmailPage,
+  component: () => (
+    <>
+      <PageTitle name="Confirm email" />
+      <VerifyEmailPage />
+    </>
+  ),
 });
 
 type Step = "confirm" | "approve" | "change";

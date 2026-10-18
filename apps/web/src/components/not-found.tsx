@@ -7,10 +7,12 @@ import {
   EmptyTitle,
 } from "@everycent/ui/components/empty";
 import { Link } from "@tanstack/react-router";
+import { PageTitle } from "./page-title";
 
 export function NotFound() {
   return (
     <main className="flex min-h-svh items-center justify-center p-4">
+      <PageTitle name="Page not found" />
       <Empty>
         <EmptyHeader>
           <EmptyTitle className="text-5xl tabular-nums">404</EmptyTitle>

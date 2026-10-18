@@ -27,6 +27,7 @@ import { ExchangeRates } from "@/components/exchange-rates";
 import { FreshStartDialog } from "@/components/fresh-start-dialog";
 import { useManagePayees } from "@/components/manage-payees";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, budgetQueryOptions, invalidateBudgets } from "@/lib/budgets";
@@ -97,6 +98,7 @@ function BudgetSettingsPage() {
   return (
     // The page edge matches the other pages; the settings keep a readable column.
     <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
+      <PageTitle name="Budget settings" />
       <PageHeader title="Budget settings" />
       {/* A viewer (EVERYCENT-88) sees the settings but can't change them. */}
       <Card>

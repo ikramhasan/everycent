@@ -11,6 +11,7 @@ import { z } from "zod";
 import { currencyName } from "@/components/currency-picker";
 import { ImportBudgetMenu } from "@/components/import-budget";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { type Budget, budgetsQueryOptions, lastUsedLabel } from "@/lib/budgets";
 
 export const Route = createFileRoute("/_authed/budgets/")({
@@ -27,6 +28,7 @@ function AllBudgetsPage() {
   return (
     // The page edge and width match the other pages.
     <div className="mx-auto grid w-full max-w-6xl content-start gap-6">
+      <PageTitle name="Budgets" />
       <PageHeader
         title="All budgets"
         actions={

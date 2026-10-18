@@ -45,6 +45,7 @@ import {
   FixThisButton,
 } from "@/components/move-money";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
 import { type MoneyIO, TargetSection } from "@/components/target-inspector";
@@ -847,6 +848,7 @@ function BudgetPage() {
         }
       >
         <div className="grid gap-1">
+          <PageTitle name={budget.name} />
           <PageHeader
             title={budget.name}
             // Without the side inspector, the month's summary is a page action in the top bar.
