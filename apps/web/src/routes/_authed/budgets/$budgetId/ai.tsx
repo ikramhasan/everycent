@@ -131,7 +131,11 @@ function AiPage() {
           {!readOnly && (
             <EmptyContent>
               <Button asChild variant="outline">
-                <Link to="/budgets/$budgetId/settings" params={{ budgetId: budget.id }}>
+                <Link
+                  to="/budgets/$budgetId/settings"
+                  params={{ budgetId: budget.id }}
+                  search={{ tab: "ai" }}
+                >
                   Budget settings
                 </Link>
               </Button>
