@@ -164,34 +164,74 @@ export function sentFile(part: unknown): SentFile | null {
   };
 }
 
-/** A file in the conversation: a photo's thumbnail or the file's name; opens it in a new tab. */
-export function SentFileCard({ budgetId, file }: { budgetId: string; file: SentFile }) {
+/** What kind of file a sent file is, in a word. */
+function kindLabel(type: string): string {
+  if (type === "application/pdf") return "PDF";
+  if (isSheet(type)) return "Spreadsheet";
+  return "Document";
+}
+
+/**
+ * A message's files, above its text: photos as thumbnails in a row, then the other files by name.
+ * Each opens in a new tab.
+ */
+export function SentFiles({ budgetId, files }: { budgetId: string; files: readonly SentFile[] }) {
+  const photos = files.filter((f) => isImage(f.contentType));
+  const others = files.filter((f) => !isImage(f.contentType));
+  return (
+    <div className="ml-auto grid justify-items-end gap-2">
+      {photos.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {photos.map((f) => (
+            <SentPhoto key={f.attachmentId} budgetId={budgetId} file={f} />
+          ))}
+        </div>
+      )}
+      {others.map((f) => (
+        <Attachment key={f.attachmentId} className="max-w-72">
+          <AttachmentMedia>
+            <FileIcon type={f.contentType} />
+          </AttachmentMedia>
+          <AttachmentContent>
+            <AttachmentTitle>{f.fileName}</AttachmentTitle>
+            <AttachmentDescription>{kindLabel(f.contentType)}</AttachmentDescription>
+          </AttachmentContent>
+          <AttachmentTrigger asChild>
+            <a href={aiAttachmentUrl(budgetId, f.attachmentId)} target="_blank" rel="noreferrer">
+              <span className="sr-only">Open {f.fileName}</span>
+            </a>
+          </AttachmentTrigger>
+        </Attachment>
+      ))}
+    </div>
+  );
+}
+
+function SentPhoto({ budgetId, file }: { budgetId: string; file: SentFile }) {
   const [broken, setBroken] = useState(false);
   const url = aiAttachmentUrl(budgetId, file.attachmentId);
-  const photo = isImage(file.contentType) && !broken;
   return (
-    <Attachment
-      size="sm"
-      orientation={photo ? "vertical" : "horizontal"}
-      className="ml-auto max-w-56"
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title={file.fileName}
+      className="block size-20 overflow-hidden rounded-xl border bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <AttachmentMedia variant={photo ? "image" : "icon"}>
-        {photo ? (
-          <img src={url} alt={file.fileName} loading="lazy" onError={() => setBroken(true)} />
-        ) : broken ? (
-          <ImageOff />
-        ) : (
-          <FileIcon type={file.contentType} />
-        )}
-      </AttachmentMedia>
-      <AttachmentContent>
-        <AttachmentTitle>{file.fileName}</AttachmentTitle>
-      </AttachmentContent>
-      <AttachmentTrigger asChild>
-        <a href={url} target="_blank" rel="noreferrer">
-          <span className="sr-only">Open {file.fileName}</span>
-        </a>
-      </AttachmentTrigger>
-    </Attachment>
+      {broken ? (
+        <span className="flex size-full items-center justify-center text-muted-foreground">
+          <ImageOff className="size-5" />
+          <span className="sr-only">{file.fileName}</span>
+        </span>
+      ) : (
+        <img
+          src={url}
+          alt={file.fileName}
+          loading="lazy"
+          className="size-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      )}
+    </a>
   );
 }

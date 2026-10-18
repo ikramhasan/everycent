@@ -22,7 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Check, CircleAlert, CircleDashed, Paperclip, Square, X } from "lucide-react";
 import { type DragEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
-import { PickedFiles, SentFileCard, sentFile, usePickedFiles } from "@/components/ai-attachments";
+import { PickedFiles, SentFiles, sentFile, usePickedFiles } from "@/components/ai-attachments";
 import { AiChangePreview } from "@/components/ai-change-preview";
 import { AiChart, chartSpec } from "@/components/ai-chart";
 import { AI_FILE_ACCEPT } from "@/lib/ai";
@@ -418,20 +418,16 @@ function ChatMessage({
   streaming: boolean;
 }) {
   const mine = message.role === "user";
+  // A person's files sit above what they wrote, as they're read first.
+  const files = mine ? message.parts.flatMap((p) => sentFile(p) ?? []) : [];
   const results = new Map(
     message.parts.flatMap((p) => (p.type === "tool-result" ? [[p.toolCallId, p] as const] : [])),
   );
   return (
     <Message align={mine ? "end" : "start"}>
       <MessageContent>
-        {/* A person's files sit above what they wrote, as they're read first. */}
-        {(mine
-          ? [
-              ...message.parts.filter((p) => sentFile(p)),
-              ...message.parts.filter((p) => !sentFile(p)),
-            ]
-          : message.parts
-        ).map((part, i) => {
+        {files.length > 0 && <SentFiles budgetId={budgetId} files={files} />}
+        {message.parts.map((part, i) => {
           const key = `${message.id}-${i}`;
           if (part.type === "text" && part.content) {
             return (
@@ -451,8 +447,7 @@ function ChatMessage({
               </Bubble>
             );
           }
-          const file = mine ? sentFile(part) : null;
-          if (file) return <SentFileCard key={key} budgetId={budgetId} file={file} />;
+          if (mine && sentFile(part)) return null;
           if (part.type === "tool-call") {
             // The model's own tool for loading other tools' schemas isn't worth showing.
             if (part.name.startsWith("__")) return null;

@@ -143,6 +143,7 @@ export function NewAttachmentCell({
   return (
     // Keys pressed in the dialogs (portalled, but React bubbles them through the tree) stop here:
     // the row would take Escape as cancelling the new transaction and Enter as saving it.
+    // biome-ignore lint/a11y/noStaticElementInteractions: only stops its dialogs' keys bubbling on
     <div
       className={cn("flex", className)}
       onKeyDown={(e) => {
