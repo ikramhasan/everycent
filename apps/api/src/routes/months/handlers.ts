@@ -74,13 +74,14 @@ import { adjustAssigned, assignedAmount, assignmentRow, logMove } from "../../li
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import { prefetchRates, resolveRate } from "../../lib/fx";
-import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
+import { accountBalances, type Db, internalCategoryId } from "../../lib/ledger";
 import { memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
 import {
   type CategoryUpcoming,
   enterDueScheduled,
   entryDate,
   upcomingByCategory,
+  userToday,
 } from "../../lib/scheduled";
 import { lastAssignedBy, staleVersion } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -1123,7 +1124,7 @@ export async function budgetMonthJson(
 export const getBudgetMonthHandler: RouteHandler<typeof getBudgetMonth, Env> = async (c) => {
   const { budgetId, month } = c.req.valid("param");
   const query = c.req.valid("query");
-  const today = query.today ?? serverToday();
+  const today = userToday(c.var.deps, query.today);
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.today)
     await enterDueScheduled(
@@ -1159,8 +1160,9 @@ export const setMonthNoteHandler: RouteHandler<typeof setMonthNote, Env> = async
 
 export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = async (c) => {
   const { budgetId, month, categoryId } = c.req.valid("param");
-  const { assigned, expectedAssigned, today = serverToday() } = c.req.valid("json");
+  const { assigned, expectedAssigned, today: rawToday } = c.req.valid("json");
   const { db } = c.var.deps;
+  const today = userToday(c.var.deps, rawToday);
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
   const target = await moneyCategory(db, budgetId, categoryId);
@@ -1197,9 +1199,10 @@ export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) =
     toCategoryId,
     amount,
     fromMonth = month,
-    today = serverToday(),
+    today: rawToday,
   } = c.req.valid("json");
   const { db } = c.var.deps;
+  const today = userToday(c.var.deps, rawToday);
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
 
   const from = await moneyCategory(db, budgetId, fromCategoryId);
@@ -1249,8 +1252,9 @@ export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) =
 
 export const autoAssignHandler: RouteHandler<typeof autoAssign, Env> = async (c) => {
   const { budgetId, month } = c.req.valid("param");
-  const { option, categoryIds, scope, today = serverToday() } = c.req.valid("json");
+  const { option, categoryIds, scope, today: rawToday } = c.req.valid("json");
   const { db } = c.var.deps;
+  const today = userToday(c.var.deps, rawToday);
   const { budget } = await loadBudgetAccess(c, budgetId, { budget: ["assign"] });
   await assertMonthInRange(db, budgetId, month, today);
 

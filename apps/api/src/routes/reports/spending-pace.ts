@@ -22,9 +22,9 @@ import { createRoute, type RouteHandler, z } from "@hono/zod-openapi";
 import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError, jsonError } from "../../lib/errors";
-import { type Db, serverToday } from "../../lib/ledger";
+import type { Db } from "../../lib/ledger";
 import { reportSums } from "../../lib/reports";
-import { enterDueScheduled, entryDate } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate, userToday } from "../../lib/scheduled";
 import { type AuthedEnv, authSecurity, requireAuth } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { budgetMonthJson } from "../months/handlers";
@@ -267,7 +267,7 @@ export const getSpendingPaceHandler: RouteHandler<typeof getSpendingPace, Env> =
   const query = c.req.valid("query");
   const deps = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
-  const today = query.today ?? serverToday();
+  const today = userToday(deps, query.today);
   const month = (query.month ?? monthOf(today)) as BudgetMonth;
   if (month > monthOf(today)) {
     throw new AppError(400, "BAD_REQUEST", "A future month has no spending pace yet");

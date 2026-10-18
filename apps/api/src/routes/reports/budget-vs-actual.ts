@@ -14,8 +14,7 @@ import { createRoute, type RouteHandler, z } from "@hono/zod-openapi";
 import { asc, eq } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError, jsonError } from "../../lib/errors";
-import { serverToday } from "../../lib/ledger";
-import { enterDueScheduled, entryDate } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate, userToday } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import { authSecurity, requireAuth } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -119,7 +118,7 @@ export const getBudgetVsActualHandler: RouteHandler<
   const { db } = c.var.deps;
   const { budget } = await loadBudgetAccess(c, budgetId);
   if (query.from > query.to) throw new AppError(400, "BAD_REQUEST", "`from` is after `to`");
-  const today = query.today ?? serverToday();
+  const today = userToday(c.var.deps, query.today);
   if (query.today) {
     await enterDueScheduled(db, c.var.deps, budgetId, entryDate(c.var.deps, query.today));
   }

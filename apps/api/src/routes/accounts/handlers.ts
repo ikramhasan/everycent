@@ -60,7 +60,7 @@ import {
 import { reorder, writeOrder } from "../../lib/ordering";
 import { type Unrealized, unrealizedGains } from "../../lib/revaluation";
 import { transactionsToReview } from "../../lib/review";
-import { enterDueScheduled, entryDate } from "../../lib/scheduled";
+import { enterDueScheduled, entryDate, userToday } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { accountLogoUrls } from "../pictures/handlers";
@@ -355,7 +355,7 @@ const optionalBigInt = (v: string | null | undefined) =>
 export const listAccountsHandler: RouteHandler<typeof listAccounts, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const query = c.req.valid("query");
-  const today = query.today ?? serverToday();
+  const today = userToday(c.var.deps, query.today);
   await loadBudgetAccess(c, budgetId);
   if (query.today)
     await enterDueScheduled(
@@ -806,8 +806,8 @@ async function setStarred(tx: Db, account: AccountRow, starred: boolean) {
 export const moveAccountHandler: RouteHandler<typeof moveAccount, Env> = async (c) => {
   const { budgetId, accountId } = c.req.valid("param");
   const { beforeAccountId, starred } = c.req.valid("json");
-  const { today = serverToday() } = c.req.valid("query");
   const { db } = c.var.deps;
+  const today = userToday(c.var.deps, c.req.valid("query").today);
   await loadBudgetAccess(c, budgetId, { account: ["update"] });
   await db.transaction(async (tx) => {
     const account = await findAccount(tx, budgetId, accountId);
