@@ -319,7 +319,9 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
  */
 function withApproval(body: UpdateBody): UpdateBody {
   if (body.approved !== undefined) return body;
-  const edits = Object.entries(body).some(([key, value]) => key !== "flag" && value !== undefined);
+  const edits = Object.entries(body).some(
+    ([key, value]) => key !== "flag" && key !== "renameRule" && value !== undefined,
+  );
   return edits ? { ...body, approved: true } : body;
 }
 
@@ -337,6 +339,8 @@ export interface UpdateBody {
   subtransactions?: LineInput[];
   /** A transfer's other side follows a change (YNAB approves both sides together). */
   approved?: boolean;
+  /** False: a payee change makes no renaming rule (undoing a Don't Rename that removed none). */
+  renameRule?: boolean;
   /**
    * In a foreign-currency account: a rate typed by hand, or null to go back to the date's rate.
    * Left out, the rate stays (see `rebase`).
@@ -479,6 +483,7 @@ export async function applyUpdate(
     payeeId &&
     !transferTo &&
     payeeId !== existing.payeeId &&
+    body.renameRule !== false &&
     existing.importedPayee &&
     !existing.matchedImport
   ) {

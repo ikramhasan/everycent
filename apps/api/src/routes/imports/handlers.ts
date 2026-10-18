@@ -10,6 +10,7 @@ import {
   matchTransactions as matchRows,
   unmatchTransaction as unmatchRow,
 } from "../../lib/file-import";
+import { assertTransactionVersions, transactionVersions } from "../../lib/versions";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import { assertOpen, findAccount } from "../transactions/rules";
@@ -104,7 +105,18 @@ export const unmatchTransactionHandler: RouteHandler<typeof unmatchTransaction, 
 
 export const dontRenameHandler: RouteHandler<typeof dontRenameTransaction, Env> = async (c) => {
   const { budgetId, transactionId } = c.req.valid("param");
+  const { expectedVersion } = c.req.valid("query");
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
-  const payeeId = await c.var.deps.db.transaction((tx) => dontRename(tx, budgetId, transactionId));
-  return c.json({ payeeId }, 200);
+  const result = await c.var.deps.db.transaction(async (tx) => {
+    // Undo and redo send the version they expect, as other edits do (EVERYCENT-212).
+    if (expectedVersion !== undefined) {
+      const expected = { [transactionId]: expectedVersion };
+      await assertTransactionVersions(tx, budgetId, expected, c.var.user.id);
+    }
+    const previousVersions = await transactionVersions(tx, [transactionId]);
+    const renamed = await dontRename(tx, budgetId, transactionId);
+    const versions = await transactionVersions(tx, [transactionId]);
+    return { ...renamed, previousVersions, version: versions[transactionId] as number };
+  });
+  return c.json(result, 200);
 };

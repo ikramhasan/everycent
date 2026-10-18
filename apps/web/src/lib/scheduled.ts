@@ -2,14 +2,20 @@ import type { components } from "@everycent/api-client";
 import { addMonths, format, parseISO } from "date-fns";
 import type { MoneySettings } from "./money-input";
 import { toMoneyInput } from "./money-input";
-import { createBody, type Draft, draftFrom, emptyLine, type Transaction } from "./transactions";
+import {
+  createBody,
+  type Draft,
+  draftFrom,
+  emptyLine,
+  scheduledQueryPrefix,
+  type Transaction,
+} from "./transactions";
 
 export type ScheduledTransaction = components["schemas"]["ScheduledTransaction"];
 type CreateBody = components["schemas"]["CreateScheduledTransaction"];
 type UpdateBody = components["schemas"]["UpdateScheduledTransaction"];
 
-/** Prefix of every Scheduled Transactions query (any budget, account or filter). */
-export const scheduledQueryPrefix = ["scheduled"] as const;
+export { scheduledQueryPrefix };
 
 type Result<T> = { ok: true; body: T } | { ok: false; error: string };
 

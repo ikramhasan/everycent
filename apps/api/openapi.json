@@ -10334,6 +10334,10 @@
             "type": "integer",
             "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten"
           },
+          "renameRule": {
+            "type": "boolean",
+            "description": "Left out or true, moving an imported transaction to another payee gives that payee the renaming rule \"Is <imported name>\", as YNAB does. False skips it: undoing a Don't Rename that removed no rule"
+          },
           "approved": {
             "type": "boolean",
             "description": "Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB"
@@ -12656,11 +12660,30 @@
         "type": "object",
         "properties": {
           "payeeId": {
-            "type": "string"
+            "type": "string",
+            "description": "The payee named as imported"
+          },
+          "ruleRemoved": {
+            "type": "boolean",
+            "description": "Whether the old payee had the rule \"Is <imported name>\" to remove"
+          },
+          "version": {
+            "type": "integer",
+            "description": "The transaction's version now"
+          },
+          "previousVersions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The transaction's version just before this change"
           }
         },
         "required": [
-          "payeeId"
+          "payeeId",
+          "ruleRemoved",
+          "version",
+          "previousVersions"
         ]
       },
       "BudgetViewList": {
@@ -28241,7 +28264,7 @@
           }
         ],
         "summary": "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
-        "description": "The transaction takes its imported payee name again, and its payee loses the renaming rule \"Is <imported name>\".",
+        "description": "The transaction takes its imported payee name again (and is approved), and its payee loses the renaming rule \"Is <imported name>\". Undo is an update back to the payee, which brings the rule back unless `ruleRemoved` was false (send `renameRule: false`).",
         "parameters": [
           {
             "schema": {
@@ -28258,6 +28281,19 @@
             "required": true,
             "name": "transactionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"
+            },
+            "required": false,
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`",
+            "name": "expectedVersion",
+            "in": "query"
           }
         ],
         "responses": {
@@ -28272,7 +28308,7 @@
             }
           },
           "400": {
-            "description": "The transaction wasn't imported",
+            "description": "The transaction wasn't imported, is matched, or is a transfer",
             "content": {
               "application/json": {
                 "schema": {
@@ -28303,6 +28339,16 @@
           },
           "404": {
             "description": "No such budget or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The transaction changed since `expectedVersion` (`STALE_VERSION`)",
             "content": {
               "application/json": {
                 "schema": {

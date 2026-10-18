@@ -1,3 +1,5 @@
+import { category, payee, transaction } from "@everycent/db/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createBudget,
@@ -6,9 +8,14 @@ import {
   shareBudget,
   signUp,
 } from "../../../test/helpers";
+import type { FakeFxProvider } from "../../lib/fx/fake";
 
-const { app, db, close } = createTestApp();
-beforeEach(() => resetDatabase(db));
+const { app, db, close, fxProviders } = createTestApp();
+const fx = fxProviders[0] as FakeFxProvider;
+beforeEach(async () => {
+  await resetDatabase(db);
+  fx.reset().seed("2026-10-01", "EUR", { USD: "1.1" }).seed("2026-10-11", "EUR", { USD: "1.2" });
+});
 afterAll(close);
 
 type Txn = {
@@ -22,6 +29,9 @@ type Txn = {
   memo: string;
   cleared: string;
   approved: boolean;
+  baseAmount: string;
+  fxRate: string | null;
+  version: number;
 };
 type Result = {
   imported: number;
@@ -44,13 +54,14 @@ async function setup() {
   const owner = await signUp(app);
   const budget = await createBudget(app, owner.cookie);
   const base = `/v1/budgets/${budget.id}`;
-  const addAccount = async (name: string, type = "checking") =>
+  const addAccount = async (name: string, type = "checking", currency?: string) =>
     json<{ id: string }>(
       await send("POST", `${base}/accounts`, owner.cookie, {
         name,
         type,
         balance: "0",
         date: "2026-10-01",
+        ...(currency ? { currency } : {}),
       }),
     );
   const checking = await addAccount("Checking");
@@ -170,6 +181,82 @@ describe("file import (EVERYCENT-66)", () => {
     await importFile([{ date: "2026-10-12", amount: "-2500", payee: "POS MKT #123", memo: "" }]);
     const [row] = await rows();
     expect(row).toMatchObject({ payeeName: "Market", categoryId: groceries.id, approved: false });
+  });
+
+  it("takes in a year-long file of 5,000 rows in seconds (EVERYCENT-212)", async () => {
+    const { importFile, base, owner, checking, groceries } = await setup();
+    // A payee with a usual category and a rule, so the file exercises every lookup.
+    const res = await send("POST", `${base}/transactions`, owner.cookie, {
+      accountId: checking.id,
+      date: "2026-10-02",
+      amount: "-100",
+      payeeName: "Market",
+      categoryId: groceries.id,
+      memo: "",
+      flag: null,
+    });
+    const market = (await json<Txn>(res)).payeeId;
+    await send("POST", `${base}/payees/${market}/rules`, owner.cookie, {
+      operator: "contains",
+      text: "MKT",
+    });
+    const day = (i: number) =>
+      new Date(Date.UTC(2025, 9, 18) + (i % 365) * 86_400_000).toISOString().slice(0, 10);
+    const file = Array.from({ length: 5000 }, (_, i) => ({
+      date: day(i),
+      amount: i % 10 === 0 ? `${100_000 + i}` : `-${1000 + i}`,
+      // Payees repeat, in different cases, as a bank's do.
+      payee: i % 7 === 0 ? `POS MKT #${i}` : `${i % 2 ? "store" : "STORE"} ${i % 150}`,
+      memo: `row ${i}`,
+    }));
+    const started = performance.now();
+    const result = await importFile(file);
+    const took = performance.now() - started;
+    expect(result).toMatchObject({ imported: 5000, duplicates: 0 });
+    expect(took).toBeLessThan(10_000);
+
+    const all = await db
+      .select({
+        memo: transaction.memo,
+        payeeId: transaction.payeeId,
+        payeeName: payee.name,
+        categoryId: transaction.categoryId,
+        categoryName: category.name,
+      })
+      .from(transaction)
+      .leftJoin(payee, eq(payee.id, transaction.payeeId))
+      .leftJoin(category, eq(category.id, transaction.categoryId))
+      .where(eq(transaction.accountId, checking.id));
+    const byMemo = new Map(all.map((t) => [t.memo, t]));
+    expect(byMemo.get("row 7")).toMatchObject({ payeeName: "Market", categoryId: groceries.id });
+    expect(byMemo.get("row 10")?.categoryName).toBe("Inflow: Ready to Assign");
+    expect(byMemo.get("row 1")?.categoryName).toBe("Uncategorized");
+    // "store 1" and "STORE 1" are one payee, named as the file first spelled it.
+    expect(byMemo.get("row 151")?.payeeId).toBe(byMemo.get("row 1")?.payeeId);
+    expect(byMemo.get("row 1")?.payeeName).toBe("store 1");
+    // A second import of the file takes in nothing.
+    expect(await importFile(file)).toMatchObject({ imported: 0, duplicates: 5000 });
+    // The rows, the Market purchase and the starting balance.
+    expect(all).toHaveLength(5002);
+  }, 60_000);
+
+  it("converts rows in a foreign-currency account at each date's rate", async () => {
+    const { importFile, rows, addAccount } = await setup();
+    const euro = await addAccount("Euro", "checking", "EUR");
+    await importFile(
+      [
+        { date: "2026-10-05", amount: "-1000", payee: "x Bakery", memo: "" },
+        { date: "2026-10-12", amount: "-1000", payee: "x Bakery", memo: "" },
+        { date: "2026-10-13", amount: "0", payee: "x Zero", memo: "" },
+      ],
+      {},
+      euro.id,
+    );
+    expect((await rows(euro.id)).map((t) => [t.date, t.baseAmount, t.fxRate])).toEqual([
+      ["2026-10-13", "0", null],
+      ["2026-10-12", "-1200", "1.2"],
+      ["2026-10-05", "-1100", "1.1"],
+    ]);
   });
 
   it("refuses rows dated after today and closed accounts", async () => {
@@ -517,6 +604,105 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     expect(await rules()).toEqual([]);
     const row = (await s.rows()).find((t) => t.id === id);
     expect(row).toMatchObject({ payeeName: "SQ *CORNER CAFE", approved: true });
+  });
+
+  it("checks the version, and an undo back to the payee brings the rule back", async () => {
+    const s = await setup();
+    const [id] = (
+      await s.importFile([{ date: "2026-10-10", amount: "-500", payee: "SQ *DELI", memo: "" }])
+    ).transactionIds;
+    const renamed = await json<Txn>(
+      await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, { payeeName: "Deli" }),
+    );
+    const rules = async () =>
+      (
+        await json<{ rules: { payeeId: string; operator: string; text: string }[] }>(
+          await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
+        )
+      ).rules;
+    // A stale version is refused and changes nothing.
+    const stale = await send(
+      "POST",
+      `${s.base}/transactions/${id}/dont-rename?expectedVersion=${renamed.version - 1}`,
+      s.owner.cookie,
+    );
+    expect(stale.status).toBe(409);
+    expect(await json<{ error: { code: string } }>(stale)).toMatchObject({
+      error: { code: "STALE_VERSION" },
+    });
+    expect(await rules()).toHaveLength(1);
+
+    const back = await send(
+      "POST",
+      `${s.base}/transactions/${id}/dont-rename?expectedVersion=${renamed.version}`,
+      s.owner.cookie,
+    );
+    expect(back.status, await back.clone().text()).toBe(200);
+    const result = await json<{
+      ruleRemoved: boolean;
+      version: number;
+      previousVersions: Record<string, number>;
+    }>(back);
+    expect(result).toMatchObject({
+      ruleRemoved: true,
+      version: renamed.version + 1,
+      previousVersions: { [id as string]: renamed.version },
+    });
+    expect(await rules()).toEqual([]);
+
+    // Undo: back to the payee as it was, which makes the rule again.
+    const undone = await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, {
+      payeeName: "Deli",
+      approved: renamed.approved,
+      expectedVersion: result.version,
+    });
+    expect(undone.status, await undone.clone().text()).toBe(200);
+    expect(await rules()).toEqual([
+      expect.objectContaining({ payeeId: renamed.payeeId, operator: "is", text: "SQ *DELI" }),
+    ]);
+    expect((await s.rows()).find((t) => t.id === id)).toMatchObject({ payeeName: "Deli" });
+  });
+
+  it("brings no rule back on undo when there was none to remove", async () => {
+    const s = await setup();
+    // Renamed on import by a "contains" rule, so there's no "Is" rule to remove.
+    const market = await json<Txn>(
+      await send("POST", `${s.base}/transactions`, s.owner.cookie, {
+        accountId: s.checking.id,
+        date: "2026-10-02",
+        amount: "-100",
+        payeeName: "Market",
+        categoryId: null,
+        memo: "",
+        flag: null,
+      }),
+    );
+    await send("POST", `${s.base}/payees/${market.payeeId}/rules`, s.owner.cookie, {
+      operator: "contains",
+      text: "MKT",
+    });
+    const [id] = (
+      await s.importFile([{ date: "2026-10-10", amount: "-500", payee: "POS MKT 1", memo: "" }])
+    ).transactionIds;
+    const back = await json<{ ruleRemoved: boolean; version: number }>(
+      await send("POST", `${s.base}/transactions/${id}/dont-rename`, s.owner.cookie),
+    );
+    expect(back.ruleRemoved).toBe(false);
+    const undone = await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, {
+      payeeName: "Market",
+      approved: false,
+      renameRule: false,
+      expectedVersion: back.version,
+    });
+    expect(undone.status, await undone.clone().text()).toBe(200);
+    const rules = await json<{ rules: { operator: string; text: string }[] }>(
+      await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
+    );
+    expect(rules.rules).toEqual([expect.objectContaining({ operator: "contains", text: "MKT" })]);
+    expect((await s.rows()).find((t) => t.id === id)).toMatchObject({
+      payeeName: "Market",
+      approved: false,
+    });
   });
 
   it("leaves entered and matched transactions' payee changes alone", async () => {

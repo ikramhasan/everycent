@@ -10,10 +10,13 @@ import {
   roundRate,
   type ScheduleFrequency,
 } from "@everycent/engine";
+import type { QueryClient } from "@tanstack/react-query";
+import { accountsQueryOptions } from "./accounts";
 import { $api } from "./api";
-import type { CategoryList } from "./categories";
+import { type CategoryList, categoriesQueryOptions } from "./categories";
 import type { FlagColor } from "./flags";
 import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from "./money-input";
+import { invalidateMonths } from "./months";
 
 export type Transaction = components["schemas"]["Transaction"];
 export type SubTransaction = components["schemas"]["SubTransaction"];
@@ -43,6 +46,30 @@ export const REGISTER_PAGE_SIZE = 100;
 
 /** Prefix of every register query (any budget, account, filter or sort). */
 export const transactionsQueryPrefix = ["register"] as const;
+
+/**
+ * Prefix of every Scheduled Transactions query (any budget, account or filter). Kept here, not in
+ * `scheduled.ts`, so `refreshTransactions` needn't import that module, which imports this one.
+ */
+export const scheduledQueryPrefix = ["scheduled"] as const;
+
+/**
+ * Refetches everything a change to transactions shows up in: the registers, scheduled rows,
+ * account balances, payees, categories, months and the selection's count and total.
+ */
+export async function refreshTransactions(queryClient: QueryClient, budgetId: string) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
+    queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
+    queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budgetId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),
+    invalidateMonths(queryClient),
+    queryClient.invalidateQueries({
+      queryKey: ["post", "/v1/budgets/{budgetId}/transactions/selection"],
+    }),
+  ]);
+}
 
 export const payeesQueryOptions = (budgetId: string) =>
   $api.queryOptions("get", "/v1/budgets/{budgetId}/payees", {

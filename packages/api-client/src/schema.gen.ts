@@ -1859,7 +1859,7 @@ export interface paths {
         put?: never;
         /**
          * YNAB's "Don't Rename as <payee>": back to the imported payee, without the rule
-         * @description The transaction takes its imported payee name again, and its payee loses the renaming rule "Is <imported name>".
+         * @description The transaction takes its imported payee name again (and is approved), and its payee loses the renaming rule "Is <imported name>". Undo is an update back to the payee, which brings the rule back unless `ruleRemoved` was false (send `renameRule: false`).
          */
         post: operations["dontRenameTransaction"];
         delete?: never;
@@ -4203,6 +4203,8 @@ export interface components {
             subtransactions?: components["schemas"]["SubTransactionInput"][];
             /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten */
             expectedVersion?: number;
+            /** @description Left out or true, moving an imported transaction to another payee gives that payee the renaming rule "Is <imported name>", as YNAB does. False skips it: undoing a Don't Rename that removed no rule */
+            renameRule?: boolean;
             /** @description Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB */
             approved?: boolean;
         };
@@ -4765,7 +4767,16 @@ export interface components {
             importedTransactionId: string;
         };
         DontRenameResult: {
+            /** @description The payee named as imported */
             payeeId: string;
+            /** @description Whether the old payee had the rule "Is <imported name>" to remove */
+            ruleRemoved: boolean;
+            /** @description The transaction's version now */
+            version: number;
+            /** @description The transaction's version just before this change */
+            previousVersions: {
+                [key: string]: number;
+            };
         };
         BudgetViewList: {
             /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
@@ -12993,7 +13004,10 @@ export interface operations {
     };
     dontRenameTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version` */
+                expectedVersion?: number | null;
+            };
             header?: never;
             path: {
                 budgetId: string;
@@ -13012,7 +13026,7 @@ export interface operations {
                     "application/json": components["schemas"]["DontRenameResult"];
                 };
             };
-            /** @description The transaction wasn't imported */
+            /** @description The transaction wasn't imported, is matched, or is a transfer */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13041,6 +13055,15 @@ export interface operations {
             };
             /** @description No such budget or transaction, or the caller isn't a member */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The transaction changed since `expectedVersion` (`STALE_VERSION`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

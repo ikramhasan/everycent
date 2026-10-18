@@ -18,10 +18,16 @@ import {
   resolveCategory,
   usesCategory,
 } from "../routes/transactions/rules";
-import { budgetCurrencyOf, type FxDeps, syncBases, toBase } from "./base-amount";
+import { budgetCurrencyOf, type FxDeps, rateFor, syncBases, toBase } from "./base-amount";
 import { AppError } from "./errors";
-import { type Db, findOrCreatePayee, insertTransaction, internalCategoryId } from "./ledger";
-import { payeeCategories } from "./payee-categories";
+import {
+  type Db,
+  findOrCreatePayee,
+  findOrCreatePayees,
+  insertTransaction,
+  internalCategoryId,
+} from "./ledger";
+import { notePayeeCategorizations, payeeCategories } from "./payee-categories";
 
 /**
  * Where a file import's "dated before the account's start date or last reconciliation" line falls
@@ -101,25 +107,31 @@ export async function importTransactions(
     return { ...item, target };
   });
 
+  // Each payee, rule and category is looked up once and the new rows go in a few statements, so
+  // a year-long file of thousands of rows takes seconds (EVERYCENT-212).
   const rules = await tx
     .select({ payeeId: payeeRule.payeeId, operator: payeeRule.operator, text: payeeRule.text })
     .from(payeeRule)
     .where(eq(payeeRule.budgetId, budgetId))
     .orderBy(asc(payeeRule.createdAt), asc(payeeRule.id));
-  const payeeIds: (string | null)[] = [];
-  for (const { row, target } of plan) {
+  const ruled = new Map<string, string | null>();
+  const ruleFor = (name: string) => {
+    if (!ruled.has(name)) ruled.set(name, matchPayeeRule(rules, name)?.payeeId ?? null);
+    return ruled.get(name) ?? null;
+  };
+  const named = await findOrCreatePayees(
+    tx,
+    budgetId,
+    plan.flatMap(({ row, target }) => {
+      const name = row.payee.trim();
+      return !target && name && !ruleFor(name) ? [name] : [];
+    }),
+  );
+  const payeeIds = plan.map(({ row, target }) => {
     const name = row.payee.trim();
-    const rule = !target && name ? matchPayeeRule(rules, name) : undefined;
-    payeeIds.push(
-      target
-        ? null
-        : rule
-          ? rule.payeeId
-          : name
-            ? await findOrCreatePayee(tx, budgetId, name)
-            : null,
-    );
-  }
+    if (target || !name) return null;
+    return ruleFor(name) ?? (named.get(name) as string);
+  });
 
   const known = [...new Set(payeeIds.filter((id): id is string => id !== null))];
   const settings = known.length
@@ -139,9 +151,30 @@ export async function importTransactions(
   const cash =
     isOnBudget(account.type) && !["credit_card", "line_of_credit"].includes(account.type);
   const readyToAssign = cash ? await internalCategoryId(tx, budgetId, "ready_to_assign") : null;
+  const resolved = new Map<string | null, Promise<string | null>>();
+  const categoryFor = (wanted: string | null) => {
+    if (!usesCategory(account, null)) return null;
+    let id = resolved.get(wanted);
+    if (!id) {
+      id = resolveCategory(tx, budgetId, account, null, wanted);
+      resolved.set(wanted, id);
+    }
+    return id;
+  };
+  const budgetCurrency = await budgetCurrencyOf(tx, budgetId);
+  const rates = new Map<string, Promise<{ fxRate: string | null; fxRateManual: boolean }>>();
+  const rateOn = (date: string) => {
+    let rate = rates.get(date);
+    if (!rate) {
+      rate = rateFor(tx, fx, { budgetId, budgetCurrency, currency: account.currency, date });
+      rates.set(date, rate);
+    }
+    return rate;
+  };
 
   const transactionIds: string[] = [];
   const matchedIds: string[] = [];
+  const inserts: (typeof transaction.$inferInsert)[] = [];
   for (const [i, { row, importId, target }] of plan.entries()) {
     if (target) {
       await foldImport(tx, target, { ...row, importId, importedPayee: row.payee });
@@ -151,17 +184,22 @@ export async function importTransactions(
     const payeeId = payeeIds[i] ?? null;
     const usual = payeeId ? (categories.get(payeeId)?.prefillCategoryId ?? null) : null;
     const wanted = usual ?? (row.amount > 0n ? readyToAssign : null);
-    const id = await insertTransaction(tx, {
+    // Zero is zero in any currency, so a $0 row needs no rate (as `insertTransaction`).
+    const { fxRate, fxRateManual } =
+      row.amount === 0n ? { fxRate: null, fxRateManual: false } : await rateOn(row.date);
+    const id = newId();
+    inserts.push({
+      id,
       budgetId,
       accountId: account.id,
       date: row.date,
       amount: row.amount,
       currency: account.currency,
-      fx,
+      baseAmount: toBase(row.amount, account.currency, fxRate, budgetCurrency),
+      fxRate,
+      fxRateManual,
       payeeId,
-      categoryId: usesCategory(account, null)
-        ? await resolveCategory(tx, budgetId, account, null, wanted)
-        : null,
+      categoryId: await categoryFor(wanted),
       memo: row.memo,
       cleared: "cleared",
       flag: null,
@@ -169,11 +207,18 @@ export async function importTransactions(
       importId,
       importedPayee: row.payee,
     });
-    await syncBases(tx, id);
     transactionIds.push(id);
   }
+  for (let i = 0; i < inserts.length; i += INSERT_CHUNK) {
+    await tx.insert(transaction).values(inserts.slice(i, i + INSERT_CHUNK));
+  }
+  // An add updates the payee's auto-categorization default (EVERYCENT-182), once per payee.
+  await notePayeeCategorizations(tx, budgetId, transactionIds);
   return { transactionIds, matchedIds, duplicates: rows.length - fresh.length };
 }
+
+/** Rows per insert statement, well under Postgres's 65,535 parameters. */
+const INSERT_CHUNK = 1000;
 
 /** How far apart an import and an entered transaction may be dated and still match (YNAB). */
 const MATCH_DAYS = 10;
@@ -444,7 +489,8 @@ export async function rememberRename(
 
 /**
  * YNAB's "Don't Rename as <payee>" (Bank Import Details, 2026-10-17): the transaction goes back to
- * its imported payee name, and the payee's "Is <imported name>" rule is removed.
+ * its imported payee name, and the payee's "Is <imported name>" rule is removed. Says whether
+ * there was one, so an undo knows whether to bring it back.
  */
 export async function dontRename(tx: Db, budgetId: string, transactionId: string) {
   const [row] = await tx
@@ -456,18 +502,23 @@ export async function dontRename(tx: Db, budgetId: string, transactionId: string
   if (!name || row.matchedImport) {
     throw new AppError(400, "NOT_IMPORTED", "This transaction wasn't imported (or is matched)");
   }
-  if (row.payeeId) {
-    await tx
-      .delete(payeeRule)
-      .where(
-        and(
-          eq(payeeRule.payeeId, row.payeeId),
-          eq(payeeRule.operator, "is"),
-          sql`lower(${payeeRule.text}) = lower(${name})`,
-        ),
-      );
+  // A transfer's payee is its other account; renaming it would leave the other side behind.
+  if (row.transferTransactionId || row.transferSubTransactionId) {
+    throw new AppError(400, "NOT_IMPORTED", "A transfer's payee isn't renamed");
   }
+  const removed = row.payeeId
+    ? await tx
+        .delete(payeeRule)
+        .where(
+          and(
+            eq(payeeRule.payeeId, row.payeeId),
+            eq(payeeRule.operator, "is"),
+            sql`lower(${payeeRule.text}) = lower(${name})`,
+          ),
+        )
+        .returning({ id: payeeRule.id })
+    : [];
   const payeeId = await findOrCreatePayee(tx, budgetId, name);
   await tx.update(transaction).set({ payeeId, approved: true }).where(eq(transaction.id, row.id));
-  return payeeId;
+  return { payeeId, ruleRemoved: removed.length > 0 };
 }

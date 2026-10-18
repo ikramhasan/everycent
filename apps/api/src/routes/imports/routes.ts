@@ -239,11 +239,19 @@ export const dontRenameTransaction = createRoute({
   middleware: [requireAuth] as const,
   summary: "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
   description:
-    "The transaction takes its imported payee name again, and its payee loses the renaming " +
-    'rule "Is <imported name>".',
+    "The transaction takes its imported payee name again (and is approved), and its payee loses " +
+    'the renaming rule "Is <imported name>". Undo is an update back to the payee, which brings ' +
+    "the rule back unless `ruleRemoved` was false (send `renameRule: false`).",
   request: {
     params: BudgetParams.extend({
       transactionId: z.string().openapi({ param: { name: "transactionId", in: "path" } }),
+    }),
+    query: z.object({
+      expectedVersion: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe("Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"),
     }),
   },
   responses: {
@@ -251,15 +259,27 @@ export const dontRenameTransaction = createRoute({
       description: "Renamed back",
       content: {
         "application/json": {
-          schema: z.object({ payeeId: z.string() }).openapi("DontRenameResult"),
+          schema: z
+            .object({
+              payeeId: z.string().describe("The payee named as imported"),
+              ruleRemoved: z
+                .boolean()
+                .describe('Whether the old payee had the rule "Is <imported name>" to remove'),
+              version: z.number().int().describe("The transaction's version now"),
+              previousVersions: z
+                .record(z.string(), z.number().int())
+                .describe("The transaction's version just before this change"),
+            })
+            .openapi("DontRenameResult"),
         },
       },
     },
-    400: jsonError("The transaction wasn't imported"),
+    400: jsonError("The transaction wasn't imported, is matched, or is a transfer"),
     401: jsonError("Not signed in"),
     403: jsonError(
       "The caller's role can't change transactions, or the account's email address isn't confirmed",
     ),
     404: jsonError("No such budget or transaction, or the caller isn't a member"),
+    409: jsonError("The transaction changed since `expectedVersion` (`STALE_VERSION`)"),
   },
 });
