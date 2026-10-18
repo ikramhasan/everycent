@@ -290,8 +290,8 @@ export const transferOwnership = createRoute({
   path: "/budgets/{budgetId}/transfer-ownership",
   operationId: "transferBudgetOwnership",
   tags: ["Sharing"],
-  security: authSecurity,
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Make someone else the budget's owner (owner only)",
   description:
     "The new owner must already share the budget. The old owner keeps access as a member, as " +

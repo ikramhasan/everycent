@@ -19041,9 +19041,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "summary": "Make someone else the budget's owner (owner only)",

@@ -227,6 +227,7 @@ describe("requests made with an API key", () => {
       ["DELETE", `/v1/budgets/${budget.id}`],
       ["POST", `/v1/budgets/${budget.id}/leave`],
       ["POST", `/v1/budgets/${budget.id}/invitations`, { name: "x", email: "x@example.com" }],
+      ["POST", `/v1/budgets/${budget.id}/transfer-ownership`, { userId: "someone" }],
     ];
     for (const [method, path, body] of attempts) {
       const res = await app.request(path, {
