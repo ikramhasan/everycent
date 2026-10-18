@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { NewAccountValues } from "@/components/account-forms";
 import { accountsQueryOptions } from "./accounts";
 import { $api } from "./api";
@@ -6,6 +7,7 @@ import { apiErrorMessage } from "./budgets";
 import { categoriesQueryOptions } from "./categories";
 import { todayIso } from "./dates";
 import { invalidateMonths } from "./months";
+import { uploadAccountLogo } from "./pictures";
 
 /**
  * Creates an account dated the user's today and refreshes what it touches (the account list and,
@@ -17,6 +19,7 @@ export function useCreateAccount(budgetId: string) {
   const createCategory = $api.useMutation("post", "/v1/budgets/{budgetId}/categories");
   return async ({
     pairing,
+    logo,
     ...values
   }: NewAccountValues): Promise<{ id: string } | { error: string }> => {
     try {
@@ -35,6 +38,14 @@ export function useCreateAccount(budgetId: string) {
         params: { path: { budgetId } },
         body: { ...values, date: todayIso(), pairedCategoryId },
       });
+      if (logo) {
+        // The account stays either way; its logo can be added again from Edit account.
+        await uploadAccountLogo(budgetId, created.id, logo).catch((e: unknown) =>
+          toast.error(
+            `The account was added, but its logo wasn't: ${e instanceof Error ? e.message : "try again from Edit account."}`,
+          ),
+        );
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budgetId).queryKey }),
         queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budgetId).queryKey }),

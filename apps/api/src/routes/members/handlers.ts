@@ -77,6 +77,7 @@ async function listedMembers(db: Db, budgetId: string) {
       userId: budgetMember.userId,
       name: user.name,
       email: user.email,
+      picture: user.image,
       role: budgetMember.role,
       joinedAt: budgetMember.createdAt,
     })

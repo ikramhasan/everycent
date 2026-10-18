@@ -344,6 +344,13 @@
       "when": 1792278340888,
       "tag": "0048_transaction_attachment",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792280794431,
+      "tag": "0049_account_logo_user_avatar",
+      "breakpoints": true
     }
   ]
 }

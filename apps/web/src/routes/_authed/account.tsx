@@ -19,7 +19,7 @@ import {
   ItemTitle,
 } from "@everycent/ui/components/item";
 import { Spinner } from "@everycent/ui/components/spinner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -28,12 +28,19 @@ import { NameCard, OptionsCard } from "@/components/account-options";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
 import { PageHeader } from "@/components/page-header";
+import { PictureField } from "@/components/picture-field";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { apiErrorMessage } from "@/lib/budgets";
-import { refreshSession } from "@/lib/session";
+import {
+  deleteProfilePicture,
+  PROFILE_PICTURE_PX,
+  pictureSrc,
+  uploadProfilePicture,
+} from "@/lib/pictures";
+import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_authed/account")({
   component: AccountPage,
@@ -45,6 +52,7 @@ function AccountPage() {
     // The page edge matches the other pages; the settings keep a readable column.
     <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
       <PageHeader title="Account settings" />
+      <ProfilePictureCard />
       <NameCard name={session.user.name} />
       <EmailCard email={session.user.email} />
       <PasswordCard />
@@ -53,6 +61,48 @@ function AccountPage() {
       <OptionsCard />
       <DeleteAccountCard />
     </div>
+  );
+}
+
+/** An optional profile picture (EVERYCENT-229): cropped to a square, shown as a circle. */
+function ProfilePictureCard() {
+  const queryClient = useQueryClient();
+  const user = useQuery(sessionQueryOptions).data?.user;
+  const initial = user?.name.trim().charAt(0).toUpperCase() ?? "";
+  async function done(message: string) {
+    await refreshSession(queryClient);
+    // Members' avatars elsewhere (Activity, moves) show it too.
+    await queryClient.invalidateQueries();
+    toast.success(message);
+  }
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Profile picture</CardTitle>
+        <CardDescription>
+          Optional. Shown as a circle wherever you are: the menu, Activity, and to the people you
+          share a budget with.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <PictureField
+          shape="circle"
+          size={PROFILE_PICTURE_PX}
+          src={pictureSrc(user?.image)}
+          fallback={initial}
+          label="Profile picture"
+          cropTitle="Crop your profile picture"
+          onPick={async (blob) => {
+            await uploadProfilePicture(blob);
+            await done("Profile picture saved.");
+          }}
+          onRemove={async () => {
+            await deleteProfilePicture();
+            await done("Profile picture removed.");
+          }}
+        />
+      </CardContent>
+    </Card>
   );
 }
 

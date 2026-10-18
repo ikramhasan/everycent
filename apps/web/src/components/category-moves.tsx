@@ -100,6 +100,7 @@ export function CategoryMovesButton({
                     userId={move.userId}
                     userName={move.userName}
                     avatarColor={move.avatarColor}
+                    picture={move.picture}
                     currentUserId={context.currentUserId}
                   />
                 </td>

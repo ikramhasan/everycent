@@ -44,6 +44,7 @@ const NOUNS: Record<string, string> = {
   category_target: "target",
   month_note: "month note",
   budget_account: "account",
+  account_logo: "account logo",
   loan_terms: "loan details",
   loan_charge: "loan charge",
   payee: "payee",
@@ -62,7 +63,7 @@ export const ACTIVITY_ENTITIES: { value: string; label: string }[] = [
   { value: "category_assignment", label: "Assigned money" },
   { value: "scheduled_transaction,scheduled_sub_transaction", label: "Scheduled transactions" },
   { value: "category,category_group,category_target", label: "Categories and targets" },
-  { value: "budget_account,loan_terms,loan_charge", label: "Accounts" },
+  { value: "budget_account,account_logo,loan_terms,loan_charge", label: "Accounts" },
   { value: "payee,payee_rule", label: "Payees" },
   {
     value:
@@ -176,6 +177,7 @@ function subjectOf(entity: string, row: Values, l: ActivityLookups): string | nu
       return [row.name, row.email].filter(Boolean).join(" · ") || null;
     case "loan_terms":
     case "loan_charge":
+    case "account_logo":
       return row.account_id ? show("account_id", row.account_id, row, l) : null;
     default:
       return row.name ?? null;

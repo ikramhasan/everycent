@@ -35,6 +35,7 @@ async function events(
       atText: sql<string>`${auditEvent.createdAt}::text`,
       actorUserId: auditEvent.actorUserId,
       actorName: user.name,
+      actorPicture: user.image,
       source: auditEvent.source,
       entity: auditEvent.tableName,
       rowId: auditEvent.rowId,
@@ -61,6 +62,7 @@ async function events(
             userId: r.actorUserId,
             name: r.actorName,
             avatarColor: colors.get(r.actorUserId) ?? null,
+            picture: r.actorPicture,
           }
         : null,
       source: r.source,

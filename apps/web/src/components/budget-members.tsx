@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, invalidateBudgets } from "@/lib/budgets";
+import { pictureSrc } from "@/lib/pictures";
 import { sessionQueryOptions } from "@/lib/session";
 
 /** Budget settings' sharing card: YNAB Together's members and pending invitations, per budget. */
@@ -86,7 +87,7 @@ export function BudgetMembers() {
             <ul className="grid gap-2">
               {data.members.map((m) => (
                 <li key={m.userId} className="flex items-center gap-3">
-                  <Avatar name={m.name} />
+                  <Avatar name={m.name} picture={m.picture} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-sm">
                       {m.name}
@@ -234,17 +235,35 @@ function RoleSelect({ member, onChanged }: { member: Member; onChanged: () => Pr
   );
 }
 
-function Avatar({ name, muted }: { name: string; muted?: boolean }) {
+function Avatar({
+  name,
+  muted,
+  picture,
+}: {
+  name: string;
+  muted?: boolean;
+  picture?: string | null;
+}) {
   return (
     <span
       aria-hidden
       className={
         muted
           ? "flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed font-medium text-muted-foreground text-sm"
-          : "flex size-8 shrink-0 items-center justify-center rounded-full bg-primary font-medium text-primary-foreground text-sm"
+          : "relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary font-medium text-primary-foreground text-sm"
       }
     >
       {[...name.trim()][0]?.toUpperCase() ?? "?"}
+      {picture && (
+        <img
+          src={pictureSrc(picture)}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={(e) => {
+            e.currentTarget.hidden = true;
+          }}
+        />
+      )}
     </span>
   );
 }

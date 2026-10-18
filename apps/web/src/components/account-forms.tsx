@@ -13,13 +13,16 @@ import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
 import { RadioGroup, RadioGroupItem } from "@everycent/ui/components/radio-group";
 import { Textarea } from "@everycent/ui/components/textarea";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { Landmark } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { editBalanceLabel } from "@/lib/accounts";
 import type { CategoryList } from "@/lib/categories";
 import { hasEscrow } from "@/lib/loans";
 import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from "@/lib/money-input";
+import { ACCOUNT_LOGO_PX } from "@/lib/pictures";
 import { CurrencyPicker } from "./currency-picker";
 import { PairCategoryFields, type PairChoice, pairChoiceReady } from "./loan-dialogs";
+import { PictureField } from "./picture-field";
 
 const TYPE_GROUPS: Array<{ label: string; types: AccountType[] }> = [
   {
@@ -192,6 +195,39 @@ export interface NewAccountValues {
   escrowAmount?: string;
   /** Loans: YNAB's optional "Pair a Category" step. */
   pairing?: PairChoice;
+  /** An optional logo, already cropped (EVERYCENT-229); uploaded once the account exists. */
+  logo?: Blob | null;
+}
+
+/** An account's optional logo: a square crop, shown before its name in the sidebar. */
+export function AccountLogoField({
+  name,
+  src,
+  onPick,
+  onRemove,
+}: {
+  name: string;
+  src: string | undefined;
+  onPick: (blob: Blob) => Promise<void> | void;
+  onRemove: () => Promise<void> | void;
+}) {
+  return (
+    <Field>
+      <FieldLabel>
+        Logo <span className="font-normal text-muted-foreground">(optional)</span>
+      </FieldLabel>
+      <PictureField
+        shape="square"
+        size={ACCOUNT_LOGO_PX}
+        src={src}
+        fallback={[...name.trim()][0]?.toUpperCase() ?? <Landmark className="size-6" />}
+        label="Logo"
+        cropTitle="Crop the account's logo"
+        onPick={onPick}
+        onRemove={onRemove}
+      />
+    </Field>
+  );
 }
 
 /**
@@ -218,6 +254,12 @@ export function AddAccountForm({
   const currency = allowsOtherCurrency(type) ? picked : settings.currency;
   const money = inCurrency(settings, currency);
   const [name, setName] = useState("");
+  const [logo, setLogo] = useState<Blob | null>(null);
+  const logoPreview = useMemo(() => (logo ? URL.createObjectURL(logo) : undefined), [logo]);
+  useEffect(
+    () => () => (logoPreview ? URL.revokeObjectURL(logoPreview) : undefined),
+    [logoPreview],
+  );
   const [balance, setBalance] = useState("");
   const [loan, setLoan] = useState<LoanValues>({
     interestRate: "",
@@ -261,6 +303,7 @@ export function AddAccountForm({
           }
         : {}),
       ...(pairStep && !skipPairing && pairing ? { pairing } : {}),
+      ...(logo ? { logo } : {}),
     });
     setPending(false);
     setError(message);
@@ -332,6 +375,12 @@ export function AddAccountForm({
           required
         />
       </Field>
+      <AccountLogoField
+        name={name}
+        src={logoPreview}
+        onPick={setLogo}
+        onRemove={() => setLogo(null)}
+      />
       {allowsOtherCurrency(type) && (
         <Field>
           <FieldLabel htmlFor="account-currency">Currency</FieldLabel>
@@ -376,9 +425,12 @@ export function EditAccountForm({
   initial,
   workingBalance,
   onSubmit,
+  logo,
 }: {
   settings: MoneySettings;
   initial: AccountEdit;
+  /** The logo field, which saves on its own (EVERYCENT-229). */
+  logo?: ReactNode;
   /** The account's working balance; null hides the field (closed accounts, as YNAB). */
   workingBalance: bigint | null;
   onSubmit: (values: AccountEdit) => Promise<string | null>;
@@ -425,6 +477,7 @@ export function EditAccountForm({
 
   return (
     <FormShell onSubmit={handleSubmit} error={error} pending={pending} submitLabel="Save">
+      {logo}
       <Field>
         <FieldLabel htmlFor="edit-account-name">Nickname</FieldLabel>
         <Input

@@ -21,7 +21,7 @@ const lookups: ActivityLookups = {
 const event = (over: Partial<ActivityEvent>): ActivityEvent => ({
   id: "e",
   at: "2026-10-16T12:00:00.000Z",
-  actor: { userId: "pat", name: "Pat", avatarColor: 2 },
+  actor: { userId: "pat", name: "Pat", avatarColor: 2, picture: null },
   source: null,
   entity: "transaction",
   rowId: "t",
@@ -105,8 +105,8 @@ describe("Activity lines", () => {
   it("names who made a change, or why nobody did", () => {
     expect(actorName(event({}))).toBe("Pat");
     expect(actorName(event({ actor: null, source: "scheduled" }))).toBe("Scheduled transactions");
-    expect(actorName(event({ actor: { userId: "x", name: null, avatarColor: null } }))).toBe(
-      "A deleted user",
-    );
+    expect(
+      actorName(event({ actor: { userId: "x", name: null, avatarColor: null, picture: null } })),
+    ).toBe("A deleted user");
   });
 });

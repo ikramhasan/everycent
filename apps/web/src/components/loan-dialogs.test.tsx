@@ -20,6 +20,7 @@ const usd = {
 const account = (id: string, type: Account["type"], closed = false): Account => ({
   id,
   name: id,
+  logo: null,
   type,
   note: "",
   closed,

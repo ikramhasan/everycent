@@ -74,7 +74,10 @@ export class S3Storage implements ObjectStorage {
     }
   }
 
-  async signedUrl(key: string, { fileName, contentType, download }: ServeOptions) {
+  async signedUrl(
+    key: string,
+    { fileName, contentType, download, expiresInSeconds = SIGNED_URL_SECONDS }: ServeOptions,
+  ) {
     return getSignedUrl(
       this.#client,
       new GetObjectCommand({
@@ -83,7 +86,7 @@ export class S3Storage implements ObjectStorage {
         ResponseContentType: contentType,
         ResponseContentDisposition: contentDisposition(fileName, download),
       }),
-      { expiresIn: SIGNED_URL_SECONDS },
+      { expiresIn: expiresInSeconds },
     );
   }
 

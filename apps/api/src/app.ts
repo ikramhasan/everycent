@@ -25,6 +25,7 @@ import { meRouter } from "./routes/me";
 import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
 import { payeesRouter } from "./routes/payees";
+import { picturesRouter } from "./routes/pictures";
 import { reportsRouter } from "./routes/reports";
 import { scheduledRouter } from "./routes/scheduled";
 import { transactionsRouter } from "./routes/transactions";
@@ -77,6 +78,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", healthRouter);
   app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", picturesRouter);
   app.route("/v1", ynabImportRouter);
   app.route("/v1", backupsRouter);
   app.route("/v1", budgetsRouter);

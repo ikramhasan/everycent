@@ -18,12 +18,19 @@ export const zAvatarColor = z
     "YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined",
   );
 
+/** A user's profile picture URL (EVERYCENT-229), shown as a circle; null without one. */
+export const zPicture = z
+  .string()
+  .nullable()
+  .describe("Their profile picture's URL (an API path); null without one");
+
 /** Someone who made a change: an audit event's actor, who entered or changed a transaction. */
 export const zMemberRef = z
   .object({
     userId: z.string(),
     name: z.string().nullable().describe("Null once their user is deleted"),
     avatarColor: zAvatarColor.nullable().describe("Null once they've left the budget"),
+    picture: zPicture,
   })
   .openapi("MemberRef");
 
@@ -32,12 +39,20 @@ export async function memberRefs(db: Db, budgetId: string, userIds: Iterable<str
   const ids = [...new Set([...userIds].filter((id): id is string => Boolean(id)))];
   const colors = await memberAvatarColors(db, budgetId);
   const names = ids.length
-    ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, ids))
+    ? await db
+        .select({ id: user.id, name: user.name, picture: user.image })
+        .from(user)
+        .where(inArray(user.id, ids))
     : [];
-  const byId = new Map(names.map((n) => [n.id, n.name]));
+  const byId = new Map(names.map((n) => [n.id, n]));
   return (userId: string | null) =>
     userId
-      ? { userId, name: byId.get(userId) ?? null, avatarColor: colors.get(userId) ?? null }
+      ? {
+          userId,
+          name: byId.get(userId)?.name ?? null,
+          avatarColor: colors.get(userId) ?? null,
+          picture: byId.get(userId)?.picture ?? null,
+        }
       : null;
 }
 

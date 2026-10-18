@@ -9,6 +9,7 @@ const move = (over: Partial<MoneyMove>): MoneyMove => ({
   fromDeletedCategory: null,
   toDeletedCategory: null,
   deletion: false,
+  picture: null,
   month: "2026-10",
   amount: "100",
   movedAt: "2026-10-16T12:00:00.000Z",

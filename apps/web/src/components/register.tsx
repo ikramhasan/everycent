@@ -1837,6 +1837,7 @@ export function Register({
             userId={t.enteredBy.userId}
             userName={t.enteredBy.name}
             avatarColor={t.enteredBy.avatarColor}
+            picture={t.enteredBy.picture}
             currentUserId={session.data?.user.id}
             tooltipPrefix="Entered by "
             tooltipSuffix={t.changedBy?.name ? `, last changed by ${t.changedBy.name}` : ""}

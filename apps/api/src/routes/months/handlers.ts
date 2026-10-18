@@ -1286,6 +1286,7 @@ async function movesJson(
       autoAssignMethod: moneyMove.autoAssignMethod,
       userId: moneyMove.userId,
       userName: user.name,
+      userPicture: user.image,
       memberRole: budgetMember.role,
     })
     .from(moneyMove)
@@ -1330,6 +1331,7 @@ async function movesJson(
       userName: m.userName,
       memberRole: m.memberRole,
       avatarColor: (m.userId && colors.get(m.userId)) || null,
+      picture: m.userPicture,
     };
   });
 }

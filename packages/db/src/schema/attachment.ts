@@ -1,5 +1,6 @@
 import { integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { transaction } from "./account";
+import { budgetAccount, transaction } from "./account";
+import { user } from "./auth";
 import { budget } from "./budget";
 import { timestamps } from "./columns";
 
@@ -37,4 +38,40 @@ export const transactionAttachment = pgTable(
 export const storageDeletion = pgTable("storage_deletion", {
   storageKey: text().primaryKey(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * An account's logo (an everycent extra, EVERYCENT-229): a square image shown before the account's
+ * name. Replaced by deleting the row and adding another, so the old file is queued for deletion.
+ * `id` names the version, for cache-safe URLs.
+ */
+export const accountLogo = pgTable("account_logo", {
+  id: text().primaryKey(),
+  accountId: text()
+    .notNull()
+    .unique()
+    .references(() => budgetAccount.id, { onDelete: "cascade" }),
+  budgetId: text()
+    .notNull()
+    .references(() => budget.id, { onDelete: "cascade" }),
+  storageKey: text().notNull(),
+  contentType: text().notNull(),
+  byteSize: integer().notNull(),
+  ...timestamps,
+});
+
+/**
+ * A user's profile picture (EVERYCENT-229): a square image shown as a circle. Its URL is also kept
+ * in Better Auth's `user.image`, so the session carries it.
+ */
+export const userAvatar = pgTable("user_avatar", {
+  id: text().primaryKey(),
+  userId: text()
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  storageKey: text().notNull(),
+  contentType: text().notNull(),
+  byteSize: integer().notNull(),
+  ...timestamps,
 });

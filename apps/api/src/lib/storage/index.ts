@@ -15,6 +15,8 @@ export interface ServeOptions {
   contentType: string;
   /** Save it (Content-Disposition: attachment) rather than show it inline. */
   download: boolean;
+  /** How long a signed link works (default 5 minutes). */
+  expiresInSeconds?: number;
 }
 
 /**
@@ -38,6 +40,14 @@ export interface ObjectStorage {
 /** A transaction attachment's object key: one prefix per budget, the attachment's own id. */
 export const attachmentKey = (budgetId: string, attachmentId: string) =>
   `budgets/${budgetId}/attachments/${attachmentId}`;
+
+/** An account logo's object key (each version its own). */
+export const accountLogoKey = (budgetId: string, accountId: string, logoId: string) =>
+  `budgets/${budgetId}/accounts/${accountId}/logo/${logoId}`;
+
+/** A profile picture's object key (each version its own). */
+export const userAvatarKey = (userId: string, avatarId: string) =>
+  `users/${userId}/avatar/${avatarId}`;
 
 /**
  * The bucket when `S3_*` is set; otherwise `STORAGE_DIR` on disk (development defaults to

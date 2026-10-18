@@ -7,13 +7,13 @@ import { bodyLimit } from "hono/body-limit";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
-import { attachmentKey, type ObjectStorage } from "../../lib/storage";
+import { attachmentKey } from "../../lib/storage";
 import {
   type AttachmentType,
   attachmentType,
   MAX_ATTACHMENT_BYTES,
 } from "../../lib/storage/file-type";
-import { contentDisposition } from "../../lib/storage/s3";
+import { requireStorage, serveStored } from "../../lib/storage/serve";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type { deleteAttachment, getAttachment, uploadAttachment } from "./routes";
@@ -35,17 +35,6 @@ export const attachmentBodyLimit: MiddlewareHandler<Env> = bodyLimit({
   maxSize: MAX_ATTACHMENT_BYTES + 64 * 1024,
   onError: () => tooLarge(),
 });
-
-function storageOf(storage: ObjectStorage | null): ObjectStorage {
-  if (!storage) {
-    throw new AppError(
-      503,
-      "ATTACHMENTS_DISABLED",
-      "Attachments are turned off on this server (it has no file storage)",
-    );
-  }
-  return storage;
-}
 
 export function attachmentJson(row: Attachment) {
   return {
@@ -129,7 +118,7 @@ export const uploadAttachmentHandler: RouteHandler<typeof uploadAttachment, Env>
   const { file } = c.req.valid("form");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
-  const storage = storageOf(c.var.deps.storage);
+  const storage = requireStorage(c.var.deps.storage);
   if (file.size > MAX_ATTACHMENT_BYTES) tooLarge();
   if (file.size === 0) throw new AppError(400, "BAD_REQUEST", "The file is empty");
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -185,24 +174,15 @@ export const getAttachmentHandler: RouteHandler<typeof getAttachment, Env> = asy
   const { budgetId, transactionId } = c.req.valid("param");
   const download = c.req.valid("query").download === "true";
   await loadBudgetAccess(c, budgetId);
-  const storage = storageOf(c.var.deps.storage);
+  const storage = requireStorage(c.var.deps.storage);
   const attachment = await findShown(c.var.deps.db, budgetId, transactionId);
   if (!attachment) throw new AppError(404, "NOT_FOUND", "This transaction has no attachment");
-  const serve = { fileName: attachment.fileName, contentType: attachment.contentType, download };
-  // Kept by the browser for less time than a signed link lasts, and never by a shared cache.
-  c.header("Cache-Control", "private, max-age=240");
-  const url = await storage.signedUrl(attachment.storageKey, serve);
-  if (url) return c.redirect(url, 302);
-  const bytes = await storage.get(attachment.storageKey);
-  if (!bytes) throw new AppError(404, "NOT_FOUND", "This transaction's attachment file is missing");
-  return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
-    "Content-Type": attachment.contentType,
-    "Content-Length": String(bytes.byteLength),
-    "Content-Disposition": contentDisposition(attachment.fileName, download),
-    "X-Content-Type-Options": "nosniff",
-    // Served from the app's own origin: an SVG's scripts must not run here.
-    "Content-Security-Policy":
-      "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox",
+  return serveStored(c, storage, attachment.storageKey, {
+    fileName: attachment.fileName,
+    contentType: attachment.contentType,
+    download,
+    // Kept by the browser for less time than a signed link lasts.
+    maxAgeSeconds: 240,
   });
 };
 

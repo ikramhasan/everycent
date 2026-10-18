@@ -30,6 +30,12 @@ export const AccountSchema = z
   .object({
     id: z.string(),
     name: z.string(),
+    logo: z
+      .string()
+      .nullable()
+      .describe(
+        "Its logo's URL (an API path; EVERYCENT-229), shown before its name; null without one",
+      ),
     type: zAccountType,
     note: z.string(),
     closed: z.boolean(),
