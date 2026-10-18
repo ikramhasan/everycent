@@ -15,6 +15,7 @@ import {
 import { FakeFxProvider } from "../src/lib/fx/fake";
 import { Jobs } from "../src/lib/jobs";
 import { jobHandlers } from "../src/lib/jobs/handlers";
+import { MemoryStorage, type ObjectStorage } from "../src/lib/storage";
 import { loadRootEnv } from "../src/load-env";
 import type { AppDeps } from "../src/types";
 import { workerDatabaseUrl } from "./worker-db";
@@ -60,10 +61,12 @@ export function createTestApp({
   serverDate = () => null,
   fxProviders = [new FakeFxProvider()],
   ynab,
+  storage = new MemoryStorage(),
   envOverrides = {},
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> &
-  AuthOptions & { envOverrides?: Partial<Env> } = {}) {
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & {
+  storage?: ObjectStorage | null;
+} & AuthOptions & { envOverrides?: Partial<Env> } = {}) {
   const env = { ...testEnv(), ...envOverrides };
   const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
@@ -85,6 +88,7 @@ export function createTestApp({
     serverDate,
     fxProviders,
     ynab,
+    storage,
   };
   const app = createApp(deps);
   outboxes.set(app, outbox);
@@ -96,6 +100,7 @@ export function createTestApp({
     outbox,
     fxProviders,
     jobs,
+    storage,
     close: async () => {
       await jobs.stop();
       await close();

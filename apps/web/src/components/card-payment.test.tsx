@@ -32,6 +32,7 @@ const account = (
 ): Account => ({
   id,
   name: id,
+  logo: null,
   type,
   note: "",
   closed: false,

@@ -14,6 +14,8 @@
     "db:seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@everycent/db": "workspace:*",
     "@everycent/engine": "workspace:*",
     "@hono/node-server": "catalog:",
@@ -26,6 +28,7 @@
     "better-auth": "catalog:",
     "bowser": "catalog:",
     "drizzle-orm": "catalog:",
+    "file-type": "catalog:",
     "hono": "catalog:",
     "jose": "catalog:",
     "papaparse": "catalog:",

@@ -3,6 +3,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { $api } from "@/lib/api";
 import { useOptionalBudget } from "@/lib/budget-context";
 import { useDifferentiateWithoutColor } from "@/lib/display-options";
+import { pictureSrc } from "@/lib/pictures";
 import { useOptionalQueryClient } from "@/lib/query-client";
 
 /**
@@ -114,6 +115,7 @@ export function MemberAvatar({
   userId,
   userName,
   avatarColor,
+  picture = null,
   currentUserId,
   tooltipPrefix = "",
   tooltipSuffix = "",
@@ -123,6 +125,8 @@ export function MemberAvatar({
   userName: string | null;
   /** 1–6 from the API; null once they've left the budget. */
   avatarColor: number | null;
+  /** Their profile picture's URL (EVERYCENT-229), shown instead of the initial. */
+  picture?: string | null;
   currentUserId: string | undefined;
   /** Around the name in the tooltip: "Entered by " … ", last changed by Sam". */
   tooltipPrefix?: string;
@@ -147,6 +151,18 @@ export function MemberAvatar({
         >
           <AvatarPattern pattern={pattern} />
           <span className="relative">{userId && userName ? userName.trim().charAt(0) : ""}</span>
+          {picture && (
+            // Over the initial, which shows if the picture can't load.
+            <img
+              src={pictureSrc(picture)}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 size-full object-cover"
+              onError={(e) => {
+                e.currentTarget.hidden = true;
+              }}
+            />
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>

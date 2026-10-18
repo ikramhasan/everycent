@@ -171,6 +171,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/picture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or replace the profile picture
+         * @description Shown as a circle wherever the user is. A square image the browser cropped: image/png, image/jpeg, image/webp, read from its bytes; at most 2 MB.
+         */
+        put: operations["setProfilePicture"];
+        post?: never;
+        /** Remove the profile picture */
+        delete: operations["deleteProfilePicture"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{userId}/picture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A user's profile picture
+         * @description Your own, or that of someone who shares a budget with you.
+         */
+        get: operations["getProfilePicture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/accounts/{accountId}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An account's logo */
+        get: operations["getAccountLogo"];
+        /**
+         * Set or replace an account's logo
+         * @description Shown before the account's name. A square image the browser cropped: image/png, image/jpeg, image/webp, read from its bytes; at most 2 MB.
+         */
+        put: operations["setAccountLogo"];
+        post?: never;
+        /** Remove an account's logo */
+        delete: operations["deleteAccountLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/import/ynab/plans": {
         parameters: {
             query?: never;
@@ -1048,6 +1111,34 @@ export interface paths {
          * @description On-budget accounts: a null category means Uncategorized; credit-card payment categories can't be used. Tracking accounts never have a category. The payee is matched by name (ignoring case) and created if new; null leaves it empty. `transferAccountId` (instead of `payeeName`) makes it a transfer: a matching transaction with the opposite amount is kept in that account. Only a transfer from a budget account to a tracking account has a category (on the budget side), as money leaves the budget. New transfers need both accounts open. Between accounts in different currencies each side has its own amount (`transferAmount`, in the other account's currency) and the two always have opposite base amounts: a side in the budget's currency sets it, otherwise the entered side at its rate; the other side's `fxRate` is the rate its amounts imply. On a transfer, date, amount and memo changes apply to both sides; cleared, flag and category are per side. Setting `payeeName` turns a transfer back into a normal transaction and deletes the other side. A reconciled other side follows and stays reconciled. A reconciled transaction can be edited but stays reconciled, so `cleared` can't be set on it. Moving it to an account that can't use its category resets the category. `subtransactions` (two or more lines, adding up to the amount) splits it across categories; its own `categoryId` is then null. Lines follow the same category and transfer rules. Only budget accounts have splits, and a transfer can't be split (its lines can be transfers). Sending `subtransactions` replaces a split's lines (matched by `id`); changing a split's amount needs new lines too. Giving a split a `categoryId` (or making it a transfer) un-splits it. A split's transfer side only takes memo, cleared, flag and category; its memo is the split line's too.
          */
         patch: operations["updateTransaction"];
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/attachment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open or download a transaction's attachment
+         * @description Redirects to a short-lived link to the file in object storage, or (storage on the API's own disk) sends the file. Either side of a transfer gives the shared attachment.
+         */
+        get: operations["getAttachment"];
+        put?: never;
+        /**
+         * Attach a photo or PDF to a transaction
+         * @description One per transaction, as YNAB's transaction photo: delete it before adding another (`ATTACHMENT_EXISTS`). A transfer's two sides share it. The type is read from the file (image/jpeg, image/png, image/webp, image/avif, image/gif, image/svg+xml, image/heic, image/heif, application/pdf); at most 15 MB.
+         */
+        post: operations["uploadAttachment"];
+        /**
+         * Delete a transaction's attachment
+         * @description From both sides of a transfer. Its file is deleted from storage soon after.
+         */
+        delete: operations["deleteAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/budgets/{budgetId}/payees": {
@@ -2025,6 +2116,10 @@ export interface components {
         DeleteAccount: {
             password: string;
         };
+        Picture: {
+            /** @description Where the image is (an API path with its version) */
+            url: string;
+        };
         YnabPlanList: {
             plans: {
                 id: string;
@@ -2529,6 +2624,8 @@ export interface components {
             joinedAt: string;
             /** @description YNAB's member avatar colour, 1–6: the owner is 1, the others 2–6 in the order they joined */
             avatarColor: number;
+            /** @description Their profile picture's URL (an API path); null without one */
+            picture: string | null;
         };
         BudgetInvitation: {
             id: string;
@@ -2835,6 +2932,8 @@ export interface components {
         Account: {
             id: string;
             name: string;
+            /** @description Its logo's URL (an API path; EVERYCENT-229), shown before its name; null without one */
+            logo: string | null;
             /**
              * @description YNAB account type
              * @enum {string}
@@ -3259,6 +3358,7 @@ export interface components {
             /** @description Transfers: the other side is reconciled (it follows changes to date, amount and account, and stays reconciled; YNAB warns before an amount or account change) */
             transferReconciled: boolean;
             transferSide: components["schemas"]["TransferSide"];
+            attachment: components["schemas"]["Attachment"];
             /** @description A split's lines, in order (empty when not split); the split has no category */
             subtransactions: components["schemas"]["SubTransaction"][];
             /** @description The account's balance after this transaction, in date order (all of its transactions; within a day, inflows first, then outflows from smallest to largest) */
@@ -3293,6 +3393,22 @@ export interface components {
              */
             currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
         } | null;
+        /** @description Its photo or PDF (YNAB's transaction photo), shared by a transfer's two sides; a split has one for the whole split */
+        Attachment: {
+            id: string;
+            /** @description The transaction it was added on: a transfer's two sides share one attachment */
+            transactionId: string;
+            /** @description As uploaded */
+            fileName: string;
+            /**
+             * @description Read from the file's contents
+             * @enum {string}
+             */
+            contentType: "image/jpeg" | "image/png" | "image/webp" | "image/avif" | "image/gif" | "image/svg+xml" | "image/heic" | "image/heif" | "application/pdf";
+            byteSize: number;
+            /** Format: date-time */
+            createdAt: string;
+        } | null;
         SubTransaction: {
             id: string;
             /** @description Negative is an outflow */
@@ -3321,6 +3437,8 @@ export interface components {
             name: string | null;
             /** @description Null once they've left the budget */
             avatarColor: number | null;
+            /** @description Their profile picture's URL (an API path); null without one */
+            picture: string | null;
         } | null;
         SelectionSummary: {
             count: number;
@@ -4440,6 +4558,8 @@ export interface components {
             memberRole: "owner" | "editor" | "viewer" | null;
             /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget */
             avatarColor: number | null;
+            /** @description The mover's profile picture URL; null without one */
+            picture: string | null;
         };
         ExpectedIncome: {
             /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
@@ -5216,6 +5336,365 @@ export interface operations {
             };
             /** @description Too many attempts (`RATE_LIMITED`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setProfilePicture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Set; the user's `image` is its URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Picture"];
+                };
+            };
+            /** @description No file, or an empty one */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Bigger than the limit (`FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a PNG, JPEG or WebP image (`UNSUPPORTED_FILE_TYPE`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This server has no file storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteProfilePicture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or there was none) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getProfilePicture: {
+        parameters: {
+            query?: {
+                /** @description The picture's version (from its URL), so a new one isn't served from a cache */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            /** @description Where to fetch the image (a signed link) */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No picture, or not someone you share a budget with */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This server has no file storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAccountLogo: {
+        parameters: {
+            query?: {
+                /** @description The picture's version (from its URL), so a new one isn't served from a cache */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            /** @description Where to fetch the image (a signed link) */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No logo, no such account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This server has no file storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setAccountLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Set; the account's `logo` is its URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Picture"];
+                };
+            };
+            /** @description No file, or an empty one */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Bigger than the limit (`FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a PNG, JPEG or WebP image (`UNSUPPORTED_FILE_TYPE`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This server has no file storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAccountLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or there was none) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change accounts */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or account, or the caller isn't a member */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8894,6 +9373,218 @@ export interface operations {
             };
             /** @description A move into an account in another currency (`CROSS_CURRENCY_MOVE`); not supported yet. Or no rate for a foreign-currency amount's date (`FX_RATE_UNAVAILABLE`): type one in `fxRate` */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAttachment: {
+        parameters: {
+            query?: {
+                /** @description `true`: saved as a download (its file name) rather than shown */
+                download?: "true" | "false";
+                /** @description Any value, such as the attachment's id, to tell its versions apart in a cache */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Where to fetch the file (valid for a few minutes) */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such transaction, it has no attachment, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Attachments are turned off on this server: it has no object storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Attached */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            /** @description No file, or an empty one */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, account or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description It already has an attachment, or its transfer's other side has (`ATTACHMENT_EXISTS`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Bigger than 15 MB (`FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an image or PDF an attachment can be (`UNSUPPORTED_FILE_TYPE`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Attachments are turned off on this server: it has no object storage (`ATTACHMENTS_DISABLED`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such transaction, it has no attachment, or the caller isn't a member */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

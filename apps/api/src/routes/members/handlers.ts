@@ -8,6 +8,7 @@ import { emails } from "../../lib/email/templates";
 import { AppError } from "../../lib/errors";
 import { hashToken, newInvitationToken as newToken } from "../../lib/invitations";
 import type { Db, Tx } from "../../lib/ledger";
+import { pictureUrlSql } from "../../lib/member-colors";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import {
@@ -77,6 +78,7 @@ async function listedMembers(db: Db, budgetId: string) {
       userId: budgetMember.userId,
       name: user.name,
       email: user.email,
+      picture: pictureUrlSql(user.id),
       role: budgetMember.role,
       joinedAt: budgetMember.createdAt,
     })

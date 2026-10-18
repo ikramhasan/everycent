@@ -65,8 +65,10 @@ import {
   CircleX,
   CreditCard,
   History,
+  Image as ImageIcon,
   Lock,
   MoreHorizontal,
+  Paperclip,
   Plus,
   ReceiptText,
   Repeat,
@@ -148,6 +150,7 @@ import {
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { useViewportWidth } from "@/lib/use-viewport-width";
+import { AccountLogo } from "./accounts-nav";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FileImportButton } from "./file-import";
@@ -170,6 +173,7 @@ import { RegisterViewMenu } from "./register-view-menu";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
 import { ScheduledSection } from "./scheduled-section";
 import { type BulkAction, SelectionBar } from "./selection-bar";
+import { AttachmentCell, AttachmentField } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
@@ -432,12 +436,21 @@ export function Register({
         (c) =>
           (c !== "balance" || view.showRunningBalance) &&
           (c !== "flag" || view.showFlags) &&
+          (c !== "attachment" || view.showAttachments) &&
           (c !== "enteredBy" || view.showEnteredBy) &&
           // A viewer (EVERYCENT-88) can't select, approve or change rows.
           (c !== "select" || !readOnly) &&
           (c !== "review" || (reviewing && !readOnly)),
       ),
-    [allAccounts, view.showRunningBalance, view.showFlags, view.showEnteredBy, reviewing, readOnly],
+    [
+      allAccounts,
+      view.showRunningBalance,
+      view.showFlags,
+      view.showAttachments,
+      view.showEnteredBy,
+      reviewing,
+      readOnly,
+    ],
   );
   const accountList = accounts.data?.accounts ?? [];
   const accountById = useMemo(() => new Map(accountList.map((a) => [a.id, a])), [accountList]);
@@ -1738,8 +1751,15 @@ export function Register({
             onRename={renameFlags}
           />
         );
+      case "attachment":
+        return <AttachmentCell budgetId={budget.id} transaction={t} readOnly={readOnly} />;
       case "account":
-        return t.accountName;
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <AccountLogo name={t.accountName} logo={accountById.get(t.accountId)?.logo ?? null} />
+            <span className="truncate">{t.accountName}</span>
+          </span>
+        );
       case "date":
         return formatDate(t.date);
       case "payee":
@@ -1823,6 +1843,7 @@ export function Register({
             userId={t.enteredBy.userId}
             userName={t.enteredBy.name}
             avatarColor={t.enteredBy.avatarColor}
+            picture={t.enteredBy.picture}
             currentUserId={session.data?.user.id}
             tooltipPrefix="Entered by "
             tooltipSuffix={t.changedBy?.name ? `, last changed by ${t.changedBy.name}` : ""}
@@ -2126,7 +2147,13 @@ export function Register({
                     // The arrow shows on the first sort field; the rest break its ties.
                     const active = sortBy !== undefined && sortBy === sort;
                     const HeaderIcon =
-                      id === "flag" ? Bookmark : id === "cleared" ? CircleCheck : null;
+                      id === "flag"
+                        ? Bookmark
+                        : id === "attachment"
+                          ? ImageIcon
+                          : id === "cleared"
+                            ? CircleCheck
+                            : null;
                     const pin = pinned(columnIds, id);
                     return (
                       <TableHead
@@ -2192,6 +2219,11 @@ export function Register({
                                 <ArrowDown className="size-3" aria-hidden />
                               ))}
                           </button>
+                        ) : HeaderIcon ? (
+                          <span className="inline-flex">
+                            <HeaderIcon className="size-3.5" aria-hidden />
+                            <span className="sr-only">{spec.header}</span>
+                          </span>
                         ) : (
                           <span className={cn(spec.srOnly && "sr-only")}>{spec.header}</span>
                         )}
@@ -2264,6 +2296,9 @@ export function Register({
                       focusMemo={editingSplit.fromKey}
                       label="Edit transaction"
                       columns={columnIds}
+                      attachment={
+                        <AttachmentCell budgetId={budget.id} transaction={t} readOnly={readOnly} />
+                      }
                       accounts={editorAccounts(accountList, t.accountId)}
                       accountChoices={movableAccounts(accountList, t)}
                       payees={payeeList}
@@ -2460,6 +2495,14 @@ export function Register({
                       onSave={(draft) => void saveSplit(editingTransaction, draft)}
                       onCancel={() => setEditingSplit(null)}
                     />
+                    <div className="mt-3 grid gap-1.5">
+                      <span className="text-muted-foreground text-xs">Attachment</span>
+                      <AttachmentField
+                        budgetId={budget.id}
+                        transaction={editingTransaction}
+                        readOnly={readOnly}
+                      />
+                    </div>
                     <Button
                       variant="ghost"
                       className="mt-3 min-h-11 w-full text-destructive"
@@ -2716,6 +2759,12 @@ function PhoneTransactions({
                       />
                     )}
                     {t.payeeName ?? "No payee"}
+                    {t.attachment && (
+                      <Paperclip
+                        className="ml-1 inline size-3.5 text-muted-foreground"
+                        aria-label="Has an attachment"
+                      />
+                    )}
                   </span>
                   <span
                     className={cn(

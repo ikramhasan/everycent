@@ -23,7 +23,7 @@ import { Info, Lock, Pencil } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { type AccountEdit, EditAccountForm } from "@/components/account-forms";
+import { type AccountEdit, AccountLogoField, EditAccountForm } from "@/components/account-forms";
 import { BalanceHistory } from "@/components/balance-history";
 import {
   cardPaymentDraft,
@@ -49,6 +49,7 @@ import { categoriesQueryOptions } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { inCurrency } from "@/lib/money-input";
 import { invalidateMonths } from "@/lib/months";
+import { deleteAccountLogo, pictureSrc, uploadAccountLogo } from "@/lib/pictures";
 import { type RegisterSearch, registerSearchSchema } from "@/lib/register-filters";
 import { scheduledQueryPrefix } from "@/lib/scheduled";
 import { useShortcut } from "@/lib/shortcuts";
@@ -357,6 +358,24 @@ function AccountPage() {
           initial={account}
           workingBalance={account.closed ? null : BigInt(account.balances.working)}
           onSubmit={handleSave}
+          logo={
+            <AccountLogoField
+              name={account.name}
+              src={pictureSrc(account.logo)}
+              onPick={async (blob) => {
+                await uploadAccountLogo(budget.id, account.id, blob);
+                await queryClient.invalidateQueries({
+                  queryKey: accountsQueryOptions(budget.id).queryKey,
+                });
+              }}
+              onRemove={async () => {
+                await deleteAccountLogo(budget.id, account.id);
+                await queryClient.invalidateQueries({
+                  queryKey: accountsQueryOptions(budget.id).queryKey,
+                });
+              }}
+            />
+          }
         />
         {isLoan && !account.closed && (
           <section className="grid gap-2 border-t pt-4" aria-label="Paired Plan Category">

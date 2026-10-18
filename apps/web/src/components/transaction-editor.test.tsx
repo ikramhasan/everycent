@@ -17,6 +17,7 @@ const usd: MoneySettings = {
 const account = (id: string, type: Account["type"]): Account => ({
   id,
   name: id,
+  logo: null,
   type,
   note: "",
   closed: false,

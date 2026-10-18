@@ -12,6 +12,7 @@ function account(id: string, type: Account["type"], working: string, closed = fa
   return {
     id,
     name: id,
+    logo: null,
     type,
     note: "",
     closed,

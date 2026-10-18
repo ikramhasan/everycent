@@ -35,6 +35,7 @@ import { apiErrorMessage, type Budget } from "@/lib/budgets";
 import { nextId } from "@/lib/categories";
 import { todayIso } from "@/lib/dates";
 import { inCurrency } from "@/lib/money-input";
+import { pictureSrc } from "@/lib/pictures";
 import { AddAccountDialog } from "./add-account-dialog";
 
 /**
@@ -244,7 +245,7 @@ function AccountItem({
           ref={handleRef}
           type="button"
           aria-label={`Reorder ${account.name}`}
-          className="absolute top-1/2 -left-1 z-10 grid h-6 w-3 -translate-y-1/2 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 active:cursor-grabbing group-hover/account:opacity-100 pointer-coarse:hidden"
+          className="absolute top-1/2 left-1 z-10 grid h-6 w-3 -translate-y-1/2 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 active:cursor-grabbing group-hover/account:opacity-100 pointer-coarse:hidden"
         >
           <GripVertical className="size-3" />
         </button>
@@ -258,7 +259,14 @@ function AccountItem({
           activeProps={{ "data-active": true }}
         >
           {/* YNAB's dot before an account with transactions to approve or categorize. */}
-          <span className="flex w-1.5 shrink-0 justify-center">
+          {/* The reorder handle shows over this slot on hover, inside the row's highlight. */}
+          <span
+            className={cn(
+              "flex w-3 shrink-0 justify-center transition-opacity",
+              reorderable &&
+                "group-hover/account:opacity-0 group-has-[button:focus-visible]/account:opacity-0",
+            )}
+          >
             {account.toReview > 0 && (
               <span
                 role="img"
@@ -267,6 +275,7 @@ function AccountItem({
               />
             )}
           </span>
+          <AccountLogo name={account.name} logo={account.logo} />
           <span className="truncate">{account.name}</span>
         </Link>
       </SidebarMenuButton>
@@ -280,5 +289,42 @@ function AccountItem({
         {format(working, account.currency)}
       </SidebarMenuBadge>
     </SidebarMenuItem>
+  );
+}
+
+/**
+ * An account's leading icon (EVERYCENT-229): its logo, or its initial on a muted tile, so every
+ * name starts in the same place.
+ */
+export function AccountLogo({
+  name,
+  logo,
+  className,
+}: {
+  name: string;
+  logo: string | null;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "relative flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[0.25rem] bg-muted font-semibold text-[0.5625rem] text-muted-foreground uppercase",
+        className,
+      )}
+    >
+      {[...name.trim()][0] ?? ""}
+      {logo && (
+        <img
+          src={pictureSrc(logo)}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 size-full bg-background object-cover"
+          onError={(e) => {
+            e.currentTarget.hidden = true;
+          }}
+        />
+      )}
+    </span>
   );
 }

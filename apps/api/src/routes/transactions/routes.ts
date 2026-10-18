@@ -5,7 +5,9 @@ import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
 import { zMemberRef } from "../../lib/member-colors";
+import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES } from "../../lib/storage/file-type";
 import { requireAuth } from "../../middleware/require-auth";
+import { attachmentBodyLimit } from "./attachments";
 import { SORT_COLUMNS, SORT_PATTERN } from "./register-query";
 
 const DateLimitQuery = z.object({
@@ -93,6 +95,19 @@ const SubTransactionSchema = z
   })
   .openapi("SubTransaction");
 
+export const AttachmentSchema = z
+  .object({
+    id: z.string(),
+    transactionId: z
+      .string()
+      .describe("The transaction it was added on: a transfer's two sides share one attachment"),
+    fileName: z.string().describe("As uploaded"),
+    contentType: z.enum(ATTACHMENT_TYPES).describe("Read from the file's contents"),
+    byteSize: z.number().int(),
+    createdAt: z.iso.datetime(),
+  })
+  .openapi("Attachment");
+
 export const TransactionSchema = z
   .object({
     id: z.string(),
@@ -175,6 +190,10 @@ export const TransactionSchema = z
     transferSide: TransferSideSchema.nullable().describe(
       "Transfers: the other side's own state (null when the other side is a split's line, or " +
         "for other transactions)",
+    ),
+    attachment: AttachmentSchema.nullable().describe(
+      "Its photo or PDF (YNAB's transaction photo), shared by a transfer's two sides; a split " +
+        "has one for the whole split",
     ),
     subtransactions: z
       .array(SubTransactionSchema)
@@ -595,6 +614,110 @@ export const deleteTransaction = createRoute({
       "A split's transfer side, deleted with its split (`TRANSFER_IN_SPLIT`), or the " +
         "transaction changed since `expectedVersion` (STALE_VERSION)",
     ),
+  },
+});
+
+const attachmentsOff = jsonError(
+  "Attachments are turned off on this server: it has no object storage (`ATTACHMENTS_DISABLED`)",
+);
+
+export const uploadAttachment = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
+  operationId: "uploadAttachment",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth, attachmentBodyLimit] as const,
+  summary: "Attach a photo or PDF to a transaction",
+  description:
+    "One per transaction, as YNAB's transaction photo: delete it before adding another " +
+    "(`ATTACHMENT_EXISTS`). A transfer's two sides share it. The type is read from the file " +
+    `(${ATTACHMENT_TYPES.join(", ")}); at most ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.`,
+  request: {
+    params: TransactionParams,
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z
+              .custom<File>((v) => v instanceof File, { message: "Expected a file" })
+              .openapi({ type: "string", format: "binary" }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Attached",
+      content: { "application/json": { schema: AttachmentSchema } },
+    },
+    400: jsonError("No file, or an empty one"),
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: notFound,
+    409: jsonError(
+      "It already has an attachment, or its transfer's other side has (`ATTACHMENT_EXISTS`)",
+    ),
+    413: jsonError(`Bigger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB (\`FILE_TOO_LARGE\`)`),
+    415: jsonError("Not an image or PDF an attachment can be (`UNSUPPORTED_FILE_TYPE`)"),
+    503: attachmentsOff,
+  },
+});
+
+export const getAttachment = createRoute({
+  method: "get",
+  path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
+  operationId: "getAttachment",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Open or download a transaction's attachment",
+  description:
+    "Redirects to a short-lived link to the file in object storage, or (storage on the API's " +
+    "own disk) sends the file. Either side of a transfer gives the shared attachment.",
+  request: {
+    params: TransactionParams,
+    query: z.object({
+      download: z
+        .enum(["true", "false"])
+        .optional()
+        .describe("`true`: saved as a download (its file name) rather than shown"),
+      v: z
+        .string()
+        .max(100)
+        .optional()
+        .describe("Any value, such as the attachment's id, to tell its versions apart in a cache"),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The file",
+      content: { "application/octet-stream": { schema: z.string().openapi({ format: "binary" }) } },
+    },
+    302: { description: "Where to fetch the file (valid for a few minutes)" },
+    401: jsonError("Not signed in"),
+    404: jsonError("No such transaction, it has no attachment, or the caller isn't a member"),
+    503: attachmentsOff,
+  },
+});
+
+export const deleteAttachment = createRoute({
+  method: "delete",
+  path: "/budgets/{budgetId}/transactions/{transactionId}/attachment",
+  operationId: "deleteAttachment",
+  tags: ["Transactions"],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  summary: "Delete a transaction's attachment",
+  description: "From both sides of a transfer. Its file is deleted from storage soon after.",
+  request: { params: TransactionParams },
+  responses: {
+    204: { description: "Deleted" },
+    401: jsonError("Not signed in"),
+    403: forbidden,
+    404: jsonError("No such transaction, it has no attachment, or the caller isn't a member"),
   },
 });
 

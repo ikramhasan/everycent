@@ -2,12 +2,17 @@ import { Button } from "@everycent/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { Spinner } from "@everycent/ui/components/spinner";
-import { type FormEvent, useState } from "react";
+import { UserRound } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { PROFILE_PICTURE_PX } from "@/lib/pictures";
+import { PictureField } from "./picture-field";
 
 export interface SignUpValues {
   name: string;
   email: string;
   password: string;
+  /** An optional profile picture, already cropped (EVERYCENT-229). */
+  picture: Blob | null;
 }
 
 export function SignUpForm({
@@ -17,6 +22,9 @@ export function SignUpForm({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [picture, setPicture] = useState<Blob | null>(null);
+  const preview = useMemo(() => (picture ? URL.createObjectURL(picture) : undefined), [picture]);
+  useEffect(() => () => (preview ? URL.revokeObjectURL(preview) : undefined), [preview]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,6 +35,7 @@ export function SignUpForm({
       name: String(form.get("name") ?? ""),
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
+      picture,
     });
     setPending(false);
     setError(message);
@@ -34,6 +43,21 @@ export function SignUpForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
+      <Field>
+        <FieldLabel>
+          Profile picture <span className="font-normal text-muted-foreground">(optional)</span>
+        </FieldLabel>
+        <PictureField
+          shape="circle"
+          size={PROFILE_PICTURE_PX}
+          src={preview}
+          fallback={<UserRound className="size-6" />}
+          label="Profile picture"
+          cropTitle="Crop your profile picture"
+          onPick={setPicture}
+          onRemove={() => setPicture(null)}
+        />
+      </Field>
       <Field>
         <FieldLabel htmlFor="name">Name</FieldLabel>
         <Input id="name" name="name" autoComplete="name" required />

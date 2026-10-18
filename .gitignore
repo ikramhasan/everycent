@@ -15,3 +15,6 @@ coverage
 
 # Agent worktrees (Claude Code)
 .claude/worktrees/
+
+# Attachments stored on local disk in development (STORAGE_DIR)
+.storage

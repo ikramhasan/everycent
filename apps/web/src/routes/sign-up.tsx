@@ -6,6 +6,7 @@ import { PageTitle } from "@/components/page-title";
 import { SignUpForm } from "@/components/sign-up-form";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { savePendingPicture } from "@/lib/pictures";
 import { sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/sign-up")({
@@ -50,8 +51,11 @@ function SignUpPage() {
     >
       <SignUpForm
         onSubmit={async (values) => {
-          const { error } = await authClient.signUp.email(values);
+          const { picture, ...account } = values;
+          const { error } = await authClient.signUp.email(account);
           if (error) return authErrorMessage(error, error.message ?? "Sign up failed");
+          // Uploaded on the first sign-in in this browser, once the address is confirmed.
+          if (picture) await savePendingPicture(values.email, picture);
           setSentTo(values.email);
           return null;
         }}

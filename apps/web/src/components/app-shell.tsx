@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@everycent/ui/components/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@everycent/ui/components/avatar";
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -25,6 +25,7 @@ import {
   useSidebar,
 } from "@everycent/ui/components/sidebar";
 import { type Theme, useTheme } from "@everycent/ui/lib/theme";
+import { cn } from "@everycent/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -44,6 +45,7 @@ import { useCallback, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
+import { pictureSrc } from "@/lib/pictures";
 import { useShortcut } from "@/lib/shortcuts";
 import { AccountsNav } from "./accounts-nav";
 import { BudgetSwitcher } from "./budget-switcher";
@@ -67,7 +69,11 @@ const THEME_ITEM =
 /** The page's scrolling element: the router resets it to the top on navigation and restores it. */
 export const APP_SCROLL_ID = "app-scroll";
 
-export function AppShell({ user }: { user: { name: string; email: string } }) {
+export function AppShell({
+  user,
+}: {
+  user: { name: string; email: string; image?: string | null };
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { budgetId } = useParams({ strict: false });
@@ -226,7 +232,9 @@ export function AppShell({ user }: { user: { name: string; email: string } }) {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton size="lg">
-                      <Avatar className="size-8 rounded-lg">
+                      {/* A profile picture is a circle (EVERYCENT-229); initials keep the square. */}
+                      <Avatar className={cn("size-8", user.image ? "rounded-full" : "rounded-lg")}>
+                        {user.image && <AvatarImage src={pictureSrc(user.image)} alt="" />}
                         <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                       </Avatar>
                       <div className="grid flex-1 text-left text-sm leading-tight">

@@ -22,6 +22,7 @@ import { StarButton } from "./star-button";
 const account = (id: string, type: Account["type"], starredOrder: number | null): Account => ({
   id,
   name: id,
+  logo: null,
   type,
   note: "",
   closed: false,

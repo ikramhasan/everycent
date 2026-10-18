@@ -1,8 +1,18 @@
-import { defineRailway, github, postgres, preserve, project, service } from "railway/iac";
+import {
+  bucket,
+  defineRailway,
+  github,
+  postgres,
+  preserve,
+  project,
+  ref,
+  service,
+} from "railway/iac";
 
 /**
  * everycent on Railway (Infrastructure as Code: `railway config plan` / `apply`; EVERYCENT-105).
- * One service built from the repo's Dockerfile (API + web app on one origin) and Postgres. The
+ * One service built from the repo's Dockerfile (API + web app on one origin), Postgres, and a
+ * bucket for transaction attachments (EVERYCENT-31). The
  * image is the same one any host runs; nothing here changes how it behaves.
  */
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Railway's reference syntax, not a JS template.
@@ -10,6 +20,9 @@ const PUBLIC_URL = "https://${{RAILWAY_PUBLIC_DOMAIN}}";
 
 export default defineRailway(() => {
   const db = postgres("postgres");
+  // Private and S3-compatible; the API hands browsers presigned links (bucket egress is free).
+  // Next to the service (Singapore); a bucket's region can't change once it exists.
+  const files = bucket("attachments", { region: "sin" });
 
   const app = service("everycent", {
     // Deploys every push to main once its CI checks pass. Needs Railway's GitHub app on the repo.
@@ -30,8 +43,20 @@ export default defineRailway(() => {
       BETTER_AUTH_SECRET: preserve(),
       RESEND_API_KEY: preserve(),
       FROM_EMAIL: preserve(),
+      // Telemetry export (traces and logs), set in Railway.
+      OTEL_SERVICE_NAME: preserve(),
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: preserve(),
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: preserve(),
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: preserve(),
+      OTEL_EXPORTER_OTLP_LOGS_HEADERS: preserve(),
+      // The attachments bucket's S3 credentials.
+      S3_BUCKET: ref(files, "BUCKET"),
+      S3_ENDPOINT: ref(files, "ENDPOINT"),
+      S3_REGION: ref(files, "REGION"),
+      S3_ACCESS_KEY_ID: ref(files, "ACCESS_KEY_ID"),
+      S3_SECRET_ACCESS_KEY: ref(files, "SECRET_ACCESS_KEY"),
     },
   });
 
-  return project("everycent", { resources: [app, db] });
+  return project("everycent", { resources: [app, db, files] });
 });

@@ -38,6 +38,7 @@ function move(over: Partial<MoneyMove>): MoneyMove {
     fromDeletedCategory: null,
     toDeletedCategory: null,
     deletion: false,
+    picture: null,
     month: "2026-10",
     amount: "0",
     movedAt: AT,

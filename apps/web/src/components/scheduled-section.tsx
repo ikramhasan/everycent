@@ -36,8 +36,10 @@ import {
 } from "@/lib/scheduled";
 import { type CategoryOption, type Draft, movableAccounts, type Payee } from "@/lib/transactions";
 import { useUndo } from "@/lib/undo";
+import { AccountLogo } from "./accounts-nav";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, PINNED_BG, pinned } from "./register-columns";
+import { ScheduledAttachmentCell } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 
 /**
@@ -287,6 +289,8 @@ export function ScheduledSection({
             }}
           />
         );
+      case "attachment":
+        return <ScheduledAttachmentCell />;
       case "flag":
         return row.kind === "splitTransfer" || viewer ? null : (
           <FlagMenu
@@ -297,7 +301,15 @@ export function ScheduledSection({
           />
         );
       case "account":
-        return row.accountName;
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <AccountLogo
+              name={row.accountName}
+              logo={accountById.get(row.accountId)?.logo ?? null}
+            />
+            <span className="truncate">{row.accountName}</span>
+          </span>
+        );
       case "date": {
         const repeats = row.frequency !== "never" && row.kind !== "splitTransfer";
         return (

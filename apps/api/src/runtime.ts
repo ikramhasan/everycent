@@ -7,6 +7,7 @@ import { createEmailSender } from "./lib/email/sender";
 import { defaultFxProviders } from "./lib/fx/providers";
 import { Jobs } from "./lib/jobs";
 import { jobHandlers } from "./lib/jobs/handlers";
+import { createStorage } from "./lib/storage";
 import { observeJobs } from "./telemetry";
 import type { AppDeps } from "./types";
 
@@ -27,6 +28,7 @@ export async function createRuntime(env: Env, { worker }: { worker: boolean }) {
     auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env)),
     changes: new ChangeBus(listen),
     fxProviders: defaultFxProviders(),
+    storage: createStorage(env),
   };
   if (worker) {
     await jobs.work(jobHandlers, deps);

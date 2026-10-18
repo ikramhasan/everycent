@@ -72,6 +72,7 @@ export function ActivityList({
               userId={event.actor?.userId ?? null}
               userName={event.actor ? actorName(event) : null}
               avatarColor={event.actor?.avatarColor ?? null}
+              picture={event.actor?.picture}
               currentUserId={session.data?.user.id}
             />
             <div className="grid min-w-0 flex-1 gap-1">

@@ -20,6 +20,8 @@ export const QUEUES = {
   "invitations.remind": { retryLimit: 3, retryDelay: 60, expireInSeconds: 300 },
   /** Today's exchange rates, fetched ahead of reads (EVERYCENT-192). */
   "fx.prefetch": { retryLimit: 2, retryDelay: 300, expireInSeconds: 300 },
+  /** Deletes the files of deleted attachments from object storage (`storage_deletion`). */
+  "storage.purge": { retryLimit: 3, retryDelay: 60, expireInSeconds: 300 },
 } as const satisfies Record<string, QueueOptions>;
 
 export type QueueName = keyof typeof QUEUES;
@@ -29,6 +31,7 @@ export interface JobData {
   "email.send": { sealed: string };
   "invitations.remind": null;
   "fx.prefetch": null;
+  "storage.purge": null;
 }
 
 /** Cron schedules (UTC) the worker keeps; each sends its queue a job. */
@@ -36,4 +39,6 @@ export const SCHEDULES: { queue: QueueName; cron: string }[] = [
   { queue: "invitations.remind", cron: "0 * * * *" },
   // Four tries a day: a provider may not have today's rates until later in the day.
   { queue: "fx.prefetch", cron: "0 1,7,13,19 * * *" },
+  // A delete queues a run straight away; this catches cascades (an account or budget deleted).
+  { queue: "storage.purge", cron: "*/15 * * * *" },
 ];

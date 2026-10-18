@@ -62,6 +62,7 @@ import { transactionsToReview } from "../../lib/review";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
+import { accountLogoUrls } from "../pictures/handlers";
 import type {
   closeAccount,
   createAccount,
@@ -90,10 +91,12 @@ function toAccountJson(
   migratedFromAccountId: string | null,
   toReview: number,
   unrealized: Unrealized | undefined,
+  logo: string | null,
 ) {
   return {
     id: a.id,
     name: a.name,
+    logo,
     type: a.type,
     note: a.note,
     closed: a.closed,
@@ -168,6 +171,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
     accounts.flatMap((a) => (a.migratedToAccountId ? [[a.migratedToAccountId, a.id]] : [])),
   );
   const toReview = await transactionsToReview(db, budgetId);
+  const logos = await accountLogoUrls(db, budgetId);
   return accounts.map((a) =>
     toAccountJson(
       a,
@@ -180,6 +184,7 @@ async function listAccountJson(db: Db, budgetId: string, today: string) {
       migratedFrom.get(a.id) ?? null,
       toReview.get(a.id) ?? 0,
       unrealized.get(a.id),
+      logos.get(a.id) ?? null,
     ),
   );
 }

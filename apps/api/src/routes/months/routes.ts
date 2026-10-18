@@ -7,7 +7,7 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { zAvatarColor } from "../../lib/member-colors";
+import { zAvatarColor, zPicture } from "../../lib/member-colors";
 import { requireAuth } from "../../middleware/require-auth";
 
 const zBudgetMonth = z
@@ -657,6 +657,7 @@ const MoneyMoveSchema = z
       .describe(
         "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget",
       ),
+    picture: zPicture.describe("The mover's profile picture URL; null without one"),
   })
   .openapi("MoneyMove");
 

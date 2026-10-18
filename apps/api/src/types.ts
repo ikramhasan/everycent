@@ -5,6 +5,7 @@ import type { ChangeBus } from "./lib/change-bus";
 import type { EmailSender } from "./lib/email/sender";
 import type { FxProvider } from "./lib/fx/providers";
 import type { Jobs } from "./lib/jobs";
+import type { ObjectStorage } from "./lib/storage";
 import type { YnabClient } from "./lib/ynab/client";
 
 /** Everything a request handler may need. Injected once in createApp; read via c.var.deps. */
@@ -20,6 +21,8 @@ export interface AppDeps {
   jobs: Jobs;
   /** Exchange-rate providers, tried in order (tests use an in-memory fake). */
   fxProviders: FxProvider[];
+  /** Where transaction attachments are kept; null turns attachments off (`createStorage`). */
+  storage: ObjectStorage | null;
   /**
    * The server's date (YYYY-MM-DD) that a user's `today` is held near before it enters scheduled
    * transactions; null leaves it unbounded. Defaults to the real UTC date (tests set their own).
