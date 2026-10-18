@@ -309,7 +309,7 @@ export function AccountLogo({
     <span
       aria-hidden
       className={cn(
-        "relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-[0.3rem] bg-muted font-semibold text-[0.625rem] text-muted-foreground uppercase",
+        "relative flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[0.25rem] bg-muted font-semibold text-[0.5625rem] text-muted-foreground uppercase",
         className,
       )}
     >
