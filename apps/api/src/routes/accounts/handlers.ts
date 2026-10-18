@@ -62,7 +62,7 @@ import { type Unrealized, unrealizedGains } from "../../lib/revaluation";
 import { transactionsToReview } from "../../lib/review";
 import { enterDueScheduled, entryDate, userToday } from "../../lib/scheduled";
 import type { AuthedEnv } from "../../middleware/require-auth";
-import type { AppEnv } from "../../types";
+import type { AppDeps, AppEnv } from "../../types";
 import { accountLogoUrls } from "../pictures/handlers";
 import type {
   closeAccount,
@@ -246,9 +246,13 @@ export async function accountJson(
   db: Db,
   budgetId: string,
   accountId: string,
-  today = serverToday(),
+  today: string | undefined,
+  deps: Pick<AppDeps, "serverDate">,
 ) {
-  const found = (await listAccountJson(db, budgetId, today)).find((a) => a.id === accountId);
+  // Held near the server's date: `today` can come straight from a client (EVERYCENT-246).
+  const found = (await listAccountJson(db, budgetId, userToday(deps, today))).find(
+    (a) => a.id === accountId,
+  );
   if (!found) throw new AppError(404, "NOT_FOUND", "Account not found");
   return found;
 }
@@ -446,7 +450,7 @@ export const createAccountHandler: RouteHandler<typeof createAccount, Env> = asy
   const accountId = await db.transaction((tx) =>
     insertAccount(tx, c.var.deps, budgetId, currency, body),
   );
-  return c.json(await accountJson(db, budgetId, accountId, body.date), 201);
+  return c.json(await accountJson(db, budgetId, accountId, body.date, c.var.deps), 201);
 };
 
 /**
@@ -541,8 +545,8 @@ export const updateToLoanAccountHandler: RouteHandler<typeof updateToLoanAccount
     return loanId;
   });
   const [loan, original] = await Promise.all([
-    accountJson(db, budgetId, loanId, body.date),
-    accountJson(db, budgetId, accountId, body.date),
+    accountJson(db, budgetId, loanId, body.date, c.var.deps),
+    accountJson(db, budgetId, accountId, body.date, c.var.deps),
   ]);
   return c.json({ loan, original }, 201);
 };
@@ -648,7 +652,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       }
     }
   });
-  return c.json(await accountJson(db, budgetId, accountId, today ?? date), 200);
+  return c.json(await accountJson(db, budgetId, accountId, today ?? date, c.var.deps), 200);
 };
 
 /** A balance adjustment in `account`; budget accounts take it from Ready to Assign. */
@@ -782,7 +786,7 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
       .set({ lastReconciledAt: sql`now()` })
       .where(eq(budgetAccount.id, accountId));
   });
-  return c.json(await accountJson(db, budgetId, accountId, date), 200);
+  return c.json(await accountJson(db, budgetId, accountId, date, c.var.deps), 200);
 };
 
 /** Stars an account at the end of the Starred group, or unstars it. */
@@ -898,7 +902,7 @@ export const closeAccountHandler: RouteHandler<typeof closeAccount, Env> = async
       .set({ closed: true, pairedCategoryId: null, starredSortOrder: null })
       .where(eq(budgetAccount.id, accountId));
   });
-  return c.json(await accountJson(db, budgetId, accountId, date), 200);
+  return c.json(await accountJson(db, budgetId, accountId, date, c.var.deps), 200);
 };
 
 export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = async (c) => {
@@ -913,7 +917,7 @@ export const reopenAccountHandler: RouteHandler<typeof reopenAccount, Env> = asy
     .update(budgetAccount)
     .set({ closed: false, migratedToAccountId: null })
     .where(eq(budgetAccount.id, accountId));
-  return c.json(await accountJson(db, budgetId, accountId, today), 200);
+  return c.json(await accountJson(db, budgetId, accountId, today, c.var.deps), 200);
 };
 
 export const deleteAccountHandler: RouteHandler<typeof deleteAccount, Env> = async (c) => {

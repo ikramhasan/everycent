@@ -83,7 +83,7 @@ export const revalueAccountHandler: RouteHandler<typeof revalueAccount, Env> = a
     return { id, date, baseAmount: delta.toString(), fxRate: rate };
   });
   return c.json(
-    { transaction: posted, account: await accountJson(db, budgetId, accountId, today) },
+    { transaction: posted, account: await accountJson(db, budgetId, accountId, today, c.var.deps) },
     200,
   );
 };

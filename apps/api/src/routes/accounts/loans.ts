@@ -281,5 +281,5 @@ export const recordLoanPaymentHandler: RouteHandler<typeof recordLoanPayment, En
     });
   });
   // Balances as of the user's today, not the payment's date (which may be back-dated).
-  return c.json(await accountJson(db, budgetId, accountId, today), 201);
+  return c.json(await accountJson(db, budgetId, accountId, today, c.var.deps), 201);
 };
