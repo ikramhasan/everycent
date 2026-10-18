@@ -8,6 +8,7 @@ import {
   isOnBudget,
   money,
   monthBounds,
+  monthsBetween,
   type NetWorthParts,
   type NetWorthTotals,
   netWorthGroup,
@@ -67,6 +68,12 @@ interface MonthFlows {
 }
 
 const ZERO_FLOWS: MonthFlows = { native: 0n, base: 0n, starting: 0n, transfers: 0n };
+
+/**
+ * The most months a report covers, and how far before its start the walk looks back for all-time
+ * highs (EVERYCENT-244): a century, beyond any real history, while keeping a request's work bounded.
+ */
+export const NET_WORTH_MAX_MONTHS = 1200;
 
 /**
  * Month-end balances of a budget's accounts over `from`–`to` and the net worth they add up to
@@ -160,13 +167,20 @@ export async function netWorthReport(
   }
 
   // The months walked: from the first one with a transaction (for all-time highs) or the month
-  // before the range (its opening), whichever is earlier, to the range's end.
+  // before the range (its opening), whichever is earlier, to the range's end. The look back stops
+  // NET_WORTH_MAX_MONTHS before the opening, so a range far from the transactions stays bounded;
+  // the months before it only seed the running balances.
   const before = addMonths(from, -1);
   const earliest = [...firstMonths.values()].reduce<BudgetMonth | null>(
     (a, m) => (a === null || m < a ? m : a),
     null,
   );
-  const start = earliest !== null && earliest < before ? earliest : before;
+  const floor =
+    monthsBetween("0000-01", before) > NET_WORTH_MAX_MONTHS
+      ? addMonths(before, -NET_WORTH_MAX_MONTHS)
+      : "0000-01";
+  const wanted = earliest !== null && earliest < before ? earliest : before;
+  const start = wanted < floor ? floor : wanted;
   const months: BudgetMonth[] = [];
   for (let m = start; m <= to; m = addMonths(m, 1)) months.push(m);
 
@@ -215,6 +229,11 @@ export async function netWorthReport(
 
   // Balances month by month (native running sums, converted at each month-end).
   const running = new Map<string, bigint>(ids.map((id) => [id, 0n]));
+  for (const [accountId, byMonth] of flows) {
+    for (const [month, f] of byMonth) {
+      if (month < start) running.set(accountId, (running.get(accountId) ?? 0n) + f.native);
+    }
+  }
   const balances: Map<string, NetWorthBalance>[] = [];
   const rates: NetWorthRate[] = [];
   for (const month of months) {
@@ -241,8 +260,10 @@ export async function netWorthReport(
   }
 
   const totals = balances.map((b) => netWorthTotals([...b.values()].map((v) => v.base)));
-  // All-time highs count from the first month with a transaction.
-  const firstIndex = earliest === null ? months.length : months.indexOf(earliest);
+  // All-time highs count from the first month with a transaction (or the walk's first, when the
+  // look back stopped short of it).
+  const firstIndex =
+    earliest === null ? months.length : earliest < start ? 0 : months.indexOf(earliest);
   const highs = [
     ...months.slice(0, firstIndex).map(() => false),
     ...allTimeHighs(totals.slice(firstIndex).map((t) => t.netWorth)),
