@@ -386,6 +386,13 @@
       "when": 1792331143901,
       "tag": "0054_ai_attachment",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792348159366,
+      "tag": "0055_category_pace",
+      "breakpoints": true
     }
   ]
 }

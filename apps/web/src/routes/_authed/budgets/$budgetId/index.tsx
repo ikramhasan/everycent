@@ -48,6 +48,7 @@ import { PageHeader } from "@/components/page-header";
 import { PageTitle } from "@/components/page-title";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
+import { SpendingPacePanel } from "@/components/spending-pace-panel";
 import { type MoneyIO, TargetSection } from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { UpcomingTransactions } from "@/components/upcoming-transactions";
@@ -805,6 +806,7 @@ function BudgetPage() {
         targetActions={targetActions}
         onShowOverspent={() => setFilter("overspent")}
       />
+      {selection.size === 0 && month <= today && <SpendingPacePanel month={month} />}
       {/* Uncategorized alone has no Auto-Assign: money can't be assigned to it. */}
       {!(selection.size === 1 && selection.has(UNCATEGORIZED)) && autoAssignPanel(selection)}
       {month === today && (

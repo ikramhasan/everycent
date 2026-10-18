@@ -900,7 +900,9 @@ async function monthState(
   const groupRows = await db
     .select({ id: categoryGroup.id })
     .from(categoryGroup)
-    .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)));
+    .where(and(eq(categoryGroup.budgetId, budgetId), eq(categoryGroup.internal, false)))
+    // In plan order: without it the rows came back in whatever order Postgres stored them.
+    .orderBy(categoryGroup.sortOrder, categoryGroup.id);
 
   const rta = readyToAssign({ month, income, assigned, overspent });
   const debtIncome = [...debt].map(([m, amount]) => ({ month: m, amount }));
