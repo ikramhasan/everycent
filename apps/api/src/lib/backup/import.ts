@@ -443,6 +443,8 @@ export async function importBackup(tx: Tx, doc: Backup, budgetId: string): Promi
       expectedIncome: bigOrNull(doc.budget.expectedIncome),
       expectedIncomeCurrency: doc.budget.expectedIncomeCurrency as CurrencyCode | null,
       loanSimulatorBannerDismissed: doc.budget.loanSimulatorBannerDismissed,
+      aiEnabled: doc.budget.aiEnabled,
+      aiAssistantButton: doc.budget.aiAssistantButton,
       viewOrder:
         doc.budget.viewOrder?.flatMap((key) =>
           presets.has(key) ? [key] : views.has(key) ? [views.get(key)] : [],

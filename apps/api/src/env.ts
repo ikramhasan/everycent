@@ -1,3 +1,4 @@
+import { ANTHROPIC_MODELS } from "@tanstack/ai-anthropic";
 import { z } from "zod";
 
 /** An empty value in .env means "unset". */
@@ -62,6 +63,13 @@ const EnvSchema = z
      * `.storage`). Production with neither turns attachments off.
      */
     STORAGE_DIR: optional(z.string().min(1)),
+    /**
+     * An Anthropic API key for the in-app AI assistant (TanStack AI's Anthropic adapter). Unset,
+     * in-app AI is off for every budget and budget settings say why.
+     */
+    AI_API_KEY: optional(z.string().min(1)),
+    /** The Claude model the assistant runs on. */
+    AI_MODEL: optional(z.enum(ANTHROPIC_MODELS)).transform((v) => v ?? "claude-sonnet-5-5"),
   })
   .superRefine((env, ctx) => {
     const s3 = ["S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;

@@ -1,0 +1,144 @@
+import { Button } from "@everycent/ui/components/button";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@everycent/ui/components/drawer";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@everycent/ui/components/empty";
+import { Skeleton } from "@everycent/ui/components/skeleton";
+import { useIsMobile } from "@everycent/ui/hooks/use-mobile";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { History, SquarePen } from "lucide-react";
+import { useState } from "react";
+import { z } from "zod";
+import { AiConversation } from "@/components/ai-conversation";
+import { AiHistory } from "@/components/ai-history";
+import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
+import { useAiSettings } from "@/lib/ai";
+import { useBudget } from "@/lib/budget-context";
+
+export const Route = createFileRoute("/_authed/budgets/$budgetId/ai")({
+  // The open conversation; none for a new chat.
+  validateSearch: z.object({ c: z.string().optional().catch(undefined) }),
+  component: AiPage,
+});
+
+/**
+ * The AI assistant as a page, in the sidebar whenever the budget has AI on, whether or not the
+ * floating chat button shows: a new chat, or one from the history beside it (a drawer on a phone).
+ */
+function AiPage() {
+  const { budget, readOnly } = useBudget();
+  const settings = useAiSettings(budget.id);
+  const { c: openId } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const phone = useIsMobile();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // A chat started here gets its id in the URL without reloading the conversation showing it.
+  const [newChat, setNewChat] = useState(0);
+  const [startedId, setStartedId] = useState<string | null>(null);
+  const chatKey = !openId || openId === startedId ? `new-${newChat}` : openId;
+  const enabled = settings.data?.enabled && !readOnly;
+
+  function open(id: string | undefined) {
+    if (!id) {
+      setStartedId(null);
+      setNewChat((n) => n + 1);
+    }
+    setHistoryOpen(false);
+    void navigate({ search: id ? { c: id } : {} });
+  }
+
+  const history = (
+    <AiHistory
+      budgetId={budget.id}
+      activeId={openId}
+      onSelect={open}
+      onDeleted={(id) => id === openId && open(undefined)}
+    />
+  );
+
+  return (
+    // Fills the space between the top bar and the page's padding (and, on a phone, the bottom
+    // navigation), so the conversation scrolls on its own with the input in view.
+    <div className="flex h-[calc(100svh-3.5rem-2rem-5rem-env(safe-area-inset-bottom))] w-full flex-col gap-4 md:h-[calc(100svh-3.5rem-2.5rem)]">
+      <PageTitle name="AI assistant" />
+      <PageHeader
+        title="AI assistant"
+        actions={
+          enabled && (
+            <>
+              {phone && (
+                <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+                  <History /> History
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => open(undefined)}>
+                <SquarePen /> New chat
+              </Button>
+            </>
+          )
+        }
+      />
+      {!settings.data ? (
+        <Skeleton className="flex-1" />
+      ) : enabled ? (
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border">
+          {!phone && (
+            <aside
+              aria-label="History"
+              className="flex w-64 shrink-0 flex-col overflow-y-auto border-r"
+            >
+              <h2 className="px-4 pt-3 font-medium text-muted-foreground text-xs">History</h2>
+              {history}
+            </aside>
+          )}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <AiConversation
+              key={chatKey}
+              budgetId={budget.id}
+              conversationId={chatKey.startsWith("new-") ? undefined : chatKey}
+              onStarted={(id) => {
+                setStartedId(id);
+                void navigate({ search: { c: id }, replace: true });
+              }}
+            />
+          </div>
+          {phone && (
+            <Drawer open={historyOpen} onOpenChange={setHistoryOpen}>
+              <DrawerContent className="max-h-[80dvh]">
+                <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
+                  <DrawerTitle>History</DrawerTitle>
+                </DrawerHeader>
+                <div className="overflow-y-auto pb-[env(safe-area-inset-bottom)]">{history}</div>
+              </DrawerContent>
+            </Drawer>
+          )}
+        </div>
+      ) : (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>AI is off for this budget</EmptyTitle>
+            <EmptyDescription>
+              {readOnly
+                ? "You can view this budget but not use its AI features."
+                : "Turn on AI features in budget settings to chat with this budget."}
+            </EmptyDescription>
+          </EmptyHeader>
+          {!readOnly && (
+            <EmptyContent>
+              <Button asChild variant="outline">
+                <Link to="/budgets/$budgetId/settings" params={{ budgetId: budget.id }}>
+                  Budget settings
+                </Link>
+              </Button>
+            </EmptyContent>
+          )}
+        </Empty>
+      )}
+    </div>
+  );
+}

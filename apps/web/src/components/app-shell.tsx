@@ -38,10 +38,12 @@ import {
   LogOut,
   Menu,
   Settings,
+  Sparkles,
   UserCog,
   Wallet,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { useAiSettings } from "@/lib/ai";
 import { authClient } from "@/lib/auth-client";
 import { budgetQueryOptions, budgetsQueryOptions } from "@/lib/budgets";
 import { lastViewedMonth } from "@/lib/months";
@@ -103,6 +105,10 @@ export function AppShell({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  // The AI assistant is in the sidebar whenever the budget has AI on (viewers can't use it).
+  const aiSettings = useAiSettings(budgetId);
+  const aiOn = aiSettings.data?.enabled && currentBudget.data?.role !== "viewer";
 
   return (
     <SidebarProvider
@@ -194,6 +200,20 @@ export function AppShell({
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
+                    {aiOn && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="AI assistant">
+                          <Link
+                            to="/budgets/$budgetId/ai"
+                            params={{ budgetId }}
+                            activeProps={{ "data-active": true }}
+                          >
+                            <Sparkles />
+                            <span>AI assistant</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild tooltip="Budget settings">
                         <Link

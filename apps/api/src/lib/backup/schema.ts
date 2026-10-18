@@ -30,8 +30,9 @@ import { z } from "@hono/zod-openapi";
  * id. Money is an integer string of minor units next to its currency, never a number.
  *
  * Not in a backup: the budget's members and invitations (people belong to an instance), its change
- * history, the shared market FX rate cache (the budget's own rate overrides are in), and
- * transaction attachments (files in object storage, not JSON; EVERYCENT-31).
+ * history, the shared market FX rate cache (the budget's own rate overrides are in), transaction
+ * attachments (files in object storage, not JSON; EVERYCENT-31), and AI conversations (private to
+ * whoever had them).
  */
 export const BACKUP_FORMAT = "everycent-backup";
 export const BACKUP_VERSION = 1;
@@ -56,6 +57,9 @@ const BudgetSchema = z.object({
   expectedIncome: zMinorUnits.nullable(),
   expectedIncomeCurrency: zCurrencyCode.nullable(),
   loanSimulatorBannerDismissed: z.boolean(),
+  /** Missing from backups made before the AI settings existed. */
+  aiEnabled: z.boolean().default(false),
+  aiAssistantButton: z.boolean().default(false),
   /** Preset view keys and `views` ids. */
   viewOrder: z.array(z.string()).nullable(),
 });

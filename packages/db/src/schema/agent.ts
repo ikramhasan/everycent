@@ -313,12 +313,13 @@ export const approvalRequest = pgTable(
   ],
 );
 
-export const CONNECTED_AGENT_KINDS = ["mcp", "agent_auth"] as const;
+/** `in_app`: the budget AI assistant in everycent itself, acting for the signed-in person. */
+export const CONNECTED_AGENT_KINDS = ["mcp", "agent_auth", "in_app"] as const;
 export type ConnectedAgentKind = (typeof CONNECTED_AGENT_KINDS)[number];
 
 /**
  * An agent acting for a user, whichever way it signed in: an MCP client (an OAuth client, by
- * client id) or an Agent Auth agent (by agent id). Changes it makes are attributed to it and its
+ * client id), an Agent Auth agent (by agent id), or everycent's own AI assistant (`in_app`). Changes it makes are attributed to it and its
  * user (`audit_event.actor_agent_id`, `transaction.created_by_agent_id`), so its name and kind are
  * kept here even once the client or agent is revoked. Deleted with its user.
  */
@@ -330,7 +331,7 @@ export const connectedAgent = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     kind: text({ enum: CONNECTED_AGENT_KINDS }).notNull(),
-    /** The OAuth client id (`mcp`) or the Agent Auth agent id (`agent_auth`). */
+    /** The OAuth client id (`mcp`), the Agent Auth agent id (`agent_auth`), or `everycent` (`in_app`). */
     externalId: text().notNull(),
     name: text().notNull(),
     lastUsedAt: at().notNull().defaultNow(),

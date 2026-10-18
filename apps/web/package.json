@@ -18,6 +18,8 @@
     "@everycent/api-client": "workspace:*",
     "@everycent/engine": "workspace:*",
     "@everycent/ui": "workspace:*",
+    "@tanstack/ai": "catalog:",
+    "@tanstack/ai-react": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-table": "catalog:",
@@ -36,6 +38,7 @@
     "react-qr-code": "catalog:",
     "recharts": "catalog:",
     "sonner": "catalog:",
+    "streamdown": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

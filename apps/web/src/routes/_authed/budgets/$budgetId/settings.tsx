@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { FileDown } from "lucide-react";
 import { toast } from "sonner";
+import { AiSettingsFields } from "@/components/ai-settings";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
 import { BudgetMembers } from "@/components/budget-members";
 import { ExchangeRates } from "@/components/exchange-rates";
@@ -146,6 +147,18 @@ function BudgetSettingsPage() {
       <fieldset disabled={readOnly} className="contents">
         <ExchangeRates budget={budget} />
       </fieldset>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI</CardTitle>
+          <CardDescription>
+            AI features for this budget, and connecting your own agent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AiSettingsFields budgetId={budget.id} canEdit={!readOnly} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

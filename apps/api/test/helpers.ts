@@ -62,9 +62,10 @@ export function createTestApp({
   fxProviders = [new FakeFxProvider()],
   ynab,
   storage = new MemoryStorage(),
+  aiAdapter,
   envOverrides = {},
   ...authOptions
-}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & {
+}: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab" | "aiAdapter">> & {
   storage?: ObjectStorage | null;
 } & AuthOptions & { envOverrides?: Partial<Env> } = {}) {
   const env = { ...testEnv(), ...envOverrides };
@@ -89,6 +90,7 @@ export function createTestApp({
     fxProviders,
     ynab,
     storage,
+    aiAdapter,
   };
   const app = createApp(deps);
   outboxes.set(app, outbox);

@@ -545,6 +545,8 @@ export function fromYnabCsv(
         expectedIncome: null,
         expectedIncomeCurrency: null,
         loanSimulatorBannerDismissed: false,
+        aiEnabled: false,
+        aiAssistantButton: false,
         viewOrder: null,
       },
       categoryGroups: groups,

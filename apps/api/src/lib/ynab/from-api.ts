@@ -663,6 +663,8 @@ export function fromYnabApi(plan: YnabPlan, now = new Date()): Conversion {
         expectedIncome: null,
         expectedIncomeCurrency: null,
         loanSimulatorBannerDismissed: false,
+        aiEnabled: false,
+        aiAssistantButton: false,
         viewOrder: null,
       },
       categoryGroups: groups,

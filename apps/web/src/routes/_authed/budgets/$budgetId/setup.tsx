@@ -12,6 +12,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AddAccountForm } from "@/components/account-forms";
+import { AiSettingsFields } from "@/components/ai-settings";
 import { CategoryPicker, type CategoryPicks } from "@/components/category-picker";
 import { PageTitle } from "@/components/page-title";
 import { apiClient } from "@/lib/api";
@@ -19,20 +20,23 @@ import { useBudget } from "@/lib/budget-context";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { useCreateAccount } from "@/lib/use-create-account";
 
+const STEPS = ["categories", "account", "ai", "fund"] as const;
+
 export const Route = createFileRoute("/_authed/budgets/$budgetId/setup")({
   component: SetupPage,
 });
 
 /**
  * Onboarding for a new budget, YNAB's new-plan checklist: pick categories, add a first account,
- * then fund categories (which, as YNAB's checklist does, just opens the budget to assign).
+ * then fund categories (which, as YNAB's checklist does, just opens the budget to assign). Before
+ * funding, an everycent extra: the budget's AI settings and how to connect an agent over MCP.
  */
 function SetupPage() {
   const { budget } = useBudget();
   const queryClient = useQueryClient();
   const categories = useQuery(categoriesQueryOptions(budget.id));
   const createAccount = useCreateAccount(budget.id);
-  const [step, setStep] = useState<"categories" | "account" | "fund">("categories");
+  const [step, setStep] = useState<(typeof STEPS)[number]>("categories");
   const [saving, setSaving] = useState(false);
   const budgetHome = { to: "/budgets/$budgetId", params: { budgetId: budget.id } } as const;
 
@@ -83,8 +87,7 @@ function SetupPage() {
     <div className="mx-auto grid max-w-3xl gap-6">
       <PageTitle name="Set up budget" />
       <p className="text-muted-foreground text-sm">
-        Step {step === "categories" ? 1 : step === "account" ? 2 : 3} of 3 · Setting up{" "}
-        {budget.name}
+        Step {STEPS.indexOf(step) + 1} of {STEPS.length} · Setting up {budget.name}
       </p>
       {step === "categories" ? (
         <Card>
@@ -119,12 +122,32 @@ function SetupPage() {
               onSubmit={async (values) => {
                 const result = await createAccount(values);
                 if ("error" in result) return result.error;
-                setStep("fund");
+                setStep("ai");
                 return null;
               }}
             />
-            <Button asChild variant="link" className="justify-self-start px-0">
-              <Link {...budgetHome}>Skip for now</Link>
+            <Button
+              variant="link"
+              className="justify-self-start px-0"
+              onClick={() => setStep("ai")}
+            >
+              Skip for now
+            </Button>
+          </CardContent>
+        </Card>
+      ) : step === "ai" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Set up AI</CardTitle>
+            <CardDescription>
+              Choose whether AI can help with this budget, and connect your own agent if you use
+              one. You can change this any time in budget settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <AiSettingsFields budgetId={budget.id} canEdit={budget.role !== "viewer"} />
+            <Button className="justify-self-start" onClick={() => setStep("fund")}>
+              Continue
             </Button>
           </CardContent>
         </Card>

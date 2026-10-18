@@ -1,6 +1,6 @@
 import { type Database, newId } from "@everycent/db";
 import { type ConnectedAgentKind, connectedAgent, user } from "@everycent/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import type { AuthUser } from "../auth";
 
 /** An agent acting for a user, as `requireAuth` sees it (`c.var.agent`). */
@@ -91,7 +91,14 @@ export async function markDisconnected(db: Database, userId: string, id: string)
   const [row] = await db
     .update(connectedAgent)
     .set({ revokedAt: sql`now()` })
-    .where(and(eq(connectedAgent.id, id), eq(connectedAgent.userId, userId)))
+    .where(
+      and(
+        eq(connectedAgent.id, id),
+        eq(connectedAgent.userId, userId),
+        // The in-app assistant isn't connected, so there's nothing to disconnect.
+        ne(connectedAgent.kind, "in_app"),
+      ),
+    )
     .returning({ kind: connectedAgent.kind, externalId: connectedAgent.externalId });
   return row ?? null;
 }
