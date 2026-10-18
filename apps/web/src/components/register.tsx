@@ -174,6 +174,9 @@ import { TransactionEditor } from "./transaction-editor";
 import { UndoRedoButtons } from "./undo-redo-buttons";
 
 /** Columns a header click sorts by (YNAB's: Outflow and Inflow apart, the flag too). */
+/** The tray's colour, on the scroll area and its sticky header cells (which must be opaque). */
+const REGISTER_TRAY = "bg-muted dark:bg-[color-mix(in_oklch,var(--background),black_20%)]";
+
 const SORTABLE: Partial<Record<ColumnId, SortColumn>> = {
   flag: "flag",
   account: "account",
@@ -2151,21 +2154,21 @@ export function Register({
           onLoadMore={() => void fetchNextPage()}
         />
       ) : (
-        // An overlay scrollbar inside the rounded border, instead of a native one that takes a
-        // strip beside the header and squares off its corner.
+        // The shared Table's tray, as the scroll area so the header stays on it: an overlay
+        // scrollbar inside the rounded frame, instead of a native one that takes a strip beside
+        // the header and squares off its corner.
         <ScrollArea
           viewportRef={scrollRef}
           // A query container: the editor's footer sizes to its visible width (EVERYCENT-194).
           viewportClassName="@container max-h-[70vh]"
           scrollbars="both"
-          className="rounded-lg border"
+          className={cn("rounded-xl ring-1 ring-border", REGISTER_TRAY)}
         >
           <Table
-            // The ScrollArea's border is the frame: no tray inside it (its padding would throw off
-            // the column widths and the pinned Cleared/Actions columns); rows and cells come from
-            // register-table.
-            containerClassName="overflow-visible rounded-none bg-transparent p-0 ring-0 not-has-[>table>thead]:pt-0 dark:bg-transparent"
-            className="table-fixed border-collapse"
+            // The ScrollArea is the tray; the container keeps only its padding. Rows and cells
+            // come from register-table.
+            containerClassName="overflow-visible rounded-none bg-transparent ring-0 dark:bg-transparent"
+            className="table-fixed"
             // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
             // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
             style={{
@@ -2181,7 +2184,7 @@ export function Register({
                 <col key={id} style={{ width: columnWidth(widths, id) }} />
               ))}
             </colgroup>
-            <TableHeader className="sticky top-0 z-10 [&_th]:border-b">
+            <TableHeader className="sticky top-0 z-10">
               {table.getHeaderGroups().map((group) => (
                 <RegisterRow key={group.id} className="hover:bg-transparent">
                   {group.headers.map((header) => {
@@ -2207,7 +2210,7 @@ export function Register({
                         }
                         style={pin?.style}
                         className={cn(
-                          "bg-muted text-muted-foreground text-xs uppercase",
+                          cn("font-medium text-[13px] text-muted-foreground", REGISTER_TRAY),
                           RESIZABLE.includes(id) && "relative",
                           pin && [pin.className, PINNED_BG.head],
                           spec.align === "right" && "text-right",
@@ -2243,7 +2246,7 @@ export function Register({
                           <button
                             type="button"
                             className={cn(
-                              "inline-flex items-center gap-1 uppercase hover:text-foreground",
+                              "inline-flex items-center gap-1 hover:text-foreground",
                               active && "text-foreground",
                             )}
                             onClick={() => setView({ sort: nextSort(view.sort, sortBy) })}
@@ -2621,7 +2624,7 @@ function BalanceHeader({ sorted, onResetSort }: { sorted: boolean; onResetSort: 
     <span className="inline-flex items-center gap-1">
       <button
         type="button"
-        className="uppercase hover:text-foreground"
+        className="hover:text-foreground"
         title="Sort by date (the balance's order)"
         onClick={onResetSort}
       >

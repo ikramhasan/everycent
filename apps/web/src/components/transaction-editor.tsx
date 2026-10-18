@@ -727,8 +727,9 @@ export function TransactionEditor({
   return (
     <>
       <RegisterRow
+        still
         aria-label={label}
-        className="border-b-0 bg-muted/50 hover:bg-muted/50"
+        className="*:border-b-0 bg-muted/50"
         onKeyDown={handleKeyDown}
       >
         {columns.map((column) => (
@@ -748,9 +749,10 @@ export function TransactionEditor({
       </RegisterRow>
       {lines?.map((line, index) => (
         <RegisterRow
+          still
           key={line.key}
           aria-label={`Split line ${index + 1}`}
-          className="border-b-0 bg-muted/50 hover:bg-muted/50"
+          className="*:border-b-0 bg-muted/50"
           onKeyDown={handleKeyDown}
         >
           {columns.map((column) => (
@@ -767,7 +769,7 @@ export function TransactionEditor({
           ))}
         </RegisterRow>
       ))}
-      <RegisterRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
+      <RegisterRow still className="bg-muted/50" onKeyDown={handleKeyDown}>
         <RegisterCell
           colSpan={columns.length - pinnedColumns(columns).length}
           className="px-1.5 pt-0"

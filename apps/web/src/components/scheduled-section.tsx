@@ -49,6 +49,13 @@ import { TransactionEditor } from "./transaction-editor";
  * occurrence), entered now or deleted. A split's transfer line in the other account is only
  * entered from there; it's edited and deleted through its split, as YNAB does.
  */
+/**
+ * A scheduled row's tint, on every cell (as RegisterRow paints its states), and its selected tint,
+ * which also holds on hover.
+ */
+const SCHEDULED_ROW =
+  "*:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] data-selected:*:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] data-selected:hover:*:bg-[color-mix(in_oklab,var(--primary)_14%,var(--background))]";
+
 export function ScheduledSection({
   rows,
   columns,
@@ -385,7 +392,7 @@ export function ScheduledSection({
   const span = columns.length;
   return (
     <>
-      <RegisterRow className="bg-muted hover:bg-muted">
+      <RegisterRow still className="bg-muted">
         <RegisterCell colSpan={span} className="py-1.5">
           <button
             type="button"
@@ -438,7 +445,7 @@ export function ScheduledSection({
                 budget.dateFormat,
               )}`}
               data-selected={selected.has(row.id) || undefined}
-              className="bg-muted/40 data-selected:bg-primary/10"
+              className={SCHEDULED_ROW}
             >
               {columns.map((id) => {
                 const spec = COLUMN_SPECS[id];
