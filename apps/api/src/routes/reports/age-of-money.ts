@@ -12,7 +12,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { jsonError } from "../../lib/errors";
 import { serverToday } from "../../lib/ledger";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
-import { type AuthedEnv, requireAuth } from "../../middleware/require-auth";
+import { type AuthedEnv, authSecurity, requireAuth } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 
 const Days = z.number().int().nullable();
@@ -22,7 +22,7 @@ export const getAgeOfMoney = createRoute({
   path: "/budgets/{budgetId}/reports/age-of-money",
   operationId: "getAgeOfMoney",
   tags: ["Reports"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Age of Money now, 30 days ago, and at each month's end",
   description:

@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { IsoDate } from "../../lib/dates";
 import { jsonError } from "../../lib/errors";
 import { zFxRate } from "../../lib/fx/rate-schema";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const zRate = zFxRate;
 
@@ -45,7 +45,7 @@ const notFound = jsonError("No such budget, or the caller isn't a member");
 
 export const getFxRate = createRoute({
   tags: ["Exchange rates"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/fx-rates",
@@ -74,7 +74,7 @@ export const getFxRate = createRoute({
 
 export const listFxRateOverrides = createRoute({
   tags: ["Exchange rates"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "get",
   path: "/budgets/{budgetId}/fx-rate-overrides",
@@ -100,7 +100,7 @@ export const listFxRateOverrides = createRoute({
 
 export const putFxRateOverride = createRoute({
   tags: ["Exchange rates"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "put",
   path: "/budgets/{budgetId}/fx-rate-overrides",
@@ -140,7 +140,7 @@ export const putFxRateOverride = createRoute({
 
 export const deleteFxRateOverride = createRoute({
   tags: ["Exchange rates"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   method: "delete",
   path: "/budgets/{budgetId}/fx-rate-overrides/{overrideId}",

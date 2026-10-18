@@ -10,6 +10,7 @@ import { serveWebApp } from "./lib/web-app";
 import { requestLog } from "./middleware/request-log";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
+import { apiKeysRouter } from "./routes/api-keys";
 import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
 import { categoriesRouter } from "./routes/categories";
@@ -55,6 +56,8 @@ export function createApp(deps: AppDeps) {
   // Budgets are organization-plugin records, but clients must go through /v1/budgets (our
   // validation, error shape and OpenAPI contract), so the plugin's own endpoints stay hidden.
   app.all("/api/auth/organization/*", notFound);
+  // API keys are managed through /v1/me/api-keys (a session only, our scopes and error shape).
+  app.all("/api/auth/api-key/*", notFound);
   // Replaced by /v1/me routes: change-email needs the current password there, and the session
   // routes return ids instead of the raw session tokens these endpoints hand to the browser.
   for (const path of [
@@ -78,6 +81,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", healthRouter);
   app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", apiKeysRouter);
   app.route("/v1", picturesRouter);
   app.route("/v1", ynabImportRouter);
   app.route("/v1", backupsRouter);

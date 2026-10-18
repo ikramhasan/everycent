@@ -243,7 +243,12 @@ describe("budgets", () => {
     for (const [path, method, operationId] of ops) {
       const op = doc.paths[path]?.[method];
       expect(op?.operationId).toBe(operationId);
-      expect(op?.security).toEqual([{ cookieAuth: [] }]);
+      // Creating and deleting a budget take a signed-in session; the rest also take an API key.
+      expect(op?.security).toEqual(
+        operationId === "createBudget" || operationId === "deleteBudget"
+          ? [{ cookieAuth: [] }]
+          : [{ cookieAuth: [] }, { apiKeyAuth: [] }],
+      );
     }
   });
 });

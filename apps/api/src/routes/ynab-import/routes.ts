@@ -7,7 +7,7 @@ import {
 } from "@everycent/engine";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import { requireSession, sessionSecurity } from "../../middleware/require-auth";
 import { BudgetSchema } from "../budgets/routes";
 
 const Token = z
@@ -62,8 +62,8 @@ export const listYnabPlans = createRoute({
   path: "/budgets/import/ynab/plans",
   operationId: "listYnabPlans",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "The YNAB plans a personal access token can read",
   description: "A POST so the token travels in the body, never in a URL.",
   request: {
@@ -102,8 +102,8 @@ export const importYnabPlan = createRoute({
   path: "/budgets/import/ynab",
   operationId: "importYnabPlan",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Import a YNAB plan through YNAB's API, as a new budget",
   description:
     "An everycent extra (EVERYCENT-69). Reads the whole plan with the caller's personal access " +
@@ -170,8 +170,8 @@ export const importYnabFiles = createRoute({
   path: "/budgets/import/ynab-files",
   operationId: "importYnabFiles",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Import YNAB's Export Plan files as a new budget (the fallback to the API)",
   description:
     "The plan and register files from YNAB's Export Plan, in the plan's currency, number and " +

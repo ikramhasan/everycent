@@ -3,7 +3,7 @@ import { BUDGET_MONTH_PATTERN, zCurrencyCode, zMinorUnits } from "@everycent/eng
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { REPORT_GROUPINGS, REPORT_KINDS, REPORT_LINE_ORDERS } from "../../lib/reports";
-import { requireAuth } from "../../middleware/require-auth";
+import { authSecurity, requireAuth } from "../../middleware/require-auth";
 
 const BudgetParams = z.object({
   budgetId: z.string().openapi({ param: { name: "budgetId", in: "path" } }),
@@ -81,7 +81,7 @@ export const getReportActivity = createRoute({
   path: "/budgets/{budgetId}/reports/activity",
   operationId: "getReportActivity",
   tags: ["Reports"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Spending or income summed by month, group, category, payee, account or flag",
   description:
@@ -146,7 +146,7 @@ export const listReportTransactions = createRoute({
   path: "/budgets/{budgetId}/reports/transactions",
   operationId: "listReportTransactions",
   tags: ["Reports"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The transactions behind a report's sums (drill-down and export)",
   description:

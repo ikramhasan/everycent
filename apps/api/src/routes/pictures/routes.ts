@@ -1,7 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { MAX_PICTURE_BYTES, PICTURE_TYPES } from "../../lib/storage/images";
-import { requireAuth } from "../../middleware/require-auth";
+import {
+  authSecurity,
+  requireAuth,
+  requireSession,
+  sessionSecurity,
+} from "../../middleware/require-auth";
 import { pictureBodyLimit } from "./handlers";
 
 const PictureBody = {
@@ -52,8 +57,8 @@ export const setProfilePicture = createRoute({
   path: "/me/picture",
   operationId: "setProfilePicture",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth, pictureBodyLimit] as const,
+  security: sessionSecurity,
+  middleware: [requireSession, pictureBodyLimit] as const,
   summary: "Set or replace the profile picture",
   description: `Shown as a circle wherever the user is. ${pictureRules}`,
   request: { body: PictureBody },
@@ -71,8 +76,8 @@ export const deleteProfilePicture = createRoute({
   path: "/me/picture",
   operationId: "deleteProfilePicture",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Remove the profile picture",
   responses: {
     204: { description: "Removed (or there was none)" },
@@ -85,7 +90,7 @@ export const getProfilePicture = createRoute({
   path: "/users/{userId}/picture",
   operationId: "getProfilePicture",
   tags: ["Users"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "A user's profile picture",
   description: "Your own, or that of someone who shares a budget with you.",
@@ -113,7 +118,7 @@ export const setAccountLogo = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/logo",
   operationId: "setAccountLogo",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth, pictureBodyLimit] as const,
   summary: "Set or replace an account's logo",
   description: `Shown before the account's name. ${pictureRules}`,
@@ -134,7 +139,7 @@ export const deleteAccountLogo = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/logo",
   operationId: "deleteAccountLogo",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "Remove an account's logo",
   request: { params: AccountParams },
@@ -151,7 +156,7 @@ export const getAccountLogo = createRoute({
   path: "/budgets/{budgetId}/accounts/{accountId}/logo",
   operationId: "getAccountLogo",
   tags: ["Accounts"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "An account's logo",
   request: { params: AccountParams, query: VersionQuery },

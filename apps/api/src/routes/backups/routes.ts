@@ -1,7 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { BackupSchema } from "../../lib/backup/schema";
 import { jsonError } from "../../lib/errors";
-import { requireAuth } from "../../middleware/require-auth";
+import {
+  authSecurity,
+  requireAuth,
+  requireSession,
+  sessionSecurity,
+} from "../../middleware/require-auth";
 import { BudgetSchema } from "../budgets/routes";
 
 const BudgetParams = z.object({
@@ -13,7 +18,7 @@ export const exportBackup = createRoute({
   path: "/budgets/{budgetId}/backup",
   operationId: "exportBackup",
   tags: ["Export"],
-  security: [{ cookieAuth: [] }],
+  security: authSecurity,
   middleware: [requireAuth] as const,
   summary: "The whole budget as everycent's versioned JSON backup (streamed)",
   description:
@@ -42,8 +47,8 @@ export const importBackup = createRoute({
   path: "/budgets/import",
   operationId: "importBackup",
   tags: ["Budgets"],
-  security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
   summary: "Restore a backup as a new budget, owned by the caller",
   description:
     "Every row gets a new id and every reference is remapped, so the same backup can be " +

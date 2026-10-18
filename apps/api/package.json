@@ -16,6 +16,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@better-auth/api-key": "catalog:",
     "@everycent/db": "workspace:*",
     "@everycent/engine": "workspace:*",
     "@hono/node-server": "catalog:",

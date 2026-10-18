@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import type { AuthedEnv } from "../middleware/require-auth";
 import type { AppEnv } from "../types";
+import { keyAllowsBudget } from "./api-keys";
 import { type BudgetPermission, budgetRoles } from "./budget-access-control";
 import { AppError } from "./errors";
 
@@ -18,6 +19,7 @@ export interface BudgetAccess {
 /**
  * Loads a budget the signed-in user belongs to. Every budget-scoped route authorizes through this.
  * Non-members get 404 (never 403) so budget ids can't be probed; members lacking `permission` get 403.
+ * An API key limited to other budgets gets 404 too (`requireAuth` checks the path first).
  */
 export async function loadBudgetAccess(
   // biome-ignore lint/suspicious/noExplicitAny: accepts any route's context (path/input generics)
@@ -25,6 +27,9 @@ export async function loadBudgetAccess(
   budgetId: string,
   permission?: BudgetPermission,
 ): Promise<BudgetAccess> {
+  if (!keyAllowsBudget(c.var.apiKey, budgetId)) {
+    throw new AppError(404, "NOT_FOUND", "Budget not found");
+  }
   const [row] = await c.var.deps.db
     .select({ budget, role: budgetMember.role, lastUsedAt: budgetMember.lastUsedAt })
     .from(budget)
