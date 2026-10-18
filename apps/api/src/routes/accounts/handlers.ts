@@ -31,6 +31,7 @@ import {
 import { budgetCurrencyOf, type FxDeps } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
+import { prefetchRates } from "../../lib/fx";
 import {
   type AccountBalances,
   accountBalances,
@@ -386,6 +387,10 @@ async function insertAccount(
   currency: AccountRow["currency"],
   body: NewAccount,
 ) {
+  // The Starting Balance's rate, before anything is written (EVERYCENT-201).
+  if (BigInt(body.balance) !== 0n) {
+    await prefetchRates(tx, fx, { budgetId, currencies: [currency], dates: [body.date] });
+  }
   const accountId = newId();
   const [last] = await tx
     .select({ value: max(budgetAccount.sortOrder) })
