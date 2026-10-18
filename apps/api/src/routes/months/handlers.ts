@@ -181,7 +181,7 @@ async function categoryHistory(db: Db, budgetId: string, cutoff: string) {
  * Every category's history up to `cutoff`, payment categories' Funded Spending included (YNAB moves
  * the funded part of card spending into the card's payment category).
  */
-async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
+export async function budgetHistory(db: Db, budgetId: string, cutoff: string) {
   const history = await categoryHistory(db, budgetId, cutoff);
   const rows = await db
     .select({
@@ -544,7 +544,7 @@ const totalsJson = (n: CategoryMonth) => ({
 });
 
 /** The months the budget shows, as of the user's `today`. */
-async function monthRange(db: Db, budgetId: string, today: string) {
+export async function monthRange(db: Db, budgetId: string, today: string) {
   const [earliest] = await db
     .select({ date: min(transaction.date) })
     .from(transaction)
@@ -626,6 +626,51 @@ async function targetRates(
 }
 
 /**
+ * Every category's target in the budget's currency. A target in its own currency asks in the
+ * budget's: its amount converted at today's rate, rounded up, before any target math. Without a
+ * rate its need is unknown, so it's left out (`rateMissing`).
+ */
+export async function loadTargets(
+  db: Db,
+  deps: FxDeps,
+  budget: { id: string; currency: CurrencyCode },
+  today: string,
+) {
+  const targetRows = await db
+    .select()
+    .from(categoryTarget)
+    .where(eq(categoryTarget.budgetId, budget.id));
+  const rates = await targetRates(
+    db,
+    deps,
+    budget,
+    targetRows.map((t) => t.currency),
+    today,
+  );
+  const targets = new Map<string, CategoryTarget>();
+  const conversions = new Map<string, TargetConversion>();
+  const rateMissing = new Set<string>();
+  for (const t of targetRows) {
+    const rate = t.currency === budget.currency ? "1" : rates.get(t.currency);
+    if (!rate) {
+      rateMissing.add(t.categoryId);
+      continue;
+    }
+    const inBase = targetInBase(t, rate, budget.currency);
+    targets.set(t.categoryId, { ...inBase, startMonth: monthOf(t.startMonth) });
+    if (t.currency !== budget.currency) {
+      conversions.set(t.categoryId, {
+        currency: t.currency,
+        amount: t.amount,
+        amountInBase: inBase.amount,
+        rate,
+      });
+    }
+  }
+  return { targetRows, targets, conversions, rateMissing };
+}
+
+/**
  * Everything the budget screen shows for `month`, as of the user's `today`: each category's
  * numbers, target and Auto-Assign amounts, and the month's totals.
  */
@@ -667,39 +712,12 @@ async function monthState(
     .where(eq(category.budgetId, budgetId))
     .orderBy(categoryGroup.sortOrder, category.sortOrder, category.id);
 
-  const targetRows = await db
-    .select()
-    .from(categoryTarget)
-    .where(eq(categoryTarget.budgetId, budgetId));
-  // A target in its own currency asks in the budget's: its amount converted at today's rate,
-  // rounded up, before any target math. Without a rate its need is unknown, so it's left out.
-  const rates = await targetRates(
+  const { targetRows, targets, conversions, rateMissing } = await loadTargets(
     db,
     deps,
     budget,
-    targetRows.map((t) => t.currency),
     today,
   );
-  const targets = new Map<string, CategoryTarget>();
-  const conversions = new Map<string, TargetConversion>();
-  const rateMissing = new Set<string>();
-  for (const t of targetRows) {
-    const rate = t.currency === budget.currency ? "1" : rates.get(t.currency);
-    if (!rate) {
-      rateMissing.add(t.categoryId);
-      continue;
-    }
-    const inBase = targetInBase(t, rate, budget.currency);
-    targets.set(t.categoryId, { ...inBase, startMonth: monthOf(t.startMonth) });
-    if (t.currency !== budget.currency) {
-      conversions.set(t.categoryId, {
-        currency: t.currency,
-        amount: t.amount,
-        amountInBase: inBase.amount,
-        rate,
-      });
-    }
-  }
   // A snooze lasts for the month it was set in.
   const snoozedNow = new Set(
     targetRows
