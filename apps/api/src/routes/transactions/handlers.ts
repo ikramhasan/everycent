@@ -7,12 +7,13 @@ import {
 } from "@everycent/db/schema";
 import { normalizeRate } from "@everycent/engine";
 import type { RouteHandler } from "@hono/zod-openapi";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { type FxDeps, oppositeSides, rebase, syncBases } from "../../lib/base-amount";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { assertNotFuture, latestTransactionDate } from "../../lib/dates";
 import { AppError } from "../../lib/errors";
 import { rememberRename } from "../../lib/file-import";
+import { prefetchRates } from "../../lib/fx";
 import { type Db, findOrCreatePayee, insertTransaction, transferPayeeId } from "../../lib/ledger";
 import { notePayeeCategorizations } from "../../lib/payee-categories";
 import { assertRevaluationEditable, isRevaluationPayee } from "../../lib/revaluation";
@@ -186,6 +187,13 @@ export async function insertWithFee(tx: Db, fx: FxDeps, budgetId: string, body: 
     assertSplitAllowed(account);
     assertLinesAddUp(split, amount);
   }
+  // Before anything is written (EVERYCENT-201); zero converts without a rate.
+  await prefetchRates(tx, fx, {
+    budgetId,
+    currencies: amount !== 0n || split ? [account.currency] : [],
+    accountIds: [transferTo?.id, ...(split ?? []).map((l) => l.transferAccountId)],
+    dates: [body.date],
+  });
   const payeeId = transferTo
     ? await transferPayeeId(tx, transferTo)
     : body.payeeName
@@ -300,6 +308,7 @@ export const updateTransactionHandler: RouteHandler<typeof updateTransaction, En
   const latest = latestTransactionDate(c.var.deps, today);
   const { expectedVersion, ...changes } = body;
   let previousVersions: Record<string, number> = {};
+  await prefetchUpdateRates(db, c.var.deps, budgetId, transactionId, changes);
   const accountId = await db.transaction(async (tx) => {
     if (expectedVersion !== undefined) {
       const expected = { [transactionId]: expectedVersion };
@@ -347,6 +356,47 @@ export interface UpdateBody {
    * for this side's base amount at the date's rate. Left out, the other side keeps its amount.
    */
   transferAmount?: string | null;
+}
+
+/**
+ * Looks up the rates an edit that converts again may need, before `applyUpdate` locks the row
+ * (EVERYCENT-201): the accounts it touches, at its date. A memo, flag or cleared edit needs none.
+ */
+export async function prefetchUpdateRates(
+  db: Db,
+  fx: FxDeps,
+  budgetId: string,
+  transactionId: string,
+  body: UpdateBody,
+) {
+  const { accountId, date, amount, transferAccountId, subtransactions, fxRate } = body;
+  const converts = [accountId, date, amount, transferAccountId, subtransactions, fxRate];
+  if (converts.every((v) => v === undefined) && !body.transferAmount) return;
+  const [existing] = await db
+    .select({
+      accountId: transaction.accountId,
+      date: transaction.date,
+      transferTransactionId: transaction.transferTransactionId,
+    })
+    .from(transaction)
+    .where(and(eq(transaction.id, transactionId), eq(transaction.budgetId, budgetId)));
+  if (!existing) return;
+  const [other] = existing.transferTransactionId
+    ? await db
+        .select({ accountId: transaction.accountId })
+        .from(transaction)
+        .where(eq(transaction.id, existing.transferTransactionId))
+    : [];
+  await prefetchRates(db, fx, {
+    budgetId,
+    accountIds: [
+      accountId ?? existing.accountId,
+      transferAccountId,
+      other?.accountId,
+      ...(subtransactions ?? []).map((l) => l.transferAccountId),
+    ],
+    dates: [date ?? existing.date],
+  });
 }
 
 /** One transaction's edit (as `updateTransaction` describes it); returns its account. */
