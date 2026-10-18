@@ -19,24 +19,25 @@ import {
   ItemTitle,
 } from "@everycent/ui/components/item";
 import { Spinner } from "@everycent/ui/components/spinner";
+import { TabsContent } from "@everycent/ui/components/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { NameCard, OptionsCard } from "@/components/account-options";
 import { ApiKeysCard } from "@/components/api-keys-card";
 import { ConnectedAgentsCard } from "@/components/connected-agents-card";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
-import { PageHeader } from "@/components/page-header";
-import { PageTitle } from "@/components/page-title";
 import { PictureField } from "@/components/picture-field";
+import { SettingsLayout, SettingsSection } from "@/components/settings-layout";
 import { TwoFactorCard } from "@/components/two-factor-card";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { apiErrorMessage } from "@/lib/budgets";
+import { apiErrorMessage, budgetsQueryOptions, pickBudgetRedirect } from "@/lib/budgets";
 import { useInstance } from "@/lib/instance";
 import {
   deleteProfilePicture,
@@ -45,29 +46,68 @@ import {
   uploadProfilePicture,
 } from "@/lib/pictures";
 import { refreshSession, sessionQueryOptions } from "@/lib/session";
+import { ACCOUNT_TAB_IDS, ACCOUNT_TABS } from "@/lib/settings-index";
 
 export const Route = createFileRoute("/_authed/account")({
+  validateSearch: z.object({ tab: z.enum(ACCOUNT_TAB_IDS).optional().catch(undefined) }),
   component: AccountPage,
 });
 
 function AccountPage() {
   const { session } = Route.useRouteContext();
+  const { tab = "profile" } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  // The search reaches the settings of the budget "/" would open.
+  const budgets = useQuery(budgetsQueryOptions()).data;
+  const budgetId = budgets && pickBudgetRedirect(budgets);
+  const budget = budgets?.budgets.find((b) => b.id === budgetId) ?? null;
   return (
-    // The page edge matches the other pages; the settings keep a readable column.
-    <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,42rem)] content-start gap-6">
-      <PageTitle name="Account settings" />
-      <PageHeader title="Account settings" />
-      <ProfilePictureCard />
-      <NameCard name={session.user.name} />
-      <EmailCard email={session.user.email} />
-      <PasswordCard />
-      <TwoFactorCard />
-      <DevicesCard />
-      <ApiKeysCard />
-      <ConnectedAgentsCard />
-      <OptionsCard />
-      <DeleteAccountCard />
-    </div>
+    <SettingsLayout
+      title="Account settings"
+      tabs={ACCOUNT_TABS}
+      tab={tab}
+      onTabChange={(next) => navigate({ search: { tab: next }, replace: true })}
+      budget={budget}
+    >
+      <TabsContent value="profile" className="grid gap-6">
+        <SettingsSection id="profile-picture">
+          <ProfilePictureCard />
+        </SettingsSection>
+        <SettingsSection id="first-name">
+          <NameCard name={session.user.name} />
+        </SettingsSection>
+        <SettingsSection id="email">
+          <EmailCard email={session.user.email} />
+        </SettingsSection>
+        <SettingsSection id="delete-account">
+          <DeleteAccountCard />
+        </SettingsSection>
+      </TabsContent>
+      <TabsContent value="security" className="grid gap-6">
+        <SettingsSection id="password">
+          <PasswordCard />
+        </SettingsSection>
+        <SettingsSection id="two-step">
+          <TwoFactorCard />
+        </SettingsSection>
+        <SettingsSection id="devices">
+          <DevicesCard />
+        </SettingsSection>
+      </TabsContent>
+      <TabsContent value="preferences" className="grid gap-6">
+        <SettingsSection id="options">
+          <OptionsCard />
+        </SettingsSection>
+      </TabsContent>
+      <TabsContent value="developer" className="grid gap-6">
+        <SettingsSection id="api-keys">
+          <ApiKeysCard />
+        </SettingsSection>
+        <SettingsSection id="connected-agents">
+          <ConnectedAgentsCard />
+        </SettingsSection>
+      </TabsContent>
+    </SettingsLayout>
   );
 }
 
