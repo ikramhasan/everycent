@@ -48,7 +48,7 @@ const BudgetVsActualSchema = z
       .array(Month)
       .describe(
         `The months returned: the range, reaching back to at least ${HISTORY_MONTHS} months ` +
-          "before its end (never before the plan's first month)",
+          "before its end, within the plan's months (`firstMonth` to the plan's last month)",
       ),
     categories: z.array(
       z
@@ -125,16 +125,23 @@ export const getBudgetVsActualHandler: RouteHandler<
   }
   const from = query.from as BudgetMonth;
   const to = query.to as BudgetMonth;
-  const { first } = await monthRange(db, budgetId, today);
+  // Only the plan's own months (as the plan screen offers them): months outside hold nothing, and
+  // the walk stays bounded however wide a range is asked for.
+  const { first, last } = await monthRange(db, budgetId, today);
   const lookBack = addMonths(to, -(HISTORY_MONTHS - 1));
-  const historyStart = lookBack < first ? first : lookBack;
-  const start = from < historyStart ? from : historyStart;
-  const months = monthsBetween(start, to);
+  const wanted = from < lookBack ? from : lookBack;
+  const start = wanted < first ? first : wanted;
+  const end = to > last ? last : to;
+  const months = start <= end ? monthsBetween(start, end) : [];
 
   // The plan's history up to the range's end (or today): each month's numbers are the plan's for
   // that month, since later transactions never change an earlier month.
-  const end = monthBounds(to).end;
-  const { history, paymentAccounts } = await budgetHistory(db, budgetId, end < today ? end : today);
+  const rangeEnd = monthBounds(to).end;
+  const { history, paymentAccounts } = await budgetHistory(
+    db,
+    budgetId,
+    rangeEnd < today ? rangeEnd : today,
+  );
   const paymentCategories = new Set(paymentAccounts.values());
   const { targets } = await loadTargets(db, c.var.deps, budget, today);
   const current = monthOf(today);

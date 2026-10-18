@@ -16874,7 +16874,7 @@
               "type": "string",
               "pattern": "^(\\d{4})-(0[1-9]|1[0-2])$"
             },
-            "description": "The months returned: the range, reaching back to at least 12 months before its end (never before the plan's first month)"
+            "description": "The months returned: the range, reaching back to at least 12 months before its end, within the plan's months (`firstMonth` to the plan's last month)"
           },
           "categories": {
             "type": "array",

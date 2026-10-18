@@ -136,6 +136,13 @@ describe("budgetVsActual", () => {
     expect(phone?.cells[0]?.overspent).toBe("cash");
   });
 
+  it("doesn't count months before the plan began toward the over-plan count", () => {
+    const young = { ...report, firstMonth: "2026-09" };
+    const result = budgetVsActual(young, list, { from: "2026-08", to: "2026-10" });
+    const food = result.groups.flatMap((g) => g.rows).find((r) => r.categoryId === "food");
+    expect([food?.overMonths, food?.historyMonths]).toEqual([2, 2]);
+  });
+
   it("leaves out categories with nothing in the range, and keeps the category filter", () => {
     const october = budgetVsActual(report, list, { from: "2026-10", to: "2026-10" });
     expect(october.groups.flatMap((g) => g.rows.map((r) => r.name))).toEqual([

@@ -124,7 +124,8 @@ export function budgetVsActual(
           target = (target ?? 0n) + BigInt(m.targetAmount);
         }
       }
-      if (lastTwelve.includes(month)) {
+      // Months before the plan began aren't counted (the API leaves them out too).
+      if (month >= report.firstMonth && lastTwelve.includes(month)) {
         historyMonths++;
         if (monthSpent > monthAssigned) overMonths++;
       }

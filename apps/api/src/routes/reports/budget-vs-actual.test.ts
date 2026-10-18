@@ -194,7 +194,7 @@ describe("GET /v1/budgets/:id/reports/budget-vs-actual", () => {
     ]);
   });
 
-  it("reaches back 12 months for the heatmap, not before the plan's first month", async () => {
+  it("reaches back 12 months for the heatmap, within the plan's months", async () => {
     const s = await setup();
     const short = await s.report("from=2026-10&to=2026-10");
     // The plan's first month, as the plan screen gives it (the month before July's starting balances).
@@ -203,24 +203,14 @@ describe("GET /v1/budgets/:id/reports/budget-vs-actual", () => {
     );
     expect(short.firstMonth).toBe(plan.firstMonth);
     expect(short.months).toEqual(["2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
+    // Only the plan's months: from its first to one past the current month (no later assignments).
     const long = await s.report("from=2026-01&to=2027-06");
-    expect(long.months[0]).toBe("2026-01");
-    expect(long.months).toHaveLength(18);
+    expect(long.months).toEqual(["2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"]);
     const later = await s.report("from=2027-12&to=2027-12");
-    expect(later.months).toEqual([
-      "2027-01",
-      "2027-02",
-      "2027-03",
-      "2027-04",
-      "2027-05",
-      "2027-06",
-      "2027-07",
-      "2027-08",
-      "2027-09",
-      "2027-10",
-      "2027-11",
-      "2027-12",
-    ]);
+    expect(later.months).toEqual([]);
+    // However wide the range, the walk stays within the plan's months.
+    const widest = await s.report("from=0000-01&to=9999-12");
+    expect(widest.months).toEqual(long.months);
   });
 
   it("gives what the target asks of each month", async () => {

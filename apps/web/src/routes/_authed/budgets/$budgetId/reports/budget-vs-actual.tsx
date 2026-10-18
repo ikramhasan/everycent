@@ -177,7 +177,7 @@ function Report() {
         chart={report && <Heatmap report={report} onCategory={onCategory} />}
         table={report && <HeatmapTable report={report} />}
       />
-      {report && report.months.length > 0 && report.months[0] !== state.range.from && (
+      {report && report.months.length > 0 && (report.months[0] ?? "") < state.range.from && (
         <p className="-mt-2 text-muted-foreground text-xs">
           The heatmap reaches back to {monthLabel(report.months[0] as BudgetMonth, "long")} so a
           short range still shows the last 12 months.
