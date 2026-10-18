@@ -109,6 +109,16 @@ function targetStrip(t: MonthlySummary["targets"]) {
   )}</tr></table>`;
 }
 
+/** An upcoming transaction's amount, with its currency's code when it isn't the budget's. */
+export function upcomingMoney(
+  u: { amount: bigint; currency: MonthlySummary["currency"] },
+  budgetCurrency: MonthlySummary["currency"],
+  settings: BudgetFormatSettings,
+) {
+  const amount = formatAmount({ amount: u.amount, currency: u.currency }, settings);
+  return u.currency === budgetCurrency ? amount : `${amount} ${u.currency}`;
+}
+
 export function monthlySummaryEmail(input: SummaryEmailInput): EmailMessage {
   const { to, webOrigin, budget, summary: s, overview } = input;
   // A typographic minus, as the stats' deltas use.
@@ -116,6 +126,10 @@ export function monthlySummaryEmail(input: SummaryEmailInput): EmailMessage {
     formatAmount({ amount, currency: s.currency }, budget).replace(/^-/, MINUS);
   const signed = (amount: bigint) =>
     `${amount < 0n ? MINUS : "+"}${money(amount < 0n ? -amount : amount)}`;
+  // A scheduled transaction is in its account's currency: one that isn't the budget's is named.
+  const upcomingAmount = (u: { amount: bigint; currency: MonthlySummary["currency"] }) =>
+    upcomingMoney(u, s.currency, budget);
+  const foreign = s.upcoming.items.some((u) => u.currency !== s.currency);
   const month = monthName(s.month);
   const next = addMonths(s.month, 1);
   const nextName = monthName(next);
@@ -129,7 +143,8 @@ export function monthlySummaryEmail(input: SummaryEmailInput): EmailMessage {
       : s.readyToAssign > 0n
         ? `You spent ${money(s.spent)}, and ${money(s.readyToAssign)} is still waiting for a job.`
         : `You spent ${money(s.spent)} and every cent had a job.`;
-  const subject = `Your ${month} in everycent`;
+  // The budget's name tells apart the emails of someone on several budgets.
+  const subject = `Your ${month} in everycent: ${budget.name}`;
   const lede = `Here's how ${month} went, and what's coming up in ${nextName}.`;
 
   // Key numbers. Spending less than last month is good news; earning less isn't.
@@ -285,10 +300,10 @@ ${st.note ? html`<div class="ec-muted-fg" style="font-size:12px;color:${C.mutedF
           headRow(`Coming up in ${nextName}`, mutedText(`${s.upcoming.count} scheduled`)),
           rows(
             s.upcoming.items.map((u) => {
-              const amount = formatAmount(
-                { amount: u.amount < 0n ? -u.amount : u.amount, currency: u.currency },
-                budget,
-              );
+              const amount = upcomingAmount({
+                ...u,
+                amount: u.amount < 0n ? -u.amount : u.amount,
+              });
               return {
                 name: u.payee ?? "No payee",
                 meta: [dayAndMonth(u.date), u.category].filter(Boolean).join(" · "),
@@ -315,7 +330,7 @@ ${st.note ? html`<div class="ec-muted-fg" style="font-size:12px;color:${C.mutedF
 
   const settingsUrl = `${webOrigin}/account?tab=notifications#settings-notifications`;
   const footer = [
-    html`You get this summary on the 1st of each month for the budgets you're a member of. Amounts are in ${s.currency}, the budget's currency.`,
+    html`You get this summary on the 1st of each month for the budgets you're a member of. Amounts are in ${s.currency}, the budget's currency${foreign ? ", unless another currency is named" : ""}.`,
     html`<a href="${settingsUrl}" class="ec-muted-fg" style="color:${C.mutedFg};text-decoration:underline">Email settings</a> · <a href="${input.unsubscribeUrl}" class="ec-muted-fg" style="color:${C.mutedFg};text-decoration:underline">Unsubscribe from monthly summaries</a>`,
     html`everycent`,
   ];
@@ -354,8 +369,7 @@ ${st.note ? html`<div class="ec-muted-fg" style="font-size:12px;color:${C.mutedF
       [
         `Coming up in ${nextName} (${s.upcoming.count} scheduled)`,
         ...s.upcoming.items.map(
-          (u) =>
-            `- ${dayAndMonth(u.date)} ${u.payee ?? "No payee"}: ${formatAmount({ amount: u.amount, currency: u.currency }, budget)}`,
+          (u) => `- ${dayAndMonth(u.date)} ${u.payee ?? "No payee"}: ${upcomingAmount(u)}`,
         ),
       ].join("\n"),
     `Plan ${nextName}: ${budgetUrl(next)}`,

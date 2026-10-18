@@ -127,7 +127,7 @@ describe("monthly summary email", () => {
 
     const [mail, ...more] = await emailsTo(app, owner.email, "monthly-summary");
     expect(more).toEqual([]);
-    expect(mail?.subject).toBe("Your September in everycent");
+    expect(mail?.subject).toBe("Your September in everycent: Home");
     const text = mail?.text ?? "";
     expect(text).toContain("Home · September 2026");
     expect(text).toContain("You spent $1,750.00, $50.00 more than you assigned.");

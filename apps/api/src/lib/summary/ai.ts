@@ -3,6 +3,7 @@ import { type AnyTextAdapter, chat } from "@tanstack/ai";
 import { z } from "zod";
 import { log } from "../log";
 import type { MonthlySummary } from "./data";
+import { upcomingMoney } from "./email";
 import { monthName } from "./format";
 
 /** The AI overview at the top of a monthly summary: a short paragraph and a few points. */
@@ -82,7 +83,7 @@ export async function summaryOverview(
       payee: u.payee,
       date: u.date,
       category: u.category,
-      amount: formatAmount({ amount: u.amount, currency: u.currency }, budget),
+      amount: upcomingMoney(u, summary.currency, budget),
     })),
   };
   const instructions = [
