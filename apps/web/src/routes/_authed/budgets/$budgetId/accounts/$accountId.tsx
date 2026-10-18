@@ -34,6 +34,7 @@ import {
 import { PairCategoryDialog } from "@/components/loan-dialogs";
 import { LoanPage, usePairCategory } from "@/components/loan-page";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { ReconcileBanner, ReconcilePopover, reconciledLabel } from "@/components/reconcile";
 import { Register } from "@/components/register";
 import { REVIEW_SEARCH, ReviewBanner } from "@/components/review-banner";
@@ -550,6 +551,7 @@ function AccountPage() {
   return (
     <div className="grid gap-6">
       <ReviewBanner count={account.toReview} onView={() => onSearchChange({ q: REVIEW_SEARCH })} />
+      <PageTitle name={account.name} />
       <PageHeader
         title={account.name}
         meta={

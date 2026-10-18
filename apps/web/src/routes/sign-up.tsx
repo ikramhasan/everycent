@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthCard } from "@/components/auth-card";
 import { CheckInbox } from "@/components/check-inbox";
+import { PageTitle } from "@/components/page-title";
 import { SignUpForm } from "@/components/sign-up-form";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
@@ -13,7 +14,12 @@ export const Route = createFileRoute("/sign-up")({
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     if (session) throw redirect({ to: "/" });
   },
-  component: SignUpPage,
+  component: () => (
+    <>
+      <PageTitle name="Sign up" />
+      <SignUpPage />
+    </>
+  ),
 });
 
 function SignUpPage() {

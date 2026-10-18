@@ -5,11 +5,17 @@ import { Spinner } from "@everycent/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { AuthCard } from "@/components/auth-card";
+import { PageTitle } from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 
 export const Route = createFileRoute("/forgot-password")({
-  component: ForgotPasswordPage,
+  component: () => (
+    <>
+      <PageTitle name="Forgot password" />
+      <ForgotPasswordPage />
+    </>
+  ),
 });
 
 function ForgotPasswordPage() {

@@ -6,12 +6,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { AuthCard } from "@/components/auth-card";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { PageTitle } from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { useLinkParams } from "@/lib/link-params";
 
 export const Route = createFileRoute("/reset-password")({
-  component: ResetPasswordPage,
+  component: () => (
+    <>
+      <PageTitle name="Reset password" />
+      <ResetPasswordPage />
+    </>
+  ),
 });
 
 function ResetPasswordPage() {

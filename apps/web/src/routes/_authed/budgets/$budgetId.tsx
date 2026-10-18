@@ -11,6 +11,7 @@ import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router"
 import { Eye } from "lucide-react";
 import { FileDropImport } from "@/components/file-import";
 import { ManagePayeesProvider } from "@/components/manage-payees";
+import { PageTitle } from "@/components/page-title";
 import { apiBaseUrl } from "@/lib/api";
 import { BudgetProvider } from "@/lib/budget-context";
 import { apiErrorCode, budgetQueryOptions } from "@/lib/budgets";
@@ -62,6 +63,7 @@ function BudgetLayout() {
 function BudgetNotFound() {
   return (
     <Empty className="py-12">
+      <PageTitle name="Budget not found" />
       <EmptyHeader>
         <EmptyTitle>Budget not found</EmptyTitle>
         <EmptyDescription>It may have been deleted, or it isn't shared with you.</EmptyDescription>

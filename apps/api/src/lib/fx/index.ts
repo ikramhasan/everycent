@@ -80,10 +80,12 @@ export async function resolveRate(
 
   const cached = await cachedMarketRate(db, from, to, date);
   if (cached) return { ...cached, date, source: "market" };
-  const recent = recentFetches.get(recentKey(date, from));
-  if (recent && Date.now() - recent.at < RECENT_TTL_MS) {
-    const onRateDate = await cachedMarketRate(db, from, to, recent.rateDate);
-    if (onRateDate) return { ...onRateDate, date, source: "market" };
+  for (const provider of deps.fxProviders) {
+    const recent = recentFetches.get(provider)?.get(recentKey(date, from));
+    if (recent && Date.now() - recent.at < RECENT_TTL_MS) {
+      const onRateDate = await cachedMarketRate(db, from, to, recent.rateDate);
+      if (onRateDate) return { ...onRateDate, date, source: "market" };
+    }
   }
 
   // A date at least two days back is settled: the provider's answer for it won't change, so it's
@@ -203,8 +205,8 @@ async function cachedMarketRate(
 }
 
 const RECENT_TTL_MS = 60 * 60 * 1000;
-/** Recent (unsettled) dates fetched lately: which day's cached rates answered them. */
-const recentFetches = new Map<string, { at: number; rateDate: string }>();
+/** Recent (unsettled) dates each provider was asked lately: which day's cached rates answered. */
+const recentFetches = new WeakMap<FxProvider, Map<string, { at: number; rateDate: string }>>();
 /** Fetches in progress, so identical concurrent lookups share one request. */
 const inFlight = new WeakMap<FxProvider, Map<string, Promise<FxRates | null>>>();
 const FAILED_TTL_MS = 10 * 60 * 1000;
@@ -271,7 +273,11 @@ function fetchOnce(
 
     const dates = new Set([fetched.date]);
     if (settled || fetched.date === date) dates.add(date);
-    else recentFetches.set(key, { at: Date.now(), rateDate: fetched.date });
+    else {
+      const recent = recentFetches.get(provider) ?? new Map();
+      recentFetches.set(provider, recent);
+      recent.set(key, { at: Date.now(), rateDate: fetched.date });
+    }
     const rateDate = fetched.date;
     await db
       .insert(fxRate)

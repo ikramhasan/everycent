@@ -7,6 +7,7 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { type FormEvent, useState } from "react";
 import { z } from "zod";
 import { AuthCard } from "@/components/auth-card";
+import { PageTitle } from "@/components/page-title";
 import { SignInForm } from "@/components/sign-in-form";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
@@ -19,7 +20,12 @@ export const Route = createFileRoute("/sign-in")({
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     if (session) throw redirect({ href: safeRedirect(search.redirect) });
   },
-  component: SignInPage,
+  component: () => (
+    <>
+      <PageTitle name="Sign in" />
+      <SignInPage />
+    </>
+  ),
 });
 
 function SignInPage() {

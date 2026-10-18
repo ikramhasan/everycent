@@ -11,6 +11,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { BudgetForm, type BudgetFormValues } from "@/components/budget-form";
+import { PageTitle } from "@/components/page-title";
 import { $api } from "@/lib/api";
 import { apiErrorMessage, budgetsQueryOptions, invalidateBudgets } from "@/lib/budgets";
 
@@ -52,6 +53,7 @@ function NewBudgetPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
+      <PageTitle name="New budget" />
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">

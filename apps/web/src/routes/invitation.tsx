@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthCard } from "@/components/auth-card";
+import { PageTitle } from "@/components/page-title";
 import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { apiErrorCode, apiErrorMessage, invalidateBudgets } from "@/lib/budgets";
@@ -14,7 +15,12 @@ import { forgetInvitation, pendingInvitation, rememberInvitation } from "@/lib/p
 import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/invitation")({
-  component: InvitationPage,
+  component: () => (
+    <>
+      <PageTitle name="Invitation" />
+      <InvitationPage />
+    </>
+  ),
 });
 
 function InvitationPage() {
