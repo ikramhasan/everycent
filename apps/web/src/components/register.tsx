@@ -80,6 +80,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
 import { agentFor } from "@/lib/activity";
+import { useAiSettings } from "@/lib/ai";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
@@ -374,6 +375,10 @@ export function Register({
     "/v1/budgets/{budgetId}/transactions/{transactionId}/unmatch",
   );
   const [adding, setAdding] = useState(false);
+  // A new transaction can take an attachment as it's entered; with AI on, a receipt fills it in.
+  const aiEnabled = useAiSettings(budget.id).data?.enabled ?? false;
+  const newAttachment = useMemo(() => ({ budgetId: budget.id, aiEnabled }), [budget.id, aiEnabled]);
+  const [attaching, setAttaching] = useState(false);
   // What the new-transaction row starts with: empty, or Make Repeating's copy.
   const [addingDraft, setAddingDraft] = useState<Draft | null>(null);
   // Make Repeating opens the date picker on its row; Record Payment doesn't.
@@ -1224,9 +1229,17 @@ export function Register({
     else setAdding(false);
   }
 
-  async function saveNew(draft: Draft, another = false) {
+  async function saveNew(draft: Draft, another = false, file: File | null = null) {
     if (!draft.date) return setNewError("Enter a date.");
-    if (isScheduled(draft, today)) return saveNewScheduled(draft, another);
+    if (isScheduled(draft, today)) {
+      // YNAB: a scheduled transaction can't have an attachment.
+      if (file) {
+        return setNewError(
+          "Scheduled transactions can't have attachments. Remove the file, or date it today or earlier.",
+        );
+      }
+      return saveNewScheduled(draft, another);
+    }
     const result = createBody(draft, settingsOf(draft.accountId), otherSettingsOf(draft));
     if (!result.ok) return setNewError(result.error);
     const fee = result.body.fee;
@@ -1262,10 +1275,38 @@ export function Register({
           await refresh();
         },
       });
+      // Uploaded before the row closes, so its spinner shows while it goes.
+      if (file) await attachToNew(created.id, file);
       afterNewSaved(draft, another);
       await refresh();
     } catch (e) {
       setNewError(apiErrorMessage(e, "Couldn't save the transaction."));
+    }
+  }
+
+  /** A new transaction's attachment, uploaded once the transaction exists. */
+  async function attachToNew(transactionId: string, file: File) {
+    setAttaching(true);
+    try {
+      const { error } = await apiClient.POST(
+        "/v1/budgets/{budgetId}/transactions/{transactionId}/attachment",
+        {
+          params: { path: { budgetId: budget.id, transactionId } },
+          body: { file: file as unknown as string },
+          bodySerializer: () => {
+            const form = new FormData();
+            form.append("file", file);
+            return form;
+          },
+        },
+      );
+      if (error) {
+        toast.error(apiErrorMessage(error, "Saved, but the attachment couldn't be added."));
+      }
+    } catch {
+      toast.error("Saved, but the attachment couldn't be added. Add it from the register.");
+    } finally {
+      setAttaching(false);
     }
   }
 
@@ -2262,11 +2303,12 @@ export function Register({
                   settings={budget}
                   flags={flags}
                   onRenameFlags={renameFlags}
-                  pending={create.isPending || createScheduled.isPending}
+                  pending={create.isPending || createScheduled.isPending || attaching}
                   error={newError}
-                  onSave={(draft) => void saveNew(draft)}
-                  onSaveAndAddAnother={(draft) => void saveNew(draft, true)}
+                  onSave={(draft, file) => void saveNew(draft, false, file)}
+                  onSaveAndAddAnother={(draft, file) => void saveNew(draft, true, file)}
                   onCancel={() => setAdding(false)}
+                  newAttachment={newAttachment}
                 />
               )}
               <ScheduledSection
@@ -2472,10 +2514,11 @@ export function Register({
                   settings={budget}
                   flags={flags}
                   onRenameFlags={renameFlags}
-                  pending={create.isPending || createScheduled.isPending}
+                  pending={create.isPending || createScheduled.isPending || attaching}
                   error={newError}
-                  onSave={(draft) => void saveNew(draft)}
+                  onSave={(draft, file) => void saveNew(draft, false, file)}
                   onCancel={() => setAdding(false)}
+                  newAttachment={newAttachment}
                 />
               ) : (
                 editingTransaction &&

@@ -44,6 +44,7 @@
     "papaparse": "catalog:",
     "pg-boss": "catalog:",
     "rate-limiter-flexible": "catalog:",
+    "read-excel-file": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"
   },

@@ -50,6 +50,8 @@ const OUTSIDE = [
  * handler returns (a request transaction would have ended by then).
  */
 const READ_ONLY_POSTS = [/^\/v1\/budgets\/[^/]+\/export\//] as const;
+/** Filling in a transaction from a receipt only reads, and waits on the AI: no transaction held. */
+const AI_READ_POSTS = [/^\/v1\/budgets\/[^/]+\/ai\/transaction-draft$/] as const;
 /**
  * The AI assistant's chat stream runs long after its handler returns. It writes only the
  * conversation's own (unaudited) records; each change it makes is a request of its own, with its
@@ -59,6 +61,7 @@ const STREAMING_POSTS = [/^\/v1\/budgets\/[^/]+\/ai\/chat$/] as const;
 const outsideRequestTransaction = (method: string, path: string) =>
   OUTSIDE.some((re) => re.test(path)) ||
   (method === "POST" && READ_ONLY_POSTS.some((re) => re.test(path))) ||
+  (method === "POST" && AI_READ_POSTS.some((re) => re.test(path))) ||
   (method === "POST" && STREAMING_POSTS.some((re) => re.test(path))) ||
   (method === "DELETE" && /^\/v1\/budgets\/[^/]+\/?$/.test(path));
 

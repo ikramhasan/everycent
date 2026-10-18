@@ -36,6 +36,10 @@ const AGENT_EXCLUDED = new Set([
   "deleteAiConversation",
   "aiChat",
   "hydrateAiChat",
+  "uploadAiAttachment",
+  "getAiAttachment",
+  "deleteAiAttachment",
+  "draftTransactionFromFile",
 ]);
 
 /** POSTs that only read (a viewer may make them too): allowed with read access alone. */

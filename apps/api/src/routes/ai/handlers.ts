@@ -11,6 +11,13 @@ import {
   inAppPrincipal,
   systemPrompt,
 } from "../../lib/ai/assistant";
+import {
+  attachmentIds,
+  attachmentMiddleware,
+  claimAttachments,
+  usableAttachments,
+  withStoredAttachments,
+} from "../../lib/ai/attachments";
 import { chatPersistence } from "../../lib/ai/persistence";
 import { aiSettings, aiUnavailableReason, assertAiAllowed } from "../../lib/ai/settings";
 import { loadBudgetAccess } from "../../lib/budget-access";
@@ -64,7 +71,7 @@ export const updateAiSettingsHandler: RouteHandler<typeof updateAiSettings, Env>
  * catalog leaves these routes out too (`AGENT_EXCLUDED`).
  */
 // biome-ignore lint/suspicious/noExplicitAny: accepts any route's context (path/input generics)
-function refuseAgents(c: Context<Env, any, any>) {
+export function refuseAgents(c: Context<Env, any, any>) {
   if (c.var.agent) {
     throw new AppError(403, "NOT_FOR_AGENTS", "The in-app AI assistant is only for people");
   }
@@ -84,7 +91,7 @@ const summaryJson = (c: ConversationRow) => ({
  * reads or writes a budget that hasn't turned it on.
  */
 // biome-ignore lint/suspicious/noExplicitAny: accepts any route's context (path/input generics)
-async function aiBudget(c: Context<Env, any, any>, budgetId: string) {
+export async function aiBudget(c: Context<Env, any, any>, budgetId: string) {
   refuseAgents(c);
   const access = await loadBudgetAccess(c, budgetId);
   assertAiAllowed(c.var.deps.env, access.budget);
@@ -111,7 +118,7 @@ function messageText(message: unknown): string {
   const m = message as { content?: unknown; parts?: unknown };
   if (typeof m.content === "string") return m.content;
   const parts = Array.isArray(m.parts) ? m.parts : Array.isArray(m.content) ? m.content : [];
-  return parts
+  const text = parts
     .map((p) =>
       p && typeof p === "object" && (p as { type?: unknown }).type === "text"
         ? String(
@@ -122,6 +129,12 @@ function messageText(message: unknown): string {
         : "",
     )
     .join(" ");
+  // A message that's only files is named by them.
+  if (text.trim()) return text;
+  return parts
+    .map((p) => (p as { metadata?: { fileName?: unknown } } | null)?.metadata?.fileName)
+    .filter((name): name is string => typeof name === "string")
+    .join(", ");
 }
 
 /** A conversation's title: the start of its first message, on one line. */
@@ -150,6 +163,17 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
       error instanceof Error ? error.message : "Invalid chat input",
     );
   });
+  // The server's transcript is the history. A send contributes its new user message only, a
+  // resume nothing: a client re-sending what it painted (after a reload, with paging) would
+  // otherwise be merged in again and break the model's tool-call pairing.
+  const sent = params.resume ? [] : newUserMessage(params.messages);
+  const ids = sent.flatMap(attachmentIds);
+  // Checked before the conversation is written, so a refused send leaves nothing behind.
+  const attachments = await usableAttachments(
+    db,
+    { budgetId, userId: c.var.user.id, conversationId: params.threadId },
+    ids,
+  );
   const existing = await conversationFor(c, budgetId, params.threadId);
   if (existing) {
     // Most recently used first in the history.
@@ -166,6 +190,9 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
       title: titleFrom(messageText(firstUser)),
     });
   }
+  // Files it carries become this conversation's; the transcript keeps pointers to them.
+  await claimAttachments(db, params.threadId, ids);
+  const messages = sent.map((m) => withStoredAttachments(m, attachments));
 
   const adapter = c.var.deps.aiAdapter ?? anthropicAdapter(env);
   if (!adapter)
@@ -192,10 +219,7 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
   c.req.raw.signal.addEventListener("abort", () => abortController.abort());
   const stream = chat({
     adapter,
-    // The server's transcript is the history. A send contributes its new user message only, a
-    // resume nothing: a client re-sending what it painted (after a reload, with paging) would
-    // otherwise be merged in again and break the model's tool-call pairing.
-    messages: params.resume ? [] : newUserMessage(params.messages),
+    messages,
     threadId: params.threadId,
     runId: params.runId,
     ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
@@ -203,12 +227,17 @@ export const aiChatHandler: RouteHandler<typeof aiChat, Env> = async (c) => {
     systemPrompts: [systemPrompt(b, today)],
     tools: budgetTools(auth.agentRuntime, principal, {
       db,
+      storage: c.var.deps.storage,
       budgetId,
       threadId: params.threadId,
       alsoEager: answering,
     }),
     lazyToolsConfig: { includeDescription: "first-sentence" },
-    middleware: [withPersistence(persistence)],
+    middleware: [
+      withPersistence(persistence),
+      // After persistence has loaded the transcript: the model gets the files, the store doesn't.
+      attachmentMiddleware({ db, storage: c.var.deps.storage, conversationId: params.threadId }),
+    ],
     abortController,
   });
   return toServerSentEventsResponse(stream, { abortController });
@@ -248,7 +277,8 @@ export const deleteAiConversationHandler: RouteHandler<typeof deleteAiConversati
   if (!(await conversationFor(c, budgetId, conversationId))) {
     throw new AppError(404, "NOT_FOUND", "No such conversation");
   }
-  // Its transcript, runs and pending approvals go with it.
+  // Its transcript, runs, pending approvals and files go with it (a trigger queues the files).
   await c.var.deps.db.delete(aiConversation).where(eq(aiConversation.id, conversationId));
+  await c.var.deps.jobs.send(c.var.deps.db, "storage.purge", null);
   return c.body(null, 204);
 };
