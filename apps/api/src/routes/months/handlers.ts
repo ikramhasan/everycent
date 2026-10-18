@@ -73,7 +73,7 @@ import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
 import { adjustAssigned, assignedAmount, assignmentRow, logMove } from "../../lib/assignments";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
-import { resolveRate } from "../../lib/fx";
+import { prefetchRates, resolveRate } from "../../lib/fx";
 import { accountBalances, type Db, internalCategoryId, serverToday } from "../../lib/ledger";
 import { memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
 import {
@@ -626,6 +626,19 @@ async function targetRates(
 }
 
 /**
+ * Looks up today's rates for targets in other currencies before a write (EVERYCENT-201), so the
+ * month it answers with doesn't fetch them while its changes hold locks.
+ */
+async function prefetchTargetRates(db: Db, deps: FxDeps, budgetId: string, today: string) {
+  const rows = await db
+    .selectDistinct({ currency: categoryTarget.currency })
+    .from(categoryTarget)
+    .where(eq(categoryTarget.budgetId, budgetId));
+  const currencies = rows.map((r) => r.currency);
+  await prefetchRates(db, deps, { budgetId, currencies, dates: [today], today });
+}
+
+/**
  * Every category's target in the budget's currency. A target in its own currency asks in the
  * budget's: its amount converted at today's rate, rounded up, before any target math. Without a
  * rate its need is unknown, so it's left out (`rateMissing`).
@@ -1153,6 +1166,7 @@ export const assignCategoryHandler: RouteHandler<typeof assignCategory, Env> = a
   const target = await moneyCategory(db, budgetId, categoryId);
   if (target.readyToAssign) throw new AppError(404, "NOT_FOUND", "Category not found");
   await assertMonthInRange(db, budgetId, month, today);
+  await prefetchTargetRates(db, c.var.deps, budgetId, today);
 
   await db.transaction(async (tx) => {
     const current = await assignedAmount(tx, categoryId, month, { lock: true });
@@ -1197,6 +1211,7 @@ export const moveMoneyHandler: RouteHandler<typeof moveMoney, Env> = async (c) =
   if (value <= 0n) throw new AppError(400, "BAD_REQUEST", "Move a positive amount");
   await assertMonthInRange(db, budgetId, month, today);
   if (fromMonth !== month) await assertMonthInRange(db, budgetId, fromMonth, today);
+  await prefetchTargetRates(db, c.var.deps, budgetId, today);
 
   // Moving money changes what each side has assigned; Ready to Assign follows from that. Covering
   // from a later month takes it off that month's Assigned (YNAB, 2026-10-14, "x132 Order": $2.00

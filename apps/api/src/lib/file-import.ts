@@ -20,6 +20,7 @@ import {
 } from "../routes/transactions/rules";
 import { budgetCurrencyOf, type FxDeps, syncBases, toBase } from "./base-amount";
 import { AppError } from "./errors";
+import { prefetchRates } from "./fx";
 import { type Db, findOrCreatePayee, insertTransaction, internalCategoryId } from "./ledger";
 import { payeeCategories } from "./payee-categories";
 
@@ -65,6 +66,12 @@ export async function importTransactions(
   rows: readonly ImportRow[],
 ): Promise<ImportResult> {
   const ids = importIds(rows);
+  // The rows' rates, before anything is written (EVERYCENT-201).
+  await prefetchRates(tx, fx, {
+    budgetId,
+    currencies: [account.currency],
+    dates: rows.filter((r) => r.amount !== 0n).map((r) => r.date),
+  });
   // Claim the ids before adding anything: a concurrent import of the same rows waits on this
   // transaction's insert and then conflicts, so each id is taken in once.
   const unique = [...new Set(ids)];
