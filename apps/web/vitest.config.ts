@@ -1,4 +1,5 @@
 import { globSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { defineConfig, mergeConfig } from "vitest/config";
 import viteConfig from "./vite.config";
 
@@ -10,8 +11,10 @@ const TESTS = "src/**/*.test.{ts,tsx}";
  * the rest share their worker's modules, which skips re-importing React, Radix and the app for
  * every file (~3x faster). In a shared worker such a replacement would leak into the next file.
  */
-const isolated = globSync(TESTS).filter((file) =>
-  /\bvi\.(mock|doMock|hoisted|stubGlobal|useFakeTimers)\(/.test(readFileSync(file, "utf8")),
+const isolated = globSync(TESTS, { cwd: import.meta.dirname }).filter((file) =>
+  /\bvi\.(mock|doMock|hoisted|stubGlobal|useFakeTimers)\(/.test(
+    readFileSync(join(import.meta.dirname, file), "utf8"),
+  ),
 );
 
 export default mergeConfig(
