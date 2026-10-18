@@ -94,7 +94,7 @@ export function PayeeCategorizationSection({
                 how the{" "}
                 <button
                   type="button"
-                  className="text-primary underline underline-offset-4 hover:no-underline"
+                  className="text-primary-text underline underline-offset-4 hover:no-underline"
                   onClick={() => setShowing(true)}
                 >
                   last 3 transactions

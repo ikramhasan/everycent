@@ -26,16 +26,20 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-input outline-none group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-[state=checked]:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground group-has-[:focus-visible]/field-label:data-[state=checked]:border-primary dark:data-[state=checked]:bg-primary",
+        // Same skins as Checkbox: raised secondary when off, the default
+        // button fading in on ::before when on.
+        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-[color-mix(in_oklch,var(--input),var(--foreground)_48%)] bg-linear-to-b from-background to-secondary shadow-[0_1px_2px_rgb(0_0_0/0.06),inset_0_-1px_0_rgb(0_0_0/0.03)] transition-[border-color,box-shadow,scale] duration-150 ease-out outline-none group-has-[:focus-visible]/field-label:ring-0 before:absolute before:-inset-px before:rounded-full before:bg-linear-to-b before:from-[color-mix(in_oklch,var(--primary),white_15%)] before:to-primary before:opacity-0 before:shadow-[inset_0_1px_0_rgb(255_255_255/0.22)] before:transition-opacity before:duration-150 before:ease-out after:absolute after:-inset-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:active:scale-100 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:border-[color-mix(in_oklch,var(--input),var(--foreground)_35%)] dark:from-[color-mix(in_oklch,var(--secondary),var(--foreground)_4%)] dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.06)] dark:aria-invalid:ring-destructive/40 data-[state=checked]:border-[color-mix(in_oklch,var(--primary),black_15%)] data-[state=checked]:shadow-[0_1px_2px_rgb(30_60_160/0.28)] data-[state=checked]:before:opacity-100 dark:data-[state=checked]:shadow-[0_1px_2px_rgb(0_0_0/0.45)]",
         className,
       )}
       {...props}
     >
       <RadioGroupPrimitive.Indicator
         data-slot="radio-group-indicator"
-        className="flex size-4 items-center justify-center"
+        forceMount
+        className="relative flex size-full items-center justify-center data-[state=unchecked]:*:scale-50 data-[state=unchecked]:*:opacity-0 data-[state=unchecked]:*:duration-100 motion-reduce:*:scale-100"
       >
-        <span className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground" />
+        {/* The dot grows in from half size; it never starts from nothing. */}
+        <span className="size-1.5 rounded-full bg-primary-foreground shadow-[0_1px_1px_rgb(0_0_0/0.15)] transition-[scale,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );

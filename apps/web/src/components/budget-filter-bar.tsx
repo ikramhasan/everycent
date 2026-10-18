@@ -11,7 +11,7 @@ export interface OverflowView {
 
 /** A view as a text tab; the trigger of the Views Menu ("More") matches it. */
 export const TAB =
-  "h-9 rounded-none border-transparent border-b-2 bg-transparent px-2 font-medium text-muted-foreground text-sm transition-colors duration-150 hover:bg-transparent hover:text-foreground data-[state=on]:border-current data-[state=on]:bg-transparent data-[state=on]:text-foreground";
+  "h-9 rounded-none before:hidden border-transparent border-b-2 bg-transparent px-2 font-medium text-muted-foreground text-sm transition-colors duration-150 hover:bg-transparent hover:text-foreground data-[state=on]:border-current data-[state=on]:bg-transparent data-[state=on]:text-foreground";
 
 /** How many views the bar shows before the rest go into "More". */
 const BAR_VIEWS = 4;

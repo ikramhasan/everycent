@@ -16,7 +16,9 @@ function Avatar({
       data-slot="avatar"
       data-size={size}
       className={cn(
-        "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:border-border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
+        // The outline is drawn above the image, so photos never bleed into
+        // the page, like Item image tiles.
+        "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:ring-1 after:ring-black/8 after:ring-inset data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:ring-white/10",
         className,
       )}
       {...props}
@@ -42,7 +44,9 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs",
+        // The secondary Button's raised skin as a white highlight over the fill,
+        // so a plain `bg-*` recolors it. Dark adds a hairline along the top.
+        "flex size-full items-center justify-center rounded-full bg-secondary bg-linear-to-b from-white to-transparent text-sm font-medium text-muted-foreground group-data-[size=sm]/avatar:text-xs dark:from-white/6 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]",
         className,
       )}
       {...props}
@@ -55,7 +59,9 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
     <span
       data-slot="avatar-badge"
       className={cn(
-        "absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground bg-blend-color ring-2 ring-background select-none",
+        // The primary Button's lift as a white highlight over the fill, so a plain
+        // `bg-*` recolors it. A background ring cuts it out of the avatar.
+        "absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-primary bg-linear-to-b from-white/15 to-transparent text-primary-foreground ring-2 ring-background select-none",
         "group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden",
         "group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2",
         "group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2",
@@ -84,7 +90,7 @@ function AvatarGroupCount({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="avatar-group-count"
       className={cn(
-        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-muted-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
+        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary bg-linear-to-b from-white to-transparent text-sm font-medium text-muted-foreground ring-2 ring-background after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:ring-1 after:ring-black/8 after:ring-inset group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 group-has-data-[size=sm]/avatar-group:text-xs dark:from-white/6 dark:after:ring-white/10 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
         className,
       )}
       {...props}

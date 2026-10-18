@@ -384,7 +384,7 @@ export function LoanPage({
               <Link
                 to="/budgets/$budgetId"
                 params={{ budgetId: budget.id }}
-                className="font-medium text-primary hover:underline"
+                className="font-medium text-primary-text hover:underline"
               >
                 {paired.group}: {paired.name}
               </Link>
@@ -399,7 +399,7 @@ export function LoanPage({
             {paired.target?.cadence === "debt_monthly" ? (
               <button
                 type="button"
-                className="font-medium text-primary hover:underline"
+                className="font-medium text-primary-text hover:underline"
                 onClick={openPairedCategory}
               >
                 {formatText(paired.target.amount)} Needed Each Month
@@ -417,7 +417,7 @@ export function LoanPage({
             className="flex flex-wrap items-center gap-4 rounded-lg border px-4 py-3"
             aria-label="Pair your loan"
           >
-            <Puzzle className="size-8 text-primary" aria-hidden />
+            <Puzzle className="size-8 text-primary-text" aria-hidden />
             <div className="grid flex-1 gap-1">
               <p className="font-semibold text-sm">Pair your loan and get more out of your plan</p>
               <p className="text-muted-foreground text-sm">
@@ -805,7 +805,7 @@ export function MonthCard({
         formatDate={formatDate}
         onOpen={onOpenUpcoming}
         align="start"
-        className="text-primary"
+        className="text-primary-text"
       />{" "}
       for {format(upcomingTotal)}
     </>

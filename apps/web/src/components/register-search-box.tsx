@@ -133,7 +133,7 @@ export function RegisterSearchBox({
                   )}
                 />
               )}
-              {item.calendar && <CalendarDays className="size-4 text-primary" />}
+              {item.calendar && <CalendarDays className="size-4 text-primary-text" />}
               <span className="truncate">{item.text}</span>
             </AutocompleteItem>
           )}

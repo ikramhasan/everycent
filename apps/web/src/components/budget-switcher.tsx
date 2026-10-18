@@ -41,7 +41,7 @@ export function BudgetSwitcher({
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton size="lg">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Wallet className="size-4" />
+              <Wallet className="size-4 text-primary-foreground" />
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">{current?.name ?? "Select a budget"}</span>

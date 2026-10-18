@@ -7,7 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
-import { TableCell, TableRow } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import {
   ArrowLeftRight,
@@ -39,8 +38,16 @@ import { useUndo } from "@/lib/undo";
 import { AccountLogo } from "./accounts-nav";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, PINNED_BG, pinned } from "./register-columns";
+import { RegisterCell, RegisterRow } from "./register-table";
 import { ScheduledAttachmentCell } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
+
+/**
+ * A scheduled row's tint, on every cell (as RegisterRow paints its states), and its selected tint,
+ * which also holds on hover.
+ */
+const SCHEDULED_ROW =
+  "*:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] data-selected:*:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] data-selected:hover:*:bg-[color-mix(in_oklab,var(--primary)_14%,var(--background))]";
 
 /**
  * YNAB's "Scheduled Transactions" section at the top of a register: one row per schedule (its
@@ -385,8 +392,8 @@ export function ScheduledSection({
   const span = columns.length;
   return (
     <>
-      <TableRow className="bg-muted hover:bg-muted">
-        <TableCell colSpan={span} className="py-1.5">
+      <RegisterRow still className="bg-muted">
+        <RegisterCell colSpan={span} className="py-1.5">
           <button
             type="button"
             aria-expanded={!collapsed}
@@ -401,8 +408,8 @@ export function ScheduledSection({
               <ChevronDown className="size-4" aria-hidden />
             )}
           </button>
-        </TableCell>
-      </TableRow>
+        </RegisterCell>
+      </RegisterRow>
       {!collapsed &&
         rows.map((row) => {
           if (editing?.id === row.id) {
@@ -431,21 +438,21 @@ export function ScheduledSection({
           }
           const readOnly = row.kind === "splitTransfer";
           return [
-            <TableRow
+            <RegisterRow
               key={row.id}
               aria-label={`Scheduled: ${row.payeeName ?? "transaction"} on ${formatDate(
                 row.dateNext,
                 budget.dateFormat,
               )}`}
               data-selected={selected.has(row.id) || undefined}
-              className="bg-muted/40 data-selected:bg-primary/10"
+              className={SCHEDULED_ROW}
             >
               {columns.map((id) => {
                 const spec = COLUMN_SPECS[id];
                 const editable = !readOnly && !viewer && isEditable(id);
                 const pin = pinned(columns, id);
                 return (
-                  <TableCell
+                  <RegisterCell
                     key={id}
                     style={pin?.style}
                     className={cn(
@@ -461,10 +468,10 @@ export function ScheduledSection({
                     onClick={editable ? () => open(row) : undefined}
                   >
                     {display(row, id)}
-                  </TableCell>
+                  </RegisterCell>
                 );
               })}
-            </TableRow>,
+            </RegisterRow>,
             ...row.subtransactions.map((line) => {
               const lineAmount = BigInt(line.amount);
               const type = accountById.get(row.accountId)?.type ?? "checking";
@@ -486,13 +493,13 @@ export function ScheduledSection({
                 inflow: lineAmount > 0n ? show(lineAmount, row.currency) : "",
               };
               return (
-                <TableRow
+                <RegisterRow
                   key={`${row.id}:${line.id}`}
                   aria-label={`Split line of ${row.payeeName ?? "scheduled transaction"}`}
                   className="bg-muted/40 text-muted-foreground text-xs"
                 >
                   {columns.map((id) => (
-                    <TableCell
+                    <RegisterCell
                       key={id}
                       style={pinned(columns, id)?.style}
                       className={cn(
@@ -507,9 +514,9 @@ export function ScheduledSection({
                       onClick={isEditable(id) && !viewer ? () => open(row) : undefined}
                     >
                       {cells[id] ?? null}
-                    </TableCell>
+                    </RegisterCell>
                   ))}
-                </TableRow>
+                </RegisterRow>
               );
             }),
           ];

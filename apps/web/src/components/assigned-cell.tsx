@@ -141,7 +141,7 @@ export function AssignedCell({
                 aria-label={label}
                 onMouseDown={keepFocus}
                 onClick={() => addOperator(operator)}
-                className="grid size-7 place-items-center rounded-md border text-primary hover:bg-muted"
+                className="grid size-7 place-items-center rounded-md border text-primary-text hover:bg-muted"
               >
                 <Icon className="size-3.5" />
               </button>

@@ -92,14 +92,16 @@ const PINNED: readonly ColumnId[] = ["cleared", "actions"];
  * finds the classes.
  */
 export const PINNED_BG = {
-  /** Transaction and split-line rows: plain, hovered, expanded (a split), selected, jumped to. */
-  row: "bg-background [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))] [tr:has([aria-expanded=true])>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))] [tr[data-state=selected]>&]:bg-muted [tr[data-highlighted]>&]:animate-[row-highlight-pinned_2.5s_ease-out]",
+  /**
+   * Transaction and split-line rows at rest, and jumped to. Hover, an open menu and selection come
+   * from RegisterRow, which paints them on every cell in opaque colours.
+   */
+  row: "bg-background [tr[data-highlighted]>&]:animate-[row-highlight-pinned_2.5s_ease-out]",
   /** The inline editor's rows (`bg-muted/50`). */
   editor: "bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]",
-  /** Scheduled rows (`bg-muted/40`, `bg-primary/10` when selected). */
-  scheduled:
-    "bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] [tr[data-selected]>&]:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]",
-  /** Header cells are already opaque (`bg-muted`); they sit above the body's pinned cells. */
+  /** Scheduled rows (`bg-muted/40`); their selected tint comes from the row (SCHEDULED_ROW in scheduled-section). */
+  scheduled: "bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))]",
+  /** Header cells are already opaque (the tray's colour); they sit above the body's pinned cells. */
   head: "z-[2]",
 };
 

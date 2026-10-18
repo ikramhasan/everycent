@@ -342,7 +342,7 @@ export function UpdateToLoanDialog({
         {step === "done" && loanId && (
           <>
             <DialogHeader className="items-center text-center">
-              <CircleCheck className="size-12 text-primary" aria-hidden />
+              <CircleCheck className="size-12 text-primary-text" aria-hidden />
               <DialogTitle>Success!</DialogTitle>
               <DialogDescription>
                 We've updated your account. You'll see your new account in the sidebar under Loans,

@@ -445,7 +445,7 @@ function CopyLink({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-primary hover:underline"
+      className="inline-flex items-center gap-1 text-primary-text hover:underline"
     >
       <Copy className="size-3" aria-hidden /> Copy and go to my plan
     </button>

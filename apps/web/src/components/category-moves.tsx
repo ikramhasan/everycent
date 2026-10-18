@@ -56,7 +56,7 @@ export function CategoryMovesButton({
               size="icon"
               aria-label={`Changes to ${categoryName}'s assigned amount this month`}
               className={cn(
-                "size-6 text-primary opacity-0 focus-visible:opacity-100 group-hover/assigned:opacity-100",
+                "size-6 text-primary-text opacity-0 focus-visible:opacity-100 group-hover/assigned:opacity-100",
                 (visible || open) && "opacity-100",
               )}
             >
