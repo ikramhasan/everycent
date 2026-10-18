@@ -552,7 +552,7 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
   const { today } = c.req.valid("query");
   const { workingBalance, date = today ?? serverToday(), starred, ...body } = c.req.valid("json");
   const { db } = c.var.deps;
-  await loadBudgetAccess(
+  const { budget } = await loadBudgetAccess(
     c,
     budgetId,
     workingBalance === undefined
@@ -593,8 +593,9 @@ export const updateAccountHandler: RouteHandler<typeof updateAccount, Env> = asy
       optionalBigInt(body.minimumPayment) !== account.minimumPayment) ||
     (escrowAmount !== undefined && escrowAmount !== account.escrowAmount);
 
-  // The adjustment's rate, before the transaction locks anything (EVERYCENT-247).
-  if (workingBalance !== undefined) {
+  // The adjustment's rate, before the transaction locks anything (EVERYCENT-247); an account in
+  // the budget's currency needs none.
+  if (workingBalance !== undefined && account.currency !== budget.currency) {
     const working = (await accountBalances(db, budgetId, date)).get(accountId)?.working ?? 0n;
     if (BigInt(workingBalance) !== working) {
       await prefetchRates(db, c.var.deps, { budgetId, accountIds: [accountId], dates: [date] });
@@ -746,11 +747,17 @@ export const reconcileAccountHandler: RouteHandler<typeof reconcileAccount, Env>
   const body = c.req.valid("json");
   const { date } = body;
   const { db } = c.var.deps;
-  await loadBudgetAccess(c, budgetId, { transaction: ["create", "update"] });
-  // The adjustment's rate, before the transaction locks the account (EVERYCENT-247).
-  const planned = await planReconcile(db, await findAccount(db, budgetId, accountId), body);
-  if (planned.adjustment !== 0n) {
-    await prefetchRates(db, c.var.deps, { budgetId, accountIds: [accountId], dates: [date] });
+  const { budget } = await loadBudgetAccess(c, budgetId, {
+    transaction: ["create", "update"],
+  });
+  // The adjustment's rate, before the transaction locks the account (EVERYCENT-247); an account
+  // in the budget's currency needs none.
+  const planning = await findAccount(db, budgetId, accountId);
+  if (planning.currency !== budget.currency) {
+    const planned = await planReconcile(db, planning, body);
+    if (planned.adjustment !== 0n) {
+      await prefetchRates(db, c.var.deps, { budgetId, accountIds: [accountId], dates: [date] });
+    }
   }
   await db.transaction(async (tx) => {
     const [account] = await tx
