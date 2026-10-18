@@ -150,6 +150,7 @@ import {
 } from "@/lib/transactions";
 import { type UndoCommand, useUndo } from "@/lib/undo";
 import { useViewportWidth } from "@/lib/use-viewport-width";
+import { AccountLogo } from "./accounts-nav";
 import { CellEditor, type CellExit } from "./cell-editor";
 import { ChangeHistoryDialog } from "./change-history-dialog";
 import { FileImportButton } from "./file-import";
@@ -1753,7 +1754,12 @@ export function Register({
       case "attachment":
         return <AttachmentCell budgetId={budget.id} transaction={t} readOnly={readOnly} />;
       case "account":
-        return t.accountName;
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <AccountLogo name={t.accountName} logo={accountById.get(t.accountId)?.logo ?? null} />
+            <span className="truncate">{t.accountName}</span>
+          </span>
+        );
       case "date":
         return formatDate(t.date);
       case "payee":
