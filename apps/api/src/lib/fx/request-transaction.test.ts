@@ -1,6 +1,8 @@
 import { sql } from "@everycent/db";
+import { CURRENCY_CODES } from "@everycent/engine";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, resetDatabase, signUp } from "../../../test/helpers";
+import { deferFxCacheWrites, resolveRate } from ".";
 import type { FakeFxProvider } from "./fake";
 
 // EVERYCENT-201: a write fetches its exchange rates before it locks anything, and caches them
@@ -81,6 +83,28 @@ describe("exchange rates in a write's transaction", () => {
       release();
     }
     expect((await revaluing).status).toBe(200);
+  });
+
+  it("caches more rates than one statement can take", async () => {
+    const { base } = await setup();
+    const budgetId = base.split("/").at(-1) as string;
+    const quotes = Object.fromEntries(
+      CURRENCY_CODES.filter((c) => c !== "EUR").map((c) => [c, "1.5"]),
+    );
+    // Each date answers on itself, so every one is a fetch of its own.
+    const dates = Array.from({ length: 70 }, (_, i) =>
+      new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10),
+    );
+    for (const date of dates) fx.seed(date, "EUR", quotes);
+    await deferFxCacheWrites(db, async () => {
+      for (const date of dates) {
+        await resolveRate(db, { fxProviders }, { budgetId, from: "EUR", to: "USD", date });
+      }
+    });
+    const rows = Object.keys(quotes).length * dates.length;
+    expect(rows).toBeGreaterThan(65_534 / 7);
+    const [cached] = await db.execute<{ n: number }>(sql`select count(*)::int as n from fx_rate`);
+    expect(cached?.n).toBe(rows);
   });
 
   it("keeps the rates a failed write fetched", async () => {

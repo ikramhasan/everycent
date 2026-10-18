@@ -293,7 +293,13 @@ export async function deferFxCacheWrites<T>(db: Db, run: () => Promise<T>): Prom
   } finally {
     if (rows.length > 0) {
       try {
-        await db.insert(fxRate).values(rows).onConflictDoNothing();
+        // One statement takes 65,534 parameters at most (7 per row); a long import fetches more.
+        for (let i = 0; i < rows.length; i += 5000) {
+          await db
+            .insert(fxRate)
+            .values(rows.slice(i, i + 5000))
+            .onConflictDoNothing();
+        }
       } catch (error) {
         log.warn("Couldn't cache fetched FX rates", { count: rows.length }, error);
       }

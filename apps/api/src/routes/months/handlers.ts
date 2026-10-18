@@ -626,11 +626,6 @@ async function targetRates(
 }
 
 /**
- * Every category's target in the budget's currency. A target in its own currency asks in the
- * budget's: its amount converted at today's rate, rounded up, before any target math. Without a
- * rate its need is unknown, so it's left out (`rateMissing`).
- */
-/**
  * Looks up today's rates for targets in other currencies before a write (EVERYCENT-201), so the
  * month it answers with doesn't fetch them while its changes hold locks.
  */
@@ -643,6 +638,11 @@ async function prefetchTargetRates(db: Db, deps: FxDeps, budgetId: string, today
   await prefetchRates(db, deps, { budgetId, currencies, dates: [today], today });
 }
 
+/**
+ * Every category's target in the budget's currency. A target in its own currency asks in the
+ * budget's: its amount converted at today's rate, rounded up, before any target math. Without a
+ * rate its need is unknown, so it's left out (`rateMissing`).
+ */
 export async function loadTargets(
   db: Db,
   deps: FxDeps,
