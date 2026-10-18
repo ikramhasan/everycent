@@ -8,11 +8,21 @@ const EnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().default(3000),
+    /**
+     * `self-hosted` (default) or `cloud`, the hosted everycent we run. Cloud requires what running
+     * the service needs (email); self-hosted leaves those optional (`isCloud`).
+     */
+    EVERYCENT_DEPLOYMENT: optional(z.enum(["self-hosted", "cloud"])).transform(
+      (v) => v ?? "self-hosted",
+    ),
     DATABASE_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
     BETTER_AUTH_URL: z.url(),
     WEB_ORIGIN: z.url(),
-    /** Resend API key. Without it, development logs emails to the console instead of sending. */
+    /**
+     * Resend API key. Without it, development logs emails to the console instead of sending, and a
+     * self-hosted production server sends none (`createEmailSender`). Cloud requires it.
+     */
     RESEND_API_KEY: optional(z.string().startsWith("re_", "must be a Resend API key (re_…)")),
     /**
      * Sender: an address (`hello@example.com`), a display form (`everycent <hello@example.com>`),
@@ -71,16 +81,28 @@ const EnvSchema = z
           ctx.addIssue({ code: "custom", path: [key], message: "required with S3_BUCKET" });
       }
     }
-    if (env.NODE_ENV !== "production") return;
+    if (env.RESEND_API_KEY && !env.FROM_EMAIL) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["FROM_EMAIL"],
+        message: "required with RESEND_API_KEY",
+      });
+    }
+    if (env.NODE_ENV !== "production" || env.EVERYCENT_DEPLOYMENT !== "cloud") return;
     for (const key of ["RESEND_API_KEY", "FROM_EMAIL"] as const) {
       if (!env[key])
-        ctx.addIssue({ code: "custom", path: [key], message: "required in production" });
+        ctx.addIssue({ code: "custom", path: [key], message: "required in cloud production" });
     }
   });
 
 export type Env = z.infer<typeof EnvSchema>;
 
 type EnvSource = Record<string, string | undefined>;
+
+/** The hosted everycent we run, rather than a self-hosted server. */
+export function isCloud(env: Pick<Env, "EVERYCENT_DEPLOYMENT">): boolean {
+  return env.EVERYCENT_DEPLOYMENT === "cloud";
+}
 
 /**
  * A Railway PR environment: a deploy Railway made from a git branch other than `main`, the only

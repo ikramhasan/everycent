@@ -11,6 +11,7 @@ import { PageTitle } from "@/components/page-title";
 import { SignInForm } from "@/components/sign-in-form";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { useInstance } from "@/lib/instance";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { refreshSession, sessionQueryOptions } from "@/lib/session";
 
@@ -32,6 +33,7 @@ function SignInPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { email } = useInstance();
   // Set when the password was right but the account has two-step verification on.
   const [secondStep, setSecondStep] = useState(false);
 
@@ -57,12 +59,14 @@ function SignInPage() {
     >
       <SignInForm
         forgotPassword={
-          <Link
-            to="/forgot-password"
-            className="text-muted-foreground text-sm underline-offset-4 hover:underline"
-          >
-            Forgot password?
-          </Link>
+          email && (
+            <Link
+              to="/forgot-password"
+              className="text-muted-foreground text-sm underline-offset-4 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          )
         }
         onSubmit={async (values) => {
           const { data, error } = await authClient.signIn.email(values);

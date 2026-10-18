@@ -51,7 +51,7 @@ export const getMeHandler: Handler<typeof getMe> = (c) => {
 };
 
 export const changeEmailHandler: Handler<typeof changeEmail> = async (c) => {
-  const { db, auth } = c.var.deps;
+  const { db, auth, email } = c.var.deps;
   const { newEmail, password } = c.req.valid("json");
   const headers = c.req.raw.headers;
 
@@ -66,6 +66,20 @@ export const changeEmailHandler: Handler<typeof changeEmail> = async (c) => {
   }
   if (newEmail.toLowerCase() === c.var.user.email.toLowerCase()) {
     throw new AppError(400, "SAME_EMAIL", "That's already the account's email address");
+  }
+  if (!email) {
+    // No inbox to approve or confirm with: the password is the check, as at sign-up.
+    const address = newEmail.toLowerCase();
+    const [taken] = await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(sql`lower(${userTable.email}) = ${address}`);
+    if (taken) throw new AppError(409, "EMAIL_TAKEN", "Another account already uses that address");
+    await db
+      .update(userTable)
+      .set({ email: address, emailVerified: true })
+      .where(eq(userTable.id, c.var.user.id));
+    return c.json({ status: "changed" as const, email: address }, 200);
   }
   await auth.api.changeEmail({ body: { newEmail }, headers });
   return c.json({ status: "approval_sent" as const }, 202);

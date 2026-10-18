@@ -38,11 +38,12 @@ import { Skeleton } from "@everycent/ui/components/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { $api } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage, invalidateBudgets } from "@/lib/budgets";
+import { useInstance } from "@/lib/instance";
 import { pictureSrc } from "@/lib/pictures";
 import { sessionQueryOptions } from "@/lib/session";
 
@@ -56,9 +57,15 @@ export function BudgetMembers() {
     "post",
     "/v1/budgets/{budgetId}/invitations/{invitationId}/resend",
   );
+  const newLink = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/invitations/{invitationId}/link",
+  );
   const cancel = $api.useMutation("delete", "/v1/budgets/{budgetId}/invitations/{invitationId}");
   const me = queryClient.getQueryData(sessionQueryOptions.queryKey)?.user;
+  const { email: sendsEmail } = useInstance();
   const [inviting, setInviting] = useState(false);
+  const [sharing, setSharing] = useState<InvitationWithLink | null>(null);
   const owner = budget.role === "owner";
 
   const refresh = () =>
@@ -116,28 +123,50 @@ export function BudgetMembers() {
                         <p className="truncate font-medium text-sm">{i.name}</p>
                         <p className="truncate text-muted-foreground text-xs">
                           {i.email} · {i.role === "viewer" ? "Can view" : "Can edit"} ·{" "}
+                          {i.delivery === "link" && "Link shared · "}
                           {i.expired
                             ? "Expired"
                             : `Expires ${formatDate(i.expiresAt.slice(0, 10))}`}
                         </p>
                       </div>
+                      {sendsEmail && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={resend.isPending}
+                          onClick={async () => {
+                            try {
+                              await resend.mutateAsync({
+                                params: { path: { ...path, invitationId: i.id } },
+                              });
+                              toast.success(`Invitation sent again to ${i.email}`);
+                            } catch (e) {
+                              toast.error(apiErrorMessage(e, "Couldn't resend the invitation."));
+                            }
+                            await refresh();
+                          }}
+                        >
+                          Resend Invite
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={resend.isPending}
+                        disabled={newLink.isPending}
                         onClick={async () => {
                           try {
-                            await resend.mutateAsync({
-                              params: { path: { ...path, invitationId: i.id } },
-                            });
-                            toast.success(`Invitation sent again to ${i.email}`);
+                            setSharing(
+                              await newLink.mutateAsync({
+                                params: { path: { ...path, invitationId: i.id } },
+                              }),
+                            );
                           } catch (e) {
-                            toast.error(apiErrorMessage(e, "Couldn't resend the invitation."));
+                            toast.error(apiErrorMessage(e, "Couldn't make a link."));
                           }
                           await refresh();
                         }}
                       >
-                        Resend Invite
+                        Get Link
                       </Button>
                       <Button
                         size="sm"
@@ -180,18 +209,21 @@ export function BudgetMembers() {
       {inviting && (
         <InviteDialog
           onClose={() => setInviting(false)}
-          onInvited={async (email) => {
+          onInvited={async (invitation) => {
             setInviting(false);
-            toast.success(`Invitation sent to ${email}`);
+            if (invitation.link) setSharing(invitation);
+            else toast.success(`Invitation sent to ${invitation.email}`);
             await refresh();
           }}
         />
       )}
+      {sharing && <ShareLinkDialog invitation={sharing} onClose={() => setSharing(null)} />}
     </Card>
   );
 }
 
 export type Member = components["schemas"]["BudgetMember"];
+type InvitationWithLink = components["schemas"]["BudgetInvitationWithLink"];
 type MemberRole = components["schemas"]["ChangeBudgetMemberRole"]["role"];
 
 /** YNAB calls everyone a plan is shared with a member; a viewer is an everycent extra. */
@@ -268,19 +300,75 @@ function Avatar({
   );
 }
 
+/**
+ * An invitation link for the owner to send however they like (an everycent extra: YNAB only
+ * emails invitations). It's shown once: the server keeps only its hash.
+ */
+function ShareLinkDialog({
+  invitation,
+  onClose,
+}: {
+  invitation: InvitationWithLink;
+  onClose: () => void;
+}) {
+  const { formatDate } = useBudget();
+  const link = invitation.link ?? "";
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Share the Invitation Link</DialogTitle>
+          <DialogDescription>
+            Send this link to {invitation.name}. To join, they sign in or create an account with{" "}
+            <span className="break-all font-medium text-foreground">{invitation.email}</span>. It
+            works until {formatDate(invitation.expiresAt.slice(0, 10))} and replaces any earlier
+            link for this invitation.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2">
+          <Input
+            readOnly
+            value={link}
+            aria-label="Invitation link"
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <Button
+            variant="outline"
+            onClick={() => {
+              void navigator.clipboard.writeText(link);
+              toast.success("Invitation link copied");
+            }}
+          >
+            Copy
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function InviteDialog({
   onClose,
   onInvited,
 }: {
   onClose: () => void;
-  onInvited: (email: string) => Promise<void>;
+  onInvited: (invitation: InvitationWithLink) => Promise<void>;
 }) {
   const { budget } = useBudget();
+  const { email: sendsEmail } = useInstance();
   const invite = $api.useMutation("post", "/v1/budgets/{budgetId}/invitations");
   const [error, setError] = useState<string | null>(null);
+  // Set by "Get Link"; Enter and "Send Invite" email the invitation.
+  const linkAsked = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Without email, only links.
+    const viaLink = !sendsEmail || linkAsked.current;
+    linkAsked.current = false;
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
@@ -288,11 +376,12 @@ function InviteDialog({
     if (!name) return setError("Enter their first name.");
     setError(null);
     try {
-      await invite.mutateAsync({
-        params: { path: { budgetId: budget.id } },
-        body: { name, email, role },
-      });
-      await onInvited(email);
+      await onInvited(
+        await invite.mutateAsync({
+          params: { path: { budgetId: budget.id } },
+          body: { name, email, role, sendEmail: !viaLink },
+        }),
+      );
     } catch (e) {
       setError(apiErrorMessage(e, "Couldn't send the invitation. Try again."));
     }
@@ -305,7 +394,9 @@ function InviteDialog({
           <DialogHeader>
             <DialogTitle>Invite Member</DialogTitle>
             <DialogDescription>
-              They'll get an email with a link to join “{budget.name}”. It works for 14 days.
+              {sendsEmail
+                ? `They'll get an email with a link to join “${budget.name}”, or you can get the link and send it yourself. It works for 14 days.`
+                : `You'll get a link to send them to join “${budget.name}”. It works for 14 days.`}
             </DialogDescription>
           </DialogHeader>
           <Field>
@@ -328,8 +419,21 @@ function InviteDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
+            {sendsEmail && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={invite.isPending}
+                onClick={(e) => {
+                  linkAsked.current = true;
+                  e.currentTarget.form?.requestSubmit();
+                }}
+              >
+                Get Link
+              </Button>
+            )}
             <Button type="submit" disabled={invite.isPending}>
-              Invite
+              {sendsEmail ? "Send Invite" : "Get Link"}
             </Button>
           </DialogFooter>
         </form>

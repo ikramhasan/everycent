@@ -89,8 +89,18 @@ async function addressTakenByOther(db: Database, from: string, to: string) {
   return owner !== undefined && holder !== undefined && holder.id !== owner.id;
 }
 
-export function createAuth(db: Database, env: Env, email: EmailSender, options: AuthOptions = {}) {
+/**
+ * `email` is null on a server that sends no email (`createEmailSender`). Addresses are then taken
+ * as given: accounts start confirmed and sign in straight after sign-up, and there's no reset link.
+ */
+export function createAuth(
+  db: Database,
+  env: Env,
+  email: EmailSender | null,
+  options: AuthOptions = {},
+) {
   const web = env.WEB_ORIGIN;
+  const sendsEmail = email !== null;
   const logFailure = (message: EmailMessage, e: unknown) =>
     log.error("Email not queued", { kind: message.kind }, e);
   /**
@@ -101,6 +111,7 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
    * Tests await, so the job is queued before they read the outbox.
    */
   const deliver = async (message: EmailMessage) => {
+    if (!email) return;
     if (env.NODE_ENV === "test") return email.send(message);
     void email.send(message).catch((e) => logFailure(message, e));
   };
@@ -127,14 +138,18 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       enabled: true,
       // No session until the address is confirmed. This also makes a sign-up with a taken
       // address answer exactly like a new one, so sign-up can't be used to find accounts.
-      requireEmailVerification: true,
-      autoSignIn: false,
+      // Without email there's nothing to confirm with, so sign-up signs straight in.
+      requireEmailVerification: sendsEmail,
+      autoSignIn: !sendsEmail,
       ...(options.password ? { password: options.password } : {}),
       // Better Auth's links go to its own GET endpoints; ours go to the web app, which only
-      // acts when the person clicks (see email/templates.ts).
-      sendResetPassword: async ({ user, token }) => {
-        await deliver(emails.resetPassword(user.email, web, token));
-      },
+      // acts when the person clicks (see email/templates.ts). Without email, Better Auth answers
+      // a reset request with an error.
+      ...(sendsEmail && {
+        sendResetPassword: async ({ user, token }: { user: { email: string }; token: string }) => {
+          await deliver(emails.resetPassword(user.email, web, token));
+        },
+      }),
       resetPasswordTokenExpiresIn: LINK_LIFETIME_SECONDS,
       revokeSessionsOnPasswordReset: true,
       onPasswordReset: async ({ user }) => {
@@ -154,8 +169,8 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
             : emails.verifyEmail(user.email, web, token);
         await deliver(message);
       },
-      sendOnSignUp: true,
-      sendOnSignIn: true,
+      sendOnSignUp: sendsEmail,
+      sendOnSignIn: sendsEmail,
       // Confirming proves the inbox, not the password: sign in afterwards as usual.
       autoSignInAfterVerification: false,
       expiresIn: LINK_LIFETIME_SECONDS,
@@ -176,7 +191,12 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
     // the user's own browser then loads, so they can't set it.
     databaseHooks: {
       user: {
-        create: { before: async (user) => ({ data: { ...user, image: null } }) },
+        // Without email, an address can't be confirmed, so it starts confirmed.
+        create: {
+          before: async (user) => ({
+            data: { ...user, image: null, emailVerified: sendsEmail ? user.emailVerified : true },
+          }),
+        },
         // Better Auth merges what this returns over its input, so the field is cleared to
         // undefined (left unchanged) rather than left out.
         update: { before: async (data) => ({ data: { ...data, image: undefined } }) },
@@ -235,6 +255,15 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
         if (ctx.path === "/change-password") {
           const user = ctx.context.session?.user;
           if (user) await notify(emails.passwordChanged(user.email, web));
+        }
+        // An account left unconfirmed from when the server sent email can't be confirmed now:
+        // signing in confirms it, as new accounts start (see `databaseHooks`).
+        const signedIn = ctx.context.newSession?.user;
+        if (!sendsEmail && ctx.path === "/sign-in/email" && signedIn && !signedIn.emailVerified) {
+          await db
+            .update(schema.user)
+            .set({ emailVerified: true })
+            .where(sql`${schema.user.id} = ${signedIn.id}`);
         }
         // An agent shows as connected once approved, before it's first used.
         if (ctx.path === "/oauth2/consent" || ctx.path === "/agent/approve-capability") {

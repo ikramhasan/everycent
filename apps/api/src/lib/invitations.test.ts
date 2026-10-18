@@ -125,3 +125,24 @@ describe("invitation reminder (EVERYCENT-125)", () => {
     }
   });
 });
+
+describe("invitation reminder: shared links", () => {
+  it("sends none for an invitation whose link the owner shares, which keeps working", async () => {
+    const owner = await signUp(app, { name: "Owner" });
+    const budget = await createBudget(app, owner.cookie);
+    const email = `pat-${crypto.randomUUID()}@example.com`;
+    const res = await post(`/v1/budgets/${budget.id}/invitations`, owner.cookie, {
+      name: "Pat",
+      email,
+      sendEmail: false,
+    });
+    const { id, link } = (await res.json()) as { id: string; link: string };
+
+    await expiresIn(id, 2);
+    await remind();
+    expect(await emailsTo(app, email, "budget-invitation-reminder")).toHaveLength(0);
+    const token = new URLSearchParams(new URL(link).hash.slice(1)).get("token");
+    const pat = await signUp(app, { email, name: "Pat" });
+    expect((await post("/v1/invitations/accept", pat.cookie, { token })).status).toBe(200);
+  });
+});

@@ -63,15 +63,18 @@ export function createTestApp({
   ynab,
   storage = new MemoryStorage(),
   envOverrides = {},
+  sendsEmail = true,
   ...authOptions
 }: Partial<Pick<AppDeps, "serverDate" | "fxProviders" | "ynab">> & {
   storage?: ObjectStorage | null;
+  /** False: a server that sends no email (self-hosted production without Resend). */
+  sendsEmail?: boolean;
 } & AuthOptions & { envOverrides?: Partial<Env> } = {}) {
   const env = { ...testEnv(), ...envOverrides };
   const { db, listen, close } = createDb(env.DATABASE_URL, { max: 2 });
   // Real throttling over an in-memory outbox, so tests can read what was sent.
   const outbox = new MemoryEmailSender();
-  const email = new ThrottledEmailSender(outbox, db);
+  const email = sendsEmail ? new ThrottledEmailSender(outbox, db) : null;
   // The real queue, without a worker: tests run queued jobs on demand (`runJobs`).
   const jobs = new Jobs(env.DATABASE_URL, { worker: false, max: 2 });
   // Tests pick their own `today`, so the server's date doesn't bound it unless a test sets one.
@@ -80,7 +83,7 @@ export function createTestApp({
     env,
     email,
     jobs,
-    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env), {
+    auth: createAuth(db, env, email && new QueuedEmailSender(jobs, db, env), {
       password: testPassword,
       ...authOptions,
     }),
@@ -176,7 +179,8 @@ export async function resetDatabase(db: Database): Promise<void> {
 
 /**
  * Signs up, confirms the address through the emailed link and signs in, the way a person would
- * (sign-up alone gives no session until the email is confirmed).
+ * (sign-up alone gives no session until the email is confirmed). On a server that sends no email
+ * (`sendsEmail: false`), signs straight in.
  */
 export async function signUp(
   app: App,
@@ -190,6 +194,9 @@ export async function signUp(
     body: JSON.stringify({ email, password, name: input.name ?? "Test User" }),
   });
   if (res.status !== 200) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`);
+  // Without email there's nothing to confirm.
+  if (!appDeps.get(app)?.email)
+    return { cookie: await signIn(app, email, password), email, password };
   const sent = (await emailsTo(app, email, "verify-email")).at(-1);
   if (!sent) throw new Error(`no verification email for ${email}`);
   const verified = await app.request(

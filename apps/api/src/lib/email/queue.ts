@@ -31,6 +31,11 @@ export const sendQueuedEmail: JobHandler<"email.send"> = async (deps, { sealed }
     log.error("Queued email dropped: it can't be opened with the current secret", {}, error);
     return;
   }
+  // Queued before the server stopped sending email: nothing can deliver it now.
+  if (!deps.email) {
+    log.warn("Queued email dropped: this server sends no email");
+    return;
+  }
   await deps.email.send(message);
 };
 
