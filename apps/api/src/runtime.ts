@@ -19,13 +19,14 @@ export async function createRuntime(env: Env, { worker }: { worker: boolean }) {
   const { db, listen, close: closeDb } = createDb(env.DATABASE_URL);
   const jobs = new Jobs(env.DATABASE_URL, { worker });
   await jobs.start();
+  const email = createEmailSender(env, db);
   const deps: AppDeps = {
     db,
     env,
-    email: createEmailSender(env, db),
+    email,
     jobs,
     // Better Auth's emails are queued like every other, so a failed send is retried.
-    auth: createAuth(db, env, new QueuedEmailSender(jobs, db, env)),
+    auth: createAuth(db, env, email && new QueuedEmailSender(jobs, db, env)),
     changes: new ChangeBus(listen),
     fxProviders: defaultFxProviders(),
     storage: createStorage(env),

@@ -113,13 +113,17 @@ export function fromAddress(fromEmail: string): string {
   return fromEmail.includes("@") ? fromEmail : `everycent <no-reply@${fromEmail}>`;
 }
 
-/** Resend when configured; otherwise the console (development) or an in-memory outbox (tests). */
-export function createEmailSender(env: Env, db: Database): EmailSender {
+/**
+ * Resend when configured; otherwise the console (development) or an in-memory outbox (tests). A
+ * production server without Resend (self-hosted only: cloud requires it) sends no email: null, and
+ * whatever needs an inbox is off or works without one (`GET /v1/instance` tells the web app).
+ */
+export function createEmailSender(env: Env, db: Database): EmailSender | null {
   let sender: EmailSender;
   if (env.NODE_ENV === "test") sender = new MemoryEmailSender();
-  else if (env.RESEND_API_KEY) {
-    if (!env.FROM_EMAIL) throw new Error("FROM_EMAIL is required when RESEND_API_KEY is set");
+  else if (env.RESEND_API_KEY && env.FROM_EMAIL) {
     sender = new ResendEmailSender(env.RESEND_API_KEY, fromAddress(env.FROM_EMAIL));
-  } else sender = new ConsoleEmailSender();
+  } else if (env.NODE_ENV === "development") sender = new ConsoleEmailSender();
+  else return null;
   return new ThrottledEmailSender(sender, db);
 }

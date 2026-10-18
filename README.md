@@ -331,6 +331,19 @@ Off by default, per-user toggle, clear data-usage notice, no data sent unless en
 - [ ] Native mobile apps (or Capacitor wrapper around the PWA)
 - [ ] Billing / subscriptions (if hosted as a service)
 
+## Self-hosting
+
+The Docker image (`Dockerfile`) runs the API and the web app on one origin and migrates the
+database on deploy (`node dist/migrate.mjs`). It needs `DATABASE_URL`, `BETTER_AUTH_SECRET`,
+`BETTER_AUTH_URL` and `WEB_ORIGIN`; everything else in `.env.example` is optional.
+
+- **Email is optional.** With `RESEND_API_KEY` and `FROM_EMAIL`, everycent confirms addresses,
+  sends password reset links and emails invitations. Without them it sends nothing: accounts are
+  usable straight after sign-up, an email change applies at once, and invitations are links you
+  share yourself (owners can also share links on a server that sends email).
+- `EVERYCENT_DEPLOYMENT` stays unset (`self-hosted`). `cloud` is the hosted everycent, which
+  requires email.
+
 ## License
 
 everycent is free software under the [GNU Affero General Public License v3.0 only](LICENSE)

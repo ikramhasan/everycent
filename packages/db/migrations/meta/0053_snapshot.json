@@ -1,6 +1,6 @@
 {
-  "id": "5793d4b7-ed40-41ab-b727-9e01161af874",
-  "prevId": "f5390fd3-3960-4b68-96cc-15670c475da7",
+  "id": "790f37cd-adf2-4b73-9550-9c9e8456284b",
+  "prevId": "59858b36-d1d6-4202-86a3-8a1772c68344",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4244,6 +4244,58 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ai_tool_run": {
+      "name": "ai_tool_run",
+      "schema": "",
+      "columns": {
+        "tool_call_id": {
+          "name": "tool_call_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "output": {
+          "name": "output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ai_tool_run_thread_id_ai_conversation_id_fk": {
+          "name": "ai_tool_run_thread_id_ai_conversation_id_fk",
+          "tableFrom": "ai_tool_run",
+          "tableTo": "ai_conversation",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.account_logo": {
       "name": "account_logo",
       "schema": "",
@@ -5641,6 +5693,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "delivery": {
+          "name": "delivery",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'email'"
         },
         "expires_at": {
           "name": "expires_at",

@@ -47,7 +47,7 @@ export const changeEmail = createRoute({
   tags: ["Users"],
   summary: "Start changing the account's email address",
   description:
-    "Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link).",
+    "Checks the current password, then emails the current address a link to approve the change; once approved, the new address gets a link to confirm it, and only then does the email change. The answer is the same whether or not the new address already has an account, so it can't be used to find accounts (an address that's taken just never gets a link). On a server that sends no email (`GET /v1/instance`), the address changes at once instead (200), unless another account has it (`EMAIL_TAKEN`).",
   security: sessionSecurity,
   middleware: [requireSession] as const,
   request: {
@@ -66,6 +66,16 @@ export const changeEmail = createRoute({
     },
   },
   responses: {
+    200: {
+      description: "Changed (a server that sends no email)",
+      content: {
+        "application/json": {
+          schema: z
+            .object({ status: z.literal("changed"), email: z.string() })
+            .openapi("ChangeEmailDone"),
+        },
+      },
+    },
     202: {
       description: "Approval link sent to the current address",
       content: {
@@ -81,6 +91,7 @@ export const changeEmail = createRoute({
     403: jsonError(
       "Wrong password (INVALID_PASSWORD), or the account's email address isn't confirmed",
     ),
+    409: jsonError("Another account has the new address (EMAIL_TAKEN; only without email)"),
     429: jsonError("Too many password attempts (RATE_LIMITED)"),
   },
 });

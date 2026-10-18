@@ -6,7 +6,7 @@ import { loadBudgetAccess } from "../../lib/budget-access";
 import { deliverEmail } from "../../lib/email/deliver";
 import { emails } from "../../lib/email/templates";
 import { AppError } from "../../lib/errors";
-import { hashToken, newInvitationToken as newToken } from "../../lib/invitations";
+import { hashToken, invitationUrl, newInvitationToken as newToken } from "../../lib/invitations";
 import type { Db, Tx } from "../../lib/ledger";
 import { pictureUrlSql } from "../../lib/member-colors";
 import type { AuthedEnv } from "../../middleware/require-auth";
@@ -16,6 +16,7 @@ import {
   type cancelInvitation,
   type changeMemberRole,
   type createInvitation,
+  type createInvitationLink,
   INVITATION_DAYS,
   type leaveBudget,
   type listMembers,
@@ -41,8 +42,16 @@ function toInvitationJson(row: InvitationRow) {
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     expired: row.expiresAt.getTime() <= Date.now(),
+    delivery: row.delivery,
   };
 }
+
+const EMAIL_DISABLED = () =>
+  new AppError(
+    409,
+    "EMAIL_DISABLED",
+    "This server doesn't send email. Share an invitation link instead.",
+  );
 
 /** People in the budget plus invitations still waiting, with the budget row locked. */
 async function headcount(tx: Tx, budgetId: string) {
@@ -125,6 +134,8 @@ export const createInvitationHandler: RouteHandler<typeof createInvitation, Env>
   const deps = c.var.deps;
   await loadBudgetAccess(c, budgetId, MANAGE);
   const email = input.email.toLowerCase();
+  if (input.sendEmail && !deps.email) throw EMAIL_DISABLED();
+  const sendEmail = input.sendEmail ?? deps.email !== null;
   const { token, tokenHash } = newToken();
   const row = await deps.db.transaction(async (tx) => {
     const people = await headcount(tx, budgetId);
@@ -171,6 +182,7 @@ export const createInvitationHandler: RouteHandler<typeof createInvitation, Env>
         role: input.role,
         status: "pending",
         tokenHash,
+        delivery: sendEmail ? "email" : "link",
         expiresAt: expiry(),
         inviterId: c.var.user.id,
       })
@@ -178,11 +190,17 @@ export const createInvitationHandler: RouteHandler<typeof createInvitation, Env>
     if (!created) throw new Error("Invitation insert returned nothing");
     return created;
   });
+  if (!sendEmail) {
+    return c.json(
+      { ...toInvitationJson(row), link: invitationUrl(deps.env.WEB_ORIGIN, token) },
+      201,
+    );
+  }
   await deliverEmail(
     deps,
     emails.budgetInvitation(email, c.var.user.email, deps.env.WEB_ORIGIN, token),
   );
-  return c.json(toInvitationJson(row), 201);
+  return c.json({ ...toInvitationJson(row), link: null }, 201);
 };
 
 async function pendingInvitation(tx: Tx, budgetId: string, invitationId: string) {
@@ -201,12 +219,19 @@ async function pendingInvitation(tx: Tx, budgetId: string, invitationId: string)
   return row;
 }
 
-export const resendInvitationHandler: RouteHandler<typeof resendInvitation, Env> = async (c) => {
-  const { budgetId, invitationId } = c.req.valid("param");
-  const deps = c.var.deps;
-  await loadBudgetAccess(c, budgetId, MANAGE);
+/**
+ * A new token and expiry for a pending invitation (the old link stops working), by the caller,
+ * delivered as `delivery` says.
+ */
+async function renewInvitation(
+  db: Db,
+  budgetId: string,
+  invitationId: string,
+  inviterId: string,
+  delivery: InvitationRow["delivery"],
+) {
   const { token, tokenHash } = newToken();
-  const row = await deps.db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => {
     const existing = await pendingInvitation(tx, budgetId, invitationId);
     // An expired invitation stopped counting toward the limit, so it has to fit again.
     if (existing.expiresAt.getTime() <= Date.now()) {
@@ -215,17 +240,48 @@ export const resendInvitationHandler: RouteHandler<typeof resendInvitation, Env>
     }
     const [updated] = await tx
       .update(budgetInvitation)
-      .set({ tokenHash, expiresAt: expiry(), inviterId: c.var.user.id, remindedAt: null })
+      .set({ tokenHash, delivery, expiresAt: expiry(), inviterId, remindedAt: null })
       .where(eq(budgetInvitation.id, invitationId))
       .returning();
     if (!updated) throw new Error("Invitation update returned nothing");
     return updated;
   });
+  return { row, token };
+}
+
+export const resendInvitationHandler: RouteHandler<typeof resendInvitation, Env> = async (c) => {
+  const { budgetId, invitationId } = c.req.valid("param");
+  const deps = c.var.deps;
+  await loadBudgetAccess(c, budgetId, MANAGE);
+  if (!deps.email) throw EMAIL_DISABLED();
+  const { row, token } = await renewInvitation(
+    deps.db,
+    budgetId,
+    invitationId,
+    c.var.user.id,
+    "email",
+  );
   await deliverEmail(
     deps,
     emails.budgetInvitation(row.email, c.var.user.email, deps.env.WEB_ORIGIN, token),
   );
   return c.json(toInvitationJson(row), 200);
+};
+
+export const createInvitationLinkHandler: RouteHandler<typeof createInvitationLink, Env> = async (
+  c,
+) => {
+  const { budgetId, invitationId } = c.req.valid("param");
+  const deps = c.var.deps;
+  await loadBudgetAccess(c, budgetId, MANAGE);
+  const { row, token } = await renewInvitation(
+    deps.db,
+    budgetId,
+    invitationId,
+    c.var.user.id,
+    "link",
+  );
+  return c.json({ ...toInvitationJson(row), link: invitationUrl(deps.env.WEB_ORIGIN, token) }, 200);
 };
 
 export const cancelInvitationHandler: RouteHandler<typeof cancelInvitation, Env> = async (c) => {

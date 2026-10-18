@@ -1,4 +1,4 @@
-import { BUDGET_ROLES, MEMBER_ROLES } from "@everycent/db/schema";
+import { BUDGET_ROLES, INVITATION_DELIVERIES, MEMBER_ROLES } from "@everycent/db/schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { jsonError } from "../../lib/errors";
 import { zAvatarColor, zPicture } from "../../lib/member-colors";
@@ -34,8 +34,21 @@ const InvitationSchema = z
     createdAt: z.string(),
     expiresAt: z.string(),
     expired: z.boolean(),
+    delivery: z
+      .enum(INVITATION_DELIVERIES)
+      .describe("`email`: we emailed the link; `link`: the owner shares it themselves"),
   })
   .openapi("BudgetInvitation");
+
+const InvitationWithLinkSchema = InvitationSchema.extend({
+  link: z
+    .string()
+    .nullable()
+    .describe(
+      "The invitation link to share, shown only here (the server keeps only its hash); null when " +
+        "it was emailed",
+    ),
+}).openapi("BudgetInvitationWithLink");
 
 const MembersSchema = z
   .object({
@@ -89,9 +102,12 @@ export const createInvitation = createRoute({
   tags: ["Sharing"],
   security: sessionSecurity,
   middleware: [requireSession] as const,
-  summary: "Invite someone by email to share the budget (owner only)",
+  summary: "Invite someone to share the budget (owner only)",
   description:
-    `They get an email with a link that works for ${INVITATION_DAYS} days. A budget has at most ` +
+    `They get an email with a link that works for ${INVITATION_DAYS} days, or, with ` +
+    "`sendEmail: false`, the answer carries the link for the owner to share. Either way, joining " +
+    "needs an account with the invited address. A server that sends no email (`GET /v1/instance`) " +
+    "only makes links (`EMAIL_DISABLED`). A budget has at most " +
     `${MAX_BUDGET_PEOPLE} people, pending invitations included (\`BUDGET_FULL\`). Someone already ` +
     "in the budget (`ALREADY_MEMBER`) or already invited (`ALREADY_INVITED`) can't be invited.",
   request: {
@@ -108,17 +124,25 @@ export const createInvitation = createRoute({
               "`editor` (YNAB's only role: can change everything but sharing) or `viewer` (an " +
                 "everycent extra: can see the budget but not change it)",
             ),
+          sendEmail: z
+            .boolean()
+            .optional()
+            .describe(
+              "Email the link (the default when the server sends email), or return it to share",
+            ),
         })
         .openapi("CreateBudgetInvitation"),
     ),
   },
   responses: {
-    201: ok("Invited", InvitationSchema),
+    201: ok("Invited", InvitationWithLinkSchema),
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
     403: ownerOnly,
     404: notFound,
-    409: jsonError("`BUDGET_FULL`, `ALREADY_MEMBER` or `ALREADY_INVITED`"),
+    409: jsonError(
+      "`BUDGET_FULL`, `ALREADY_MEMBER`, `ALREADY_INVITED` or `EMAIL_DISABLED` (asked to email it)",
+    ),
   },
 });
 
@@ -136,6 +160,31 @@ export const resendInvitation = createRoute({
     401: jsonError("Not signed in"),
     403: ownerOnly,
     404: notFound,
+    409: jsonError(
+      "`EMAIL_DISABLED`: the server sends no email (make a new link instead); `BUDGET_FULL`: an " +
+        "expired invitation no longer fits",
+    ),
+  },
+});
+
+export const createInvitationLink = createRoute({
+  method: "post",
+  path: "/budgets/{budgetId}/invitations/{invitationId}/link",
+  operationId: "createBudgetInvitationLink",
+  tags: ["Sharing"],
+  security: sessionSecurity,
+  middleware: [requireSession] as const,
+  summary: `A new link to share for the invitation, good for another ${INVITATION_DAYS} days`,
+  description:
+    "Nothing is emailed. The earlier link, emailed or shared, stops working, and the invitation " +
+    "gets no reminder email (its new link would replace this one).",
+  request: { params: InvitationParams },
+  responses: {
+    200: ok("The invitation and its new link", InvitationWithLinkSchema),
+    401: jsonError("Not signed in"),
+    403: ownerOnly,
+    404: notFound,
+    409: jsonError("`BUDGET_FULL`: an expired invitation no longer fits"),
   },
 });
 

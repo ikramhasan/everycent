@@ -13,6 +13,9 @@ const MESSAGES: Record<string, string> = {
   INVALID_TOKEN: "This link isn't valid. Check that you opened the whole link from the email.",
   USER_NOT_FOUND: "This link isn't valid any more.",
   INVALID_USER: "This link belongs to a different account. Sign out and open it again.",
+  // Sign-up on a server that sends no email (with email, it answers the same for any address).
+  USER_ALREADY_EXISTS: "An account already uses that address. Sign in instead.",
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "An account already uses that address. Sign in instead.",
   PASSWORD_TOO_SHORT: "Use at least 8 characters.",
   PASSWORD_TOO_LONG: "Use at most 128 characters.",
   PASSWORD_COMPROMISED:

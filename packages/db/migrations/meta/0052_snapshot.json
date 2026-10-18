@@ -1,5 +1,5 @@
 {
-  "id": "f5390fd3-3960-4b68-96cc-15670c475da7",
+  "id": "59858b36-d1d6-4202-86a3-8a1772c68344",
   "prevId": "c4051954-8d07-4da4-9d6f-3761b6d9d566",
   "version": "7",
   "dialect": "postgresql",
@@ -5144,20 +5144,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "ai_enabled": {
-          "name": "ai_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "ai_assistant_button": {
-          "name": "ai_assistant_button",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5236,6 +5222,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "delivery": {
+          "name": "delivery",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'email'"
         },
         "expires_at": {
           "name": "expires_at",

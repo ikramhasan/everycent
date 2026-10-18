@@ -38,11 +38,21 @@ CREATE TABLE "ai_conversation" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "ai_tool_run" (
+	"tool_call_id" text PRIMARY KEY NOT NULL,
+	"thread_id" text NOT NULL,
+	"output" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "budget" ADD COLUMN "ai_enabled" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "budget" ADD COLUMN "ai_assistant_button" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "ai_chat_interrupt" ADD CONSTRAINT "ai_chat_interrupt_thread_id_ai_conversation_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."ai_conversation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_chat_run" ADD CONSTRAINT "ai_chat_run_thread_id_ai_conversation_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."ai_conversation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_chat_thread" ADD CONSTRAINT "ai_chat_thread_thread_id_ai_conversation_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."ai_conversation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_conversation" ADD CONSTRAINT "ai_conversation_budget_id_budget_id_fk" FOREIGN KEY ("budget_id") REFERENCES "public"."budget"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_conversation" ADD CONSTRAINT "ai_conversation_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_tool_run" ADD CONSTRAINT "ai_tool_run_thread_id_ai_conversation_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."ai_conversation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ai_chat_interrupt_thread_idx" ON "ai_chat_interrupt" USING btree ("thread_id","requested_at");--> statement-breakpoint
 CREATE INDEX "ai_chat_interrupt_run_idx" ON "ai_chat_interrupt" USING btree ("run_id","requested_at");--> statement-breakpoint
 CREATE INDEX "ai_chat_run_thread_idx" ON "ai_chat_run" USING btree ("thread_id","started_at");--> statement-breakpoint

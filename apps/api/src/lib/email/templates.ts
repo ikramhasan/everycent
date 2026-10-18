@@ -43,7 +43,8 @@ function render(kind: EmailKind, to: string, { subject, intro, action, outro }: 
   return { kind, to, subject, text, html: String(body) } satisfies EmailMessage;
 }
 
-const link = (webOrigin: string, path: string, params: Record<string, string>) =>
+/** A web app link with its parameters in the fragment. */
+export const link = (webOrigin: string, path: string, params: Record<string, string>) =>
   `${webOrigin}${path}#${new URLSearchParams(params).toString()}`;
 
 const IGNORE = "If you didn't ask for this, you can ignore this email.";

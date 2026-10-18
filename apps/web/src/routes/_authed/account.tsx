@@ -37,6 +37,7 @@ import { $api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { apiErrorMessage } from "@/lib/budgets";
+import { useInstance } from "@/lib/instance";
 import {
   deleteProfilePicture,
   PROFILE_PICTURE_PX,
@@ -113,6 +114,8 @@ function ProfilePictureCard() {
 }
 
 function EmailCard({ email }: { email: string }) {
+  const queryClient = useQueryClient();
+  const { email: sendsEmail } = useInstance();
   const change = $api.useMutation("post", "/v1/me/email");
   const [error, setError] = useState<string | null>(null);
   const [pendingTo, setPendingTo] = useState<string | null>(null);
@@ -124,11 +127,15 @@ function EmailCard({ email }: { email: string }) {
     const newEmail = String(form.get("newEmail") ?? "").trim();
     setError(null);
     try {
-      await change.mutateAsync({
+      const result = await change.mutateAsync({
         body: { newEmail, password: String(form.get("password") ?? "") },
       });
       formElement.reset();
-      setPendingTo(newEmail);
+      if (result.status === "changed") {
+        // A server that sends no email changes it at once.
+        await refreshSession(queryClient);
+        toast.success(`You now sign in with ${result.email}.`);
+      } else setPendingTo(newEmail);
     } catch (e) {
       setError(apiErrorMessage(e, "Couldn't start the change. Try again."));
     }
@@ -176,9 +183,11 @@ function EmailCard({ email }: { email: string }) {
                 autoComplete="current-password"
                 required
               />
-              <FieldDescription>
-                We'll ask your current address to approve the change first.
-              </FieldDescription>
+              {sendsEmail && (
+                <FieldDescription>
+                  We'll ask your current address to approve the change first.
+                </FieldDescription>
+              )}
             </Field>
             {error && <FieldError>{error}</FieldError>}
             <div>

@@ -101,6 +101,8 @@ export const budgetMember = pgTable(
 
 export const INVITATION_STATUSES = ["pending", "accepted", "canceled"] as const;
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
+/** How the invitation's current link reached the invitee: our email, or shared by the owner. */
+export const INVITATION_DELIVERIES = ["email", "link"] as const;
 
 /**
  * An invitation to share a budget (YNAB Together's "Invite Member"). The plugin requires the
@@ -118,8 +120,10 @@ export const budgetInvitation = pgTable(
     name: text().notNull().default(""),
     role: text(),
     status: text({ enum: INVITATION_STATUSES }).notNull().default("pending"),
-    /** SHA-256 of the emailed link's token; a resend replaces it. */
+    /** SHA-256 of the link's token; a resend or a new link replaces it. */
     tokenHash: text().unique(),
+    /** A shared link gets no reminder email: the reminder's new link would replace it. */
+    delivery: text({ enum: INVITATION_DELIVERIES }).notNull().default("email"),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
     /** When the expiry reminder went out (EVERYCENT-125); a resend clears it. */
     remindedAt: timestamp({ withTimezone: true }),
