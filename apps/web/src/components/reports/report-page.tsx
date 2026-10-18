@@ -14,7 +14,12 @@ export const PARITY_REPORTS = [
   { to: "/budgets/$budgetId/reports/age-of-money", label: "Age of Money" },
 ] as const;
 
-/** YNAB's report tabs, kept reachable from every report. */
+/** everycent's own reports, after YNAB's. */
+export const EXTRA_REPORTS = [
+  { to: "/budgets/$budgetId/reports/budget-vs-actual", label: "Budget vs Actual" },
+] as const;
+
+/** YNAB's report tabs and everycent's own, kept reachable from every report. */
 export function ReportsNav() {
   const { budget } = useBudget();
   return (
@@ -36,7 +41,7 @@ export function ReportsNav() {
             Overview
           </Link>
         </li>
-        {PARITY_REPORTS.map((r) => (
+        {[...PARITY_REPORTS, ...EXTRA_REPORTS].map((r) => (
           <li key={r.to}>
             <Link
               to={r.to}
