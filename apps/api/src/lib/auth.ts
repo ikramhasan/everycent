@@ -250,6 +250,17 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       },
     },
     telemetry: { enabled: false },
+    logger: {
+      // Through our structured log. A wrong or expired API key is an expected 401
+      // (`requireAuth`), not an error: the api-key plugin would log one for every bad request.
+      log: (level, message, ...args) => {
+        if (message.startsWith("Failed to validate API key")) return;
+        const text = `Better Auth: ${message}`;
+        if (level === "error") log.error(text, undefined, args[0]);
+        else if (level === "warn") log.warn(text, undefined, args[0]);
+        else log.info(text);
+      },
+    },
     plugins: [
       // Refuses passwords found in known breaches (sign-up, change, reset). Only the first five
       // characters of the password's SHA-1 leave the server. Off in tests: it calls the network.

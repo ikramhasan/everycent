@@ -9,7 +9,8 @@ export const OPENAPI_CONFIG = {
     title: "everycent API",
     version: "0.1.0",
     description:
-      "Zero-based budgeting API. Money amounts are integer strings in the currency's minor units.",
+      "Zero-based budgeting API. Money amounts are integer strings in the currency's minor units.\n\n" +
+      "**Authentication:** create a personal API key in the web app (Account settings → API Keys) and send it as `Authorization: Bearer ec_…`. Choose it under *Authentication* to try requests here.",
   },
 } as const;
 

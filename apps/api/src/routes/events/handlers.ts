@@ -27,25 +27,31 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
   return streamSSE(c, async (stream) => {
     let closed = false;
     let wake: () => void = () => {};
+    // Changes are handled one at a time, in order: a change after a removal waits for the
+    // membership check, so it's never written to a stream that's about to end.
+    let queue = Promise.resolve();
     const unsubscribe = await changes.subscribe(budgetId, (change) => {
       // Never left unhandled: a failed write (the client just left) or check ends the stream.
       const end = () => {
         closed = true;
         wake();
       };
-      (async () => {
-        // Removed from the budget, left it, or the budget was deleted: nothing more to hear.
-        const membership = change.table === "budget_member" || change.table === "budget";
-        if (membership && !(await stillMember())) return end();
-        await stream.writeSSE({
-          event: "change",
-          data: JSON.stringify({
-            table: change.table,
-            actorId: change.actorId,
-            clientId: change.clientId,
-          }),
-        });
-      })().catch(end);
+      queue = queue
+        .then(async () => {
+          if (closed) return;
+          // Removed from the budget, left it, or the budget was deleted: nothing more to hear.
+          const membership = change.table === "budget_member" || change.table === "budget";
+          if (membership && !(await stillMember())) return end();
+          await stream.writeSSE({
+            event: "change",
+            data: JSON.stringify({
+              table: change.table,
+              actorId: change.actorId,
+              clientId: change.clientId,
+            }),
+          });
+        })
+        .catch(end);
     });
     stream.onAbort(() => {
       closed = true;

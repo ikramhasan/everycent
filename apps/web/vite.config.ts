@@ -18,7 +18,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    // Same-origin in dev: the browser only ever talks to :5173, so auth cookies just work.
-    proxy: { "/v1": apiTarget, "/api": apiTarget },
+    // Same-origin in dev: the browser only ever talks to :5173, so auth cookies just work. The
+    // API reference (/docs and its spec) comes along, as it does where the API serves the app.
+    proxy: {
+      "/v1": apiTarget,
+      "/api": apiTarget,
+      "/docs": apiTarget,
+      "/openapi.json": apiTarget,
+    },
   },
 });
