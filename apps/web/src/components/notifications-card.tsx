@@ -8,7 +8,6 @@ import {
 import { Checkbox } from "@everycent/ui/components/checkbox";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@everycent/ui/components/field";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { $api } from "@/lib/api";
 import { useInstance } from "@/lib/instance";
@@ -24,22 +23,13 @@ type Changes = {
 /**
  * Which emails the person gets (EVERYCENT-241): the monthly summary, per budget, and its AI
  * overview. Account and security emails aren't optional. The summary email's "Email settings"
- * link lands here (`/account#notifications`).
+ * link lands here (`/account?tab=notifications#settings-notifications`).
  */
 export function NotificationsCard() {
   const queryClient = useQueryClient();
   const { email } = useInstance();
   const notifications = useQuery(notificationsQueryOptions());
   const update = $api.useMutation("patch", "/v1/me/notifications");
-  const card = useRef<HTMLDivElement>(null);
-  const loaded = notifications.data !== undefined;
-
-  useEffect(() => {
-    if (loaded && window.location.hash === "#notifications") {
-      card.current?.scrollIntoView({ block: "start" });
-    }
-  }, [loaded]);
-
   async function save(body: Changes) {
     try {
       const saved = await update.mutateAsync({ body });
@@ -56,7 +46,7 @@ export function NotificationsCard() {
   const anyAi = data?.budgets.some((b) => b.aiEnabled) ?? false;
 
   return (
-    <Card id="notifications" ref={card} className="scroll-mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>Notifications</CardTitle>
         <CardDescription>

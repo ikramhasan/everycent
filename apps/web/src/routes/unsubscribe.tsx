@@ -34,7 +34,8 @@ function Unsubscribe({ token }: { token: string | null }) {
   const footer = (
     <Link
       to="/account"
-      hash="notifications"
+      search={{ tab: "notifications" }}
+      hash="settings-notifications"
       className="text-foreground underline underline-offset-4"
     >
       Notification settings

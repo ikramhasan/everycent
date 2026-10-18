@@ -313,7 +313,7 @@ ${st.note ? html`<div class="ec-muted-fg" style="font-size:12px;color:${C.mutedF
     ),
   );
 
-  const settingsUrl = `${webOrigin}/account#notifications`;
+  const settingsUrl = `${webOrigin}/account?tab=notifications#settings-notifications`;
   const footer = [
     html`You get this summary on the 1st of each month for the budgets you're a member of. Amounts are in ${s.currency}, the budget's currency.`,
     html`<a href="${settingsUrl}" class="ec-muted-fg" style="color:${C.mutedFg};text-decoration:underline">Email settings</a> · <a href="${input.unsubscribeUrl}" class="ec-muted-fg" style="color:${C.mutedFg};text-decoration:underline">Unsubscribe from monthly summaries</a>`,
