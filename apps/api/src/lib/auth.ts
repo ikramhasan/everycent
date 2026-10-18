@@ -17,6 +17,11 @@ import { tryPasswordCheck } from "./throttle";
 export interface AuthOptions {
   /** Better Auth's rate limiter. On everywhere but tests unless a test turns it on. */
   rateLimit?: boolean;
+  /** Password hashing. Better Auth's scrypt unless given; tests pass a cheap one. */
+  password?: {
+    hash: (password: string) => Promise<string>;
+    verify: (data: { hash: string; password: string }) => Promise<boolean>;
+  };
 }
 
 /** Both email-verification links and reset links stop working after this long. */
@@ -107,6 +112,7 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       // address answer exactly like a new one, so sign-up can't be used to find accounts.
       requireEmailVerification: true,
       autoSignIn: false,
+      ...(options.password ? { password: options.password } : {}),
       // Better Auth's links go to its own GET endpoints; ours go to the web app, which only
       // acts when the person clicks (see email/templates.ts).
       sendResetPassword: async ({ user, token }) => {
