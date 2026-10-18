@@ -191,6 +191,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The account's email notification options */
+        get: operations["getNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the account's email notification options */
+        patch: operations["updateNotifications"];
+        trace?: never;
+    };
+    "/v1/email/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn monthly summary emails off from an email's link
+         * @description Public: the token from a summary email is the authorization. Serves the web app's unsubscribe page and mail clients' one-click unsubscribe (RFC 8058, which posts `List-Unsubscribe=One-Click` as a form; the body is ignored).
+         */
+        post: operations["unsubscribeEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/agents": {
         parameters: {
             query?: never;
@@ -2430,6 +2468,30 @@ export interface components {
         };
         DeleteAccount: {
             password: string;
+        };
+        Notifications: {
+            /** @description The monthly summary email after each month ends, for the budgets below that have it on */
+            monthlySummary: boolean;
+            /** @description The summary's AI overview, on budgets that have AI turned on */
+            monthlySummaryAi: boolean;
+            /** @description The budgets the person is on, in name order; a fresh start's old budget is left out */
+            budgets: {
+                budgetId: string;
+                name: string;
+                /** @description This budget's monthly summary */
+                monthlySummary: boolean;
+                /** @description The budget has AI on (and the server has AI), so its summary can carry the overview */
+                aiEnabled: boolean;
+            }[];
+        };
+        UpdateNotifications: {
+            monthlySummary?: boolean;
+            monthlySummaryAi?: boolean;
+            /** @description Per-budget changes; budgets left out keep theirs */
+            budgets?: {
+                budgetId: string;
+                monthlySummary: boolean;
+            }[];
         };
         ConnectedAgentList: {
             agents: components["schemas"]["ConnectedAgent"][];
@@ -5912,6 +5974,143 @@ export interface operations {
             };
             /** @description Too many attempts (`RATE_LIMITED`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notification options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notifications"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotifications"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notifications"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A budget the person isn't on (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unsubscribeEmail: {
+        parameters: {
+            query: {
+                /** @description The token from the email's link */
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Monthly summaries are off */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a valid unsubscribe link (`INVALID_TOKEN`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

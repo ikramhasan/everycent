@@ -21,6 +21,8 @@ const AGENT_EXCLUDED = new Set([
   "revokeSession",
   "disableTwoFactor",
   "deleteMyAccount",
+  // The token in an email is the authorization; an agent has no business with it.
+  "unsubscribeEmail",
   "listApiKeys",
   "createApiKey",
   "deleteApiKey",

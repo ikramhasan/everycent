@@ -39,6 +39,7 @@ Requirements: Node ≥ 24, pnpm (auto-selected via `packageManager` — root `.n
 | `pnpm db:generate` | Create a SQL migration from schema changes |
 | `pnpm db:migrate` / `db:studio` / `db:seed` | Apply migrations / browse data / seed demo user |
 | `pnpm format` | Biome format + safe fixes |
+| `pnpm --filter @everycent/api preview:emails <dir>` | Render every email with sample data as HTML files |
 
 ## Adding an API endpoint
 
