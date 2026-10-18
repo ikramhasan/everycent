@@ -2,6 +2,7 @@ import { cn } from "@everycent/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
+import { PageTitle } from "@/components/page-title";
 import { useBudget } from "@/lib/budget-context";
 
 /** YNAB's five Reflect reports, in its tab order (2026-10-14). */
@@ -69,6 +70,7 @@ export function ReportPage({
   return (
     // The app shell already pads the page; this only centres and spaces the report.
     <div className={cn("mx-auto grid w-full max-w-6xl content-start gap-4", className)}>
+      <PageTitle name={title} />
       <PageHeader title={title} actions={actions} />
       <ReportsNav />
       {filters}

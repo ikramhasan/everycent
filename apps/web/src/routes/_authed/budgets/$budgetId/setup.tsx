@@ -13,6 +13,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AddAccountForm } from "@/components/account-forms";
 import { CategoryPicker, type CategoryPicks } from "@/components/category-picker";
+import { PageTitle } from "@/components/page-title";
 import { apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { categoriesQueryOptions } from "@/lib/categories";
@@ -80,6 +81,7 @@ function SetupPage() {
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
+      <PageTitle name="Set up budget" />
       <p className="text-muted-foreground text-sm">
         Step {step === "categories" ? 1 : step === "account" ? 2 : 3} of 3 · Setting up{" "}
         {budget.name}

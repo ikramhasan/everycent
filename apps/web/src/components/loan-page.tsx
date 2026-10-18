@@ -67,6 +67,7 @@ import {
 import { LoanBanners, LoanProgressCard } from "./loan-progress";
 import { AvailablePill } from "./move-money";
 import { PageHeader } from "./page-header";
+import { PageTitle } from "./page-title";
 import { PayoffSimulator } from "./payoff-simulator";
 import { reconciledLabel } from "./reconcile";
 import { ShareProgressDialog } from "./share-progress";
@@ -254,6 +255,7 @@ export function LoanPage({
 
   return (
     <div className="grid gap-6">
+      <PageTitle name={account.name} />
       <PageHeader
         title={account.name}
         meta={
