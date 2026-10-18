@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { setAuditContext } from "../../lib/audit-context";
 import { type BudgetAccess, loadBudgetAccess, rememberLastBudget } from "../../lib/budget-access";
 import { ARCHIVED_STAMP, copyIntoFreshStart } from "../../lib/fresh-start";
+import { createOrganizationAs, deleteOrganizationAs } from "../../lib/organization-calls";
 import { seedStarterCategories } from "../../lib/starter-categories";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
@@ -64,16 +65,21 @@ export const listBudgetsHandler: RouteHandler<typeof listBudgets, Env> = async (
 };
 
 export const createBudgetHandler: RouteHandler<typeof createBudget, Env> = async (c) => {
-  const { auth, db } = c.var.deps;
+  const { db } = c.var.deps;
   const body = c.req.valid("json");
-  const created = await auth.api.createOrganization({
-    body: { ...body, slug: newId(), keepCurrentActiveOrganization: true },
-    headers: c.req.raw.headers,
+  const created = await createOrganizationAs(c, {
+    ...body,
+    slug: newId(),
+    keepCurrentActiveOrganization: true,
   });
   if (!created) throw new Error("Budget creation returned nothing");
   // The plugin wrote the budget on its own connection; the starter categories are the user's.
   await db.transaction(async (tx) => {
-    await setAuditContext(tx, { actorId: c.var.user.id, requestId: c.var.requestId });
+    await setAuditContext(tx, {
+      actorId: c.var.user.id,
+      agentId: c.var.agent?.id ?? null,
+      requestId: c.var.requestId,
+    });
     await seedStarterCategories(tx, created.id);
   });
   await rememberLastBudget(db, c.var.user.id, created.id);
@@ -106,37 +112,35 @@ export const updateBudgetHandler: RouteHandler<typeof updateBudget, Env> = async
 export const deleteBudgetHandler: RouteHandler<typeof deleteBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   await loadBudgetAccess(c, budgetId, { organization: ["delete"] });
-  await c.var.deps.auth.api.deleteOrganization({
-    body: { organizationId: budgetId },
-    headers: c.req.raw.headers,
-  });
+  await deleteOrganizationAs(c, budgetId);
   return c.body(null, 204);
 };
 
 export const freshStartBudgetHandler: RouteHandler<typeof freshStartBudget, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
   const { date, name } = c.req.valid("json");
-  const { auth, db } = c.var.deps;
+  const { db } = c.var.deps;
   // An archived budget can start fresh again: YNAB's plan menu still offers it (2026-10-15).
   const { budget: old } = await loadBudgetAccess(c, budgetId, { budget: ["fresh_start"] });
 
-  const created = await auth.api.createOrganization({
-    body: {
-      name,
-      currency: old.currency,
-      numberFormat: old.numberFormat,
-      currencySymbolPosition: old.currencySymbolPosition,
-      dateFormat: old.dateFormat,
-      slug: newId(),
-      keepCurrentActiveOrganization: true,
-    },
-    headers: c.req.raw.headers,
+  const created = await createOrganizationAs(c, {
+    name,
+    currency: old.currency,
+    numberFormat: old.numberFormat,
+    currencySymbolPosition: old.currencySymbolPosition,
+    dateFormat: old.dateFormat,
+    slug: newId(),
+    keepCurrentActiveOrganization: true,
   });
   if (!created) throw new Error("Budget creation returned nothing");
 
   try {
     await db.transaction(async (tx) => {
-      await setAuditContext(tx, { actorId: c.var.user.id, requestId: c.var.requestId });
+      await setAuditContext(tx, {
+        actorId: c.var.user.id,
+        agentId: c.var.agent?.id ?? null,
+        requestId: c.var.requestId,
+      });
       await copyIntoFreshStart(tx, { old, newBudgetId: created.id, ownerId: c.var.user.id, date });
     });
   } catch (error) {

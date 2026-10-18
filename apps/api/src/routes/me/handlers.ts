@@ -89,7 +89,7 @@ function describeDevice(userAgent: string | null): {
 }
 
 export const listSessionsHandler: Handler<typeof listSessions> = async (c) => {
-  const currentId = c.var.session.id;
+  const currentId = c.var.session?.id;
   const rows = await c.var.deps.db
     .select()
     .from(session)
@@ -113,7 +113,7 @@ export const listSessionsHandler: Handler<typeof listSessions> = async (c) => {
 
 export const revokeSessionHandler: Handler<typeof revokeSession> = async (c) => {
   const { sessionId } = c.req.valid("param");
-  if (sessionId === c.var.session.id) {
+  if (sessionId === c.var.session?.id) {
     throw new AppError(400, "CURRENT_SESSION", "That's this device: sign out instead");
   }
   const row = await c.var.deps.db.query.session.findFirst({
@@ -224,14 +224,18 @@ export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => 
     await tx.delete(userTable).where(eq(userTable.id, me.id));
     // Shared budgets keep their history and transactions, without the user's id.
     await pauseAudit(tx);
-    await tx.update(auditEvent).set({ actorUserId: null }).where(eq(auditEvent.actorUserId, me.id));
+    // Their agents (gone with them, `connected_agent`) acted as them: cleared alongside.
+    await tx
+      .update(auditEvent)
+      .set({ actorUserId: null, actorAgentId: null })
+      .where(eq(auditEvent.actorUserId, me.id));
     await tx
       .update(transaction)
-      .set({ createdByUserId: null })
+      .set({ createdByUserId: null, createdByAgentId: null })
       .where(eq(transaction.createdByUserId, me.id));
     await tx
       .update(transaction)
-      .set({ updatedByUserId: null })
+      .set({ updatedByUserId: null, updatedByAgentId: null })
       .where(eq(transaction.updatedByUserId, me.id));
   });
   return c.body(null, 204);

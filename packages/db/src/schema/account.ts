@@ -306,6 +306,12 @@ export const transaction = pgTable(
      */
     createdByUserId: text(),
     updatedByUserId: text(),
+    /**
+     * The agent (`connected_agent`) that entered it or changed it last for that user, when one
+     * did; null for the user's own changes. Not foreign keys either.
+     */
+    createdByAgentId: text(),
+    updatedByAgentId: text(),
     /** Bumped by the trigger on every real change: undo sends it to detect a partner's edit. */
     version: integer().notNull().default(1),
     /**

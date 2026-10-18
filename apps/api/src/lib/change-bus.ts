@@ -6,6 +6,8 @@ export interface BudgetChange {
   /** The table changed, e.g. "transaction". */
   table: string;
   actorId: string | null;
+  /** The agent (`connected_agent` id) that made it for the actor; null for the actor's own. */
+  agentId?: string | null;
   /** The browser tab that made it (`X-Client-Id`), so that tab can skip its own change. */
   clientId: string | null;
 }

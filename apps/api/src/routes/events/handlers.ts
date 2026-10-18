@@ -42,6 +42,7 @@ export const budgetEventsHandler: RouteHandler<typeof budgetEvents, AppEnv & Aut
           data: JSON.stringify({
             table: change.table,
             actorId: change.actorId,
+            agentId: change.agentId ?? null,
             clientId: change.clientId,
           }),
         });

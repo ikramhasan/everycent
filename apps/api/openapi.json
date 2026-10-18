@@ -622,6 +622,135 @@
           "password"
         ]
       },
+      "ConnectedAgentList": {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedAgent"
+            }
+          }
+        },
+        "required": [
+          "agents"
+        ]
+      },
+      "ConnectedAgent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "mcp",
+              "agent_auth"
+            ],
+            "description": "`mcp`: an MCP client (Claude, Cursor, …); `agent_auth`: an Agent Auth agent"
+          },
+          "name": {
+            "type": "string",
+            "description": "As the client or agent named itself"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "`read`: it can only look; `write`: it can also make changes"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What it was granted: OAuth scopes for an MCP client, capabilities (API operations) for an Agent Auth agent"
+          },
+          "connectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "access",
+          "permissions",
+          "connectedAt",
+          "lastUsedAt"
+        ]
+      },
+      "AgentApproval": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hostName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentCapability"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "agentId",
+          "name",
+          "hostName",
+          "capabilities",
+          "expiresAt"
+        ]
+      },
+      "AgentCapability": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The API operation (its operationId)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "Changes nothing"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the agent says it needs it"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "readOnly",
+          "reason"
+        ]
+      },
       "Picture": {
         "type": "object",
         "properties": {
@@ -8941,15 +9070,47 @@
               "null"
             ],
             "description": "Their profile picture's URL (an API path); null without one"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
           }
         },
         "required": [
           "userId",
           "name",
           "avatarColor",
-          "picture"
+          "picture",
+          "agent"
         ],
         "description": "Who entered it (EVERYCENT-89); null when nobody did (a scheduled occurrence entered on its date) or for transactions from before this was recorded"
+      },
+      "AgentRef": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "As the client or agent named itself, e.g. 'Claude Code'"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "mcp",
+              "agent_auth"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "description": "The agent that made it on the member's behalf; null when they did it themself"
       },
       "SelectionSummary": {
         "type": "object",
@@ -16574,6 +16735,202 @@
           },
           "429": {
             "description": "Too many attempts (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/agents": {
+      "get": {
+        "operationId": "listConnectedAgents",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The agents acting for you",
+        "description": "MCP clients and Agent Auth agents you've connected, newest first. Their changes show as theirs on your behalf. Not available to agents.",
+        "responses": {
+          "200": {
+            "description": "Connected agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectedAgentList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An agent's request, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/agents/{agentId}": {
+      "delete": {
+        "operationId": "revokeConnectedAgent",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Disconnect an agent",
+        "description": "Ends its access at once: an MCP client's tokens and consent, or an Agent Auth agent and its grants. Its past changes stay attributed to it. Not available to agents.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Disconnected"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An agent's request, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such agent of yours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/agent-approvals/{agentId}": {
+      "get": {
+        "operationId": "getAgentApproval",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "An agent's request for your approval",
+        "description": "What an Agent Auth agent asks to do, for the approval page it sends you to. Shown only with the code the agent gave you, while the request is pending. Approve or deny it with Better Auth's `POST /api/auth/agent/approve-capability`. Not available to agents.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "description": "The code the agent shows, e.g. `ABCD-2345`"
+            },
+            "required": true,
+            "description": "The code the agent shows, e.g. `ABCD-2345`",
+            "name": "code",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pending request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApproval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An agent's request, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending request with that code (wrong, expired or already answered)",
             "content": {
               "application/json": {
                 "schema": {
@@ -27740,7 +28097,7 @@
           }
         ],
         "summary": "Live changes to the budget (server-sent events)",
-        "description": "An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.",
+        "description": "An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, agentId, clientId }` (`agentId`: the connected agent that made it for the actor, or null), after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.",
         "parameters": [
           {
             "schema": {

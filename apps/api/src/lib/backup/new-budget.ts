@@ -7,6 +7,7 @@ import { setAuditContext } from "../audit-context";
 import { rememberLastBudget } from "../budget-access";
 import { deleteBudgetRow } from "../delete-budget";
 import type { Tx } from "../ledger";
+import { createOrganizationAs } from "../organization-calls";
 
 /**
  * Creates a budget for an import (a backup, a YNAB plan) and fills it in one transaction: the
@@ -20,23 +21,24 @@ export async function createFilledBudget<T>(
   settings: { name: string; currency: CurrencyCode } & BudgetFormatSettings,
   fill: (tx: Tx, budgetId: string) => Promise<T>,
 ): Promise<{ budgetId: string; result: T }> {
-  const { auth, db } = c.var.deps;
-  const created = await auth.api.createOrganization({
-    body: {
-      name: settings.name,
-      currency: settings.currency,
-      numberFormat: settings.numberFormat,
-      currencySymbolPosition: settings.currencySymbolPosition,
-      dateFormat: settings.dateFormat,
-      slug: newId(),
-      keepCurrentActiveOrganization: true,
-    },
-    headers: c.req.raw.headers,
+  const { db } = c.var.deps;
+  const created = await createOrganizationAs(c, {
+    name: settings.name,
+    currency: settings.currency,
+    numberFormat: settings.numberFormat,
+    currencySymbolPosition: settings.currencySymbolPosition,
+    dateFormat: settings.dateFormat,
+    slug: newId(),
+    keepCurrentActiveOrganization: true,
   });
   if (!created) throw new Error("Budget creation returned nothing");
   try {
     const result = await db.transaction(async (tx) => {
-      await setAuditContext(tx, { actorId: c.var.user.id, requestId: c.var.requestId });
+      await setAuditContext(tx, {
+        actorId: c.var.user.id,
+        agentId: c.var.agent?.id ?? null,
+        requestId: c.var.requestId,
+      });
       return fill(tx, created.id);
     });
     await rememberLastBudget(db, c.var.user.id, created.id);

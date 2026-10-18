@@ -140,6 +140,8 @@ function registerCte(db: Db, budgetId: string, accountId?: string) {
         )`.as("transfer_reconciled"),
         createdByUserId: transaction.createdByUserId,
         updatedByUserId: transaction.updatedByUserId,
+        createdByAgentId: transaction.createdByAgentId,
+        updatedByAgentId: transaction.updatedByAgentId,
         version: transaction.version,
         // Changed by a later request (one request's writes all share its now()).
         changed: sql<boolean>`${transaction.updatedAt} > ${transaction.createdAt}`.as("changed"),
@@ -662,6 +664,8 @@ function columns(r: Register) {
     transferReconciled: r.transferReconciled,
     createdByUserId: r.createdByUserId,
     updatedByUserId: r.updatedByUserId,
+    createdByAgentId: r.createdByAgentId,
+    updatedByAgentId: r.updatedByAgentId,
     version: r.version,
     changed: r.changed,
     createdAt: r.createdAt,
@@ -697,6 +701,7 @@ async function toJson(
     db,
     budgetId,
     rows.flatMap((r) => [r.createdByUserId, r.updatedByUserId]),
+    rows.flatMap((r) => [r.createdByAgentId, r.updatedByAgentId]),
   );
   // A transfer's sides share one; a split line's transfer is a transaction of its own.
   const attachments = await attachmentsFor(
@@ -711,6 +716,8 @@ async function toJson(
       createdAt: _,
       createdByUserId,
       updatedByUserId,
+      createdByAgentId,
+      updatedByAgentId,
       changed,
       importId,
       matchedImport,
@@ -727,9 +734,9 @@ async function toJson(
           }
         : null,
       attachment: ((a) => (a ? attachmentJson(a) : null))(attachments.get(row.id)),
-      enteredBy: member(createdByUserId),
+      enteredBy: member(createdByUserId, createdByAgentId),
       // Only once someone changed it after entering it.
-      changedBy: changed ? member(updatedByUserId) : null,
+      changedBy: changed ? member(updatedByUserId, updatedByAgentId) : null,
       amount: row.amount.toString(),
       baseAmount: row.baseAmount.toString(),
       fxRate: row.fxRate === null ? null : normalizeRate(row.fxRate),

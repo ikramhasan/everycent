@@ -19,6 +19,6 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     // Same-origin in dev: the browser only ever talks to :5173, so auth cookies just work.
-    proxy: { "/v1": apiTarget, "/api": apiTarget },
+    proxy: { "/v1": apiTarget, "/api": apiTarget, "/mcp": apiTarget, "/.well-known": apiTarget },
   },
 });
