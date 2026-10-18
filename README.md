@@ -13,7 +13,7 @@ multi-currency support.
 | DB (`packages/db`) | PostgreSQL 17 + Drizzle ORM |
 | Engine (`packages/engine`) | Money: exact bigint minor-unit arithmetic, ISO 4217, FX |
 | API client (`packages/api-client`) | Generated from OpenAPI (openapi-typescript + openapi-fetch) |
-| UI (`packages/ui`) | Shared shadcn/ui components and theme |
+| UI (`packages/ui`) | Shared shadcn/ui components, styled after [ui.ikramhasan.com](https://ui.ikramhasan.com) |
 
 ## Getting started
 

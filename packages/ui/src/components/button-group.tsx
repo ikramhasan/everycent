@@ -48,7 +48,11 @@ function ButtonGroupText({
   return (
     <Comp
       className={cn(
-        "flex items-center gap-2 rounded-lg border bg-muted px-2.5 text-sm font-medium [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+        // Recessed into the row (the Kbd recipe), the inverse of the raised
+        // buttons beside it: darker under the top lip, an inner shadow, and
+        // the same 1px `input` border so the seams stay shared. Text is
+        // darkened for 4.5:1 on the recess, as in the Tabs track.
+        "flex items-center gap-2 rounded-lg border border-input bg-linear-to-b from-[color-mix(in_oklch,var(--muted),var(--foreground)_6%)] to-muted px-2.5 text-sm font-medium text-[color-mix(in_oklch,var(--muted-foreground),var(--foreground)_20%)] shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] dark:from-[color-mix(in_oklch,var(--muted),black_35%)] dark:text-muted-foreground dark:shadow-[inset_0_1px_2px_rgb(0_0_0/0.5)] [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
@@ -66,6 +70,8 @@ function ButtonGroupSeparator({
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
+        // Separator's engraved groove: `input` (the borders' color) in light;
+        // in dark Separator's black/40 wins (`cn` keeps its `dark:` class).
         "relative self-stretch bg-input data-horizontal:mx-px data-horizontal:w-auto data-vertical:my-px data-vertical:h-auto",
         className,
       )}

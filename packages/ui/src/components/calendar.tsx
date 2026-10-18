@@ -25,7 +25,8 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        "group/calendar bg-background p-2 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(7)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
+        // 6px padding with 8px cells: concentric inside a 14px popover.
+        "group/calendar bg-background p-1.5 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(8)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className,
@@ -39,19 +40,19 @@ function Calendar({
       classNames={{
         root: cn("w-fit", defaultClassNames.root),
         months: cn("relative flex flex-col gap-4 md:flex-row", defaultClassNames.months),
-        month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
+        month: cn("flex w-full flex-col gap-3", defaultClassNames.month),
         nav: cn(
           "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
           defaultClassNames.nav,
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "size-(--cell-size) rounded-(--cell-radius) p-0 select-none aria-disabled:opacity-40",
           defaultClassNames.button_previous,
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "size-(--cell-size) rounded-(--cell-radius) p-0 select-none aria-disabled:opacity-40",
           defaultClassNames.button_next,
         ),
         month_caption: cn(
@@ -62,49 +63,58 @@ function Calendar({
           "flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-sm font-medium",
           defaultClassNames.dropdowns,
         ),
-        dropdown_root: cn("relative rounded-(--cell-radius)", defaultClassNames.dropdown_root),
-        dropdown: cn("absolute inset-0 bg-popover opacity-0", defaultClassNames.dropdown),
+        // The native select is invisible over its label; focus shows on the
+        // label's frame, the Button's ring.
+        dropdown_root: cn(
+          "group/dropdown relative rounded-(--cell-radius) has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-background",
+          defaultClassNames.dropdown_root,
+        ),
+        dropdown: cn(
+          "absolute inset-0 cursor-pointer bg-popover opacity-0",
+          defaultClassNames.dropdown,
+        ),
         caption_label: cn(
           "font-medium select-none",
           captionLayout === "label"
             ? "text-sm"
-            : "flex items-center gap-1 rounded-(--cell-radius) text-sm [&>svg]:size-3.5 [&>svg]:text-muted-foreground",
+            : // A small secondary key, like the Select trigger.
+              "flex h-7 items-center gap-1 rounded-(--cell-radius) border border-input bg-linear-to-b from-background to-secondary pr-1.5 pl-2.5 text-sm text-secondary-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06),inset_0_-1px_0_rgb(0_0_0/0.03)] group-hover/dropdown:to-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:from-[color-mix(in_oklch,var(--secondary),var(--foreground)_4%)] dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.06)] dark:group-hover/dropdown:to-[color-mix(in_oklch,var(--secondary),var(--foreground)_8%)] [&>svg]:size-3.5 [&>svg]:text-muted-foreground",
           defaultClassNames.caption_label,
         ),
         month_grid: cn("w-full border-collapse", defaultClassNames.month_grid),
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
-          "flex-1 rounded-(--cell-radius) text-[0.8rem] font-normal text-muted-foreground select-none",
+          "flex-1 text-xs leading-4 font-medium text-muted-foreground select-none",
           defaultClassNames.weekday,
         ),
-        week: cn("mt-2 flex w-full", defaultClassNames.week),
+        week: cn("mt-1 flex w-full first:mt-2", defaultClassNames.week),
         week_number_header: cn("w-(--cell-size) select-none", defaultClassNames.week_number_header),
         week_number: cn(
-          "text-[0.8rem] text-muted-foreground select-none",
+          "text-xs text-muted-foreground tabular-nums select-none",
           defaultClassNames.week_number,
         ),
+        // A range is a groove sunk into the surface (the Slider's track)
+        // running between its two keys: the cell's ::before, 2px shorter than
+        // the key above and below, with unblurred shadows so neighbouring
+        // cells join without a seam. A one-day range has no groove.
         day: cn(
-          "group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius)",
+          "group/day relative isolate aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none before:pointer-events-none before:absolute before:inset-y-0.5 before:hidden before:bg-linear-to-b before:from-[color-mix(in_oklch,var(--muted),var(--foreground)_7%)] before:to-muted before:shadow-[inset_0_1px_0_rgb(0_0_0/0.06),0_1px_0_rgb(255_255_255/0.9)] has-data-[range-end=true]:before:block has-data-[range-end=true]:before:right-1/2 has-data-[range-end=true]:before:left-0 has-data-[range-middle=true]:before:block has-data-[range-middle=true]:before:inset-x-0 has-data-[range-start=true]:before:block has-data-[range-start=true]:before:right-0 has-data-[range-start=true]:before:left-1/2 has-data-[range-start=true]:has-data-[range-end=true]:before:hidden last:before:rounded-r-(--cell-radius) dark:before:from-[color-mix(in_oklch,var(--muted),black_35%)] dark:before:shadow-[inset_0_1px_0_rgb(0_0_0/0.35),0_1px_0_rgb(255_255_255/0.07)]",
           props.showWeekNumber
-            ? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-(--cell-radius)"
-            : "[&:first-child[data-selected=true]_button]:rounded-l-(--cell-radius)",
+            ? "[&:nth-child(2)]:before:rounded-l-(--cell-radius)"
+            : "first:before:rounded-l-(--cell-radius)",
           defaultClassNames.day,
         ),
-        range_start: cn(
-          "relative isolate z-0 rounded-l-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:right-0 after:w-4 after:bg-muted",
-          defaultClassNames.range_start,
-        ),
-        range_middle: cn("rounded-none", defaultClassNames.range_middle),
-        range_end: cn(
-          "relative isolate z-0 rounded-r-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:left-0 after:w-4 after:bg-muted",
-          defaultClassNames.range_end,
-        ),
+        range_start: cn(defaultClassNames.range_start),
+        range_middle: cn(defaultClassNames.range_middle),
+        range_end: cn(defaultClassNames.range_end),
+        // Today is a recessed well (the Kbd); a selected day covers it.
         today: cn(
-          "rounded-(--cell-radius) bg-muted text-foreground data-[selected=true]:rounded-none",
+          "not-data-selected:bg-linear-to-b not-data-selected:from-[color-mix(in_oklch,var(--muted),var(--foreground)_7%)] not-data-selected:to-muted not-data-selected:shadow-[inset_0_1px_1.5px_rgb(0_0_0/0.12),inset_0_0_0_1px_rgb(0_0_0/0.05),0_1px_0_rgb(255_255_255/0.9)] dark:not-data-selected:from-[color-mix(in_oklch,var(--muted),black_35%)] dark:not-data-selected:shadow-[inset_0_1px_1.5px_rgb(0_0_0/0.6),inset_0_0_0_1px_rgb(0_0_0/0.25),0_1px_0_rgb(255_255_255/0.07)]",
           defaultClassNames.today,
         ),
         outside: cn(
-          "text-muted-foreground aria-selected:text-muted-foreground",
+          // On the range groove, muted text is lifted 20% to keep 4.5:1 in light.
+          "text-muted-foreground aria-selected:text-[color-mix(in_oklch,var(--muted-foreground),var(--foreground)_20%)] dark:aria-selected:text-muted-foreground",
           defaultClassNames.outside,
         ),
         disabled: cn("text-muted-foreground opacity-50", defaultClassNames.disabled),
@@ -173,7 +183,16 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 border-0 leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-(--cell-radius) data-[range-end=true]:rounded-r-(--cell-radius) data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-muted data-[range-middle=true]:text-foreground data-[range-start=true]:rounded-(--cell-radius) data-[range-start=true]:rounded-l-(--cell-radius) data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:text-foreground [&>span]:text-xs [&>span]:opacity-70",
+        // Every day is a key. Hover lifts a white key out of the surface (the
+        // secondary Button skin, on ::before); a selected day, or either end
+        // of a range, is the blue default Button skin, popping in from 0.9 on
+        // ::after. Gradients can't transition, so both skins cross-fade.
+        // everycent: the press overrides the Button's own scale-[0.97] (same variant)
+        // rather than base-nova's translate-y-px.
+        "relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-(--cell-radius) border-0 leading-none font-normal tabular-nums transition-[color,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-transparent focus-visible:z-20 focus-visible:ring-offset-0 active:not-aria-[haspopup]:scale-95 disabled:opacity-100 aria-expanded:bg-transparent motion-reduce:active:scale-100 dark:hover:bg-transparent dark:hover:text-foreground",
+        "before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:border before:border-input before:bg-linear-to-b before:from-background before:to-secondary before:opacity-0 before:shadow-[0_1px_2px_rgb(0_0_0/0.08),inset_0_-1px_0_rgb(0_0_0/0.03)] before:transition-opacity before:duration-150 before:ease-[cubic-bezier(0.23,1,0.32,1)] hover:before:opacity-100 dark:before:from-[color-mix(in_oklch,var(--secondary),var(--foreground)_6%)] dark:before:shadow-[0_1px_2px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.06)]",
+        "after:absolute after:inset-0 after:-z-1 after:scale-90 after:rounded-[inherit] after:border after:border-[color-mix(in_oklch,var(--primary),black_15%)] after:bg-linear-to-b after:from-[color-mix(in_oklch,var(--primary),white_15%)] after:to-primary after:opacity-0 after:shadow-[0_1px_2px_rgb(30_60_160/0.28),inset_0_1px_0_rgb(255_255_255/0.22)] after:transition-[opacity,scale,filter] after:duration-150 after:ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:after:scale-100 dark:after:shadow-[0_1px_2px_rgb(0_0_0/0.45),inset_0_1px_0_rgb(255_255_255/0.22)]",
+        "data-[range-end=true]:text-primary-foreground data-[range-end=true]:after:scale-100 data-[range-end=true]:after:opacity-100 data-[range-end=true]:hover:after:brightness-106 data-[range-middle=true]:text-foreground data-[range-start=true]:text-primary-foreground data-[range-start=true]:after:scale-100 data-[range-start=true]:after:opacity-100 data-[range-start=true]:hover:after:brightness-106 data-[selected-single=true]:text-primary-foreground data-[selected-single=true]:after:scale-100 data-[selected-single=true]:after:opacity-100 data-[selected-single=true]:hover:after:brightness-106 dark:data-[range-end=true]:hover:text-primary-foreground dark:data-[range-start=true]:hover:text-primary-foreground dark:data-[selected-single=true]:hover:text-primary-foreground [&>span]:text-xs [&>span]:opacity-70",
         defaultClassNames.day,
         className,
       )}

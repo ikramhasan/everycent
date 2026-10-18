@@ -62,7 +62,13 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          // Recharts paints with hard-coded grays (#ccc, #fff, #666); each one
+          // is swapped for a token here. Hairline grid in `border`, cursors in
+          // `input` / `muted`, and the white rings around active dots and pie
+          // sectors become `card`, so they read as cut-outs on the surface.
+          // Axis ticks are `muted-foreground`. The keyboard-focusable surface (with
+          // accessibilityLayer) gets the standard 2px ring.
+          "flex aspect-video justify-center text-xs tabular-nums [&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border [&_.recharts-curve.recharts-tooltip-cursor]:stroke-input [&_.recharts-dot[stroke='#fff']]:stroke-card [&_.recharts-layer]:outline-hidden [&_.recharts-polar-angle-axis-tick-value]:fill-muted-foreground [&_.recharts-polar-radius-axis-tick-value]:fill-muted-foreground [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-input [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-card [&_.recharts-surface]:rounded-md [&_.recharts-surface]:outline-hidden [&_.recharts-surface:focus-visible]:outline-2 [&_.recharts-surface:focus-visible]:outline-offset-2 [&_.recharts-surface:focus-visible]:outline-ring",
           className,
         )}
         {...props}
@@ -104,6 +110,12 @@ ${colorConfig
     />
   );
 };
+
+// Series swatches (tooltip and legend) are small raised keys: the series
+// color under the Button's top highlight, with a hairline edge so light
+// series still hold their shape on white.
+const swatchClassName =
+  "bg-(--color-bg) bg-linear-to-b from-white/20 to-transparent shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]";
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
@@ -147,7 +159,12 @@ function ChartTooltipContent({
 
     if (labelFormatter) {
       return (
-        <div className={cn("font-medium", labelClassName)}>{labelFormatter(value, payload)}</div>
+        <div
+          data-slot="chart-tooltip-label"
+          className={cn("leading-4 font-medium", labelClassName)}
+        >
+          {labelFormatter(value, payload)}
+        </div>
       );
     }
 
@@ -155,7 +172,11 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={cn("font-medium", labelClassName)}>{value}</div>;
+    return (
+      <div data-slot="chart-tooltip-label" className={cn("leading-4 font-medium", labelClassName)}>
+        {value}
+      </div>
+    );
   }, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey]);
 
   if (!active || !payload?.length) {
@@ -166,13 +187,19 @@ function ChartTooltipContent({
 
   return (
     <div
+      data-slot="chart-tooltip"
       className={cn(
-        "grid min-w-32 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+        // The Table's frame at tooltip size: a muted shell (14px radius, 4px
+        // padding) with the label on it and the series on a raised card
+        // (10px = 14 − 4). The label's 16px line sits 6px from the shell's
+        // top and 6px above the card; its text and the rows' text share one
+        // column, 13px from the shell edge (4 + 1 border + 8).
+        "grid min-w-32 items-start rounded-xl bg-muted p-1 text-xs text-popover-foreground shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.1),inset_0_1px_0_rgb(255_255_255/0.7)] ring-1 ring-border dark:bg-[color-mix(in_oklch,var(--popover),black_20%)] dark:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_rgb(0_0_0/0.5),inset_0_1px_0_rgb(255_255_255/0.04)] *:data-[slot=chart-tooltip-label]:px-[9px] *:data-[slot=chart-tooltip-label]:pt-0.5 *:data-[slot=chart-tooltip-label]:pb-1.5",
         className,
       )}
     >
       {!nestLabel ? tooltipLabel : null}
-      <div className="grid gap-1.5">
+      <div className="grid gap-1 rounded-[10px] border border-border bg-popover px-2 py-1.5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:shadow-[0_1px_2px_rgb(0_0_0/0.4)]">
         {payload
           .filter((item) => item.type !== "none")
           .map((item, index) => {
@@ -184,8 +211,8 @@ function ChartTooltipContent({
               <div
                 key={index}
                 className={cn(
-                  "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
-                  indicator === "dot" && "items-center",
+                  "flex w-full flex-wrap items-stretch gap-2 leading-4 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
+                  (indicator === "dot" || itemConfig?.icon) && "items-center",
                 )}
               >
                 {formatter && item?.value !== undefined && item.name ? (
@@ -198,12 +225,13 @@ function ChartTooltipContent({
                       !hideIndicator && (
                         <div
                           className={cn(
-                            "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
+                            "shrink-0 rounded-[3px] border-(--color-border)",
+                            indicator === "dashed"
+                              ? "w-0 border-[1.5px] border-dashed bg-transparent"
+                              : swatchClassName,
                             {
-                              "h-2.5 w-2.5": indicator === "dot",
-                              "w-1": indicator === "line",
-                              "w-0 border-[1.5px] border-dashed bg-transparent":
-                                indicator === "dashed",
+                              "size-2.5": indicator === "dot",
+                              "w-1 rounded-[2px]": indicator === "line",
                               "my-0.5": nestLabel && indicator === "dashed",
                             },
                           )}
@@ -218,18 +246,18 @@ function ChartTooltipContent({
                     )}
                     <div
                       className={cn(
-                        "flex flex-1 justify-between leading-none",
+                        "flex flex-1 justify-between gap-4",
                         nestLabel ? "items-end" : "items-center",
                       )}
                     >
-                      <div className="grid gap-1.5">
+                      <div className="grid gap-1">
                         {nestLabel ? tooltipLabel : null}
                         <span className="text-muted-foreground">
                           {itemConfig?.label ?? item.name}
                         </span>
                       </div>
                       {item.value != null && (
-                        <span className="font-mono font-medium text-foreground tabular-nums">
+                        <span className="font-medium text-foreground tabular-nums">
                           {typeof item.value === "number"
                             ? item.value.toLocaleString()
                             : String(item.value)}
@@ -266,8 +294,9 @@ function ChartLegendContent({
 
   return (
     <div
+      data-slot="chart-legend"
       className={cn(
-        "flex items-center justify-center gap-4",
+        "flex items-center justify-center gap-4 leading-4 text-muted-foreground",
         verticalAlign === "top" ? "pb-3" : "pt-3",
         className,
       )}
@@ -289,10 +318,8 @@ function ChartLegendContent({
                 <itemConfig.icon />
               ) : (
                 <div
-                  className="h-2 w-2 shrink-0 rounded-[2px]"
-                  style={{
-                    backgroundColor: item.color,
-                  }}
+                  className={cn("size-2.5 shrink-0 rounded-[3px]", swatchClassName)}
+                  style={{ "--color-bg": item.color } as React.CSSProperties}
                 />
               )}
               {itemConfig?.label}
