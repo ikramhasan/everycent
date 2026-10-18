@@ -254,8 +254,10 @@ export async function netWorthReport(
     balances.push(byAccount);
   }
   for (const month of months.filter((m) => m >= from)) {
-    for (const currency of new Set(accounts.map((a) => a.currency))) {
-      if (currency !== budgetCurrency) rates.push(await rateFor(currency, month));
+    // Only from a currency's first transaction on: earlier months have no balance to convert, and
+    // a rate for them could be a provider round-trip (EVERYCENT-245).
+    for (const [currency, first] of foreignFirst) {
+      if (month >= first) rates.push(await rateFor(currency, month));
     }
   }
 
