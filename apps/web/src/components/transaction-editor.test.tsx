@@ -118,6 +118,7 @@ describe("TransactionEditor", () => {
         outflow: "12.50",
         inflow: "",
       }),
+      null,
     );
   });
 
@@ -201,7 +202,10 @@ describe("TransactionEditor", () => {
     const user = userEvent.setup();
     expect(screen.getByRole("button", { name: "Save and add another" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Outflow"), "5{Enter}");
-    expect(onSaveAndAddAnother).toHaveBeenCalledWith(expect.objectContaining({ outflow: "5" }));
+    expect(onSaveAndAddAnother).toHaveBeenCalledWith(
+      expect.objectContaining({ outflow: "5" }),
+      null,
+    );
     await user.click(screen.getByRole("button", { name: "Save and add another" }));
     expect(onSaveAndAddAnother).toHaveBeenCalledTimes(2);
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -256,7 +260,7 @@ describe("TransactionEditor", () => {
     expect(screen.getByRole("button", { name: "Create “Bakery” Payee" })).toBeInTheDocument();
     expect(screen.getByText("“Bakery” will be created as a payee.")).toBeInTheDocument();
     await user.keyboard("{Enter}");
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Bakery" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Bakery" }), null);
   });
 
   it("lists the chosen payee under Selected when the field is opened again (YNAB)", async () => {
@@ -282,7 +286,7 @@ describe("TransactionEditor", () => {
     // A new payee has no category to fill in.
     expect(screen.getByLabelText("Category")).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Mar" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ payeeName: "Mar" }), null);
   });
 
   it("closes an open list on Esc before cancelling the row", async () => {
@@ -331,6 +335,7 @@ describe("TransactionEditor", () => {
         transferAccountId: "brokerage",
         payeeName: "To/From brokerage",
       }),
+      null,
     );
   });
 
@@ -421,6 +426,7 @@ describe("TransactionEditor", () => {
           expect.objectContaining({ outflow: "40" }),
         ],
       }),
+      null,
     );
   });
 
@@ -498,7 +504,7 @@ describe("TransactionEditor", () => {
     expect(onRenameFlags).toHaveBeenCalledWith([{ color: "blue", name: "Tax" }]);
 
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ flag: "red" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ flag: "red" }), null);
   });
 });
 
@@ -531,6 +537,6 @@ describe("TransactionEditor, stacked for a phone's drawer (EVERYCENT-93)", () =>
     const user = userEvent.setup();
     await user.type(within(form).getByLabelText("Outflow"), "12.50");
     await user.click(within(form).getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ outflow: "12.50" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ outflow: "12.50" }), null);
   });
 });

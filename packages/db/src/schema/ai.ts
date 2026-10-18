@@ -1,4 +1,5 @@
-import { bigint, index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, index, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { budget } from "./budget";
 import { timestamps } from "./columns";
@@ -97,3 +98,34 @@ export const aiToolRun = pgTable("ai_tool_run", {
   output: jsonb(),
   createdAt: timestamps.createdAt,
 });
+
+/**
+ * A file the person attached in a conversation with the assistant (a receipt, a statement, a
+ * spreadsheet). The bytes are in object storage under `storageKey`, never here; a trigger queues
+ * them for deletion with the row (`storage_deletion`), however it goes. Uploaded before the
+ * message is sent, so `conversationId` is null until the message that carries it is; unsent ones
+ * are pruned after a day (`storage.purge`).
+ */
+export const aiAttachment = pgTable(
+  "ai_attachment",
+  {
+    id: text().primaryKey(),
+    budgetId: text()
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    conversationId: text().references(() => aiConversation.id, { onDelete: "cascade" }),
+    storageKey: text().notNull(),
+    /** As uploaded, for downloads and for the model. */
+    fileName: text().notNull(),
+    contentType: text().notNull(),
+    byteSize: integer().notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("ai_attachment_conversation_idx").on(t.conversationId),
+    index("ai_attachment_unsent_idx").on(t.createdAt).where(sql`${t.conversationId} is null`),
+  ],
+);

@@ -1669,6 +1669,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/ai/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file to send to the AI assistant
+         * @description Kept in object storage, private to the caller. Send it by putting a pointer to it in a chat message: an image or document part whose source is `{ type: "url", value: "everycent-attachment:<id>" }`. A file that isn't sent within a day is deleted.
+         */
+        post: operations["uploadAiAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/ai/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open or download a file sent to the AI assistant
+         * @description Redirects to a short-lived link to the file in object storage, or (storage on the API's own disk) sends the file. Only the person who uploaded it can open it.
+         */
+        get: operations["getAiAttachment"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a file before sending it
+         * @description A file already sent stays with its conversation (deleted with it).
+         */
+        delete: operations["deleteAiAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/ai/transaction-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill in a new transaction from a receipt
+         * @description One AI request (not a conversation): reads the file and fills in a transaction for the account, choosing from the budget's own categories and payees. Nothing is saved, and the file isn't kept: the app puts the result in its new-transaction row for the person to check.
+         */
+        post: operations["draftTransactionFromFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/accounts/{accountId}/import-context": {
         parameters: {
             query?: never;
@@ -4441,6 +4505,38 @@ export interface components {
             interrupts?: unknown;
         } & {
             [key: string]: unknown;
+        };
+        AiAttachment: {
+            id: string;
+            fileName: string;
+            /** @description Read from the file, not from what the browser said */
+            contentType: string;
+            byteSize: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TransactionDraft: {
+            /** @description False when the file didn't look like a receipt, invoice or bill */
+            found: boolean;
+            /** Format: date */
+            date: string | null;
+            /** @description An existing payee the file matched; null for a new one (`payeeName`) or none */
+            payeeId: string | null;
+            payeeName: string | null;
+            /** @description Null when unsure, or when it's a split */
+            categoryId: string | null;
+            memo: string | null;
+            /** @description The total in the account's currency, negative for an outflow; null if unread */
+            amount: string | null;
+            /** @description A split by category, adding up to `amount`; empty when it isn't one */
+            lines: {
+                categoryId: string;
+                memo: string | null;
+                /** @description In the account's currency; negative for an outflow */
+                amount: string;
+            }[];
+            /** @description Something the person should check */
+            note: string | null;
         };
         ImportContext: {
             /**
@@ -11903,6 +11999,341 @@ export interface operations {
             };
             /** @description No such budget, or the conversation isn't the caller's */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_UNAVAILABLE: the server has no AI set up */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    uploadAiAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Uploaded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiAttachment"];
+                };
+            };
+            /** @description No file, or an empty one */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_UNAVAILABLE: the server has no AI set up; ATTACHMENTS_DISABLED: it has no file storage */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAiAttachment: {
+        parameters: {
+            query?: {
+                /** @description `true`: saved as a download (its file name) rather than shown */
+                download?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Where to fetch the file (valid for a few minutes) */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or file, or it isn't the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_UNAVAILABLE: the server has no AI set up; ATTACHMENTS_DISABLED: it has no file storage */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAiAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or file, or it isn't the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ATTACHMENT_SENT: it's part of a conversation */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_UNAVAILABLE: the server has no AI set up */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    draftTransactionFromFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @description The account the transaction goes in */
+                    accountId: string;
+                    /**
+                     * Format: date
+                     * @description The person's date, for a receipt without a year
+                     */
+                    today?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The filled-in transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraft"];
+                };
+            };
+            /** @description No file, an empty one, or no such account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Bigger than 15 MB, or a photo bigger than 3.75 MB (`FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a file the assistant can read: photos (JPG, PNG, WebP, GIF), PDFs, Excel workbooks (.xlsx) and text files such as CSV, OFX or QIF (`UNSUPPORTED_FILE_TYPE`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AI_FAILED: the AI couldn't read the file */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

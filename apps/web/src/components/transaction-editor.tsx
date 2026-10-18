@@ -22,7 +22,10 @@ import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/nativ
 import { cn } from "@everycent/ui/lib/utils";
 import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useState } from "react";
+import { toast } from "sonner";
 import type { Account } from "@/lib/accounts";
+import { applyTransactionDraft, draftTransactionFromFile } from "@/lib/ai";
+import { todayIso } from "@/lib/dates";
 import type { Flag } from "@/lib/flags";
 import { inCurrency, type MoneySettings, parseMoneyInput } from "@/lib/money-input";
 import {
@@ -43,6 +46,7 @@ import {
   withSplitTotal,
 } from "@/lib/transactions";
 import { FlagMenu } from "./flag-menu";
+import { NewAttachmentCell } from "./new-transaction-attachment";
 import { type ColumnId, PINNED_BG, pinned, pinnedColumns, pinnedWidth } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
 import { RegisterCell, RegisterRow } from "./register-table";
@@ -61,6 +65,7 @@ const STACKED_ROWS: ColumnId[][] = [
   ["memo"],
   ["outflow", "inflow"],
   ["flag", "cleared"],
+  ["attachment"],
 ];
 const STACKED_LABEL: Partial<Record<ColumnId, string>> = {
   account: "Account",
@@ -72,6 +77,7 @@ const STACKED_LABEL: Partial<Record<ColumnId, string>> = {
   inflow: "Inflow",
   flag: "Flag",
   cleared: "Cleared",
+  attachment: "Attachment",
 };
 
 export function TransactionEditor({
@@ -98,6 +104,7 @@ export function TransactionEditor({
   onSaveAndAddAnother,
   onCancel,
   attachment,
+  newAttachment,
 }: {
   initial: Draft;
   columns: readonly ColumnId[];
@@ -128,14 +135,22 @@ export function TransactionEditor({
   error: string | null;
   /** An in-budget transfer's category text ("Credit Card Payments: <card>"), or "". */
   transferCategory?: (accountId: string, transferAccountId: string | null) => string;
-  onSave: (draft: Draft) => void;
+  /** `file`: a new transaction's attachment, to upload once it's saved. */
+  onSave: (draft: Draft, file: File | null) => void;
   /** A new row's "Save and add another" (also its Enter); the next row keeps the date. */
-  onSaveAndAddAnother?: (draft: Draft) => void;
+  onSaveAndAddAnother?: (draft: Draft, file: File | null) => void;
   onCancel: () => void;
   /** An existing transaction's attachment cell, shown as it is while the row is edited. */
   attachment?: ReactNode;
+  /**
+   * A new transaction's attachment, picked in the editor and uploaded after saving; with AI on,
+   * a receipt can fill the transaction in.
+   */
+  newAttachment?: { budgetId: string; aiEnabled: boolean };
 }) {
   const [draft, setDraft] = useState(initial);
+  const [file, setFile] = useState<File | null>(null);
+  const [filling, setFilling] = useState(false);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const account = accounts.find((a) => a.id === draft.accountId);
   const settings = inCurrency(budgetSettings, account?.currency);
@@ -190,10 +205,36 @@ export function TransactionEditor({
   // YNAB's "Something Doesn't Add Up": saving a split whose lines miss its total asks first.
   const [mismatch, setMismatch] = useState<ReturnType<typeof splitMismatch>>(null);
   function save(another = false) {
+    // Not while the AI is still filling the row in.
+    if (filling) return;
     const found = splitMismatch(draft, settings);
     if (found) setMismatch(found);
-    else if (another && onSaveAndAddAnother) onSaveAndAddAnother(draft);
-    else onSave(draft);
+    else if (another && onSaveAndAddAnother) onSaveAndAddAnother(draft, file);
+    else onSave(draft, file);
+  }
+
+  /** Asks the AI to read the receipt and fills the row in with what it found. */
+  async function fillFrom(receipt: File) {
+    if (!newAttachment) return;
+    setFilling(true);
+    try {
+      const read = await draftTransactionFromFile(
+        newAttachment.budgetId,
+        receipt,
+        draft.accountId,
+        todayIso(),
+      );
+      setDraft((d) => {
+        const own = accounts.find((a) => a.id === d.accountId);
+        return applyTransactionDraft(d, read, inCurrency(budgetSettings, own?.currency));
+      });
+      if (!read.found) toast.warning("This doesn't look like a receipt. Check what was filled in.");
+      else if (read.note) toast.info(read.note);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The AI couldn't read this file.");
+    } finally {
+      setFilling(false);
+    }
   }
   const show = (amount: bigint) => formatAmount(money(amount, settings.currency), settings);
 
@@ -215,7 +256,19 @@ export function TransactionEditor({
       case "select":
         return null;
       case "attachment":
-        return attachment ?? null;
+        return newAttachment ? (
+          <NewAttachmentCell
+            file={file}
+            onFile={setFile}
+            aiEnabled={newAttachment.aiEnabled}
+            // Reading it, or uploading it with the saved transaction.
+            busy={filling || (pending && file !== null)}
+            onFill={(receipt) => void fillFrom(receipt)}
+            className={layout === "stacked" ? "justify-start" : "justify-center"}
+          />
+        ) : (
+          (attachment ?? null)
+        );
       case "flag":
         return (
           <FlagMenu
@@ -571,11 +624,11 @@ export function TransactionEditor({
       <Button type="button" variant="outline" size="sm" onClick={onCancel}>
         Cancel
       </Button>
-      <Button type="button" size="sm" onClick={() => save()} disabled={pending}>
+      <Button type="button" size="sm" onClick={() => save()} disabled={pending || filling}>
         Save
       </Button>
       {onSaveAndAddAnother && (
-        <Button type="button" size="sm" onClick={() => save(true)} disabled={pending}>
+        <Button type="button" size="sm" onClick={() => save(true)} disabled={pending || filling}>
           Save and add another
         </Button>
       )}
@@ -620,7 +673,11 @@ export function TransactionEditor({
   // A phone edits in a drawer: the same fields, one under another, with their names (EVERYCENT-93).
   if (layout === "stacked") {
     const stacked = STACKED_ROWS.flat().filter(
-      (c) => columns.includes(c) || c === "flag" || c === "cleared",
+      (c) =>
+        columns.includes(c) ||
+        c === "flag" ||
+        c === "cleared" ||
+        (c === "attachment" && newAttachment !== undefined),
     );
     return (
       <form
