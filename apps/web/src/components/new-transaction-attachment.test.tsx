@@ -35,6 +35,7 @@ const checking = {
 
 function renderEditor(aiEnabled: boolean) {
   const onSave = vi.fn();
+  const onCancel = vi.fn();
   render(
     <table>
       <tbody>
@@ -54,13 +55,13 @@ function renderEditor(aiEnabled: boolean) {
           pending={false}
           error={null}
           onSave={onSave}
-          onCancel={() => {}}
+          onCancel={onCancel}
           newAttachment={{ budgetId: "b1", aiEnabled }}
         />
       </tbody>
     </table>,
   );
-  return { onSave };
+  return { onSave, onCancel };
 }
 
 const receipt = () => new File(["fake"], "receipt.jpg", { type: "image/jpeg" });
@@ -134,6 +135,22 @@ describe("A new transaction's receipt", () => {
     expect(screen.getByRole("button", { name: "Add a photo or PDF" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith(expect.anything(), null);
+  });
+
+  it("closes its dialogs on Escape without cancelling the row", async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderEditor(true);
+    await user.upload(picker(), receipt());
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open the attachment receipt.jpg" }));
+    expect(screen.getByRole("dialog", { name: "receipt.jpg" })).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Open the attachment receipt.jpg" })).toBeVisible();
   });
 
   it("can just be attached", async () => {

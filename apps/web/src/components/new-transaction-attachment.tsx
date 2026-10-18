@@ -141,7 +141,14 @@ export function NewAttachmentCell({
   }
 
   return (
-    <div className={cn("flex", className)}>
+    // Keys pressed in the dialogs (portalled, but React bubbles them through the tree) stop here:
+    // the row would take Escape as cancelling the new transaction and Enter as saving it.
+    <div
+      className={cn("flex", className)}
+      onKeyDown={(e) => {
+        if (!e.currentTarget.contains(e.target as Node)) e.stopPropagation();
+      }}
+    >
       {picker}
       {cell}
       <Dialog open={viewing && file !== null} onOpenChange={setViewing}>
