@@ -12,7 +12,7 @@ export class MemoryStorage implements ObjectStorage {
     return this.objects.get(key)?.body ?? null;
   }
 
-  async signedUrl() {
+  async signedUrl(): Promise<string | null> {
     return null;
   }
 

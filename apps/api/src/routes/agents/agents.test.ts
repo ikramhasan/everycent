@@ -5,8 +5,16 @@ import { eq } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createBudget, createTestApp, one, resetDatabase, signUp } from "../../../test/helpers";
+import { MemoryStorage } from "../../lib/storage";
 
-const { app, db, env, close } = createTestApp();
+/** Like a bucket: browsers are sent signed links. Agents must still get the bytes. */
+class SigningStorage extends MemoryStorage {
+  override async signedUrl(): Promise<string | null> {
+    return "https://bucket.example/signed?X-Amz-Signature=x";
+  }
+}
+
+const { app, db, env, close } = createTestApp({ storage: new SigningStorage() });
 const MCP_URL = `${env.BETTER_AUTH_URL}/mcp`;
 beforeEach(async () => {
   await resetDatabase(db);
@@ -251,6 +259,9 @@ describe("MCP server", () => {
       data: PNG_BASE64,
       mimeType: "image/png",
     });
+    // The browser gets the signed link; only agents are handed the file itself.
+    const browser = await send("GET", `${base}/transactions/${txn.id}/attachment`, owner.cookie);
+    expect(browser.status).toBe(302);
 
     // The person's own edit is theirs alone.
     const edited = await json<Txn>(
