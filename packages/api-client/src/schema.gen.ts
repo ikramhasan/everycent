@@ -14428,13 +14428,13 @@ export interface operations {
     getNetWorthReport: {
         parameters: {
             query: {
-                /** @description First month, YYYY-MM */
+                /** @description First month, YYYY-MM (0001-01 or later) */
                 from: string;
-                /** @description Last month, YYYY-MM (inclusive) */
+                /** @description Last month, YYYY-MM (inclusive); at most 1200 months after `from` */
                 to: string;
                 /** @description Comma-separated account ids; all accounts when left out */
                 accountIds?: string;
-                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                /** @description The user's today, held within a day of the server's UTC date (the default); later transactions don't count. */
                 today?: string;
             };
             header?: never;
@@ -14454,7 +14454,7 @@ export interface operations {
                     "application/json": components["schemas"]["NetWorthReport"];
                 };
             };
-            /** @description Invalid query, or `from` after `to` */
+            /** @description Invalid query, `from` after `to` or before 0001-01, or a range over 1200 months */
             400: {
                 headers: {
                     [name: string]: unknown;
