@@ -73,7 +73,7 @@ export const ARCHIVED_STAMP = "(Archived on ";
 
 /**
  * Copies the old budget's setup into the freshly created `newBudgetId`, YNAB-style: partners,
- * category groups and categories (order, hidden flags, notes, targets), payees and their renaming rules, flag names, and
+ * category groups and categories (order, hidden flags, notes, targets, spending pace settings), payees and their renaming rules, flag names, and
  * accounts (with their transfer payees), each starting at $0 with a $0 Starting Balance on `date`
  * for the user to update (YNAB: "Unlinked accounts will start with a $0 balance for you to update
  * with today's balance"; "C4 Order FS", 2026-10-12; everycent has no linked accounts), and
@@ -246,6 +246,7 @@ export async function copyIntoFreshStart(
       sortOrder: c.sortOrder,
       hidden: c.hidden,
       linkedAccountId: c.linkedAccountId ? (accountIds.get(c.linkedAccountId) ?? null) : null,
+      pace: c.pace,
     });
     const target = targets.get(c.id);
     if (target) {

@@ -2277,6 +2277,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/reports/spending-pace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A month's spending pace: money left to spend day by day against an even pace
+         * @description An everycent extra. Money to spend is each category's Available carried in plus the month's Assigned; spending is its net activity. The plan's line adds up the categories in pace: card payment categories never are; by default bills (a monthly target due on a set day, a dated yearly or custom target, a debt target), savings (a "Have a balance of" target), categories with a scheduled transaction and hidden ones aren't either, and a category's own setting overrides that. `groupId` or `categoryId` picks the line instead. A past month is finished; a future one is a 400.
+         */
+        get: operations["getSpendingPace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/reports/spending-pace/categories/{categoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Keep a category in or out of spending pace
+         * @description Null goes back to the automatic rule (bills, savings, scheduled and hidden out).
+         */
+        put: operations["setCategoryPace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/events": {
         parameters: {
             query?: never;
@@ -2753,6 +2793,8 @@ export interface components {
                 /** @enum {string|null} */
                 internalKind: "ready_to_assign" | "uncategorized" | null;
                 linkedAccountId: string | null;
+                /** @enum {string|null} */
+                pace?: "include" | "exclude" | null;
             }[];
             accounts: {
                 id: string;
@@ -5439,6 +5481,102 @@ export interface components {
             creditOverspent: string;
             /** @description What the category's target asks of the month (the plan's month targets) */
             targetAmount: string | null;
+        };
+        SpendingPace: {
+            month: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            asOf: string;
+            days: number;
+            /** @description Days passed, today included */
+            elapsed: number;
+            finished: boolean;
+            line: components["schemas"]["SpendingPaceLine"];
+            categories: {
+                categoryId: string;
+                name: string;
+                groupId: string;
+                groupName: string;
+                /** @description Counted in the plan's line */
+                included: boolean;
+                /**
+                 * @description Null follows `reason`
+                 * @enum {string|null}
+                 */
+                setting: "include" | "exclude" | null;
+                /**
+                 * @description Why the automatic rule leaves it out; null when it keeps it
+                 * @enum {string|null}
+                 */
+                reason: "bill" | "saving" | "scheduled" | "hidden" | null;
+                pace: {
+                    /** @description Available carried in plus this month's Assigned */
+                    start: string;
+                    /** @description Net spending so far; negative when refunds outweigh it */
+                    spent: string;
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    remaining: string;
+                    /** @description `spent` of `start`; null when `start` ≤ 0 */
+                    usedPercent: number | null;
+                    /** @enum {string|null} */
+                    status: "ahead" | "on_pace" | "behind" | null;
+                    /** @description Per day for the rest of the month, today included, rounded down; null when past */
+                    safePerDay: string | null;
+                    /** @description Left at the month's end at the pace so far */
+                    projectedEnd: string;
+                    /**
+                     * Format: date
+                     * @description When the money went (or at this pace will go) below zero; null if it lasts
+                     */
+                    runOutDate: string | null;
+                };
+            }[];
+        };
+        /** @description The plan's line, or the group's or category's asked for */
+        SpendingPaceLine: {
+            /** @description Available carried in plus this month's Assigned */
+            start: string;
+            /** @description Net spending so far; negative when refunds outweigh it */
+            spent: string;
+            /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+            remaining: string;
+            /** @description `spent` of `start`; null when `start` ≤ 0 */
+            usedPercent: number | null;
+            /** @enum {string|null} */
+            status: "ahead" | "on_pace" | "behind" | null;
+            /** @description Per day for the rest of the month, today included, rounded down; null when past */
+            safePerDay: string | null;
+            /** @description Left at the month's end at the pace so far */
+            projectedEnd: string;
+            /**
+             * Format: date
+             * @description When the money went (or at this pace will go) below zero; null if it lasts
+             */
+            runOutDate: string | null;
+            points: {
+                /** Format: date */
+                date: string;
+                /** @description Left at the day's end; null for days to come */
+                remaining: string | null;
+                /** @description Left at the day's end at an even pace to zero */
+                ideal: string;
+            }[];
+        };
+        CategoryPace: {
+            categoryId: string;
+            /** @enum {string|null} */
+            pace: "include" | "exclude" | null;
+        };
+        SetCategoryPace: {
+            /** @enum {string|null} */
+            pace: "include" | "exclude" | null;
         };
         ExportSelection: {
             selection: components["schemas"]["TransactionSelection"];
@@ -14461,6 +14599,136 @@ export interface operations {
                 };
             };
             /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSpendingPace: {
+        parameters: {
+            query?: {
+                /** @description The month, YYYY-MM; defaults to today's */
+                month?: string;
+                /** @description The line for this group's categories in pace */
+                groupId?: string;
+                /** @description The line for this one category */
+                categoryId?: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's pace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendingPace"];
+                };
+            };
+            /** @description A future month, or a group or category that isn't in pace's list */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setCategoryPace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                budgetId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCategoryPace"];
+            };
+        };
+        responses: {
+            /** @description The category's setting */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryPace"];
+                };
+            };
+            /** @description Invalid setting, or a category pace doesn't list (card payments, internal) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change categories, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget or category, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

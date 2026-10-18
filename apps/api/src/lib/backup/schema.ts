@@ -3,6 +3,7 @@ import {
   FLAG_COLORS,
   INTERNAL_CATEGORY_KINDS,
   INTERNAL_PAYEE_KINDS,
+  PACE_SETTINGS,
 } from "@everycent/db/schema";
 import {
   ACCOUNT_TYPES,
@@ -82,6 +83,8 @@ const CategorySchema = z.object({
   hidden: z.boolean(),
   internalKind: z.enum(INTERNAL_CATEGORY_KINDS).nullable(),
   linkedAccountId: Ref,
+  /** Spending pace's setting; backups from before it have none. */
+  pace: z.enum(PACE_SETTINGS).nullish(),
 });
 
 /** A file import's remembered settings, kept as they are (they only steer the import dialog). */

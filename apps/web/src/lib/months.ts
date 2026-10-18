@@ -16,11 +16,17 @@ export const monthQueryOptions = (budgetId: string, month: BudgetMonth, today = 
     params: { path: { budgetId, month }, query: { today } },
   });
 
-/** Refetches every month: call after anything that changes assigned amounts or activity. */
+/**
+ * Refetches every month, and spending pace (built from the same figures): call after anything
+ * that changes assigned amounts or activity.
+ */
 export function invalidateMonths(queryClient: QueryClient) {
-  return queryClient.invalidateQueries({
-    queryKey: ["get", "/v1/budgets/{budgetId}/months/{month}"],
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["get", "/v1/budgets/{budgetId}/months/{month}"] }),
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/v1/budgets/{budgetId}/reports/spending-pace"],
+    }),
+  ]);
 }
 
 export const currentMonth = (now = new Date()) => monthOf(todayIso(now));

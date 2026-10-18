@@ -38,6 +38,7 @@ import { Route as AuthedBudgetsBudgetIdReportsBudgetVsActualRouteImport } from '
 import { Route as AuthedBudgetsBudgetIdReportsIncomeExpenseRouteImport } from './routes/_authed/budgets/$budgetId/reports/income-expense'
 import { Route as AuthedBudgetsBudgetIdReportsNetWorthRouteImport } from './routes/_authed/budgets/$budgetId/reports/net-worth'
 import { Route as AuthedBudgetsBudgetIdReportsSpendingBreakdownRouteImport } from './routes/_authed/budgets/$budgetId/reports/spending-breakdown'
+import { Route as AuthedBudgetsBudgetIdReportsSpendingPaceRouteImport } from './routes/_authed/budgets/$budgetId/reports/spending-pace'
 import { Route as AuthedBudgetsBudgetIdReportsSpendingTrendsRouteImport } from './routes/_authed/budgets/$budgetId/reports/spending-trends'
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -196,6 +197,12 @@ const AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute =
     path: '/reports/spending-breakdown',
     getParentRoute: () => AuthedBudgetsBudgetIdRoute,
   } as any)
+const AuthedBudgetsBudgetIdReportsSpendingPaceRoute =
+  AuthedBudgetsBudgetIdReportsSpendingPaceRouteImport.update({
+    id: '/reports/spending-pace',
+    path: '/reports/spending-pace',
+    getParentRoute: () => AuthedBudgetsBudgetIdRoute,
+  } as any)
 const AuthedBudgetsBudgetIdReportsSpendingTrendsRoute =
   AuthedBudgetsBudgetIdReportsSpendingTrendsRouteImport.update({
     id: '/reports/spending-trends',
@@ -230,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
   '/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
   '/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/budgets/$budgetId/reports/spending-pace': typeof AuthedBudgetsBudgetIdReportsSpendingPaceRoute
   '/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/budgets/$budgetId/accounts/': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
   '/budgets/$budgetId/reports/': typeof AuthedBudgetsBudgetIdReportsIndexRoute
@@ -260,6 +268,7 @@ export interface FileRoutesByTo {
   '/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
   '/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
   '/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/budgets/$budgetId/reports/spending-pace': typeof AuthedBudgetsBudgetIdReportsSpendingPaceRoute
   '/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/budgets/$budgetId/accounts': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
   '/budgets/$budgetId/reports': typeof AuthedBudgetsBudgetIdReportsIndexRoute
@@ -293,6 +302,7 @@ export interface FileRoutesById {
   '/_authed/budgets/$budgetId/reports/income-expense': typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
   '/_authed/budgets/$budgetId/reports/net-worth': typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
   '/_authed/budgets/$budgetId/reports/spending-breakdown': typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  '/_authed/budgets/$budgetId/reports/spending-pace': typeof AuthedBudgetsBudgetIdReportsSpendingPaceRoute
   '/_authed/budgets/$budgetId/reports/spending-trends': typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   '/_authed/budgets/$budgetId/accounts/': typeof AuthedBudgetsBudgetIdAccountsIndexRoute
   '/_authed/budgets/$budgetId/reports/': typeof AuthedBudgetsBudgetIdReportsIndexRoute
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/budgets/$budgetId/reports/income-expense'
     | '/budgets/$budgetId/reports/net-worth'
     | '/budgets/$budgetId/reports/spending-breakdown'
+    | '/budgets/$budgetId/reports/spending-pace'
     | '/budgets/$budgetId/reports/spending-trends'
     | '/budgets/$budgetId/accounts/'
     | '/budgets/$budgetId/reports/'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/budgets/$budgetId/reports/income-expense'
     | '/budgets/$budgetId/reports/net-worth'
     | '/budgets/$budgetId/reports/spending-breakdown'
+    | '/budgets/$budgetId/reports/spending-pace'
     | '/budgets/$budgetId/reports/spending-trends'
     | '/budgets/$budgetId/accounts'
     | '/budgets/$budgetId/reports'
@@ -388,6 +400,7 @@ export interface FileRouteTypes {
     | '/_authed/budgets/$budgetId/reports/income-expense'
     | '/_authed/budgets/$budgetId/reports/net-worth'
     | '/_authed/budgets/$budgetId/reports/spending-breakdown'
+    | '/_authed/budgets/$budgetId/reports/spending-pace'
     | '/_authed/budgets/$budgetId/reports/spending-trends'
     | '/_authed/budgets/$budgetId/accounts/'
     | '/_authed/budgets/$budgetId/reports/'
@@ -612,6 +625,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRouteImport
       parentRoute: typeof AuthedBudgetsBudgetIdRoute
     }
+    '/_authed/budgets/$budgetId/reports/spending-pace': {
+      id: '/_authed/budgets/$budgetId/reports/spending-pace'
+      path: '/reports/spending-pace'
+      fullPath: '/budgets/$budgetId/reports/spending-pace'
+      preLoaderRoute: typeof AuthedBudgetsBudgetIdReportsSpendingPaceRouteImport
+      parentRoute: typeof AuthedBudgetsBudgetIdRoute
+    }
     '/_authed/budgets/$budgetId/reports/spending-trends': {
       id: '/_authed/budgets/$budgetId/reports/spending-trends'
       path: '/reports/spending-trends'
@@ -634,6 +654,7 @@ interface AuthedBudgetsBudgetIdRouteChildren {
   AuthedBudgetsBudgetIdReportsIncomeExpenseRoute: typeof AuthedBudgetsBudgetIdReportsIncomeExpenseRoute
   AuthedBudgetsBudgetIdReportsNetWorthRoute: typeof AuthedBudgetsBudgetIdReportsNetWorthRoute
   AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute: typeof AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute
+  AuthedBudgetsBudgetIdReportsSpendingPaceRoute: typeof AuthedBudgetsBudgetIdReportsSpendingPaceRoute
   AuthedBudgetsBudgetIdReportsSpendingTrendsRoute: typeof AuthedBudgetsBudgetIdReportsSpendingTrendsRoute
   AuthedBudgetsBudgetIdAccountsIndexRoute: typeof AuthedBudgetsBudgetIdAccountsIndexRoute
   AuthedBudgetsBudgetIdReportsIndexRoute: typeof AuthedBudgetsBudgetIdReportsIndexRoute
@@ -657,6 +678,8 @@ const AuthedBudgetsBudgetIdRouteChildren: AuthedBudgetsBudgetIdRouteChildren = {
     AuthedBudgetsBudgetIdReportsNetWorthRoute,
   AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute:
     AuthedBudgetsBudgetIdReportsSpendingBreakdownRoute,
+  AuthedBudgetsBudgetIdReportsSpendingPaceRoute:
+    AuthedBudgetsBudgetIdReportsSpendingPaceRoute,
   AuthedBudgetsBudgetIdReportsSpendingTrendsRoute:
     AuthedBudgetsBudgetIdReportsSpendingTrendsRoute,
   AuthedBudgetsBudgetIdAccountsIndexRoute:

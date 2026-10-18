@@ -297,6 +297,16 @@ export {
   zScheduleFrequency,
 } from "./schedule";
 export {
+  addActivity,
+  PACE_STATUSES,
+  type Pace,
+  type PaceDay,
+  type PaceInput,
+  type PaceStatus,
+  paceStatus,
+  spendingPace,
+} from "./spending-pace";
+export {
   averageMonthlySpending,
   comparedToAverage,
   percentTenths,

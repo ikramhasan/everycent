@@ -30,6 +30,13 @@ import { timestamps } from "./columns";
 export const INTERNAL_CATEGORY_KINDS = ["ready_to_assign", "uncategorized"] as const;
 export type InternalCategoryKind = (typeof INTERNAL_CATEGORY_KINDS)[number];
 
+/**
+ * Spending pace (EVERYCENT-239): a category kept in or out of pace whatever the automatic rule
+ * says (null follows it: bills and lump sums out, the rest in).
+ */
+export const PACE_SETTINGS = ["include", "exclude"] as const;
+export type PaceSetting = (typeof PACE_SETTINGS)[number];
+
 /** Groups YNAB manages itself. */
 export const CATEGORY_GROUP_KINDS = ["credit_card_payments"] as const;
 export type CategoryGroupKind = (typeof CATEGORY_GROUP_KINDS)[number];
@@ -82,6 +89,8 @@ export const category = pgTable(
     linkedAccountId: text()
       .unique()
       .references(() => budgetAccount.id, { onDelete: "cascade" }),
+    /** Spending pace: in or out whatever the automatic rule says; null follows it. */
+    pace: text({ enum: PACE_SETTINGS }),
     ...timestamps,
   },
   (t) => [
