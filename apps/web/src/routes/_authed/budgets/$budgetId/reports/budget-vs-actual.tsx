@@ -57,7 +57,7 @@ function Report() {
   const state = useReportState(search, "this_month");
   const [drill, setDrill] = useState<DrillDown | null>(null);
   const update = (patch: Partial<Search>) =>
-    void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+    void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true, resetScroll: false });
   const format = (amount: bigint) => formatAmount(money(amount, budget.currency));
 
   const query = useQuery(budgetVsActualOptions(budget.id, state.range));

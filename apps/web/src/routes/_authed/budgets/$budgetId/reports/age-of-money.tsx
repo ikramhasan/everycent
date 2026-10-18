@@ -61,7 +61,12 @@ function Report() {
           size="sm"
           value={span}
           onValueChange={(v) =>
-            v && navigate({ search: (s) => ({ ...s, span: v as AgeOfMoneySpan }), replace: true })
+            v &&
+            navigate({
+              search: (s) => ({ ...s, span: v as AgeOfMoneySpan }),
+              replace: true,
+              resetScroll: false,
+            })
           }
           aria-label="Period"
           className="justify-self-start"
@@ -94,7 +99,9 @@ function Report() {
       <ChartCard
         title="History"
         view={view}
-        onViewChange={(v) => navigate({ search: (s) => ({ ...s, view: v }), replace: true })}
+        onViewChange={(v) =>
+          navigate({ search: (s) => ({ ...s, view: v }), replace: true, resetScroll: false })
+        }
         loading={query.isPending}
         empty={
           query.isError
