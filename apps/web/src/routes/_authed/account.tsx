@@ -29,6 +29,7 @@ import { ApiKeysCard } from "@/components/api-keys-card";
 import { ConnectedAgentsCard } from "@/components/connected-agents-card";
 import { DeleteAccountCard } from "@/components/delete-account";
 import { NewPasswordFields, readNewPassword } from "@/components/new-password-fields";
+import { NotificationsCard } from "@/components/notifications-card";
 import { PageHeader } from "@/components/page-header";
 import { PageTitle } from "@/components/page-title";
 import { PictureField } from "@/components/picture-field";
@@ -66,6 +67,7 @@ function AccountPage() {
       <ApiKeysCard />
       <ConnectedAgentsCard />
       <OptionsCard />
+      <NotificationsCard />
       <DeleteAccountCard />
     </div>
   );

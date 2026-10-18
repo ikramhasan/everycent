@@ -666,6 +666,83 @@
           "password"
         ]
       },
+      "Notifications": {
+        "type": "object",
+        "properties": {
+          "monthlySummary": {
+            "type": "boolean",
+            "description": "The monthly summary email after each month ends, for the budgets below that have it on"
+          },
+          "monthlySummaryAi": {
+            "type": "boolean",
+            "description": "The summary's AI overview, on budgets that have AI turned on"
+          },
+          "budgets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "budgetId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "monthlySummary": {
+                  "type": "boolean",
+                  "description": "This budget's monthly summary"
+                },
+                "aiEnabled": {
+                  "type": "boolean",
+                  "description": "The budget has AI on (and the server has AI), so its summary can carry the overview"
+                }
+              },
+              "required": [
+                "budgetId",
+                "name",
+                "monthlySummary",
+                "aiEnabled"
+              ]
+            },
+            "description": "The budgets the person is on, in name order; a fresh start's old budget is left out"
+          }
+        },
+        "required": [
+          "monthlySummary",
+          "monthlySummaryAi",
+          "budgets"
+        ]
+      },
+      "UpdateNotifications": {
+        "type": "object",
+        "properties": {
+          "monthlySummary": {
+            "type": "boolean"
+          },
+          "monthlySummaryAi": {
+            "type": "boolean"
+          },
+          "budgets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "budgetId": {
+                  "type": "string"
+                },
+                "monthlySummary": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "budgetId",
+                "monthlySummary"
+              ]
+            },
+            "description": "Per-budget changes; budgets left out keep theirs"
+          }
+        }
+      },
       "ConnectedAgentList": {
         "type": "object",
         "properties": {
@@ -17259,6 +17336,174 @@
           },
           "429": {
             "description": "Too many attempts (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/notifications": {
+      "get": {
+        "operationId": "getNotifications",
+        "tags": [
+          "Users"
+        ],
+        "summary": "The account's email notification options",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notifications"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateNotifications",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Change the account's email notification options",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotifications"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notifications"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "A budget the person isn't on (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/email/unsubscribe": {
+      "post": {
+        "operationId": "unsubscribeEmail",
+        "tags": [
+          "Users"
+        ],
+        "summary": "Turn monthly summary emails off from an email's link",
+        "description": "Public: the token from a summary email is the authorization. Serves the web app's unsubscribe page and mail clients' one-click unsubscribe (RFC 8058, which posts `List-Unsubscribe=One-Click` as a form; the body is ignored).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The token from the email's link"
+            },
+            "required": true,
+            "description": "The token from the email's link",
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Monthly summaries are off"
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a valid unsubscribe link (`INVALID_TOKEN`)",
             "content": {
               "application/json": {
                 "schema": {

@@ -35,6 +35,7 @@ import { instanceRouter } from "./routes/instance";
 import { meRouter } from "./routes/me";
 import { membersRouter } from "./routes/members";
 import { monthsRouter } from "./routes/months";
+import { notificationsRouter } from "./routes/notifications";
 import { payeesRouter } from "./routes/payees";
 import { picturesRouter } from "./routes/pictures";
 import { reportsRouter } from "./routes/reports";
@@ -126,6 +127,7 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", instanceRouter);
   app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", notificationsRouter);
   app.route("/v1", agentsRouter);
   app.route("/v1", apiKeysRouter);
   app.route("/v1", picturesRouter);
