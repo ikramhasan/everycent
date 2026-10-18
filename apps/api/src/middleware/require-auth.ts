@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
+import { type AgentActor, principalFromEnv } from "../lib/agents/principal";
 import {
   apiKeyFromHeaders,
   keyAllowsBudget,
@@ -16,10 +17,12 @@ import type { AppEnv } from "../types";
 export type AuthedEnv = {
   Variables: {
     user: AuthUser;
-    /** The signed-in session; null when the request came with an API key instead. */
+    /** The signed-in session; null when the request came with an API key or from an agent. */
     session: AuthSession | null;
-    /** The API key the request came with; null for a signed-in session. */
+    /** The API key the request came with; null for a signed-in session or an agent. */
     apiKey: RequestApiKey | null;
+    /** The agent making the request for `user` (MCP client or Agent Auth agent); null otherwise. */
+    agent: AgentActor | null;
   };
 };
 
@@ -34,10 +37,20 @@ export const sessionSecurity: Record<string, string[]>[] = [{ cookieAuth: [] }];
  * those, so this only catches sessions from before verification was required. A key is held to its
  * scope (`apiKeyGuard`). A write request then runs in one transaction logged as the user's
  * (`inRequestTransaction`), unless it's a viewer's write to their budget (`viewerGuard`).
+ *
+ * An agent's request comes from inside the server (`AgentRuntime.run`, after the MCP endpoint or
+ * Agent Auth verified the agent), with its principal in the request's environment: it runs as its
+ * user, and its changes are logged as the agent's on their behalf.
  */
 export const requireAuth = createMiddleware<AppEnv & AuthedEnv>(async (c, next) => {
-  const key = apiKeyFromHeaders(c.req.raw.headers);
-  if (key !== null) await authenticateApiKey(c, key);
+  const principal = principalFromEnv(c.env);
+  const key = principal ? null : apiKeyFromHeaders(c.req.raw.headers);
+  if (principal) {
+    c.set("user", principal.user);
+    c.set("session", null);
+    c.set("apiKey", null);
+    c.set("agent", principal.agent);
+  } else if (key !== null) await authenticateApiKey(c, key);
   else await authenticateSession(c);
   await viewerGuard(c);
   await inRequestTransaction(c, next);
@@ -45,18 +58,31 @@ export const requireAuth = createMiddleware<AppEnv & AuthedEnv>(async (c, next) 
 
 /**
  * `requireAuth` for account and security routes (email, password, sessions, two-step
- * verification, API keys themselves): only a signed-in session, so a leaked key can't take over
- * the account. A request with a key gets 403 SESSION_REQUIRED.
+ * verification, API keys themselves) and budget-wide changes (creating, deleting and sharing
+ * budgets, imports): only a signed-in session, so a leaked key can't take over the account. A
+ * request with a key gets 403 SESSION_REQUIRED.
+ *
+ * Agents act with the person's own approval, for everything the person can do but account
+ * security: their in-process requests pass here as their user, and the agent catalog
+ * (`lib/agents/operations.ts`) is what keeps them from the security routes.
  */
 export const requireSession = createMiddleware<AppEnv & AuthedEnv>(async (c, next) => {
-  if (apiKeyFromHeaders(c.req.raw.headers) !== null) {
-    throw new AppError(
-      403,
-      "SESSION_REQUIRED",
-      "API keys can't be used here: sign in to the web app instead",
-    );
+  const principal = principalFromEnv(c.env);
+  if (principal) {
+    c.set("user", principal.user);
+    c.set("session", null);
+    c.set("apiKey", null);
+    c.set("agent", principal.agent);
+  } else {
+    if (apiKeyFromHeaders(c.req.raw.headers) !== null) {
+      throw new AppError(
+        403,
+        "SESSION_REQUIRED",
+        "API keys can't be used here: sign in to the web app instead",
+      );
+    }
+    await authenticateSession(c);
   }
-  await authenticateSession(c);
   await viewerGuard(c);
   await inRequestTransaction(c, next);
 });
@@ -72,6 +98,7 @@ async function authenticateSession(c: AuthContext) {
   c.set("user", result.user);
   c.set("session", result.session);
   c.set("apiKey", null);
+  c.set("agent", null);
 }
 
 async function authenticateApiKey(c: AuthContext, key: string) {
@@ -94,6 +121,7 @@ async function authenticateApiKey(c: AuthContext, key: string) {
   c.set("user", owner);
   c.set("session", null);
   c.set("apiKey", apiKey);
+  c.set("agent", null);
 }
 
 /**

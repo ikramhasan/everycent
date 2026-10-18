@@ -22,6 +22,8 @@ export const auditEvent = pgTable(
     budgetId: text().notNull(),
     /** Who made the change; null for changes outside a request or once their user is deleted. */
     actorUserId: text(),
+    /** The agent (`connected_agent`) that made it for that user; null for the user's own changes. */
+    actorAgentId: text(),
     /** The browser tab that made it (the `X-Client-Id` header), so its own events can be skipped. */
     clientId: text(),
     requestId: text(),

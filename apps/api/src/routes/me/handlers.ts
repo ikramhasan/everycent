@@ -224,14 +224,18 @@ export const deleteAccountHandler: Handler<typeof deleteAccount> = async (c) => 
     await tx.delete(userTable).where(eq(userTable.id, me.id));
     // Shared budgets keep their history and transactions, without the user's id.
     await pauseAudit(tx);
-    await tx.update(auditEvent).set({ actorUserId: null }).where(eq(auditEvent.actorUserId, me.id));
+    // Their agents (gone with them, `connected_agent`) acted as them: cleared alongside.
+    await tx
+      .update(auditEvent)
+      .set({ actorUserId: null, actorAgentId: null })
+      .where(eq(auditEvent.actorUserId, me.id));
     await tx
       .update(transaction)
-      .set({ createdByUserId: null })
+      .set({ createdByUserId: null, createdByAgentId: null })
       .where(eq(transaction.createdByUserId, me.id));
     await tx
       .update(transaction)
-      .set({ updatedByUserId: null })
+      .set({ updatedByUserId: null, updatedByAgentId: null })
       .where(eq(transaction.updatedByUserId, me.id));
   });
   return c.body(null, 204);

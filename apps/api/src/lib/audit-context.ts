@@ -7,6 +7,8 @@ import type { Db } from "./ledger";
 /** Who and what a transaction's changes are logged as (migration 0038's `everycent.*` settings). */
 export interface AuditContext {
   actorId: string | null;
+  /** The agent (`connected_agent` id) making the change for the actor; null for the user's own. */
+  agentId?: string | null;
   clientId?: string | null;
   requestId?: string | null;
   /** Why a change without an actor happens, e.g. "scheduled". */
@@ -21,6 +23,7 @@ export interface AuditContext {
 export async function setAuditContext(tx: Db, ctx: AuditContext): Promise<void> {
   await tx.execute(sql`select
     set_config('everycent.actor_id', ${ctx.actorId ?? ""}, true),
+    set_config('everycent.agent_id', ${ctx.agentId ?? ""}, true),
     set_config('everycent.client_id', ${ctx.clientId ?? ""}, true),
     set_config('everycent.request_id', ${ctx.requestId ?? ""}, true),
     set_config('everycent.source', ${ctx.source ?? ""}, true)`);
@@ -56,7 +59,7 @@ class Rollback extends Error {}
 
 /**
  * Runs a signed-in write request in one database transaction with its audit context set: its
- * changes are logged as the user's (and the browser tab's `X-Client-Id`), and nothing is kept if
+ * changes are logged as the user's (and the agent's, for an agent's request; and the browser tab's `X-Client-Id`), and nothing is kept if
  * it fails. Handlers see the transaction as `c.var.deps.db` (their own `db.transaction` calls
  * become savepoints). Reads run outside one.
  */
@@ -70,6 +73,7 @@ export async function inRequestTransaction(c: Context<AppEnv & AuthedEnv>, next:
     await deps.db.transaction(async (tx) => {
       await setAuditContext(tx, {
         actorId: c.var.user.id,
+        agentId: c.var.agent?.id ?? null,
         clientId: c.req.header("x-client-id")?.slice(0, 100) ?? null,
         requestId: c.var.requestId ?? null,
       });

@@ -1,12 +1,19 @@
+import { agentAuth } from "@better-auth/agent-auth";
 import { apiKey } from "@better-auth/api-key";
+import { cimd } from "@better-auth/cimd";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { mcp } from "@better-auth/mcp";
 import { type Database, newId, sql } from "@everycent/db";
 import * as schema from "@everycent/db/schema";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
-import { haveIBeenPwned, organization, twoFactor } from "better-auth/plugins";
+import { haveIBeenPwned, jwt, organization, twoFactor } from "better-auth/plugins";
 import { jwtVerify } from "jose";
 import type { Env } from "../env";
+import { agentAuthOptions, recordApproval } from "./agents/agent-auth";
+import { MCP_SCOPES, mcpResource } from "./agents/mcp-auth";
+import { AgentRuntime } from "./agents/runtime";
 import {
   API_KEY_MAX_DAYS,
   API_KEY_NAME_MAX,
@@ -106,7 +113,10 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
     }
   };
 
-  return betterAuth({
+  // Runs API operations for agents; createApp attaches the app to it.
+  const agentRuntime = new AgentRuntime();
+
+  const auth = betterAuth({
     appName: "everycent",
     baseURL: env.BETTER_AUTH_URL,
     basePath: "/api/auth",
@@ -180,6 +190,8 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // Agent Auth reads its capability list from the runtime, filled on first use.
+        if (/^\/(agent|capability|host)(\/|-)/.test(ctx.path)) agentRuntime.ensureCapabilities();
         if (ctx.path === "/change-password") {
           // Shares the per-user limit with /v1/me/email: both answer whether a password is right.
           const session = await getSessionFromCtx(ctx);
@@ -224,6 +236,11 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
           const user = ctx.context.session?.user;
           if (user) await notify(emails.passwordChanged(user.email, web));
         }
+        // An agent shows as connected once approved, before it's first used.
+        if (ctx.path === "/oauth2/consent" || ctx.path === "/agent/approve-capability") {
+          const userId = ctx.context.session?.user.id;
+          if (userId) await recordApproval(db, userId, ctx.path, ctx.body);
+        }
         // The session cookie is httpOnly so scripts can't read it; don't hand the same token to
         // the browser in /get-session's JSON. Server-side calls (no request) keep it.
         if (
@@ -250,6 +267,8 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
       },
     },
     telemetry: { enabled: false },
+    // The jwt plugin's session-token endpoint: nothing uses session JWTs.
+    disabledPaths: ["/token"],
     logger: {
       // Through our structured log. A wrong or expired API key is an expected 401
       // (`requireAuth`), not an error: the api-key plugin would log one for every bad request.
@@ -317,8 +336,36 @@ export function createAuth(db: Database, env: Env, email: EmailSender, options: 
           invitation: { modelName: "budgetInvitation", fields: { organizationId: "budgetId" } },
         },
       }),
+      // Signs the MCP access tokens (JWTs the /mcp endpoint verifies against /jwks).
+      jwt({ disableSettingJwtHeader: true }),
+      // The OAuth 2.1 authorization server MCP clients (Claude, Cursor, …) sign in through. The
+      // web app's /oauth/authorize page signs the person in and sends them back; /oauth/consent
+      // asks what the client may do.
+      mcp({
+        resource: mcpResource(env),
+        loginPage: `${web}/oauth/authorize`,
+        consentPage: `${web}/oauth/consent`,
+        scopes: ["openid", "profile", "email", "offline_access", ...MCP_SCOPES],
+        // Short-lived: a disconnected client's token is refused at once anyway (connected_agent),
+        // but a shorter life bounds what a leaked token can do.
+        accessTokenExpiresIn: 15 * 60,
+        // Clients register themselves: by a client metadata URL (CIMD, below) where they support
+        // it, otherwise by dynamic registration (Claude Code, Cursor and others today).
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        clientRegistrationDefaultApplicationType: "infer",
+      }),
+      cimd({
+        // Fetches only public addresses, pinned, without redirects.
+        fetchClientMetadataResource,
+        metadataProfile: "mcp-2026-07-28",
+      }),
+      // Agent Auth Protocol: agents register, the person approves their capabilities (one per API
+      // operation) in the web app, and they call them through POST /api/auth/capability/execute.
+      agentAuth(agentAuthOptions({ env, db, runtime: agentRuntime })),
     ],
   });
+  return Object.assign(auth, { agentRuntime });
 }
 
 export type Auth = ReturnType<typeof createAuth>;

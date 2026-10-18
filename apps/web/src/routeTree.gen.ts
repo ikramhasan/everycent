@@ -18,6 +18,9 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
+import { Route as AgentsApproveRouteImport } from './routes/agents.approve'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AuthedBudgetsIndexRouteImport } from './routes/_authed/budgets/index'
 import { Route as AuthedBudgetsBudgetIdRouteImport } from './routes/_authed/budgets/$budgetId'
 import { Route as AuthedBudgetsNewRouteImport } from './routes/_authed/budgets/new'
@@ -77,6 +80,21 @@ const AuthedAccountRoute = AuthedAccountRouteImport.update({
   id: '/account',
   path: '/account',
   getParentRoute: () => AuthedRoute,
+} as any)
+const AgentsApproveRoute = AgentsApproveRouteImport.update({
+  id: '/agents/approve',
+  path: '/agents/approve',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedBudgetsIndexRoute = AuthedBudgetsIndexRouteImport.update({
   id: '/budgets/',
@@ -175,6 +193,9 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account': typeof AuthedAccountRoute
+  '/agents/approve': typeof AgentsApproveRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/budgets/$budgetId': typeof AuthedBudgetsBudgetIdRouteWithChildren
   '/budgets/new': typeof AuthedBudgetsNewRoute
   '/budgets/': typeof AuthedBudgetsIndexRoute
@@ -199,6 +220,9 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account': typeof AuthedAccountRoute
+  '/agents/approve': typeof AgentsApproveRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/': typeof AuthedIndexRoute
   '/budgets/new': typeof AuthedBudgetsNewRoute
   '/budgets': typeof AuthedBudgetsIndexRoute
@@ -225,6 +249,9 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_authed/account': typeof AuthedAccountRoute
+  '/agents/approve': typeof AgentsApproveRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/budgets/$budgetId': typeof AuthedBudgetsBudgetIdRouteWithChildren
   '/_authed/budgets/new': typeof AuthedBudgetsNewRoute
@@ -253,6 +280,9 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/account'
+    | '/agents/approve'
+    | '/oauth/authorize'
+    | '/oauth/consent'
     | '/budgets/$budgetId'
     | '/budgets/new'
     | '/budgets/'
@@ -277,6 +307,9 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/account'
+    | '/agents/approve'
+    | '/oauth/authorize'
+    | '/oauth/consent'
     | '/'
     | '/budgets/new'
     | '/budgets'
@@ -302,6 +335,9 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/_authed/account'
+    | '/agents/approve'
+    | '/oauth/authorize'
+    | '/oauth/consent'
     | '/_authed/'
     | '/_authed/budgets/$budgetId'
     | '/_authed/budgets/new'
@@ -328,6 +364,9 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  AgentsApproveRoute: typeof AgentsApproveRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  OauthConsentRoute: typeof OauthConsentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -394,6 +433,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/account'
       preLoaderRoute: typeof AuthedAccountRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/agents/approve': {
+      id: '/agents/approve'
+      path: '/agents/approve'
+      fullPath: '/agents/approve'
+      preLoaderRoute: typeof AgentsApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/budgets/': {
       id: '/_authed/budgets/'
@@ -573,6 +633,9 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  AgentsApproveRoute: AgentsApproveRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
+  OauthConsentRoute: OauthConsentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

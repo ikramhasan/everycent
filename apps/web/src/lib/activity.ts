@@ -81,6 +81,8 @@ const HIDDEN = new Set([
   "version",
   "created_by_user_id",
   "updated_by_user_id",
+  "created_by_agent_id",
+  "updated_by_agent_id",
   "last_used_at",
   "sort_order",
   "currency",
@@ -235,9 +237,18 @@ export function describeEvent(event: ActivityEvent, l: ActivityLookups): Activit
 
 /** Who made a change, for the line: the member, or why nobody did. */
 export function actorName(event: ActivityEvent): string {
-  if (event.actor) return event.actor.name ?? "A deleted user";
+  if (event.actor) {
+    const name = event.actor.name ?? "A deleted user";
+    // An agent (an MCP client or Agent Auth agent) acting for the member.
+    return event.actor.agent ? agentFor(event.actor.agent.name, name) : name;
+  }
   if (event.source === "scheduled") return "Scheduled transactions";
   return "everycent";
+}
+
+/** "Claude Code for Ada": an agent's change, made on a member's behalf. */
+export function agentFor(agentName: string, memberName: string): string {
+  return `${agentName} for ${memberName}`;
 }
 
 /** Prefix of every Activity page query (any budget or filter). */

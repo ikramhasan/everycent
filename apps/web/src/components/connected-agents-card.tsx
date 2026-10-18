@@ -1,0 +1,226 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@everycent/ui/components/alert-dialog";
+import { Badge } from "@everycent/ui/components/badge";
+import { Button } from "@everycent/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@everycent/ui/components/card";
+import { FieldError } from "@everycent/ui/components/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupTextarea,
+} from "@everycent/ui/components/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@everycent/ui/components/item";
+import { Label } from "@everycent/ui/components/label";
+import { Spinner } from "@everycent/ui/components/spinner";
+import { useQueryClient } from "@tanstack/react-query";
+import { Bot, Check, Copy } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { agentSetupPrompt, mcpServerUrl } from "@/lib/agents";
+import { $api } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/budgets";
+
+const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+/**
+ * AI agents acting for the person: MCP clients (Claude, Cursor, …) and Agent Auth agents. Shows
+ * how to connect one, what each connected one may do, and disconnects them.
+ */
+export function ConnectedAgentsCard() {
+  const queryClient = useQueryClient();
+  const agents = $api.useQuery("get", "/v1/me/agents");
+  const revoke = $api.useMutation("delete", "/v1/me/agents/{agentId}");
+  const [confirm, setConfirm] = useState<{ id: string; name: string } | null>(null);
+  const list = agents.data?.agents ?? [];
+
+  async function disconnect() {
+    if (!confirm) return;
+    try {
+      await revoke.mutateAsync({ params: { path: { agentId: confirm.id } } });
+      toast.success(`${confirm.name} disconnected`);
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Couldn't disconnect it."));
+    }
+    setConfirm(null);
+    await queryClient.invalidateQueries({ queryKey: ["get", "/v1/me/agents"] });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connected agents</CardTitle>
+        <CardDescription>
+          AI apps you've allowed to use everycent for you. They can do what you can in your budgets,
+          and their changes show as theirs, on your behalf. They can't change your sign-in details
+          or delete your account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <CopyField
+          id="mcp-url"
+          label="MCP server URL"
+          hint="Add it as a remote MCP server in Claude, Cursor or another MCP client, then sign in when it asks."
+          value={mcpServerUrl()}
+        />
+        <SetupPrompt />
+        {agents.isPending ? (
+          <Spinner />
+        ) : agents.isError ? (
+          <FieldError>Couldn't load your connected agents.</FieldError>
+        ) : list.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No agents are connected.</p>
+        ) : (
+          <ItemGroup className="gap-0 rounded-lg border">
+            {list.map((a) => (
+              <Item
+                key={a.id}
+                role="listitem"
+                size="sm"
+                className="rounded-none border-0 border-border border-t first:border-t-0"
+              >
+                <ItemMedia variant="icon">
+                  <Bot />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>
+                    {a.name}
+                    <Badge variant="secondary">{a.kind === "mcp" ? "MCP" : "Agent Auth"}</Badge>
+                    <Badge variant="outline">
+                      {a.access === "write" ? "Can make changes" : "Read only"}
+                    </Badge>
+                  </ItemTitle>
+                  <ItemDescription>
+                    Connected {dateTime.format(new Date(a.connectedAt))} · last used{" "}
+                    {dateTime.format(new Date(a.lastUsedAt))}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirm({ id: a.id, name: a.name })}
+                  >
+                    Disconnect
+                  </Button>
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        )}
+      </CardContent>
+      <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {confirm?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It loses access at once. What it already changed stays, marked as its own. You can
+              connect it again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={disconnect}>
+              {revoke.isPending && <Spinner />} Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function CopyField({
+  id,
+  label,
+  hint,
+  value,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+}) {
+  const { copied, copy } = useCopy();
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <InputGroup>
+        <InputGroupInput id={id} readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton aria-label={`Copy ${label}`} size="icon-xs" onClick={() => copy(value)}>
+            {copied ? <Check /> : <Copy />}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+      <p className="text-muted-foreground text-sm">{hint}</p>
+    </div>
+  );
+}
+
+/** Copies text to the clipboard; `copied` is true for a moment after. */
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  const copy = (text: string) => {
+    void navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => toast.error("Couldn't copy. Select the text and copy it instead."));
+  };
+  return { copied, copy };
+}
+
+/** A prompt to paste into an agent so it connects itself (adds the MCP server, then signs in). */
+function SetupPrompt() {
+  const prompt = agentSetupPrompt();
+  const { copied, copy } = useCopy();
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="agent-setup-prompt">Set up with your agent</Label>
+      <InputGroup>
+        <InputGroupTextarea
+          id="agent-setup-prompt"
+          readOnly
+          value={prompt}
+          className="field-sizing-fixed h-40 font-mono text-xs leading-relaxed md:text-xs"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <InputGroupAddon align="block-end" className="justify-end border-t">
+          <InputGroupButton size="sm" variant="secondary" onClick={() => copy(prompt)}>
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copied" : "Copy prompt"}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+      <p className="text-muted-foreground text-sm">
+        Paste it into Claude Code, Claude, Cursor or another agent and it connects itself.
+      </p>
+    </div>
+  );
+}

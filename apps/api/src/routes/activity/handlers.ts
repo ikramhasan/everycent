@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import { loadBudgetAccess } from "../../lib/budget-access";
 import { AppError } from "../../lib/errors";
 import type { Db } from "../../lib/ledger";
-import { memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
+import { agentRefs, memberAvatarColors, pictureUrlSql } from "../../lib/member-colors";
 import type { AuthedEnv } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
 import type { listActivity, transactionHistory } from "./routes";
@@ -34,6 +34,7 @@ async function events(
       // Microseconds kept, for the cursor.
       atText: sql<string>`${auditEvent.createdAt}::text`,
       actorUserId: auditEvent.actorUserId,
+      actorAgentId: auditEvent.actorAgentId,
       actorName: user.name,
       actorPicture: pictureUrlSql(user.id),
       source: auditEvent.source,
@@ -52,6 +53,10 @@ async function events(
     );
   const rows = await (limit ? query.limit(limit) : query);
   const colors = await memberAvatarColors(db, budgetId);
+  const agents = await agentRefs(
+    db,
+    rows.map((r) => r.actorAgentId),
+  );
   return rows.map((r) => ({
     atText: r.atText,
     event: {
@@ -63,6 +68,7 @@ async function events(
             name: r.actorName,
             avatarColor: colors.get(r.actorUserId) ?? null,
             picture: r.actorPicture,
+            agent: (r.actorAgentId && agents.get(r.actorAgentId)) || null,
           }
         : null,
       source: r.source,

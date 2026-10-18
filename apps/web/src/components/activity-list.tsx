@@ -70,9 +70,10 @@ export function ActivityList({
           <li key={event.id} className="flex gap-3 px-4 py-3 text-sm">
             <MemberAvatar
               userId={event.actor?.userId ?? null}
-              userName={event.actor ? actorName(event) : null}
+              userName={event.actor ? (event.actor.name ?? "A deleted user") : null}
               avatarColor={event.actor?.avatarColor ?? null}
               picture={event.actor?.picture}
+              agentName={event.actor?.agent?.name}
               currentUserId={session.data?.user.id}
             />
             <div className="grid min-w-0 flex-1 gap-1">

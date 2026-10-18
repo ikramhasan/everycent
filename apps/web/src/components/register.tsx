@@ -79,6 +79,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { type Account, accountsQueryOptions } from "@/lib/accounts";
+import { agentFor } from "@/lib/activity";
 import { $api, apiClient } from "@/lib/api";
 import { useBudget } from "@/lib/budget-context";
 import { apiErrorMessage } from "@/lib/budgets";
@@ -1845,8 +1846,13 @@ export function Register({
             avatarColor={t.enteredBy.avatarColor}
             picture={t.enteredBy.picture}
             currentUserId={session.data?.user.id}
+            agentName={t.enteredBy.agent?.name}
             tooltipPrefix="Entered by "
-            tooltipSuffix={t.changedBy?.name ? `, last changed by ${t.changedBy.name}` : ""}
+            tooltipSuffix={
+              t.changedBy?.name
+                ? `, last changed by ${t.changedBy.agent ? agentFor(t.changedBy.agent.name, t.changedBy.name) : t.changedBy.name}`
+                : ""
+            }
           />
         ) : null;
       case "cleared":

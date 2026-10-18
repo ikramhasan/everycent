@@ -1,5 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@everycent/ui/components/tooltip";
 import { cn } from "@everycent/ui/lib/utils";
+import { Bot } from "lucide-react";
 import { $api } from "@/lib/api";
 import { useOptionalBudget } from "@/lib/budget-context";
 import { useDifferentiateWithoutColor } from "@/lib/display-options";
@@ -119,6 +120,7 @@ export function MemberAvatar({
   currentUserId,
   tooltipPrefix = "",
   tooltipSuffix = "",
+  agentName = null,
   className,
 }: {
   userId: string | null;
@@ -131,9 +133,12 @@ export function MemberAvatar({
   /** Around the name in the tooltip: "Entered by " … ", last changed by Sam". */
   tooltipPrefix?: string;
   tooltipSuffix?: string;
+  /** The agent that acted for the member (MCP client or Agent Auth agent): a bot badge and its name. */
+  agentName?: string | null;
   className?: string;
 }) {
-  const tooltip = `${tooltipPrefix}${memberTooltip(userId, userName, avatarColor, currentUserId)}${tooltipSuffix}`;
+  const member = memberTooltip(userId, userName, avatarColor, currentUserId);
+  const tooltip = `${tooltipPrefix}${agentName ? `${agentName} for ${member}` : member}${tooltipSuffix}`;
   const colors = (avatarColor && AVATAR_COLORS[avatarColor]) || "bg-[#DBD7CC] text-[#696763]";
   // Only current members have a colour, and so a pattern.
   const pattern = usePattern(userId, Boolean(avatarColor));
@@ -162,6 +167,12 @@ export function MemberAvatar({
                 e.currentTarget.hidden = true;
               }}
             />
+          )}
+          {agentName && (
+            // Inside the circle's corner (it clips), over the initial or picture.
+            <span className="absolute right-0 bottom-0 flex size-3 items-center justify-center rounded-full bg-foreground text-background ring-1 ring-background">
+              <Bot className="size-2.5" aria-hidden />
+            </span>
           )}
         </span>
       </TooltipTrigger>

@@ -171,6 +171,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The agents acting for you
+         * @description MCP clients and Agent Auth agents you've connected, newest first. Their changes show as theirs on your behalf. Not available to agents.
+         */
+        get: operations["listConnectedAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an agent
+         * @description Ends its access at once: an MCP client's tokens and consent, or an Agent Auth agent and its grants. Its past changes stay attributed to it. Not available to agents.
+         */
+        delete: operations["revokeConnectedAgent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/agent-approvals/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An agent's request for your approval
+         * @description What an Agent Auth agent asks to do, for the approval page it sends you to. Shown only with the code the agent gave you, while the request is pending. Approve or deny it with Better Auth's `POST /api/auth/agent/approve-capability`. Not available to agents.
+         */
+        get: operations["getAgentApproval"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/api-keys": {
         parameters: {
             query?: never;
@@ -1985,7 +2045,7 @@ export interface paths {
         };
         /**
          * Live changes to the budget (server-sent events)
-         * @description An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, clientId }`, after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.
+         * @description An everycent extra (EVERYCENT-90; YNAB's web app re-syncs every 3 minutes). A `text/event-stream` that sends a `change` event, data `{ table, actorId, agentId, clientId }` (`agentId`: the connected agent that made it for the actor, or null), after every committed change to the budget's data (a request's identical changes once), so a client can refetch what it shows; `clientId` is the `X-Client-Id` of the tab that made it. A `ping` comment every 25 seconds keeps the connection open. The stream ends when the caller is no longer a member.
          */
         get: operations["streamBudgetEvents"];
         put?: never;
@@ -2153,6 +2213,47 @@ export interface components {
         };
         DeleteAccount: {
             password: string;
+        };
+        ConnectedAgentList: {
+            agents: components["schemas"]["ConnectedAgent"][];
+        };
+        ConnectedAgent: {
+            id: string;
+            /**
+             * @description `mcp`: an MCP client (Claude, Cursor, …); `agent_auth`: an Agent Auth agent
+             * @enum {string}
+             */
+            kind: "mcp" | "agent_auth";
+            /** @description As the client or agent named itself */
+            name: string;
+            /**
+             * @description `read`: it can only look; `write`: it can also make changes
+             * @enum {string}
+             */
+            access: "read" | "write";
+            /** @description What it was granted: OAuth scopes for an MCP client, capabilities (API operations) for an Agent Auth agent */
+            permissions: string[];
+            /** Format: date-time */
+            connectedAt: string;
+            /** Format: date-time */
+            lastUsedAt: string;
+        };
+        AgentApproval: {
+            agentId: string;
+            name: string;
+            hostName: string | null;
+            capabilities: components["schemas"]["AgentCapability"][];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        AgentCapability: {
+            /** @description The API operation (its operationId) */
+            name: string;
+            title: string;
+            /** @description Changes nothing */
+            readOnly: boolean;
+            /** @description Why the agent says it needs it */
+            reason: string | null;
         };
         ApiKeyList: {
             apiKeys: components["schemas"]["ApiKey"][];
@@ -3519,6 +3620,15 @@ export interface components {
             avatarColor: number | null;
             /** @description Their profile picture's URL (an API path); null without one */
             picture: string | null;
+            agent: components["schemas"]["AgentRef"];
+        } | null;
+        /** @description The agent that made it on the member's behalf; null when they did it themself */
+        AgentRef: {
+            id: string;
+            /** @description As the client or agent named itself, e.g. 'Claude Code' */
+            name: string;
+            /** @enum {string} */
+            kind: "mcp" | "agent_auth";
         } | null;
         SelectionSummary: {
             count: number;
@@ -5416,6 +5526,152 @@ export interface operations {
             };
             /** @description Too many attempts (`RATE_LIMITED`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listConnectedAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connected agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectedAgentList"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    revokeConnectedAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such agent of yours */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAgentApproval: {
+        parameters: {
+            query: {
+                /** @description The code the agent shows, e.g. `ABCD-2345` */
+                code: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApproval"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description An agent's request, the account's email address isn't confirmed, or the request used an API key (SESSION_REQUIRED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No pending request with that code (wrong, expired or already answered) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

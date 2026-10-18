@@ -1,15 +1,23 @@
+import {
+  oauthProviderAuthServerMetadata,
+  oauthProviderOpenIdConfigMetadata,
+} from "@better-auth/oauth-provider";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
-import { registerDocs } from "./lib/docs";
+import type { JSONWebKeySet } from "jose";
+import { McpAuth } from "./lib/agents/mcp-auth";
+import { createMcpServer } from "./lib/agents/mcp-server";
+import { OPENAPI_CONFIG, registerDocs } from "./lib/docs";
 import { notFound, onError } from "./lib/errors";
 import { createRouter } from "./lib/router";
 import { serveWebApp } from "./lib/web-app";
 import { requestLog } from "./middleware/request-log";
 import { accountsRouter } from "./routes/accounts";
 import { activityRouter } from "./routes/activity";
+import { agentsRouter } from "./routes/agents";
 import { apiKeysRouter } from "./routes/api-keys";
 import { backupsRouter } from "./routes/backups";
 import { budgetsRouter } from "./routes/budgets";
@@ -78,9 +86,44 @@ export function createApp(deps: AppDeps) {
   }
   app.on(["GET", "POST"], "/api/auth/*", (c) => c.var.deps.auth.handler(c.req.raw));
 
+  // Agents. MCP clients find the authorization server through the protected resource metadata
+  // (RFC 9728) and sign in with OAuth (Better Auth's MCP plugin); Agent Auth agents start from
+  // the agent configuration. Both run API operations as the person, attributed to the agent.
+  const auth = deps.auth;
+  for (const path of [
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/mcp",
+    "/.well-known/oauth-authorization-server/api/auth",
+  ]) {
+    app.get(path, (c) => auth.handler(c.req.raw));
+  }
+  app.get("/.well-known/oauth-authorization-server", (c) =>
+    oauthProviderAuthServerMetadata(auth)(c.req.raw),
+  );
+  app.get("/.well-known/openid-configuration", (c) =>
+    oauthProviderOpenIdConfigMetadata(auth)(c.req.raw),
+  );
+  app.get("/.well-known/agent-configuration", async (c) =>
+    c.json(await auth.api.getAgentConfiguration()),
+  );
+  const mcpAuth = new McpAuth(deps.env, deps.db, async () => {
+    const res = await auth.handler(new Request(`${deps.env.BETTER_AUTH_URL}/api/auth/jwks`));
+    return (await res.json()) as JSONWebKeySet;
+  });
+  const mcpServer = createMcpServer(auth.agentRuntime, OPENAPI_CONFIG.info.version);
+  app.all("/mcp", async (c) => {
+    const verified = await mcpAuth.verify(c.req.raw);
+    if (!verified.ok) return verified.response;
+    const { principal } = verified;
+    return mcpServer.fetch(c.req.raw, {
+      authInfo: { token: "", clientId: principal.agent.id, scopes: [], extra: { principal } },
+    });
+  });
+
   app.route("/v1", healthRouter);
   app.route("/v1", clientErrorsRouter);
   app.route("/v1", meRouter);
+  app.route("/v1", agentsRouter);
   app.route("/v1", apiKeysRouter);
   app.route("/v1", picturesRouter);
   app.route("/v1", ynabImportRouter);
@@ -104,6 +147,8 @@ export function createApp(deps: AppDeps) {
   app.route("/v1", exportsRouter);
 
   registerDocs(app);
+  // Agents run the API's own operations (built from its OpenAPI document on first use).
+  auth.agentRuntime.attach(app);
   if (deps.env.WEB_DIST_DIR) serveWebApp(app, deps.env.WEB_DIST_DIR);
   return app;
 }

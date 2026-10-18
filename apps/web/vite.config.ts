@@ -25,6 +25,9 @@ export default defineConfig({
       "/api": apiTarget,
       "/docs": apiTarget,
       "/openapi.json": apiTarget,
+      // The MCP endpoint and OAuth / agent discovery documents.
+      "/mcp": apiTarget,
+      "/.well-known": apiTarget,
     },
   },
 });

@@ -75,7 +75,7 @@ describe("live updates (EVERYCENT-90)", () => {
     expect(noted.status).toBe(200);
     const { text } = await open.until((text) => changes(text).length > 0);
     expect(changes(text)).toEqual([
-      { table: "month_note", actorId: pat.userId, clientId: "pats-tab" },
+      { table: "month_note", actorId: pat.userId, agentId: null, clientId: "pats-tab" },
     ]);
   });
 
