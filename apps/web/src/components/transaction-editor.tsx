@@ -19,7 +19,6 @@ import { Button } from "@everycent/ui/components/button";
 import { FieldError } from "@everycent/ui/components/field";
 import { Input } from "@everycent/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@everycent/ui/components/native-select";
-import { TableCell, TableRow } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import { Circle, CircleCheck, Plus, Split, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useState } from "react";
@@ -46,6 +45,7 @@ import {
 import { FlagMenu } from "./flag-menu";
 import { type ColumnId, PINNED_BG, pinned, pinnedColumns, pinnedWidth } from "./register-columns";
 import { CategoryField, DateField, listOwnsKey, PayeeField } from "./register-fields";
+import { RegisterCell, RegisterRow } from "./register-table";
 
 /**
  * The row for a new transaction (or a whole split being edited), like YNAB's: Tab moves between
@@ -669,13 +669,13 @@ export function TransactionEditor({
 
   return (
     <>
-      <TableRow
+      <RegisterRow
         aria-label={label}
         className="border-b-0 bg-muted/50 hover:bg-muted/50"
         onKeyDown={handleKeyDown}
       >
         {columns.map((column) => (
-          <TableCell
+          <RegisterCell
             key={column}
             style={pinned(columns, column)?.style}
             className={cn(
@@ -686,18 +686,18 @@ export function TransactionEditor({
             )}
           >
             {cell(column)}
-          </TableCell>
+          </RegisterCell>
         ))}
-      </TableRow>
+      </RegisterRow>
       {lines?.map((line, index) => (
-        <TableRow
+        <RegisterRow
           key={line.key}
           aria-label={`Split line ${index + 1}`}
           className="border-b-0 bg-muted/50 hover:bg-muted/50"
           onKeyDown={handleKeyDown}
         >
           {columns.map((column) => (
-            <TableCell
+            <RegisterCell
               key={column}
               style={pinned(columns, column)?.style}
               className={cn(
@@ -706,12 +706,15 @@ export function TransactionEditor({
               )}
             >
               {lineCell(line, index, column)}
-            </TableCell>
+            </RegisterCell>
           ))}
-        </TableRow>
+        </RegisterRow>
       ))}
-      <TableRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
-        <TableCell colSpan={columns.length - pinnedColumns(columns).length} className="px-1.5 pt-0">
+      <RegisterRow className="bg-muted/50 hover:bg-muted/50" onKeyDown={handleKeyDown}>
+        <RegisterCell
+          colSpan={columns.length - pinnedColumns(columns).length}
+          className="px-1.5 pt-0"
+        >
           {/*
            * EVERYCENT-194: the register's table can be wider than its scrolling container, so a
            * footer as wide as the row ran past the visible edge. It takes the container's visible
@@ -726,15 +729,15 @@ export function TransactionEditor({
             {footerItems}
           </div>
           {mismatchDialog}
-        </TableCell>
+        </RegisterCell>
         {pinnedColumns(columns).map((column) => (
-          <TableCell
+          <RegisterCell
             key={column}
             style={pinned(columns, column)?.style}
-            className={cn("px-2", pinned(columns, column)?.className, PINNED_BG.editor)}
+            className={cn(pinned(columns, column)?.className, PINNED_BG.editor)}
           />
         ))}
-      </TableRow>
+      </RegisterRow>
     </>
   );
 }

@@ -34,14 +34,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { ScrollArea } from "@everycent/ui/components/scroll-area";
 import { Skeleton } from "@everycent/ui/components/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@everycent/ui/components/table";
+import { Table, TableHeader } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import {
   keepPreviousData,
@@ -170,6 +163,7 @@ import {
   useColumnWidths,
 } from "./register-columns";
 import { RegisterSearchBox } from "./register-search-box";
+import { RegisterBody, RegisterCell, RegisterHead, RegisterRow } from "./register-table";
 import { RegisterViewMenu } from "./register-view-menu";
 import { NeedsCategoryPill, ReviewCell } from "./review-cell";
 import { ScheduledSection } from "./scheduled-section";
@@ -2127,10 +2121,10 @@ export function Register({
         >
           <Table
             // The ScrollArea's border is the frame: no tray inside it (its padding would throw off
-            // the column widths and the pinned Cleared/Actions columns). Cells take px-2, not the
-            // table's px-3: the widths in register-columns are sized for it.
+            // the column widths and the pinned Cleared/Actions columns); rows and cells come from
+            // register-table.
             containerClassName="overflow-visible rounded-none bg-transparent p-0 ring-0 not-has-[>table>thead]:pt-0 dark:bg-transparent"
-            className="table-fixed"
+            className="table-fixed border-collapse"
             // The fixed columns plus room for Memo (which takes what's left): a narrow window scrolls
             // sideways, Cleared and Actions staying pinned, rather than squeezing Memo to nothing.
             style={{
@@ -2148,7 +2142,7 @@ export function Register({
             </colgroup>
             <TableHeader className="sticky top-0 z-10 [&_th]:border-b">
               {table.getHeaderGroups().map((group) => (
-                <TableRow key={group.id} className="hover:bg-transparent">
+                <RegisterRow key={group.id} className="hover:bg-transparent">
                   {group.headers.map((header) => {
                     const id = header.column.id as ColumnId;
                     const spec = COLUMN_SPECS[id];
@@ -2165,14 +2159,13 @@ export function Register({
                             : null;
                     const pin = pinned(columnIds, id);
                     return (
-                      <TableHead
+                      <RegisterHead
                         key={header.id}
                         aria-sort={
                           active ? (dir === "asc" ? "ascending" : "descending") : undefined
                         }
                         style={pin?.style}
                         className={cn(
-                          "px-2",
                           "bg-muted text-muted-foreground text-xs uppercase",
                           RESIZABLE.includes(id) && "relative",
                           pin && [pin.className, PINNED_BG.head],
@@ -2244,13 +2237,13 @@ export function Register({
                             onWidth={(px) => setWidth(id, px)}
                           />
                         )}
-                      </TableHead>
+                      </RegisterHead>
                     );
                   })}
-                </TableRow>
+                </RegisterRow>
               ))}
             </TableHeader>
-            <TableBody ref={measureScheduled} className="before:hidden">
+            <RegisterBody ref={measureScheduled}>
               {adding && defaultAccountId && (
                 <TransactionEditor
                   transferCategory={transferCategory}
@@ -2288,8 +2281,8 @@ export function Register({
                 today={today}
                 onChanged={refresh}
               />
-            </TableBody>
-            <TableBody className="before:hidden">
+            </RegisterBody>
+            <RegisterBody>
               {paddingTop > 0 && <tr aria-hidden style={{ height: paddingTop }} />}
               {items.map((item) => {
                 const row = flat[item.index];
@@ -2326,7 +2319,7 @@ export function Register({
                 }
                 if (row.kind === "line") {
                   return (
-                    <TableRow
+                    <RegisterRow
                       key={row.key}
                       data-index={item.index}
                       ref={virtualizer.measureElement}
@@ -2337,11 +2330,10 @@ export function Register({
                         const spec = COLUMN_SPECS[id];
                         const pin = pinned(columnIds, id);
                         return (
-                          <TableCell
+                          <RegisterCell
                             key={id}
                             style={pin?.style}
                             className={cn(
-                              "px-2",
                               "truncate py-1.5",
                               pin && [pin.className, PINNED_BG.row],
                               spec.align === "right" && "text-right tabular-nums",
@@ -2350,15 +2342,15 @@ export function Register({
                             onClick={isEditable(id) && !readOnly ? () => openSplit(t) : undefined}
                           >
                             {lineDisplay(t, row.line, id)}
-                          </TableCell>
+                          </RegisterCell>
                         );
                       })}
-                    </TableRow>
+                    </RegisterRow>
                   );
                 }
                 const editable = editableColumns(t);
                 return (
-                  <TableRow
+                  <RegisterRow
                     key={t.id}
                     data-index={item.index}
                     ref={virtualizer.measureElement}
@@ -2381,7 +2373,7 @@ export function Register({
                       const pin = pinned(columnIds, id);
                       if (editing?.id === t.id && editing.column === id) {
                         return (
-                          <TableCell key={id} className="px-1.5 py-1">
+                          <RegisterCell key={id} className="px-1.5 py-1">
                             <CellEditor
                               transaction={t}
                               column={editing.column}
@@ -2405,16 +2397,15 @@ export function Register({
                               onCancel={() => setEditing(null)}
                               onDontRename={() => void dontRename(t)}
                             />
-                          </TableCell>
+                          </RegisterCell>
                         );
                       }
                       const canEdit = (editable as ColumnId[]).includes(id);
                       return (
-                        <TableCell
+                        <RegisterCell
                           key={id}
                           style={pin?.style}
                           className={cn(
-                            "px-2",
                             "truncate",
                             pin && [pin.className, PINNED_BG.row],
                             spec.align === "right" && "text-right tabular-nums",
@@ -2434,14 +2425,14 @@ export function Register({
                           }
                         >
                           {display(t, id)}
-                        </TableCell>
+                        </RegisterCell>
                       );
                     })}
-                  </TableRow>
+                  </RegisterRow>
                 );
               })}
               {paddingBottom > 0 && <tr aria-hidden style={{ height: paddingBottom }} />}
-            </TableBody>
+            </RegisterBody>
           </Table>
         </ScrollArea>
       )}

@@ -7,7 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@everycent/ui/components/dropdown-menu";
-import { TableCell, TableRow } from "@everycent/ui/components/table";
 import { cn } from "@everycent/ui/lib/utils";
 import {
   ArrowLeftRight,
@@ -39,6 +38,7 @@ import { useUndo } from "@/lib/undo";
 import { AccountLogo } from "./accounts-nav";
 import { FlagMenu } from "./flag-menu";
 import { COLUMN_SPECS, type ColumnId, isEditable, PINNED_BG, pinned } from "./register-columns";
+import { RegisterCell, RegisterRow } from "./register-table";
 import { ScheduledAttachmentCell } from "./transaction-attachment";
 import { TransactionEditor } from "./transaction-editor";
 
@@ -385,8 +385,8 @@ export function ScheduledSection({
   const span = columns.length;
   return (
     <>
-      <TableRow className="bg-muted hover:bg-muted">
-        <TableCell colSpan={span} className="px-2 py-1.5">
+      <RegisterRow className="bg-muted hover:bg-muted">
+        <RegisterCell colSpan={span} className="py-1.5">
           <button
             type="button"
             aria-expanded={!collapsed}
@@ -401,8 +401,8 @@ export function ScheduledSection({
               <ChevronDown className="size-4" aria-hidden />
             )}
           </button>
-        </TableCell>
-      </TableRow>
+        </RegisterCell>
+      </RegisterRow>
       {!collapsed &&
         rows.map((row) => {
           if (editing?.id === row.id) {
@@ -431,7 +431,7 @@ export function ScheduledSection({
           }
           const readOnly = row.kind === "splitTransfer";
           return [
-            <TableRow
+            <RegisterRow
               key={row.id}
               aria-label={`Scheduled: ${row.payeeName ?? "transaction"} on ${formatDate(
                 row.dateNext,
@@ -445,11 +445,10 @@ export function ScheduledSection({
                 const editable = !readOnly && !viewer && isEditable(id);
                 const pin = pinned(columns, id);
                 return (
-                  <TableCell
+                  <RegisterCell
                     key={id}
                     style={pin?.style}
                     className={cn(
-                      "px-2",
                       "truncate",
                       pin && [pin.className, PINNED_BG.scheduled],
                       spec.align === "right" && "text-right tabular-nums",
@@ -462,10 +461,10 @@ export function ScheduledSection({
                     onClick={editable ? () => open(row) : undefined}
                   >
                     {display(row, id)}
-                  </TableCell>
+                  </RegisterCell>
                 );
               })}
-            </TableRow>,
+            </RegisterRow>,
             ...row.subtransactions.map((line) => {
               const lineAmount = BigInt(line.amount);
               const type = accountById.get(row.accountId)?.type ?? "checking";
@@ -487,17 +486,16 @@ export function ScheduledSection({
                 inflow: lineAmount > 0n ? show(lineAmount, row.currency) : "",
               };
               return (
-                <TableRow
+                <RegisterRow
                   key={`${row.id}:${line.id}`}
                   aria-label={`Split line of ${row.payeeName ?? "scheduled transaction"}`}
                   className="bg-muted/40 text-muted-foreground text-xs"
                 >
                   {columns.map((id) => (
-                    <TableCell
+                    <RegisterCell
                       key={id}
                       style={pinned(columns, id)?.style}
                       className={cn(
-                        "px-2",
                         "truncate py-1.5",
                         pinned(columns, id) && [
                           pinned(columns, id)?.className,
@@ -509,9 +507,9 @@ export function ScheduledSection({
                       onClick={isEditable(id) && !viewer ? () => open(row) : undefined}
                     >
                       {cells[id] ?? null}
-                    </TableCell>
+                    </RegisterCell>
                   ))}
-                </TableRow>
+                </RegisterRow>
               );
             }),
           ];
