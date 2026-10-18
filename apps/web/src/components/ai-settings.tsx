@@ -10,7 +10,7 @@ import {
 } from "@everycent/ui/components/field";
 import { Skeleton } from "@everycent/ui/components/skeleton";
 import { Switch } from "@everycent/ui/components/switch";
-import { CircleAlert, MessageSquareText, ReceiptText, Tags, TrendingUp } from "lucide-react";
+import { Calculator, ChartColumn, CircleAlert, MessageSquareText, SquarePen } from "lucide-react";
 import { McpSetup } from "@/components/agent-setup";
 import { aiUnavailableMessage, useAiSettings, useUpdateAiSettings } from "@/lib/ai";
 
@@ -22,19 +22,19 @@ const CAPABILITIES = [
     description: "Ask what's left in a category, or where your money went last month.",
   },
   {
-    icon: ReceiptText,
-    title: "Add transactions from receipts",
-    description: "Snap a receipt and get a transaction drafted for you to approve.",
+    icon: SquarePen,
+    title: "Make changes for you",
+    description: "Add or fix transactions and assign money. Nothing changes until you approve it.",
   },
   {
-    icon: TrendingUp,
-    title: "Forecasting",
-    description: "See what next month likely holds and which categories may run short.",
+    icon: ChartColumn,
+    title: "Show it in charts",
+    description: "See spending, income and trends as bar, line or pie charts.",
   },
   {
-    icon: Tags,
-    title: "Categorize for you",
-    description: "Get categories suggested for new and imported transactions.",
+    icon: Calculator,
+    title: "Exact numbers",
+    description: "Totals and percentages are calculated, never guessed.",
   },
 ] as const;
 
@@ -100,7 +100,7 @@ function AiSwitches({ budgetId, canEdit }: { budgetId: string; canEdit: boolean 
           <FieldLabel htmlFor="ai-enabled">Turn on AI features</FieldLabel>
           <FieldDescription>
             {canEdit
-              ? "Chat, receipts, forecasting and suggestions for this budget. The AI assistant shows in the sidebar."
+              ? "Chat with this budget; it changes things only when you approve. The AI assistant shows in the sidebar."
               : "Only the budget's owner and editors can change this."}
           </FieldDescription>
         </FieldContent>

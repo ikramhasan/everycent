@@ -3,7 +3,7 @@ import { aiToolRun } from "@everycent/db/schema";
 import type { AnyTextAdapter, JSONSchema } from "@tanstack/ai";
 import { toolDefinition } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import type { Env } from "../../env";
 import type { AgentOperation } from "../agents/operations";
 import { type AgentPrincipal, connectAgent } from "../agents/principal";
@@ -36,10 +36,13 @@ export async function inAppPrincipal(db: Database, user: AuthUser): Promise<Agen
   return { user, agent, canWrite: true };
 }
 
+/** A claim on a tool call older than this, with no result, was left by a process that died. */
+const STALE_CLAIM_MS = 5 * 60_000;
+
 /**
- * Operations the assistant doesn't get, beyond what agents never get (`operations.ts`): files
- * (downloads and uploads), its own AI settings and conversations, and what only the person may do
- * to a budget (delete it, start fresh, sharing), which an agent is refused anyway.
+ * Operations the assistant doesn't get, beyond what agents never get (`operations.ts`, which also
+ * leaves out the AI routes themselves): files (downloads and uploads), and what only the person
+ * may do to a budget (delete it, start fresh, sharing), which an agent is refused anyway.
  */
 const NOT_FOR_ASSISTANT = new Set([
   "getAccountLogo",
@@ -57,12 +60,6 @@ const NOT_FOR_ASSISTANT = new Set([
   "changeBudgetMemberRole",
   "leaveBudget",
   "transferBudgetOwnership",
-  "getAiSettings",
-  "updateAiSettings",
-  "listAiConversations",
-  "deleteAiConversation",
-  "aiChat",
-  "hydrateAiChat",
 ]);
 
 /**
@@ -180,22 +177,53 @@ export function budgetTools(
   },
 ) {
   const { db, budgetId, threadId, alsoEager } = scope;
-  /** Runs a change once per tool call, however often its approval is retried. */
+  /**
+   * Runs a change once per tool call, however often (or however concurrently) its approval is
+   * resumed: the call is claimed first (insert-if-absent), so a second caller gets the stored
+   * result, or is told the change is still being applied, and never runs it again. A refused
+   * change frees its claim so it can be tried again; a claim left by a crashed process expires.
+   */
   async function once(toolCallId: string | undefined, change: () => Promise<OperationResult>) {
     if (!toolCallId) return toolOutput(await change());
-    const [done] = await db
-      .select({ output: aiToolRun.output })
-      .from(aiToolRun)
-      .where(eq(aiToolRun.toolCallId, toolCallId));
-    if (done) return done.output;
-    const result = await change();
+    const claimed = await db
+      .insert(aiToolRun)
+      .values({ toolCallId, threadId, output: null })
+      .onConflictDoNothing({ target: aiToolRun.toolCallId })
+      .returning({ id: aiToolRun.toolCallId });
+    if (claimed.length === 0) {
+      const [existing] = await db
+        .select({ output: aiToolRun.output })
+        .from(aiToolRun)
+        .where(eq(aiToolRun.toolCallId, toolCallId));
+      if (existing?.output != null) return existing.output;
+      const takenOver = await db
+        .update(aiToolRun)
+        .set({ createdAt: sql`now()` })
+        .where(
+          and(
+            eq(aiToolRun.toolCallId, toolCallId),
+            isNull(aiToolRun.output),
+            lt(aiToolRun.createdAt, sql`now() - ${`${STALE_CLAIM_MS} milliseconds`}::interval`),
+          ),
+        )
+        .returning({ id: aiToolRun.toolCallId });
+      if (takenOver.length === 0) {
+        return { error: { code: "IN_PROGRESS", message: "This change is already being applied" } };
+      }
+    }
+    let result: OperationResult;
+    try {
+      result = await change();
+    } catch (error) {
+      await db.delete(aiToolRun).where(eq(aiToolRun.toolCallId, toolCallId));
+      throw error;
+    }
     const output = toolOutput(result);
-    // A refused change changed nothing, so trying it again is safe; only record what happened.
     if (result.ok) {
-      await db
-        .insert(aiToolRun)
-        .values({ toolCallId, threadId, output })
-        .onConflictDoNothing({ target: aiToolRun.toolCallId });
+      await db.update(aiToolRun).set({ output }).where(eq(aiToolRun.toolCallId, toolCallId));
+    } else {
+      // A refused change changed nothing, so it can be tried again.
+      await db.delete(aiToolRun).where(eq(aiToolRun.toolCallId, toolCallId));
     }
     return output;
   }

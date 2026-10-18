@@ -81,7 +81,7 @@ export const updateAiSettings = createRoute({
     400: jsonError("Invalid input"),
     401: jsonError("Not signed in"),
     403: jsonError(
-      "The caller's role can't change the budget's settings, or the account's email address isn't confirmed",
+      "The caller's role can't change the budget's settings, NOT_FOR_AGENTS: an agent can't, or the account's email address isn't confirmed",
     ),
     404: notFound,
     409: jsonError(
@@ -98,7 +98,7 @@ const ConversationParams = BudgetParams.extend({
 const aiErrors = {
   401: jsonError("Not signed in"),
   403: jsonError(
-    "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; or the account's email address isn't confirmed",
+    "AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed",
   ),
   503: jsonError("AI_UNAVAILABLE: the server has no AI set up"),
 };

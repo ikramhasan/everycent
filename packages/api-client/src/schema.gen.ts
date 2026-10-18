@@ -11644,7 +11644,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The caller's role can't change the budget's settings, or the account's email address isn't confirmed */
+            /** @description The caller's role can't change the budget's settings, NOT_FOR_AGENTS: an agent can't, or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11702,7 +11702,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; or the account's email address isn't confirmed */
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11759,7 +11759,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; or the account's email address isn't confirmed */
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11821,7 +11821,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; or the account's email address isn't confirmed */
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11892,7 +11892,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; or the account's email address isn't confirmed */
+            /** @description AI_DISABLED: AI is turned off for this budget; READ_ONLY: a viewer can't use it; NOT_FOR_AGENTS: an agent can't; or the account's email address isn't confirmed */
             403: {
                 headers: {
                     [name: string]: unknown;

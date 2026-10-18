@@ -36,6 +36,7 @@ export const getAiSettingsHandler: RouteHandler<typeof getAiSettings, Env> = asy
 
 export const updateAiSettingsHandler: RouteHandler<typeof updateAiSettings, Env> = async (c) => {
   const { budgetId } = c.req.valid("param");
+  refuseAgents(c);
   const body = c.req.valid("json");
   const { env, db } = c.var.deps;
   // The same permission as the budget's other settings (name, formats).
@@ -57,6 +58,18 @@ export const updateAiSettingsHandler: RouteHandler<typeof updateAiSettings, Env>
   return c.json(aiSettings(env, updated ?? b), 200);
 };
 
+/**
+ * The in-app assistant is for the person in the app. An outside agent (MCP, Agent Auth) driving
+ * it would spend the server's model key and approve the assistant's changes itself; the agent
+ * catalog leaves these routes out too (`AGENT_EXCLUDED`).
+ */
+// biome-ignore lint/suspicious/noExplicitAny: accepts any route's context (path/input generics)
+function refuseAgents(c: Context<Env, any, any>) {
+  if (c.var.agent) {
+    throw new AppError(403, "NOT_FOR_AGENTS", "The in-app AI assistant is only for people");
+  }
+}
+
 type ConversationRow = typeof aiConversation.$inferSelect;
 
 const summaryJson = (c: ConversationRow) => ({
@@ -72,6 +85,7 @@ const summaryJson = (c: ConversationRow) => ({
  */
 // biome-ignore lint/suspicious/noExplicitAny: accepts any route's context (path/input generics)
 async function aiBudget(c: Context<Env, any, any>, budgetId: string) {
+  refuseAgents(c);
   const access = await loadBudgetAccess(c, budgetId);
   assertAiAllowed(c.var.deps.env, access.budget);
   return access.budget;

@@ -1,4 +1,5 @@
-import { connectedAgent, transaction } from "@everycent/db/schema";
+import { readFileSync } from "node:fs";
+import { connectedAgent, transaction, user } from "@everycent/db/schema";
 import { fakeText } from "@tanstack/ai/testing";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -9,6 +10,8 @@ import {
   shareBudget,
   signUp,
 } from "../../../test/helpers";
+import { agentOperations, type OpenApiDocument } from "../../lib/agents/operations";
+import { AGENT_PRINCIPAL, connectAgent } from "../../lib/agents/principal";
 
 // The same database, one server with AI set up (answering from a scripted model) and one without.
 const model = fakeText();
@@ -462,6 +465,112 @@ describe("AI chat", () => {
     );
     expect(JSON.stringify(state.messages)).not.toContain("injected");
     expect(state.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("makes a change once when the same approval arrives twice at the same time", async () => {
+    const { owner, budget, enable } = await setup();
+    await enable();
+    const account = await json<{ id: string }>(
+      await send(withAi.app, "POST", `/v1/budgets/${budget.id}/accounts`, owner.cookie, {
+        name: "Checking",
+        type: "checking",
+        balance: "0",
+        date: "2026-10-01",
+      }),
+    );
+    model.setResponses([
+      {
+        toolCalls: [
+          {
+            name: "createTransaction",
+            input: {
+              summary: "Add a $9 lunch to Checking.",
+              body: { accountId: account.id, date: "2026-10-18", amount: "-900", categoryId: null },
+            },
+          },
+        ],
+      },
+    ]);
+    const threadId = crypto.randomUUID();
+    const paused = await run(withAi.app, owner.cookie, budget.id, {
+      threadId,
+      content: "Lunch $9",
+    });
+    const pause = finished(paused.events) as { runId?: string; outcome?: ChatEvent["outcome"] };
+    expect(pause.outcome?.type).toBe("interrupt");
+    // A double submit, or the chat open in two places: both resumes reach the tool.
+    model.setResponses([{ text: "Added." }, { text: "Added." }]);
+    const approve = () =>
+      run(withAi.app, owner.cookie, budget.id, {
+        threadId,
+        parentRunId: pause.runId,
+        resume: pause.outcome?.interrupts?.map((i) => ({
+          interruptId: i.id,
+          status: "resolved",
+          payload: true,
+        })),
+      });
+    await Promise.all([approve(), approve()]);
+    const lunches = await withAi.db
+      .select()
+      .from(transaction)
+      .where(and(eq(transaction.accountId, account.id), eq(transaction.amount, -900n)));
+    expect(lunches).toHaveLength(1);
+  });
+
+  it("isn't open to outside agents", async () => {
+    const { owner, budget, enable, path } = await setup();
+    await enable();
+    // Not in the catalog MCP and Agent Auth agents get…
+    const doc = JSON.parse(
+      readFileSync(new URL("../../../openapi.json", import.meta.url), "utf8"),
+    ) as OpenApiDocument;
+    const agentTools = new Set(agentOperations(doc).map((op) => op.name));
+    for (const name of [
+      "aiChat",
+      "hydrateAiChat",
+      "getAiSettings",
+      "updateAiSettings",
+      "listAiConversations",
+      "deleteAiConversation",
+    ]) {
+      expect(agentTools.has(name), name).toBe(false);
+    }
+    // …and refused if an agent's request reaches the routes anyway.
+    const [person] = await withAi.db.select().from(user).where(eq(user.email, owner.email));
+    if (!person) throw new Error("no user");
+    const agent = await connectAgent(withAi.db, {
+      userId: person.id,
+      kind: "mcp",
+      externalId: "test-client",
+      name: "Test agent",
+      authorizedAt: new Date(),
+    });
+    if (!agent) throw new Error("no agent");
+    const asAgent = (method: string, url: string, body?: unknown) =>
+      withAi.app.request(
+        url,
+        {
+          method,
+          headers: { "content-type": "application/json" },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        },
+        { [AGENT_PRINCIPAL]: { user: person, agent, canWrite: true } },
+      );
+    const chat = await asAgent("POST", `/v1/budgets/${budget.id}/ai/chat`, {
+      threadId: crypto.randomUUID(),
+      runId: "r1",
+      messages: [],
+      state: {},
+      tools: [],
+      context: [],
+      forwardedProps: {},
+    });
+    expect(chat.status).toBe(403);
+    expect(await errorCode(chat)).toBe("NOT_FOR_AGENTS");
+    const settings = await asAgent("PATCH", path, { enabled: false });
+    expect(settings.status).toBe(403);
+    expect(await errorCode(settings)).toBe("NOT_FOR_AGENTS");
   });
 
   it("doesn't make a change the person denies", async () => {

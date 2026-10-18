@@ -463,7 +463,7 @@ function ApprovalCard({
         <p className="text-muted-foreground text-xs">The assistant wants to make a change</p>
         <p className="font-medium">{summary ?? `${activityLabel(name, false)}?`}</p>
       </div>
-      <AiChangePreview args={args} />
+      <AiChangePreview toolName={name} args={args} />
       {errors.map((message) => (
         <p key={message} role="alert" className="text-destructive">
           {message}

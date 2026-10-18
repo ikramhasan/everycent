@@ -10,7 +10,7 @@ type Json = Record<string, unknown>;
 /**
  * Left out for agents: account security (email, password, sessions, two-step verification,
  * deleting the account, API keys), managing agents themselves, the live event stream (agents can't hold
- * it open through a tool call) and the web app's own error reports.
+ * it open through a tool call), the web app's own error reports, and the in-app AI assistant.
  */
 const AGENT_EXCLUDED = new Set([
   "getHealth",
@@ -28,6 +28,14 @@ const AGENT_EXCLUDED = new Set([
   "listConnectedAgents",
   "revokeConnectedAgent",
   "getAgentApproval",
+  // everycent's own AI assistant: an agent driving it would spend the server's model key, approve
+  // its changes itself and have them recorded as "everycent AI" instead of as itself.
+  "getAiSettings",
+  "updateAiSettings",
+  "listAiConversations",
+  "deleteAiConversation",
+  "aiChat",
+  "hydrateAiChat",
 ]);
 
 /** POSTs that only read (a viewer may make them too): allowed with read access alone. */

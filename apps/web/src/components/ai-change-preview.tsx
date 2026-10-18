@@ -50,7 +50,7 @@ const MONEY: Record<string, string> = {
  * instead of ids, amounts and dates in the budget's formats. Fields it can't put in words (an id
  * it doesn't know) are left out; the assistant's own summary sits above this.
  */
-export function AiChangePreview({ args }: { args: unknown }) {
+export function AiChangePreview({ toolName, args }: { toolName: string; args: unknown }) {
   const { budget, formatAmount, formatDate } = useBudget();
   const accounts = useQuery(accountsQueryOptions(budget.id));
   const categories = useQuery(categoriesQueryOptions(budget.id));
@@ -68,8 +68,25 @@ export function AiChangePreview({ args }: { args: unknown }) {
   const fields: Args = { ...input, ...body };
   delete fields.body;
   delete fields.summary;
-  // A new account can be in another currency; everything else is in the budget's.
-  const currency = isCurrencyCode(body.currency) ? body.currency : budget.currency;
+  const accountCurrency = (id: unknown) =>
+    accounts.data?.accounts.find((a) => a.id === id)?.currency ?? null;
+  /**
+   * The currency a money field is in, or null when it can't be known (the row is left out rather
+   * than shown in a currency it may not be in). A transaction's amount is in its account's
+   * currency and a transfer amount in the other account's; a new account's in its own; money in
+   * categories (assigning, moving) is in the budget's.
+   */
+  const currencyOf = (key: string): string | null => {
+    if (toolName === "createAccount") {
+      return isCurrencyCode(body.currency) ? body.currency : budget.currency;
+    }
+    if (key === "transferAmount") return accountCurrency(fields.transferAccountId);
+    if (key === "amount" && /Transaction/.test(toolName)) return accountCurrency(fields.accountId);
+    if (key === "balance" || key === "minimumPayment" || key === "escrowAmount") {
+      return accountCurrency(fields.accountId);
+    }
+    return budget.currency;
+  };
 
   const rows: Array<[string, ReactNode]> = [];
   for (const [key, value] of Object.entries(fields)) {
@@ -81,6 +98,8 @@ export function AiChangePreview({ args }: { args: unknown }) {
       } catch {
         continue;
       }
+      const currency = currencyOf(key);
+      if (!currency || !isCurrencyCode(currency)) continue;
       const label = key === "amount" ? (minor < 0n ? "Outflow" : "Inflow") : MONEY[key];
       const shown = formatAmount(money(minor < 0n && key === "amount" ? -minor : minor, currency));
       rows.push([label ?? humanize(key), <span className="tabular-nums">{shown}</span>]);
