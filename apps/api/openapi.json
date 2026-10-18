@@ -12656,11 +12656,79 @@
         "type": "object",
         "properties": {
           "payeeId": {
-            "type": "string"
+            "type": "string",
+            "description": "The payee named as imported"
+          },
+          "removedRules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeRuleSnapshot"
+            },
+            "description": "The old payee's \"Is <imported name>\" rules, as they were"
+          },
+          "version": {
+            "type": "integer",
+            "description": "The transaction's version now"
+          },
+          "previousVersions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The transaction's version just before this change"
           }
         },
         "required": [
-          "payeeId"
+          "payeeId",
+          "removedRules",
+          "version",
+          "previousVersions"
+        ]
+      },
+      "UndoDontRenameResult": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "description": "The transaction's version now"
+          },
+          "previousVersions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The transaction's version just before this change"
+          }
+        },
+        "required": [
+          "version",
+          "previousVersions"
+        ]
+      },
+      "UndoDontRename": {
+        "type": "object",
+        "properties": {
+          "payeeId": {
+            "type": "string",
+            "description": "The payee the transaction had before Don't Rename"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Its approval before Don't Rename"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeRuleSnapshot"
+            },
+            "maxItems": 100,
+            "description": "`removedRules` from Don't Rename"
+          }
+        },
+        "required": [
+          "payeeId",
+          "approved",
+          "rules"
         ]
       },
       "BudgetViewList": {
@@ -28241,7 +28309,7 @@
           }
         ],
         "summary": "YNAB's \"Don't Rename as <payee>\": back to the imported payee, without the rule",
-        "description": "The transaction takes its imported payee name again, and its payee loses the renaming rule \"Is <imported name>\".",
+        "description": "The transaction takes its imported payee name again (and is approved), and its payee loses the renaming rule \"Is <imported name>\". `undoDontRenameTransaction` puts both back.",
         "parameters": [
           {
             "schema": {
@@ -28258,6 +28326,19 @@
             "required": true,
             "name": "transactionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"
+            },
+            "required": false,
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`",
+            "name": "expectedVersion",
+            "in": "query"
           }
         ],
         "responses": {
@@ -28272,7 +28353,7 @@
             }
           },
           "400": {
-            "description": "The transaction wasn't imported",
+            "description": "The transaction wasn't imported, is matched, or is a transfer",
             "content": {
               "application/json": {
                 "schema": {
@@ -28303,6 +28384,137 @@
           },
           "404": {
             "description": "No such budget or transaction, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The transaction changed since `expectedVersion` (`STALE_VERSION`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename/undo": {
+      "post": {
+        "operationId": "undoDontRenameTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "summary": "Undo Don't Rename: the payee, approval and removed rules as they were",
+        "description": "Puts the transaction back on `payeeId` with its approval, and brings back the rules Don't Rename removed with their ids, positions and ages, so the same rule wins the next import.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "budgetId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`"
+            },
+            "required": false,
+            "description": "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`",
+            "name": "expectedVersion",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UndoDontRename"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Put back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoDontRenameResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The transaction wasn't imported, is matched or a transfer, or the payee or rules don't fit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller's role can't change transactions, or the account's email address isn't confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such budget, transaction or rule, or the caller isn't a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The transaction changed since `expectedVersion` (`STALE_VERSION`)",
             "content": {
               "application/json": {
                 "schema": {

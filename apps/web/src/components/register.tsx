@@ -1,3 +1,4 @@
+import type { components } from "@everycent/api-client";
 import { money, usesCategory } from "@everycent/engine";
 import {
   AlertDialog,
@@ -84,7 +85,7 @@ import { todayIso } from "@/lib/dates";
 import { exportSelected } from "@/lib/exports";
 import { FLAG_CLASS, type Flag, type FlagColor, flagLabel, flagsQueryOptions } from "@/lib/flags";
 import { inCurrency } from "@/lib/money-input";
-import { currentMonth, invalidateMonths, monthQueryOptions } from "@/lib/months";
+import { currentMonth, monthQueryOptions } from "@/lib/months";
 import { useShortcutsEnabled } from "@/lib/preferences";
 import {
   deleteWarning,
@@ -136,6 +137,7 @@ import {
   payeesQueryOptions,
   paymentCategoryCard,
   REGISTER_PAGE_SIZE,
+  refreshTransactions,
   type SubTransaction,
   startSplit,
   type Transaction,
@@ -238,6 +240,8 @@ interface EditingSplit {
  * that transaction and highlights it (the other side of a transfer, when jumping to it).
  */
 /** A saved transaction's version, and its transfer's other side's, by id. */
+type PayeeRuleSnapshot = components["schemas"]["PayeeRuleSnapshot"];
+
 function versionsOf(row: Transaction): Record<string, number> {
   return {
     [row.id]: row.version,
@@ -366,6 +370,10 @@ export function Register({
   const dontRenameTx = $api.useMutation(
     "post",
     "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename",
+  );
+  const undoDontRenameTx = $api.useMutation(
+    "post",
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename/undo",
   );
   const unmatchTx = $api.useMutation(
     "post",
@@ -699,12 +707,39 @@ export function Register({
 
   /**
    * Bank Import Details' "Don't Rename as …" (EVERYCENT-174): back to the imported payee, and
-   * the payee's rule for that name goes.
+   * the payee's rule for that name goes. Undo puts back the payee, its approval and the same rule
+   * (so it keeps its precedence); undo and redo check the row's version (EVERYCENT-212).
    */
   async function dontRename(t: Transaction) {
+    const payeeId = t.payeeId;
+    if (!payeeId) return;
+    let removedRules: PayeeRuleSnapshot[] = [];
+    /** The version this command last left the row at; the tab's own steps lead on from it. */
+    let left = t.version;
+    const path = { budgetId: budget.id, transactionId: t.id };
+    const run = async (expectedVersion?: number) => {
+      const done = await dontRenameTx.mutateAsync({ params: { path, query: { expectedVersion } } });
+      history.noteSave(done.previousVersions, { [t.id]: done.version });
+      removedRules = done.removedRules;
+      left = done.version;
+    };
     try {
-      await dontRenameTx.mutateAsync({
-        params: { path: { budgetId: budget.id, transactionId: t.id } },
+      await run();
+      history.record({
+        label: "Don't Rename",
+        undo: async () => {
+          const done = await undoDontRenameTx.mutateAsync({
+            params: { path, query: { expectedVersion: history.expectedVersion(t.id, left) } },
+            body: { payeeId, approved: t.approved, rules: removedRules },
+          });
+          history.noteSave(done.previousVersions, { [t.id]: done.version });
+          left = done.version;
+          await refresh();
+        },
+        redo: async () => {
+          await run(history.expectedVersion(t.id, left));
+          await refresh();
+        },
       });
       setEditing(null);
       await refresh();
@@ -959,18 +994,7 @@ export function Register({
     lastEnd === undefined ? 0 : virtualizer.getTotalSize() + scheduledHeight - lastEnd;
 
   async function refresh() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: transactionsQueryPrefix }),
-      queryClient.invalidateQueries({ queryKey: scheduledQueryPrefix }),
-      queryClient.invalidateQueries({ queryKey: accountsQueryOptions(budget.id).queryKey }),
-      queryClient.invalidateQueries({ queryKey: payeesQueryOptions(budget.id).queryKey }),
-      queryClient.invalidateQueries({ queryKey: categoriesQueryOptions(budget.id).queryKey }),
-      invalidateMonths(queryClient),
-      // The selection's count and total.
-      queryClient.invalidateQueries({
-        queryKey: ["post", "/v1/budgets/{budgetId}/transactions/selection"],
-      }),
-    ]);
+    await refreshTransactions(queryClient, budget.id);
   }
 
   /** Undo for a bulk action on transactions, from their state before it. */
