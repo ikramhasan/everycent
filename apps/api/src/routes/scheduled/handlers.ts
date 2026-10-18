@@ -10,6 +10,7 @@ import {
   enterIfPast,
   enterNow,
   entryDate,
+  prefetchScheduleRates,
   type ScheduleInput,
   scheduledRowMatches,
   scheduledRows,
@@ -106,6 +107,17 @@ export const createScheduledTransactionHandler: RouteHandler<
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
   assertOnePayee(body);
   const today = body.today ?? serverToday();
+  // A past date is entered at once: its rates come before anything is locked (EVERYCENT-247).
+  if (body.date <= entryDate(c.var.deps, today)) {
+    await prefetchScheduleRates(db, c.var.deps, budgetId, {
+      accountIds: [
+        body.accountId,
+        body.transferAccountId,
+        ...(body.subtransactions ?? []).map((l) => l.transferAccountId),
+      ],
+      dates: [body.date],
+    });
+  }
   const result = await db.transaction(async (tx) => {
     // A rescheduled transaction keeps its account and transfer even if they're closed now.
     let from:
@@ -171,6 +183,19 @@ export const updateScheduledTransactionHandler: RouteHandler<
   await loadBudgetAccess(c, budgetId, { transaction: ["update"] });
   assertOnePayee(body);
   const today = body.today ?? serverToday();
+  // A new past date is entered at once: its rates come before the schedule is locked
+  // (EVERYCENT-247).
+  if (body.date !== undefined && body.date <= entryDate(c.var.deps, today)) {
+    await prefetchScheduleRates(db, c.var.deps, budgetId, {
+      scheduleIds: [id],
+      accountIds: [
+        body.accountId,
+        body.transferAccountId,
+        ...(body.subtransactions ?? []).map((l) => l.transferAccountId),
+      ],
+      dates: [body.date],
+    });
+  }
   const entered = await db.transaction(async (tx) => {
     const { schedule, transferAccountId } = await lockSchedule(tx, budgetId, id);
     const rows = await scheduledRows(tx, budgetId, schedule.accountId);
@@ -274,6 +299,7 @@ export const enterScheduledTransactionHandler: RouteHandler<
   const { today = serverToday() } = c.req.valid("json");
   const { db } = c.var.deps;
   await loadBudgetAccess(c, budgetId, { transaction: ["create"] });
+  await prefetchScheduleRates(db, c.var.deps, budgetId, { scheduleIds: [id], dates: [today] });
   const { transactionId, accountId } = await db.transaction(async (tx) => {
     const { schedule } = await lockSchedule(tx, budgetId, id);
     return {

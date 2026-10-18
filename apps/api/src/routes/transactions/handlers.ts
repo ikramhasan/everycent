@@ -2,6 +2,7 @@ import {
   budgetAccount,
   type ClearedState,
   type FlagColor,
+  payee,
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
@@ -387,6 +388,14 @@ export async function prefetchUpdateRates(
         .from(transaction)
         .where(eq(transaction.id, existing.transferTransactionId))
     : [];
+  // A split edited without new lines converts its current ones again (EVERYCENT-247).
+  const currentLines = subtransactions
+    ? []
+    : await db
+        .select({ accountId: payee.transferAccountId })
+        .from(subTransaction)
+        .innerJoin(payee, eq(payee.id, subTransaction.payeeId))
+        .where(eq(subTransaction.transactionId, transactionId));
   await prefetchRates(db, fx, {
     budgetId,
     accountIds: [
@@ -394,6 +403,7 @@ export async function prefetchUpdateRates(
       transferAccountId,
       other?.accountId,
       ...(subtransactions ?? []).map((l) => l.transferAccountId),
+      ...currentLines.map((l) => l.accountId),
     ],
     dates: [date ?? existing.date],
   });
