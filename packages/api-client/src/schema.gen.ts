@@ -1859,9 +1859,29 @@ export interface paths {
         put?: never;
         /**
          * YNAB's "Don't Rename as <payee>": back to the imported payee, without the rule
-         * @description The transaction takes its imported payee name again (and is approved), and its payee loses the renaming rule "Is <imported name>". Undo is an update back to the payee, which brings the rule back unless `ruleRemoved` was false (send `renameRule: false`).
+         * @description The transaction takes its imported payee name again (and is approved), and its payee loses the renaming rule "Is <imported name>". `undoDontRenameTransaction` puts both back.
          */
         post: operations["dontRenameTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{budgetId}/transactions/{transactionId}/dont-rename/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Don't Rename: the payee, approval and removed rules as they were
+         * @description Puts the transaction back on `payeeId` with its approval, and brings back the rules Don't Rename removed with their ids, positions and ages, so the same rule wins the next import.
+         */
+        post: operations["undoDontRenameTransaction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4203,8 +4223,6 @@ export interface components {
             subtransactions?: components["schemas"]["SubTransactionInput"][];
             /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: undo and redo send it so a partner's later change isn't overwritten */
             expectedVersion?: number;
-            /** @description Left out or true, moving an imported transaction to another payee gives that payee the renaming rule "Is <imported name>", as YNAB does. False skips it: undoing a Don't Rename that removed no rule */
-            renameRule?: boolean;
             /** @description Approve it (or un-approve it, as an undo does); a transfer's other side follows. Left out, any change but a flag approves an unapproved transaction, as saving it or clicking its cleared state does in YNAB */
             approved?: boolean;
         };
@@ -4769,14 +4787,30 @@ export interface components {
         DontRenameResult: {
             /** @description The payee named as imported */
             payeeId: string;
-            /** @description Whether the old payee had the rule "Is <imported name>" to remove */
-            ruleRemoved: boolean;
+            /** @description The old payee's "Is <imported name>" rules, as they were */
+            removedRules: components["schemas"]["PayeeRuleSnapshot"][];
             /** @description The transaction's version now */
             version: number;
             /** @description The transaction's version just before this change */
             previousVersions: {
                 [key: string]: number;
             };
+        };
+        UndoDontRenameResult: {
+            /** @description The transaction's version now */
+            version: number;
+            /** @description The transaction's version just before this change */
+            previousVersions: {
+                [key: string]: number;
+            };
+        };
+        UndoDontRename: {
+            /** @description The payee the transaction had before Don't Rename */
+            payeeId: string;
+            /** @description Its approval before Don't Rename */
+            approved: boolean;
+            /** @description `removedRules` from Don't Rename */
+            rules: components["schemas"]["PayeeRuleSnapshot"][];
         };
         BudgetViewList: {
             /** @description The rearrangeable views in order: preset keys (underfunded, overfunded, available, snoozed) and custom view ids. All and Overspent always come first. */
@@ -13054,6 +13088,81 @@ export interface operations {
                 };
             };
             /** @description No such budget or transaction, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The transaction changed since `expectedVersion` (`STALE_VERSION`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    undoDontRenameTransaction: {
+        parameters: {
+            query?: {
+                /** @description Refuse (409 STALE_VERSION) unless the transaction is still at this `version` */
+                expectedVersion?: number | null;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoDontRename"];
+            };
+        };
+        responses: {
+            /** @description Put back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndoDontRenameResult"];
+                };
+            };
+            /** @description The transaction wasn't imported, is matched or a transfer, or the payee or rules don't fit */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller's role can't change transactions, or the account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, transaction or rule, or the caller isn't a member */
             404: {
                 headers: {
                     [name: string]: unknown;

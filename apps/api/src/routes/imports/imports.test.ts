@@ -606,7 +606,7 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     expect(row).toMatchObject({ payeeName: "SQ *CORNER CAFE", approved: true });
   });
 
-  it("checks the version, and an undo back to the payee brings the rule back", async () => {
+  it("checks the version, and its undo brings back the same rule", async () => {
     const s = await setup();
     const [id] = (
       await s.importFile([{ date: "2026-10-10", amount: "-500", payee: "SQ *DELI", memo: "" }])
@@ -616,10 +616,11 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     );
     const rules = async () =>
       (
-        await json<{ rules: { payeeId: string; operator: string; text: string }[] }>(
+        await json<{ rules: { id: string; payeeId: string; operator: string; text: string }[] }>(
           await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
         )
       ).rules;
+    const [rule] = await rules();
     // A stale version is refused and changes nothing.
     const stale = await send(
       "POST",
@@ -630,7 +631,7 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     expect(await json<{ error: { code: string } }>(stale)).toMatchObject({
       error: { code: "STALE_VERSION" },
     });
-    expect(await rules()).toHaveLength(1);
+    expect(await rules()).toEqual([rule]);
 
     const back = await send(
       "POST",
@@ -639,31 +640,39 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     );
     expect(back.status, await back.clone().text()).toBe(200);
     const result = await json<{
-      ruleRemoved: boolean;
+      removedRules: { id: string }[];
       version: number;
       previousVersions: Record<string, number>;
     }>(back);
     expect(result).toMatchObject({
-      ruleRemoved: true,
+      removedRules: [{ id: rule?.id, operator: "is", text: "SQ *DELI" }],
       version: renamed.version + 1,
       previousVersions: { [id as string]: renamed.version },
     });
     expect(await rules()).toEqual([]);
 
-    // Undo: back to the payee as it was, which makes the rule again.
-    const undone = await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, {
+    const undo = (expectedVersion: number) =>
+      send(
+        "POST",
+        `${s.base}/transactions/${id}/dont-rename/undo?expectedVersion=${expectedVersion}`,
+        s.owner.cookie,
+        { payeeId: renamed.payeeId, approved: renamed.approved, rules: result.removedRules },
+      );
+    expect((await undo(result.version - 1)).status).toBe(409);
+    const undone = await undo(result.version);
+    expect(undone.status, await undone.clone().text()).toBe(200);
+    expect(await json<{ version: number }>(undone)).toMatchObject({
+      version: result.version + 1,
+    });
+    // The same rule (same id, so the same age and place) is back.
+    expect(await rules()).toEqual([rule]);
+    expect((await s.rows()).find((t) => t.id === id)).toMatchObject({
       payeeName: "Deli",
       approved: renamed.approved,
-      expectedVersion: result.version,
     });
-    expect(undone.status, await undone.clone().text()).toBe(200);
-    expect(await rules()).toEqual([
-      expect.objectContaining({ payeeId: renamed.payeeId, operator: "is", text: "SQ *DELI" }),
-    ]);
-    expect((await s.rows()).find((t) => t.id === id)).toMatchObject({ payeeName: "Deli" });
   });
 
-  it("brings no rule back on undo when there was none to remove", async () => {
+  it("brings no rule back on undo when there was none to remove, and checks what comes back", async () => {
     const s = await setup();
     // Renamed on import by a "contains" rule, so there's no "Is" rule to remove.
     const market = await json<Txn>(
@@ -684,17 +693,27 @@ describe("renaming imported payees (EVERYCENT-174)", () => {
     const [id] = (
       await s.importFile([{ date: "2026-10-10", amount: "-500", payee: "POS MKT 1", memo: "" }])
     ).transactionIds;
-    const back = await json<{ ruleRemoved: boolean; version: number }>(
+    const back = await json<{ removedRules: unknown[]; version: number }>(
       await send("POST", `${s.base}/transactions/${id}/dont-rename`, s.owner.cookie),
     );
-    expect(back.ruleRemoved).toBe(false);
-    const undone = await send("PATCH", `${s.base}/transactions/${id}`, s.owner.cookie, {
-      payeeName: "Market",
-      approved: false,
-      renameRule: false,
-      expectedVersion: back.version,
-    });
-    expect(undone.status, await undone.clone().text()).toBe(200);
+    expect(back.removedRules).toEqual([]);
+    const undo = (rules: unknown[]) =>
+      send("POST", `${s.base}/transactions/${id}/dont-rename/undo`, s.owner.cookie, {
+        payeeId: market.payeeId,
+        approved: false,
+        rules,
+      });
+    // Only the payee's "Is <imported name>" rule can come back this way.
+    const other = {
+      id: "x",
+      payeeId: market.payeeId,
+      operator: "contains",
+      text: "POS",
+      position: 0,
+      createdAt: new Date().toISOString(),
+    };
+    expect((await undo([other])).status).toBe(400);
+    expect((await undo([])).status).toBe(200);
     const rules = await json<{ rules: { operator: string; text: string }[] }>(
       await send("GET", `${s.base}/payees/rules`, s.owner.cookie),
     );

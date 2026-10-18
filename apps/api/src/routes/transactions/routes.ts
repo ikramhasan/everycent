@@ -557,14 +557,6 @@ export const updateTransaction = createRoute({
               "Refuse (409 STALE_VERSION) unless the transaction is still at this `version`: " +
                 "undo and redo send it so a partner's later change isn't overwritten",
             ),
-          renameRule: z
-            .boolean()
-            .optional()
-            .describe(
-              "Left out or true, moving an imported transaction to another payee gives that payee " +
-                'the renaming rule "Is <imported name>", as YNAB does. False skips it: undoing ' +
-                "a Don't Rename that removed no rule",
-            ),
           approved: z
             .boolean()
             .optional()

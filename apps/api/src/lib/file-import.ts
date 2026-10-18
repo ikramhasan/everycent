@@ -8,7 +8,13 @@ import {
   subTransaction,
   transaction,
 } from "@everycent/db/schema";
-import { type ImportRow, importIds, isOnBudget, matchPayeeRule } from "@everycent/engine";
+import {
+  type ImportRow,
+  importIds,
+  isOnBudget,
+  matchPayeeRule,
+  type PayeeRuleOperator,
+} from "@everycent/engine";
 import { and, asc, eq, inArray, isNull, max, min, ne } from "drizzle-orm";
 import { keepAttachment } from "../routes/transactions/attachments";
 import {
@@ -487,12 +493,18 @@ export async function rememberRename(
   });
 }
 
-/**
- * YNAB's "Don't Rename as <payee>" (Bank Import Details, 2026-10-17): the transaction goes back to
- * its imported payee name, and the payee's "Is <imported name>" rule is removed. Says whether
- * there was one, so an undo knows whether to bring it back.
- */
-export async function dontRename(tx: Db, budgetId: string, transactionId: string) {
+/** A renaming rule as it was, so an undo can bring back the same rule (its precedence too). */
+export interface PayeeRuleSnapshot {
+  id: string;
+  payeeId: string;
+  operator: PayeeRuleOperator;
+  text: string;
+  position: number;
+  createdAt: string;
+}
+
+/** An imported, unmatched transaction that isn't a transfer: what Don't Rename applies to. */
+async function renamable(tx: Db, budgetId: string, transactionId: string) {
   const [row] = await tx
     .select()
     .from(transaction)
@@ -506,6 +518,16 @@ export async function dontRename(tx: Db, budgetId: string, transactionId: string
   if (row.transferTransactionId || row.transferSubTransactionId) {
     throw new AppError(400, "NOT_IMPORTED", "A transfer's payee isn't renamed");
   }
+  return { row, name };
+}
+
+/**
+ * YNAB's "Don't Rename as <payee>" (Bank Import Details, 2026-10-17): the transaction goes back to
+ * its imported payee name, and the payee's "Is <imported name>" rule is removed. Returns the
+ * removed rules as they were, for `undoDontRename`.
+ */
+export async function dontRename(tx: Db, budgetId: string, transactionId: string) {
+  const { row, name } = await renamable(tx, budgetId, transactionId);
   const removed = row.payeeId
     ? await tx
         .delete(payeeRule)
@@ -516,9 +538,79 @@ export async function dontRename(tx: Db, budgetId: string, transactionId: string
             sql`lower(${payeeRule.text}) = lower(${name})`,
           ),
         )
-        .returning({ id: payeeRule.id })
+        .returning()
     : [];
   const payeeId = await findOrCreatePayee(tx, budgetId, name);
   await tx.update(transaction).set({ payeeId, approved: true }).where(eq(transaction.id, row.id));
-  return { payeeId, ruleRemoved: removed.length > 0 };
+  const removedRules: PayeeRuleSnapshot[] = removed.map((r) => ({
+    id: r.id,
+    payeeId: r.payeeId,
+    operator: r.operator,
+    text: r.text,
+    position: r.position,
+    createdAt: r.createdAt.toISOString(),
+  }));
+  return { payeeId, removedRules };
+}
+
+/**
+ * Undoes Don't Rename (EVERYCENT-212): the transaction goes back to `payeeId` and its approval,
+ * and the removed rules come back as they were (same id, position and age, so the same rule wins
+ * the next import as before). Only "Is <imported name>" rules of that payee can be restored.
+ */
+export async function undoDontRename(
+  tx: Db,
+  budgetId: string,
+  transactionId: string,
+  input: { payeeId: string; approved: boolean; rules: readonly PayeeRuleSnapshot[] },
+) {
+  const { row, name } = await renamable(tx, budgetId, transactionId);
+  const [target] = await tx
+    .select({ id: payee.id })
+    .from(payee)
+    .where(
+      and(
+        eq(payee.id, input.payeeId),
+        eq(payee.budgetId, budgetId),
+        isNull(payee.transferAccountId),
+      ),
+    );
+  if (!target) throw new AppError(400, "BAD_REQUEST", "No such payee in this budget");
+  const lower = name.toLowerCase();
+  if (
+    input.rules.some(
+      (r) => r.payeeId !== target.id || r.operator !== "is" || r.text.toLowerCase() !== lower,
+    )
+  ) {
+    throw new AppError(
+      400,
+      "BAD_REQUEST",
+      "Only the payee's rule for the imported name comes back",
+    );
+  }
+  const ids = input.rules.map((r) => r.id);
+  if (ids.length > 0) {
+    const foreign = await tx
+      .select({ id: payeeRule.id })
+      .from(payeeRule)
+      .where(and(inArray(payeeRule.id, ids), ne(payeeRule.budgetId, budgetId)));
+    if (foreign.length > 0) throw new AppError(404, "NOT_FOUND", "Rule not found");
+  }
+  await tx
+    .update(transaction)
+    .set({ payeeId: target.id, approved: input.approved })
+    .where(eq(transaction.id, row.id));
+  for (const rule of input.rules) {
+    const values = {
+      payeeId: rule.payeeId,
+      operator: rule.operator,
+      text: rule.text,
+      position: rule.position,
+      createdAt: new Date(rule.createdAt),
+    };
+    await tx
+      .insert(payeeRule)
+      .values({ id: rule.id, budgetId, ...values })
+      .onConflictDoUpdate({ target: payeeRule.id, set: { ...values, updatedAt: sql`now()` } });
+  }
 }
