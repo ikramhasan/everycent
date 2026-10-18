@@ -2219,6 +2219,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/reports/budget-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Each category's Assigned against its Activity, month by month, as the plan shows them
+         * @description The plan's own numbers for every spending category with something assigned or spent in `months`, in plan order, Uncategorized first. Ready to Assign and credit card payment categories are left out. Transactions after `today` don't count yet.
+         */
+        get: operations["getBudgetVsActual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/events": {
         parameters: {
             query?: never;
@@ -5321,6 +5341,42 @@ export interface components {
                 /** @description As of the month's last day (today for this month) */
                 days: number | null;
             }[];
+        };
+        BudgetVsActual: {
+            /**
+             * @description The budget's currency, every amount's
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /** @description The plan's first month */
+            firstMonth: string;
+            /** @description The months returned: the range, reaching back to at least 12 months before its end (never before the plan's first month) */
+            months: string[];
+            categories: components["schemas"]["BudgetVsActualCategory"][];
+        };
+        BudgetVsActualCategory: {
+            categoryId: string;
+            groupId: string;
+            uncategorized: boolean;
+            /** @description The category or its group is hidden */
+            hidden: boolean;
+            /** @description One per month of `months` */
+            months: components["schemas"]["BudgetVsActualMonth"][];
+        };
+        BudgetVsActualMonth: {
+            month: string;
+            /** @description The plan's Assigned (money moves included) */
+            assigned: string;
+            /** @description The plan's Activity; spending is negative */
+            activity: string;
+            /** @description The plan's Available at the month's end */
+            available: string;
+            /** @description The cash part of a negative Available (≤ 0) */
+            cashOverspent: string;
+            /** @description The credit part of a negative Available (≤ 0) */
+            creditOverspent: string;
+            /** @description What the category's target asks of the month (the plan's month targets) */
+            targetAmount: string | null;
         };
         ExportSelection: {
             selection: components["schemas"]["TransactionSelection"];
@@ -14120,6 +14176,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgeOfMoney"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getBudgetVsActual: {
+        parameters: {
+            query: {
+                /** @description First month, YYYY-MM */
+                from: string;
+                /** @description Last month, YYYY-MM (inclusive) */
+                to: string;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetVsActual"];
+                };
+            };
+            /** @description Invalid query, or `from` after `to` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not signed in */
