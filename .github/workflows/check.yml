@@ -50,7 +50,7 @@ jobs:
           API_TEST_WORKERS: 3
 
   # The production image (Dockerfile) builds, and its migrate step and server start on a
-  # fresh database. Publishing it is EVERYCENT-215.
+  # fresh database. It is published by publish-image.yml (EVERYCENT-215).
   image:
     runs-on: ubicloud-standard-2
     timeout-minutes: 20
