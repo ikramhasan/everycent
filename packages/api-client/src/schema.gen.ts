@@ -2769,7 +2769,7 @@ export interface components {
                 createdAt: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 expectedIncome: string | null;
-                expectedIncomeCurrency: components["schemas"]["CurrencyCode"] & (string | null);
+                expectedIncomeCurrency: components["schemas"]["CurrencyCode"] | null;
                 loanSimulatorBannerDismissed: boolean;
                 /** @default false */
                 aiEnabled: boolean;

@@ -1291,15 +1291,12 @@
                 "description": "Amount in the currency's minor units (e.g. cents), as an integer string"
               },
               "expectedIncomeCurrency": {
-                "allOf": [
+                "anyOf": [
                   {
                     "$ref": "#/components/schemas/CurrencyCode"
                   },
                   {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": "null"
                   }
                 ]
               },
