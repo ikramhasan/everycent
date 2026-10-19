@@ -30,11 +30,15 @@ function tool(op: AgentOperation) {
 }
 
 const COMPACT_INSTRUCTIONS =
-  "everycent's API operations are reached through three tools: searchOperations to find one, " +
-  "describeOperation for its arguments, callOperation to run it. ";
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+  "everycent is a zero-based (YNAB-style) budgeting app. Its REST API operations are reached " +
+  "through three tools: searchOperations to find an operation, describeOperation for its " +
+  "arguments, callOperation to run it by name, as the signed-in person (changes are attributed " +
+  "to this app on their behalf). Start with the listBudgets operation to find a budgetId; most " +
+  "operations are scoped to one budget. To attach a receipt to a transaction, run the " +
+  "uploadAttachment operation with the file base64-encoded in body.file. ";
+const COMPACT_FORMATS =
+  'Money amounts are integer strings in the currency\'s minor units (e.g. "-1250" is -12.50 USD). ' +
+  "Months are YYYY-MM, dates YYYY-MM-DD. Errors come back as { error: { code, message } }.";
 
 const textResult = (data: unknown, isError = false) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -89,7 +93,7 @@ export function createMcpServer(runtime: AgentRuntime, version: string) {
       { name: "everycent", title: "everycent", version },
       {
         capabilities: { tools: {} },
-        instructions: (compact ? COMPACT_INSTRUCTIONS : "") + INSTRUCTIONS,
+        instructions: compact ? COMPACT_INSTRUCTIONS + COMPACT_FORMATS : INSTRUCTIONS,
       },
     );
     const visible = () =>
@@ -139,10 +143,7 @@ export function createMcpServer(runtime: AgentRuntime, version: string) {
           if (typeof args.name !== "string") {
             return failure("INVALID_ARGUMENTS", '"name" is required');
           }
-          if (args.arguments !== undefined && !isRecord(args.arguments)) {
-            return failure("INVALID_ARGUMENTS", "Arguments must be an object");
-          }
-          return toolResult(await runtime.run(principal, args.name, args.arguments ?? {}));
+          return toolResult(await runtime.run(principal, args.name, args.arguments));
         }
         default:
           return failure("UNKNOWN_TOOL", `No tool named ${name}`);
