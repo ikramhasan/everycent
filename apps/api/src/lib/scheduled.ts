@@ -196,6 +196,11 @@ export function entryDate(deps: Pick<AppDeps, "serverDate">, today: string) {
   return today < earliest ? earliest : today > latest ? latest : today;
 }
 
+/** The `today` a read or write uses: the user's, held by `entryDate`, else the server's. */
+export function userToday(deps: Pick<AppDeps, "serverDate">, today?: string) {
+  return today === undefined ? serverToday() : entryDate(deps, today);
+}
+
 /**
  * Enters every occurrence due by the user's `today` (YNAB enters each missed one, dated its own
  * date and unapproved; checked 2026-10-11) and moves each schedule past it. Idempotent and safe to
