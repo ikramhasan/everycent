@@ -13,6 +13,7 @@ import { accountsQueryOptions } from "@/lib/accounts";
 import type { Budget } from "@/lib/budgets";
 import { categoriesQueryOptions } from "@/lib/categories";
 import { CommandRegistryProvider } from "@/lib/commands";
+import { currentMonth, monthQueryOptions } from "@/lib/months";
 import { useShortcut } from "@/lib/shortcuts";
 import { CommandPalette, filterGroups, type PaletteGroup } from "./command-palette";
 
@@ -61,6 +62,11 @@ function seed() {
         ],
       },
     ],
+  } as never);
+  // A budget going back years, as one imported from YNAB can.
+  queryClient.setQueryData(monthQueryOptions("b1", currentMonth()).queryKey, {
+    firstMonth: "2016-01",
+    lastMonth: currentMonth(),
   } as never);
   return queryClient;
 }
@@ -162,6 +168,17 @@ describe("CommandPalette", () => {
     );
     await waitFor(() => expect(router.state.location.pathname).toBe("/budgets/b1/accounts"));
     expect(router.state.location.search).toEqual({ q: "savings" });
+  });
+
+  it("finds the months named nearest to now first", async () => {
+    const { dialog, input } = await renderPalette();
+    await userEvent.type(input, "march");
+    const [year, month] = currentMonth().split("-").map(Number) as [number, number];
+    const latest = month >= 3 ? year : year - 1;
+    const months = within(dialog)
+      .getAllByRole("option", { name: /^March \d{4}$/ })
+      .map((o) => o.textContent);
+    expect(months).toEqual([0, 1, 2, 3].map((back) => `March ${latest - back}`));
   });
 
   it("switches budgets and finds a setting by a word for it", async () => {

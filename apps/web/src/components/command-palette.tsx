@@ -378,6 +378,9 @@ function PaletteBody({
       ].filter(({ month }) => inRange(month));
       const named: BudgetMonth[] = [];
       for (let month = first; month <= last; month = addMonths(month, 1)) named.push(month);
+      // Nearest to now first: "march" ranks every March alike, and the group keeps only a few.
+      const away = (month: BudgetMonth) => Math.abs(monthNumber(month) - monthNumber(now));
+      named.sort((a, b) => away(a) - away(b));
       all.push({
         heading: "Months",
         limit: 4,
@@ -726,6 +729,12 @@ function Row({ item, onRun }: { item: PaletteItem; onRun: (item: PaletteItem) =>
       )}
     </CommandItem>
   );
+}
+
+/** Months since year 0, to compare how far apart two are. */
+function monthNumber(month: BudgetMonth) {
+  const [year, number] = month.split("-").map(Number);
+  return (year ?? 0) * 12 + (number ?? 0);
 }
 
 /** "October 2026". */
