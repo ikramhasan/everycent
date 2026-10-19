@@ -49,7 +49,12 @@ import { PageTitle } from "@/components/page-title";
 import { FutureMonthsPanel, ReadyToAssignBanner } from "@/components/ready-to-assign";
 import { RecentMoves } from "@/components/recent-moves";
 import { SpendingPacePanel } from "@/components/spending-pace-panel";
-import { type MoneyIO, TargetSection } from "@/components/target-inspector";
+import {
+  type MoneyIO,
+  paymentAlertShows,
+  ReadOnlyTarget,
+  TargetSection,
+} from "@/components/target-inspector";
 import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { UpcomingTransactions } from "@/components/upcoming-transactions";
 import { accountsQueryOptions } from "@/lib/accounts";
@@ -1143,7 +1148,28 @@ function Inspector({
           note={category.note}
           onNoteChange={(note) => onNoteChange(only, note)}
           target={
-            assign && (
+            !assign ? (
+              // Where an editor gets the Payment alert in place of a target, so does a viewer:
+              // undefined lets PaymentInspector show it.
+              paymentAlertShows({
+                target: category.target,
+                need: totals.target,
+                overpaid: totals.available.startsWith("-"),
+                past,
+              }) ? undefined : (
+                <ReadOnlyTarget
+                  target={category.target}
+                  need={totals.target}
+                  format={format}
+                  currency={targetCurrency}
+                  payment={{
+                    month: month.month,
+                    fundedSpending: totals.payment.fundedSpending,
+                    paymentsMade: totals.payment.paymentsMade,
+                  }}
+                />
+              )
+            ) : (
               <TargetSection
                 key={only}
                 name={category.name}
@@ -1200,7 +1226,15 @@ function Inspector({
         note={category.note}
         onNoteChange={(note) => onNoteChange(only, note)}
         target={
-          assign && (
+          !assign ? (
+            <ReadOnlyTarget
+              target={category.target}
+              need={totals.target}
+              format={format}
+              currency={targetCurrency}
+              debt={pairedLoan !== undefined || category.target?.cadence === "debt_monthly"}
+            />
+          ) : (
             <TargetSection
               key={only}
               name={category.name}
