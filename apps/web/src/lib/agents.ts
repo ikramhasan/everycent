@@ -67,6 +67,7 @@ export function agentSetupPrompt(origin: string = apiBaseUrl): string {
     `1. Add everycent as a remote MCP server (Streamable HTTP, OAuth sign-in) named "everycent" at ${mcp}`,
     `   - Claude Code: run \`claude mcp add --transport http everycent ${mcp}\`, then open /mcp and authenticate.`,
     "   - Other clients: add it to your MCP settings as a remote/HTTP server with that URL.",
+    `   - If your client limits how many tools a server may have (Cursor warns past about 40), use ${mcp}?tools=compact instead: three tools to search, describe and call everycent's operations.`,
     "2. When a browser opens, I'll sign in to everycent and choose whether you can make changes.",
     "3. Then call listBudgets and tell me which budgets you can see.",
     "",
