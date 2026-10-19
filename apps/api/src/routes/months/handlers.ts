@@ -1365,7 +1365,8 @@ async function movesJson(
       userId: m.userId,
       userName: m.userName,
       memberRole: m.memberRole,
-      avatarColor: (m.userId && colors.get(m.userId)) || null,
+      avatarColor: (m.userId && colors.get(m.userId)?.color) || null,
+      removed: !m.memberRole,
       picture: m.userPicture,
     };
   });

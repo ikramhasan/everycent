@@ -9375,7 +9375,11 @@
             ],
             "minimum": 1,
             "maximum": 6,
-            "description": "Null once they've left the budget"
+            "description": "Their colour, kept after they leave; null if their user is deleted"
+          },
+          "removed": {
+            "type": "boolean",
+            "description": "True once they've left the budget"
           },
           "picture": {
             "type": [
@@ -9392,6 +9396,7 @@
           "userId",
           "name",
           "avatarColor",
+          "removed",
           "picture",
           "agent"
         ],
@@ -14459,7 +14464,11 @@
             ],
             "minimum": 1,
             "maximum": 6,
-            "description": "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget"
+            "description": "The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined), kept after they leave; null if their user was deleted"
+          },
+          "removed": {
+            "type": "boolean",
+            "description": "True once the mover has left the budget"
           },
           "picture": {
             "type": [
@@ -14485,6 +14494,7 @@
           "userName",
           "memberRole",
           "avatarColor",
+          "removed",
           "picture"
         ]
       },

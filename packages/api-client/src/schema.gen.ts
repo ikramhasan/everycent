@@ -3972,8 +3972,10 @@ export interface components {
             userId: string;
             /** @description Null once their user is deleted */
             name: string | null;
-            /** @description Null once they've left the budget */
+            /** @description Their colour, kept after they leave; null if their user is deleted */
             avatarColor: number | null;
+            /** @description True once they've left the budget */
+            removed: boolean;
             /** @description Their profile picture's URL (an API path); null without one */
             picture: string | null;
             agent: components["schemas"]["AgentRef"];
@@ -5207,8 +5209,10 @@ export interface components {
              * @enum {string|null}
              */
             memberRole: "owner" | "editor" | "viewer" | null;
-            /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined); null once they've left the budget */
+            /** @description The mover's avatar colour (1–6: the owner is 1, the others 2–6 by when they joined), kept after they leave; null if their user was deleted */
             avatarColor: number | null;
+            /** @description True once the mover has left the budget */
+            removed: boolean;
             /** @description The mover's profile picture URL; null without one */
             picture: string | null;
         };

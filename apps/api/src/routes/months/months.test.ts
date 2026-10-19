@@ -1546,6 +1546,7 @@ describe("budget months", () => {
           userName: "Pat",
           memberRole: "editor",
           avatarColor: 2,
+          removed: false,
         },
         {
           toCategoryId: phone.id,
@@ -1555,12 +1556,25 @@ describe("budget months", () => {
           avatarColor: 1,
         },
         { toCategoryId: rent.id, amount: "2000" },
-        { toCategoryId: phone.id, amount: "90", userId: null, memberRole: null, avatarColor: null },
+        {
+          toCategoryId: phone.id,
+          amount: "90",
+          userId: null,
+          memberRole: null,
+          avatarColor: null,
+          removed: true,
+        },
       ]);
 
-      await db.delete(budgetMember).where(eq(budgetMember.userId, partnerUser?.id ?? ""));
+      expect((await send("POST", `${base}/leave`, partner.cookie)).status).toBe(204);
       const [left] = await monthMoves();
-      expect(left).toMatchObject({ userName: "Pat", memberRole: null, avatarColor: null });
+      // They keep their own colour (avatar-two), marked removed (EVERYCENT-213).
+      expect(left).toMatchObject({
+        userName: "Pat",
+        memberRole: null,
+        avatarColor: 2,
+        removed: true,
+      });
       expect(left?.userId).toBe(partnerUser?.id);
       expect((await send("GET", `${base}/months/2026-10/moves`, partner.cookie)).status).toBe(404);
     });

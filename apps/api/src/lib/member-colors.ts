@@ -1,4 +1,5 @@
 import {
+  budgetFormerMember,
   budgetMember,
   CONNECTED_AGENT_KINDS,
   connectedAgent,
@@ -6,8 +7,8 @@ import {
   userAvatar,
 } from "@everycent/db/schema";
 import { z } from "@hono/zod-openapi";
-import { asc, eq, inArray, type SQL, sql } from "drizzle-orm";
-import type { Db } from "./ledger";
+import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { Db, Tx } from "./ledger";
 
 /**
  * YNAB's six member avatar colours, 1-based (avatar-one … avatar-six). YNAB's client (checked
@@ -56,7 +57,10 @@ export const zMemberRef = z
   .object({
     userId: z.string(),
     name: z.string().nullable().describe("Null once their user is deleted"),
-    avatarColor: zAvatarColor.nullable().describe("Null once they've left the budget"),
+    avatarColor: zAvatarColor
+      .nullable()
+      .describe("Their colour, kept after they leave; null if their user is deleted"),
+    removed: z.boolean().describe("True once they've left the budget"),
     picture: zPicture,
     agent: zAgentRef
       .nullable()
@@ -102,19 +106,63 @@ export async function memberRefs(
       ? {
           userId,
           name: byId.get(userId)?.name ?? null,
-          avatarColor: colors.get(userId) ?? null,
+          avatarColor: colors.get(userId)?.color ?? null,
+          removed: colors.get(userId)?.removed ?? true,
           picture: byId.get(userId)?.picture ?? null,
           agent: (agentId && agents.get(agentId)) || null,
         }
       : null;
 }
 
-/** Each current member's avatar colour, by user id. */
-export async function memberAvatarColors(db: Db, budgetId: string): Promise<Map<string, number>> {
-  const members = await db
+/** Current members in the order that decides their colour: the owner, then by when they joined. */
+async function currentMembers(db: Db | Tx, budgetId: string) {
+  return db
     .select({ userId: budgetMember.userId })
     .from(budgetMember)
     .where(eq(budgetMember.budgetId, budgetId))
     .orderBy(sql`${budgetMember.role} <> 'owner'`, asc(budgetMember.createdAt));
-  return new Map(members.map((m, i) => [m.userId, Math.min(i + 1, 6)]));
+}
+
+/**
+ * Each member's avatar colour, by user id: current members' from their order, and former members'
+ * as kept when they left (`removed`), so a removed member's past moves keep their own colour.
+ */
+export async function memberAvatarColors(
+  db: Db,
+  budgetId: string,
+): Promise<Map<string, { color: number; removed: boolean }>> {
+  const members = await currentMembers(db, budgetId);
+  const former = await db
+    .select({ userId: budgetFormerMember.userId, color: budgetFormerMember.avatarColor })
+    .from(budgetFormerMember)
+    .where(eq(budgetFormerMember.budgetId, budgetId));
+  const colors = new Map<string, { color: number; removed: boolean }>(
+    former.map((f) => [f.userId, { color: f.color, removed: true }]),
+  );
+  members.forEach((m, i) => {
+    colors.set(m.userId, { color: Math.min(i + 1, 6), removed: false });
+  });
+  return colors;
+}
+
+/** Keeps a member's current colour as they leave; call before deleting their `budget_member` row. */
+export async function keepFormerMemberColor(tx: Tx, budgetId: string, userId: string) {
+  const members = await currentMembers(tx, budgetId);
+  const i = members.findIndex((m) => m.userId === userId);
+  if (i < 0) return;
+  const avatarColor = Math.min(i + 1, 6);
+  await tx
+    .insert(budgetFormerMember)
+    .values({ budgetId, userId, avatarColor })
+    .onConflictDoUpdate({
+      target: [budgetFormerMember.budgetId, budgetFormerMember.userId],
+      set: { avatarColor, removedAt: new Date() },
+    });
+}
+
+/** Forgets a kept colour when the member rejoins; they get a fresh one from their new place. */
+export async function forgetFormerMemberColor(tx: Tx, budgetId: string, userId: string) {
+  await tx
+    .delete(budgetFormerMember)
+    .where(and(eq(budgetFormerMember.budgetId, budgetId), eq(budgetFormerMember.userId, userId)));
 }
