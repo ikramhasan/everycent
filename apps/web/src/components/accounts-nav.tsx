@@ -13,7 +13,6 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@everycent/ui/components/sidebar";
@@ -276,19 +275,23 @@ function AccountItem({
             )}
           </span>
           <AccountLogo name={account.name} logo={account.logo} />
-          <span className="truncate">{account.name}</span>
+          <span className="min-w-0 flex-1 truncate">{account.name}</span>
+          {/*
+           * The balance sits in the row rather than in a SidebarMenuBadge: the badge floats over
+           * a fixed 32px of padding, so a wider balance ran into the name (EVERYCENT-251). Here
+           * the name gives way and the balance never shrinks. `!` beats the active-item colour
+           * so money owed always reads red, as in YNAB.
+           */}
+          <span
+            className={cn(
+              "shrink-0 text-muted-foreground text-xs font-medium tabular-nums group-hover/menu-button:text-sidebar-accent-foreground group-data-active/menu-button:text-sidebar-accent-foreground [[data-sidebar-narrow]_&]:hidden",
+              working < 0n && "text-destructive!",
+            )}
+          >
+            {format(working, account.currency)}
+          </span>
         </Link>
       </SidebarMenuButton>
-      {/* `!` beats the sidebar's active-item colour so money owed always reads red, as in YNAB.
-          Plain text, not the badge's recessed keycap. */}
-      <SidebarMenuBadge
-        className={cn(
-          "bg-none tabular-nums shadow-none dark:bg-none dark:shadow-none [[data-sidebar-narrow]_&]:hidden",
-          working < 0n && "text-destructive!",
-        )}
-      >
-        {format(working, account.currency)}
-      </SidebarMenuBadge>
     </SidebarMenuItem>
   );
 }
