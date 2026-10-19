@@ -32,6 +32,24 @@ import { DebtTargetEditor } from "./debt-target-editor";
 import { DateField } from "./register-fields";
 
 type Format = (minorUnits: string) => string;
+
+/**
+ * Whether a payment category shows its alert in place of a target: while no target applies or
+ * the category is red, outside past months. A viewer's inspector follows the same rule.
+ */
+export function paymentAlertShows({
+  target,
+  need,
+  overpaid,
+  past,
+}: {
+  target: CategoryTarget | null;
+  need: TargetNeed | null;
+  overpaid: boolean;
+  past: boolean;
+}) {
+  return !past && (!target || !need || overpaid);
+}
 /** Formatting, parsing and input text for amounts in one currency. */
 export interface MoneyIO {
   format: Format;
@@ -196,7 +214,7 @@ export function TargetSection({
       />
     );
   }
-  if (payment && !payment.past && (!target || !need || payment.overpaid)) {
+  if (payment && paymentAlertShows({ target, need, ...payment })) {
     return payment.alert(() => setEditing(true));
   }
   if (editing) {

@@ -179,3 +179,14 @@ describe("ReadOnlyTarget for a viewer (EVERYCENT-200)", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });
+
+describe("paymentAlertShows (EVERYCENT-200)", () => {
+  const base = { target: eurTarget, need, overpaid: false, past: false };
+  it("shows the alert while no target applies, or when overpaid, but not in a past month", () => {
+    expect(paymentAlertShows({ ...base, target: null })).toBe(true);
+    expect(paymentAlertShows({ ...base, need: null })).toBe(true);
+    expect(paymentAlertShows({ ...base, overpaid: true })).toBe(true);
+    expect(paymentAlertShows(base)).toBe(false);
+    expect(paymentAlertShows({ ...base, target: null, past: true })).toBe(false);
+  });
+});
