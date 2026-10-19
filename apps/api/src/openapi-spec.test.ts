@@ -8,6 +8,15 @@ describe("committed openapi.json", () => {
     expect(serializeOpenApi(generateOpenApiDocument())).toBe(committed);
   });
 
+  it("writes the currency codes out once, as a named schema every use refers to", () => {
+    const doc = generateOpenApiDocument();
+    const text = JSON.stringify(doc);
+    expect(text.match(/"AED"/g)).toHaveLength(1);
+    const named = (doc.components?.schemas ?? {}) as Record<string, { enum?: string[] }>;
+    expect(named.CurrencyCode?.enum).toContain("USD");
+    expect(text).toContain('"$ref":"#/components/schemas/CurrencyCode"');
+  });
+
   it("documents every route with an operationId", () => {
     const doc = generateOpenApiDocument();
     for (const [path, item] of Object.entries(doc.paths ?? {})) {
