@@ -1906,6 +1906,7 @@ export function Register({
             userId={t.enteredBy.userId}
             userName={t.enteredBy.name}
             avatarColor={t.enteredBy.avatarColor}
+            removed={t.enteredBy.removed}
             picture={t.enteredBy.picture}
             currentUserId={session.data?.user.id}
             agentName={t.enteredBy.agent?.name}

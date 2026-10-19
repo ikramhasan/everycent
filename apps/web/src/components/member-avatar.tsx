@@ -98,24 +98,25 @@ function usePattern(userId: string | null, active: boolean) {
 export function memberTooltip(
   userId: string | null,
   userName: string | null,
-  avatarColor: number | null,
+  removed: boolean,
   currentUserId: string | undefined,
 ): string {
   if (!userId || !userName) return "Inactive Member";
-  if (!avatarColor) return `${userName} (removed)`;
+  if (removed) return `${userName} (removed)`;
   return `${userName}${userId === currentUserId ? " (you)" : ""}`;
 }
 
 /**
  * Who made a change, as YNAB marks a money move: a small round avatar with the first letter of the
- * name in the member's colour and the name as its tooltip. Someone no longer on the budget gets the
- * grey inactive avatar (#DBD7CC): with their initial and "(removed)" while their user exists, empty
- * with "Inactive Member" once it's deleted.
+ * name in the member's colour and the name as its tooltip. Someone who has left the budget keeps
+ * their own colour and initial, with "(removed)" in the tooltip (EVERYCENT-213). Once their user is
+ * deleted there's no colour: the grey inactive avatar (#DBD7CC), empty, "Inactive Member".
  */
 export function MemberAvatar({
   userId,
   userName,
   avatarColor,
+  removed = false,
   picture = null,
   currentUserId,
   tooltipPrefix = "",
@@ -125,8 +126,10 @@ export function MemberAvatar({
 }: {
   userId: string | null;
   userName: string | null;
-  /** 1–6 from the API; null once they've left the budget. */
+  /** 1–6 from the API, kept after they leave; null once their user is deleted. */
   avatarColor: number | null;
+  /** They've left the budget. */
+  removed?: boolean;
   /** Their profile picture's URL (EVERYCENT-229), shown instead of the initial. */
   picture?: string | null;
   currentUserId: string | undefined;
@@ -137,11 +140,11 @@ export function MemberAvatar({
   agentName?: string | null;
   className?: string;
 }) {
-  const member = memberTooltip(userId, userName, avatarColor, currentUserId);
+  const member = memberTooltip(userId, userName, removed, currentUserId);
   const tooltip = `${tooltipPrefix}${agentName ? `${agentName} for ${member}` : member}${tooltipSuffix}`;
   const colors = (avatarColor && AVATAR_COLORS[avatarColor]) || "bg-[#DBD7CC] text-[#696763]";
-  // Only current members have a colour, and so a pattern.
-  const pattern = usePattern(userId, Boolean(avatarColor));
+  // Only current members have a pattern (it follows the member list).
+  const pattern = usePattern(userId, Boolean(avatarColor) && !removed);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
