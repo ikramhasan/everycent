@@ -4,6 +4,8 @@ name: Publish image
 # `latest`). One image runs the API and serves the web app, so there is a single package.
 # Each platform builds on a runner of its own architecture (no emulation) and pushes by digest;
 # the last job merges the digests into one multi-arch tag.
+# This runs beside check.yml, not after it: a main commit that fails Check is still published as
+# `:main`, and version tags are not checked. Pin a version tag in production.
 on:
   push:
     branches: [main]
@@ -41,12 +43,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Labels only: the tags are set when the digests are merged. The licence comes from the
-      # repository's detected licence (AGPL-3.0).
+      # The tags here only feed the version label; they are applied when the digests are merged.
+      # `latest` comes from metadata-action's default (latest=auto): stable semver tags only.
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
           labels: |
             org.opencontainers.image.title=everycent
             org.opencontainers.image.description=An open source YNAB alternative
@@ -108,7 +116,6 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
       - name: Create the multi-arch tags
         working-directory: ${{ runner.temp }}/digests
         run: |
