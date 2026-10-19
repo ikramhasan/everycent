@@ -18,6 +18,7 @@ export const PARITY_REPORTS = [
 export const EXTRA_REPORTS = [
   { to: "/budgets/$budgetId/reports/budget-vs-actual", label: "Budget vs Actual" },
   { to: "/budgets/$budgetId/reports/spending-pace", label: "Spending Pace" },
+  { to: "/budgets/$budgetId/reports/credit-card-health", label: "Credit Card Health" },
 ] as const;
 
 /** YNAB's report tabs and everycent's own, kept reachable from every report. */

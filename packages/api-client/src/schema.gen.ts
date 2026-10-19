@@ -2297,6 +2297,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/budgets/{budgetId}/reports/credit-card-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Credit card health: each card's balance against what its payment category has set aside
+         * @description An everycent extra. Per open credit card or line of credit: the balance owed, the payment category's Available, and the gap between them, which is the plan screen's Underfunded for the card (so the numbers equal it). `status` is covered (nothing lacks), partial or unfunded (none of the balance is set aside). The gap is split into this month's credit overspending and everything else. `series` has each month's spending, payments, balance and Available, oldest first, from the month the card opened. `float` is what all cards' payment categories lacked at each month's end: debt carried on money still to come. `cover` is what Ready to Assign could put toward a card's gap: Ready to Assign shared out across the cards in order, so doing every card's cover never takes it below zero. A month before the plan's first is a 400.
+         */
+        get: operations["getCreditCardHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/budgets/{budgetId}/reports/spending-pace": {
         parameters: {
             query?: never;
@@ -5526,6 +5546,72 @@ export interface components {
             creditOverspent: string;
             /** @description What the category's target asks of the month (the plan's month targets) */
             targetAmount: string | null;
+        };
+        CreditCardHealth: {
+            month: string;
+            /**
+             * @description ISO 4217 currency code
+             * @enum {string}
+             */
+            currency: "AED" | "AFN" | "ALL" | "AMD" | "ANG" | "AOA" | "ARS" | "AUD" | "AWG" | "AZN" | "BAM" | "BBD" | "BDT" | "BGN" | "BHD" | "BIF" | "BMD" | "BND" | "BOB" | "BRL" | "BSD" | "BTN" | "BWP" | "BYN" | "BZD" | "CAD" | "CDF" | "CHF" | "CLP" | "CNY" | "COP" | "CRC" | "CUP" | "CVE" | "CZK" | "DJF" | "DKK" | "DOP" | "DZD" | "EGP" | "ERN" | "ETB" | "EUR" | "FJD" | "FKP" | "GBP" | "GEL" | "GHS" | "GIP" | "GMD" | "GNF" | "GTQ" | "GYD" | "HKD" | "HNL" | "HTG" | "HUF" | "IDR" | "ILS" | "INR" | "IQD" | "IRR" | "ISK" | "JMD" | "JOD" | "JPY" | "KES" | "KGS" | "KHR" | "KMF" | "KPW" | "KRW" | "KWD" | "KYD" | "KZT" | "LAK" | "LBP" | "LKR" | "LRD" | "LSL" | "LYD" | "MAD" | "MDL" | "MGA" | "MKD" | "MMK" | "MNT" | "MOP" | "MRU" | "MUR" | "MVR" | "MWK" | "MXN" | "MYR" | "MZN" | "NAD" | "NGN" | "NIO" | "NOK" | "NPR" | "NZD" | "OMR" | "PAB" | "PEN" | "PGK" | "PHP" | "PKR" | "PLN" | "PYG" | "QAR" | "RON" | "RSD" | "RUB" | "RWF" | "SAR" | "SBD" | "SCR" | "SDG" | "SEK" | "SGD" | "SHP" | "SLE" | "SOS" | "SRD" | "SSP" | "STN" | "SVC" | "SYP" | "SZL" | "THB" | "TJS" | "TMT" | "TND" | "TOP" | "TRY" | "TTD" | "TWD" | "TZS" | "UAH" | "UGX" | "USD" | "UYU" | "UZS" | "VED" | "VES" | "VND" | "VUV" | "WST" | "XAF" | "XCD" | "XCG" | "XOF" | "XPF" | "YER" | "ZAR" | "ZMW" | "ZWG";
+            /**
+             * Format: date
+             * @description The user's today
+             */
+            asOf: string;
+            /** @description The oldest month the plan shows */
+            firstMonth: string;
+            /** @description Ready to Assign for `month` */
+            readyToAssign: string;
+            totals: {
+                /** @description Owed across all cards */
+                balance: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                covered: string;
+                /** @description The cards' gaps added up */
+                unfunded: string;
+            };
+            /** @description Oldest first; what the cards' payment categories lacked at month end */
+            float: {
+                month: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                carried: string;
+            }[];
+            cards: {
+                accountId: string;
+                name: string;
+                /** @enum {string} */
+                type: "credit_card" | "line_of_credit";
+                /** @description The card's payment category */
+                categoryId: string;
+                /** @description Owed at the end of `month`, never negative */
+                balance: string;
+                /** @description The payment category's Available */
+                available: string;
+                /** @enum {string} */
+                status: "covered" | "partial" | "unfunded";
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                covered: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                gap: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                fromCreditOverspending: string;
+                /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                other: string;
+                /** @description What Ready to Assign could assign to close the gap, after the cards before it */
+                cover: string;
+                series: {
+                    month: string;
+                    /** @description Outflows on the card that month, positive */
+                    spending: string;
+                    /** @description Inflows (payments, returns), positive */
+                    payments: string;
+                    /** @description Owed at the month's end, never negative */
+                    balance: string;
+                    /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
+                    available: string;
+                }[];
+            }[];
         };
         SpendingPace: {
             month: string;
@@ -14704,6 +14790,71 @@ export interface operations {
                 };
             };
             /** @description Invalid query, or `from` after `to` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account's email address isn't confirmed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such budget, or the caller isn't a member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCreditCardHealth: {
+        parameters: {
+            query?: {
+                /** @description The last month shown, YYYY-MM; defaults to today's */
+                month?: string;
+                /** @description How many months the series covers, ending at `month`; default 6 */
+                months?: number;
+                /** @description The user's today; later transactions don't count. Defaults to the server's UTC date. */
+                today?: string;
+            };
+            header?: never;
+            path: {
+                budgetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every card's health */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditCardHealth"];
+                };
+            };
+            /** @description A future month, or one before the plan's first */
             400: {
                 headers: {
                     [name: string]: unknown;

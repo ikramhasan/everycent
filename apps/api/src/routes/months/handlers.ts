@@ -688,7 +688,7 @@ export async function loadTargets(
  * Everything the budget screen shows for `month`, as of the user's `today`: each category's
  * numbers, target and Auto-Assign amounts, and the month's totals.
  */
-async function monthState(
+export async function monthState(
   db: Db,
   deps: FxDeps,
   budget: { id: string; currency: CurrencyCode; createdAt?: Date },
