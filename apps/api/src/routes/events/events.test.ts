@@ -115,7 +115,7 @@ describe("live updates (EVERYCENT-90)", () => {
     const pat = await shareBudget(app, owner.cookie, budget.id);
     const open = await openStream(await send("GET", `/v1/budgets/${budget.id}/events`, pat.cookie));
     // Remove the member without the audit trigger's notification, then notify a later change:
-    // the order a slow removal notification leaves a stream in.
+    // the stream must end on the change itself.
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
       await tx.execute(
