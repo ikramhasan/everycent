@@ -334,6 +334,13 @@ Off by default, per-user toggle, clear data-usage notice, no data sent unless en
 
 ## Self-hosting
 
+Ready-made images are published to `ghcr.io/ikramhasan/everycent` (linux/amd64 and linux/arm64)
+by `.github/workflows/publish-image.yml`: `main` and `sha-<commit>` on every merge to `main`, and
+`X.Y.Z`, `X.Y`, `X` and `latest` on every `vX.Y.Z` release tag. Pin a version tag rather than
+`main` in production. Pulling needs no login once the repository (and so the package) is public.
+
+    docker pull ghcr.io/ikramhasan/everycent:latest
+
 The Docker image (`Dockerfile`) runs the API and the web app on one origin and migrates the
 database on deploy (`node dist/migrate.mjs`). It needs `DATABASE_URL`, `BETTER_AUTH_SECRET`,
 `BETTER_AUTH_URL` and `WEB_ORIGIN`; everything else in `.env.example` is optional.
