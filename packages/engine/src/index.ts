@@ -33,6 +33,13 @@ export {
   fundedCardSpending,
 } from "./credit";
 export {
+  CARD_COVERAGE,
+  type CardCoverage,
+  type CardHealth,
+  cardHealth,
+  coverAmount,
+} from "./credit-health";
+export {
   assertCurrencyCode,
   CURRENCY_CODES,
   type CurrencyCode,
