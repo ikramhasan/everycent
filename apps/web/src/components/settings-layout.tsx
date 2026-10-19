@@ -13,10 +13,12 @@ import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { PageTitle } from "@/components/page-title";
-import { type BudgetRole, type SettingsMatch, searchSettings } from "@/lib/settings-index";
-
-/** The element id of a settings section, which the search scrolls to. */
-const sectionId = (section: string) => `settings-${section}`;
+import {
+  type BudgetRole,
+  type SettingsMatch,
+  searchSettings,
+  settingsSectionId as sectionId,
+} from "@/lib/settings-index";
 
 /**
  * Account and Budget settings: the page's tabs, one group of settings each, and a search over

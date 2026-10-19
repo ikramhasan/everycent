@@ -192,6 +192,9 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
   );
 }
 
+// everycent: cmdk's own ranking, for a palette that filters its items itself.
+export { defaultFilter } from "cmdk";
+
 export {
   Command,
   CommandDialog,
