@@ -1,4 +1,5 @@
 import { createMcpHandler, Server } from "@modelcontextprotocol/server";
+import { COMPACT_TOOLS, describeOperation, searchOperations } from "./mcp-compact";
 import type { AgentOperation } from "./operations";
 import type { AgentPrincipal } from "./principal";
 import type { AgentRuntime, OperationResult } from "./runtime";
@@ -27,6 +28,19 @@ function tool(op: AgentOperation) {
     },
   };
 }
+
+const COMPACT_INSTRUCTIONS =
+  "everycent's API operations are reached through three tools: searchOperations to find one, " +
+  "describeOperation for its arguments, callOperation to run it. ";
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const textResult = (data: unknown, isError = false) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+  isError,
+});
+const failure = (code: string, message: string) => textResult({ error: { code, message } }, true);
 
 /** An operation's answer as an MCP tool result. */
 function toolResult(result: OperationResult) {
@@ -66,20 +80,73 @@ function toolResult(result: OperationResult) {
 /**
  * The MCP server (Streamable HTTP, stateless: a fresh server per request, with the request's
  * verified principal). Every operation agents may run is a tool; with read-only access, only
- * the ones that change nothing are listed.
+ * the ones that change nothing are listed. With `compact` (`/mcp?tools=compact`) the tools are
+ * three: search, describe and call an operation.
  */
 export function createMcpServer(runtime: AgentRuntime, version: string) {
-  const build = (principal: AgentPrincipal) => {
+  const build = (principal: AgentPrincipal, compact: boolean) => {
     const server = new Server(
       { name: "everycent", title: "everycent", version },
-      { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
+      {
+        capabilities: { tools: {} },
+        instructions: (compact ? COMPACT_INSTRUCTIONS : "") + INSTRUCTIONS,
+      },
     );
     const visible = () =>
       [...runtime.operations().values()].filter((op) => principal.canWrite || op.readOnly);
-    server.setRequestHandler("tools/list", async () => ({ tools: visible().map(tool) }));
+    if (!compact) {
+      server.setRequestHandler("tools/list", async () => ({ tools: visible().map(tool) }));
+      server.setRequestHandler("tools/call", async (request) => {
+        const { name, arguments: args } = request.params;
+        return toolResult(await runtime.run(principal, name, args ?? {}));
+      });
+      return server;
+    }
+    server.setRequestHandler("tools/list", async () => ({
+      tools: COMPACT_TOOLS.map((t) => ({
+        name: t.name,
+        title: t.title,
+        description: t.description,
+        inputSchema: t.inputSchema,
+        annotations: {
+          title: t.title,
+          readOnlyHint: t.readOnly,
+          destructiveHint: !t.readOnly,
+          openWorldHint: false,
+        },
+      })),
+    }));
     server.setRequestHandler("tools/call", async (request) => {
-      const { name, arguments: args } = request.params;
-      return toolResult(await runtime.run(principal, name, args ?? {}));
+      const { name, arguments: raw } = request.params;
+      const args = raw ?? {};
+      switch (name) {
+        case "searchOperations": {
+          const { query, limit } = args;
+          if (query !== undefined && typeof query !== "string")
+            return failure("INVALID_ARGUMENTS", '"query" must be a string');
+          if (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1))
+            return failure("INVALID_ARGUMENTS", '"limit" must be a positive integer');
+          return textResult(
+            searchOperations(visible(), query, Math.min((limit as number | undefined) ?? 20, 100)),
+          );
+        }
+        case "describeOperation": {
+          const op = visible().find((o) => o.name === args.name);
+          if (!op) return failure("UNKNOWN_OPERATION", `No operation named ${String(args.name)}`);
+          return textResult(describeOperation(op));
+        }
+        case "callOperation": {
+          if (typeof args.name !== "string") {
+            return failure("INVALID_ARGUMENTS", '"name" is required');
+          }
+          if (args.arguments !== undefined && !isRecord(args.arguments)) {
+            return failure("INVALID_ARGUMENTS", "Arguments must be an object");
+          }
+          return toolResult(await runtime.run(principal, args.name, args.arguments ?? {}));
+        }
+        default:
+          return failure("UNKNOWN_TOOL", `No tool named ${name}`);
+      }
     });
     return server;
   };
@@ -87,7 +154,7 @@ export function createMcpServer(runtime: AgentRuntime, version: string) {
     (ctx) => {
       const principal = ctx.authInfo?.extra?.principal as AgentPrincipal | undefined;
       if (!principal) throw new Error("MCP request without a verified principal");
-      return build(principal);
+      return build(principal, ctx.authInfo?.extra?.compact === true);
     },
     // Today's clients (Claude Code, Cursor) speak the 2025 protocol versions.
     { legacy: "stateless" },
