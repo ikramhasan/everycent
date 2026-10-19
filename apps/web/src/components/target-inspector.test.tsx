@@ -6,6 +6,7 @@ import { inCurrency, type MoneySettings, parseMoneyInput, toMoneyInput } from "@
 import type { CategoryTarget, TargetNeed } from "@/lib/targets";
 import {
   type MoneyIO,
+  paymentAlertShows,
   ReadOnlyTarget,
   type TargetCurrency,
   TargetSection,
