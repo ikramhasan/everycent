@@ -2306,7 +2306,7 @@ export interface paths {
         };
         /**
          * Credit card health: each card's balance against what its payment category has set aside
-         * @description An everycent extra. Per open credit card or line of credit: the balance owed, the payment category's Available, and the gap between them, which is the plan screen's Underfunded for the card (so the numbers equal it). `status` is covered (nothing lacks), partial or unfunded (none of the balance is set aside). The gap is split into this month's credit overspending and everything else. `series` has each month's spending, payments, balance and Available, oldest first, from the month the card opened. `float` is what all cards' payment categories lacked at each month's end: debt carried on money still to come. `cover` is what Ready to Assign could put toward a card's gap right now; the client opens the move-money dialog with it.
+         * @description An everycent extra. Per open credit card or line of credit: the balance owed, the payment category's Available, and the gap between them, which is the plan screen's Underfunded for the card (so the numbers equal it). `status` is covered (nothing lacks), partial or unfunded (none of the balance is set aside). The gap is split into this month's credit overspending and everything else. `series` has each month's spending, payments, balance and Available, oldest first, from the month the card opened. `float` is what all cards' payment categories lacked at each month's end: debt carried on money still to come. `cover` is what Ready to Assign could put toward a card's gap: Ready to Assign shared out across the cards in order, so doing every card's cover never takes it below zero. A month before the plan's first is a 400.
          */
         get: operations["getCreditCardHealth"];
         put?: never;
@@ -5559,6 +5559,8 @@ export interface components {
              * @description The user's today
              */
             asOf: string;
+            /** @description The oldest month the plan shows */
+            firstMonth: string;
             /** @description Ready to Assign for `month` */
             readyToAssign: string;
             totals: {
@@ -5596,7 +5598,7 @@ export interface components {
                 fromCreditOverspending: string;
                 /** @description Amount in the currency's minor units (e.g. cents), as an integer string */
                 other: string;
-                /** @description What Ready to Assign could assign to close the gap */
+                /** @description What Ready to Assign could assign to close the gap, after the cards before it */
                 cover: string;
                 series: {
                     month: string;
@@ -14852,7 +14854,7 @@ export interface operations {
                     "application/json": components["schemas"]["CreditCardHealth"];
                 };
             };
-            /** @description A future month */
+            /** @description A future month, or one before the plan's first */
             400: {
                 headers: {
                     [name: string]: unknown;

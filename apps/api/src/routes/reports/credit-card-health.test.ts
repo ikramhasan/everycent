@@ -36,6 +36,7 @@ type Card = {
 };
 type Health = {
   month: string;
+  firstMonth: string;
   readyToAssign: string;
   totals: { balance: string; covered: string; unfunded: string };
   float: { month: string; carried: string }[];
@@ -285,6 +286,36 @@ describe("GET /reports/credit-card-health", () => {
       t.cookie,
     );
     expect(future.status).toBe(400);
+  });
+
+  it("shares Ready to Assign out across the cards, so covering every card stays within it", async () => {
+    const t = await setup();
+    await t.assign(t.groceries, "2026-10", "10000");
+    await t.assign(t.fun, "2026-10", "10000");
+    // Each card is $100 short.
+    await t.post(t.visa, "2026-10-05", "-20000", t.groceries);
+    await t.post(t.amex, "2026-10-06", "-20000", t.fun);
+    const before = await t.health("month=2026-10");
+    const rta = BigInt(before.readyToAssign);
+    // Leave $150 in Ready to Assign: move the rest into a category.
+    await t.assign(t.groceries, "2026-10", (10000n + rta - 15000n).toString());
+    const report = await t.health("month=2026-10");
+    expect(report.readyToAssign).toBe("15000");
+    const covers = report.cards.filter((c) => BigInt(c.gap) > 0n).map((c) => BigInt(c.cover));
+    expect(covers.reduce((a, b) => a + b, 0n)).toBeLessThanOrEqual(15000n);
+    expect(covers.filter((c) => c > 0n).length).toBeGreaterThan(0);
+  });
+
+  it("refuses a month before the plan's first", async () => {
+    const t = await setup();
+    const report = await t.health();
+    expect(report.firstMonth <= "2026-10").toBe(true);
+    const res = await send(
+      "GET",
+      `${t.base}/reports/credit-card-health?today=${TODAY}&month=2020-01`,
+      t.cookie,
+    );
+    expect(res.status).toBe(400);
   });
 
   it("is for budget members only", async () => {

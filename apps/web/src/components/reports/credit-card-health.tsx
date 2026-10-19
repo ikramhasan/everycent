@@ -153,7 +153,7 @@ export function CardSummary({
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
         <Figure label="Owed" value={format(card.balance)} />
-        <Figure label="Set aside" value={format(card.available)} />
+        <Figure label="Set aside" value={format(card.covered)} />
         <Figure label="Still to set aside" value={format(card.gap)} />
         {gap > 0n && (
           <Figure

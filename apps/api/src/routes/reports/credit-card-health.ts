@@ -18,7 +18,7 @@ import { serverToday } from "../../lib/ledger";
 import { enterDueScheduled, entryDate } from "../../lib/scheduled";
 import { type AuthedEnv, authSecurity, requireAuth } from "../../middleware/require-auth";
 import type { AppEnv } from "../../types";
-import { monthState } from "../months/handlers";
+import { monthRange, monthState } from "../months/handlers";
 
 type Env = AppEnv & AuthedEnv;
 
@@ -47,7 +47,8 @@ export const getCreditCardHealth = createRoute({
     "and everything else. `series` has each month's spending, payments, balance and Available, " +
     "oldest first, from the month the card opened. `float` is what all cards' payment categories " +
     "lacked at each month's end: debt carried on money still to come. `cover` is what Ready to " +
-    "Assign could put toward a card's gap right now; the client opens the move-money dialog with it.",
+    "Assign could put toward a card's gap: Ready to Assign shared out across the cards in order, " +
+    "so doing every card's cover never takes it below zero. A month before the plan's first is a 400.",
   request: {
     params: BudgetParams,
     query: z.object({
@@ -77,6 +78,7 @@ export const getCreditCardHealth = createRoute({
               month: Month,
               currency: zCurrencyCode,
               asOf: z.iso.date().describe("The user's today"),
+              firstMonth: Month.describe("The oldest month the plan shows"),
               readyToAssign: zMinorUnits.describe("Ready to Assign for `month`"),
               totals: z.object({
                 balance: zMinorUnits.describe("Owed across all cards"),
@@ -99,7 +101,9 @@ export const getCreditCardHealth = createRoute({
                   gap: zMinorUnits,
                   fromCreditOverspending: zMinorUnits,
                   other: zMinorUnits,
-                  cover: zMinorUnits.describe("What Ready to Assign could assign to close the gap"),
+                  cover: zMinorUnits.describe(
+                    "What Ready to Assign could assign to close the gap, after the cards before it",
+                  ),
                   series: z.array(
                     z.object({
                       month: Month,
@@ -116,7 +120,7 @@ export const getCreditCardHealth = createRoute({
         },
       },
     },
-    400: jsonError("A future month"),
+    400: jsonError("A future month, or one before the plan's first"),
     401: jsonError("Not signed in"),
     403: jsonError("The account's email address isn't confirmed"),
     404: jsonError("No such budget, or the caller isn't a member"),
@@ -136,6 +140,10 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
     throw new AppError(400, "BAD_REQUEST", "A future month has no card health yet");
   }
   if (query.today) await enterDueScheduled(deps.db, deps, budgetId, today);
+  const range = await monthRange(deps.db, budgetId, today);
+  if (month < range.first) {
+    throw new AppError(400, "BAD_REQUEST", "That month is before the plan's first");
+  }
 
   const accounts = await deps.db
     .select({ id: budgetAccount.id, name: budgetAccount.name, type: budgetAccount.type })
@@ -153,11 +161,11 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
     const m = addMonths(month, -i);
     states.push({ month: m, state: await monthState(deps.db, deps, budget, m, today) });
   }
-  const first = states[0]?.state.range.first ?? month;
-  const shown = states.filter((s) => s.month >= first);
+  const shown = states.filter((s) => s.month >= range.first);
   const last = shown[shown.length - 1]?.state;
   const readyToAssign = last?.rta.readyToAssign ?? 0n;
 
+  let unassigned = readyToAssign;
   const rows = cards.flatMap((card) => {
     const series = shown.flatMap(({ month: m, state }) => {
       const l = state.listed.find((x) => x.payment?.accountId === card.id);
@@ -179,7 +187,10 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
     const latest = series[series.length - 1];
     if (!latest || latest.month !== month) return [];
     const health = cardHealth(latest.balance, latest.underfunded, latest.fromOverspending);
-    return [{ card, latest, health, series }];
+    // Ready to Assign is shared out in card order, so every cover together stays within it.
+    const cover = coverAmount(health.gap, unassigned);
+    unassigned -= cover;
+    return [{ card, latest, health, series, cover }];
   });
 
   const float = shown.map(({ month: m, state }) => ({
@@ -192,6 +203,7 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
       month,
       currency: budget.currency,
       asOf: today,
+      firstMonth: range.first,
       readyToAssign: readyToAssign.toString(),
       totals: {
         balance: rows.reduce((sum, r) => sum + r.latest.balance, 0n).toString(),
@@ -199,7 +211,7 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
         unfunded: rows.reduce((sum, r) => sum + r.health.gap, 0n).toString(),
       },
       float: float.map((f) => ({ month: f.month, carried: f.carried.toString() })),
-      cards: rows.map(({ card, latest, health, series }) => ({
+      cards: rows.map(({ card, latest, health, series, cover }) => ({
         accountId: card.id,
         name: card.name,
         type: card.type,
@@ -211,7 +223,7 @@ export const getCreditCardHealthHandler: RouteHandler<typeof getCreditCardHealth
         gap: health.gap.toString(),
         fromCreditOverspending: health.fromCreditOverspending.toString(),
         other: health.other.toString(),
-        cover: coverAmount(health.gap, readyToAssign).toString(),
+        cover: cover.toString(),
         series: series.map((s) => ({
           month: s.month,
           spending: s.spending.toString(),

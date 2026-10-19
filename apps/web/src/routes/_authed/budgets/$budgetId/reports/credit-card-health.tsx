@@ -53,6 +53,7 @@ function Report() {
             variant="outline"
             size="icon"
             aria-label="Previous month"
+            disabled={data !== undefined && month <= data.firstMonth}
             onClick={() => setSearch({ month: addMonths(month, -1) })}
           >
             <ChevronLeft />
