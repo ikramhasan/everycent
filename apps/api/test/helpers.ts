@@ -276,3 +276,10 @@ export async function shareBudget(
   if (!userId) throw new Error("the new member isn't listed");
   return { cookie: person.cookie, email, userId };
 }
+
+/** The Better Auth instance `app` was built with. */
+export function authOf(app: App) {
+  const deps = appDeps.get(app);
+  if (!deps) throw new Error("not an app from createTestApp");
+  return deps.auth;
+}

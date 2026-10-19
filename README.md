@@ -342,6 +342,9 @@ database on deploy (`node dist/migrate.mjs`). It needs `DATABASE_URL`, `BETTER_A
   sends password reset links and emails invitations. Without them it sends nothing: accounts are
   usable straight after sign-up, an email change applies at once, and invitations are links you
   share yourself (owners can also share links on a server that sends email).
+- **A forgotten password without email:** run `node dist/reset-password.mjs <email>` in the image
+  (`pnpm --filter @everycent/api db:reset-password <email>` in the repo). It prints a temporary
+  password and signs the account out everywhere; sign in with it and change it under Settings.
 - `EVERYCENT_DEPLOYMENT` stays unset (`self-hosted`). `cloud` is the hosted everycent, which
   requires email.
 

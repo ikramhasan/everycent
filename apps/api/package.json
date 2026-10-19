@@ -12,6 +12,7 @@
     "openapi:emit": "tsx src/scripts/emit-openapi.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
+    "db:reset-password": "tsx src/scripts/reset-password.ts",
     "preview:emails": "tsx src/scripts/preview-emails.ts"
   },
   "dependencies": {
