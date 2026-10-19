@@ -7,6 +7,21 @@ import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
 import { EmojiButton } from "./emoji-button";
 
+/** One grapheme that is an emoji (pictographs, flags, keycaps), not a bare digit or symbol. */
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+
+/**
+ * Splits a leading emoji off a name ("🏠 Rent" → "🏠", "Rent"). Only an emoji followed by one
+ * space and more text is split, so joining the parts back gives the name unchanged.
+ */
+export function splitEmoji(name: string): { emoji: string; text: string } {
+  const first = new Intl.Segmenter().segment(name)[Symbol.iterator]().next().value?.segment;
+  if (!first || !EMOJI.test(first)) return { emoji: "", text: name };
+  const rest = name.slice(first.length);
+  if (!/^ \S/.test(rest)) return { emoji: "", text: name };
+  return { emoji: first, text: rest.slice(1) };
+}
+
 export interface NameValues {
   name: string;
   note: string;
@@ -31,7 +46,10 @@ export function NamePopover({
   title: string;
   initial?: NameValues;
   withNote?: boolean;
-  /** An emoji box in front of the name; a picked emoji is put at the start of the name. */
+  /**
+   * An emoji box in front of the name: a leading emoji in `initial.name` moves into it, and a
+   * picked one is put back at the start of the name. Not shown while the name is locked.
+   */
   withEmoji?: boolean;
   submitLabel?: string;
   /** Shows the name read-only with this explanation (e.g. payment categories). */
@@ -43,6 +61,7 @@ export function NamePopover({
   // A viewer (EVERYCENT-88) sees the trigger, but it opens nothing to change.
   const readOnly = useOptionalBudget()?.readOnly ?? false;
   const [open, setOpen] = useState(false);
+  const emojiBox = withEmoji && !nameLockedReason;
   const [values, setValues] = useState(initial);
   const [emoji, setEmoji] = useState("");
   const [pending, setPending] = useState(false);
@@ -51,8 +70,9 @@ export function NamePopover({
 
   function handleOpenChange(next: boolean) {
     if (next) {
-      setValues(initial);
-      setEmoji("");
+      const split = emojiBox ? splitEmoji(initial.name) : { emoji: "", text: initial.name };
+      setValues({ ...initial, name: split.text });
+      setEmoji(split.emoji);
     }
     setOpen(next);
   }
@@ -81,7 +101,7 @@ export function NamePopover({
           <Field>
             <FieldLabel htmlFor={`${id}-name`}>{title}</FieldLabel>
             <div className="flex gap-2">
-              {withEmoji && (
+              {emojiBox && (
                 <EmojiButton
                   value={emoji}
                   onChange={setEmoji}

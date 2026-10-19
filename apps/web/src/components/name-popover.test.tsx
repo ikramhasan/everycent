@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { NamePopover } from "./name-popover";
+import { NamePopover, splitEmoji } from "./name-popover";
 
 // The picker loads Emojibase's data from our own origin; serve it from the package.
 const require = createRequire(import.meta.url);
@@ -51,5 +51,74 @@ describe("NamePopover withEmoji", () => {
     await userEvent.type(screen.getByLabelText("New category group"), "Savings");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onSubmit).toHaveBeenCalledWith({ name: "Savings", note: "" });
+  });
+});
+
+describe("splitEmoji", () => {
+  it.each([
+    ["🏠 Rent/Mortgage", "🏠", "Rent/Mortgage"],
+    ["👨‍👩‍👧 Family", "👨‍👩‍👧", "Family"],
+    ["🇧🇩 Trip home", "🇧🇩", "Trip home"],
+    ["❤️ Charity", "❤️", "Charity"],
+    ["1️⃣ First", "1️⃣", "First"],
+  ])("splits %s", (name, emoji, text) => {
+    expect(splitEmoji(name)).toEqual({ emoji, text });
+  });
+
+  it.each(["Rent", "1 Rent", "# Notes", "🎯Goals", "🎯  Goals", "🎯", "🎯 "])(
+    "leaves %s whole",
+    (name) => {
+      expect(splitEmoji(name)).toEqual({ emoji: "", text: name });
+    },
+  );
+});
+
+describe("NamePopover withEmoji, renaming", () => {
+  function renderRename(name: string, onSubmit: (values: { name: string }) => void) {
+    render(
+      <NamePopover
+        title="Category name"
+        withEmoji
+        initial={{ name, note: "" }}
+        onSubmit={onSubmit}
+        trigger={<button type="button">Open</button>}
+      />,
+    );
+  }
+
+  it("moves the leading emoji into the box and keeps it on OK", async () => {
+    const onSubmit = vi.fn();
+    renderRename("🏠 Rent", onSubmit);
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(screen.getByLabelText("Category name")).toHaveValue("Rent");
+    expect(screen.getByRole("button", { name: "Emoji: 🏠. Change emoji" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(onSubmit).toHaveBeenCalledWith({ name: "🏠 Rent", note: "" });
+  });
+
+  it("drops the emoji when it is removed", async () => {
+    const onSubmit = vi.fn();
+    renderRename("🏠 Rent", onSubmit);
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    await userEvent.click(screen.getByRole("button", { name: "Emoji: 🏠. Change emoji" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(onSubmit).toHaveBeenCalledWith({ name: "Rent", note: "" });
+  });
+
+  it("has no box while the name is locked", async () => {
+    render(
+      <NamePopover
+        title="Category name"
+        withEmoji
+        nameLockedReason="Named after its credit account."
+        initial={{ name: "🏠 Visa", note: "" }}
+        onSubmit={vi.fn()}
+        trigger={<button type="button">Open</button>}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(screen.getByLabelText("Category name")).toHaveValue("🏠 Visa");
+    expect(screen.queryByRole("button", { name: /emoji/i })).not.toBeInTheDocument();
   });
 });
