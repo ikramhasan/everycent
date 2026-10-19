@@ -414,6 +414,7 @@ export function CategoryList({
               {!readOnly && (
                 <NamePopover
                   title="New category group"
+                  withEmoji
                   submitLabel="Add"
                   onSubmit={({ name }) => actions.createGroup(name)}
                   trigger={
@@ -795,6 +796,7 @@ function GroupSection({
             <>
               <NamePopover
                 title="Category group name"
+                withEmoji
                 initial={{ name: group.name, note: "" }}
                 onSubmit={({ name }) => actions.updateGroup(group.id, { name })}
                 actions={(close) => (
@@ -837,6 +839,7 @@ function GroupSection({
               {!readOnly && (
                 <NamePopover
                   title={`New category in ${group.name}`}
+                  withEmoji
                   submitLabel="Add"
                   onSubmit={({ name }) => actions.createCategory(group.id, name)}
                   trigger={
@@ -999,6 +1002,7 @@ function CategoryRow({
           {selection && <RowCheckbox id={category.id} name={category.name} selection={selection} />}
           <NamePopover
             title="Category name"
+            withEmoji
             withNote
             nameLockedReason={
               isPayment ? "Named after its credit account. Rename the account instead." : undefined
