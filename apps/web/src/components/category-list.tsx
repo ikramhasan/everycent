@@ -414,6 +414,7 @@ export function CategoryList({
               {!readOnly && (
                 <NamePopover
                   title="New category group"
+                  withEmoji
                   submitLabel="Add"
                   onSubmit={({ name }) => actions.createGroup(name)}
                   trigger={
@@ -837,6 +838,7 @@ function GroupSection({
               {!readOnly && (
                 <NamePopover
                   title={`New category in ${group.name}`}
+                  withEmoji
                   submitLabel="Add"
                   onSubmit={({ name }) => actions.createCategory(group.id, name)}
                   trigger={

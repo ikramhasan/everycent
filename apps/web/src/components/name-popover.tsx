@@ -3,8 +3,9 @@ import { Field, FieldDescription, FieldLabel } from "@everycent/ui/components/fi
 import { Input } from "@everycent/ui/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@everycent/ui/components/popover";
 import { Textarea } from "@everycent/ui/components/textarea";
-import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
 import { useOptionalBudget } from "@/lib/budget-context";
+import { EmojiButton } from "./emoji-button";
 
 export interface NameValues {
   name: string;
@@ -20,6 +21,7 @@ export function NamePopover({
   title,
   initial = { name: "", note: "" },
   withNote = false,
+  withEmoji = false,
   submitLabel = "OK",
   nameLockedReason,
   onSubmit,
@@ -29,6 +31,8 @@ export function NamePopover({
   title: string;
   initial?: NameValues;
   withNote?: boolean;
+  /** An emoji box in front of the name; a picked emoji is put at the start of the name. */
+  withEmoji?: boolean;
   submitLabel?: string;
   /** Shows the name read-only with this explanation (e.g. payment categories). */
   nameLockedReason?: string;
@@ -40,18 +44,24 @@ export function NamePopover({
   const readOnly = useOptionalBudget()?.readOnly ?? false;
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(initial);
+  const [emoji, setEmoji] = useState("");
   const [pending, setPending] = useState(false);
   const id = useId();
+  const nameRef = useRef<HTMLInputElement>(null);
 
   function handleOpenChange(next: boolean) {
-    if (next) setValues(initial);
+    if (next) {
+      setValues(initial);
+      setEmoji("");
+    }
     setOpen(next);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = values.name.trim();
-    if (!name) return;
+    const trimmed = values.name.trim();
+    if (!trimmed) return;
+    const name = emoji ? `${emoji} ${trimmed}` : trimmed;
     setPending(true);
     try {
       await onSubmit({ name, note: values.note });
@@ -70,15 +80,26 @@ export function NamePopover({
         <form onSubmit={handleSubmit} className="grid gap-3">
           <Field>
             <FieldLabel htmlFor={`${id}-name`}>{title}</FieldLabel>
-            <Input
-              id={`${id}-name`}
-              value={values.name}
-              onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
-              maxLength={100}
-              autoFocus={!nameLockedReason}
-              readOnly={Boolean(nameLockedReason)}
-              required
-            />
+            <div className="flex gap-2">
+              {withEmoji && (
+                <EmojiButton
+                  value={emoji}
+                  onChange={setEmoji}
+                  onClose={() => nameRef.current?.focus()}
+                />
+              )}
+              <Input
+                ref={nameRef}
+                id={`${id}-name`}
+                value={values.name}
+                onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
+                // The emoji and its space count toward the 100 the API allows.
+                maxLength={emoji ? 100 - emoji.length - 1 : 100}
+                autoFocus={!nameLockedReason}
+                readOnly={Boolean(nameLockedReason)}
+                required
+              />
+            </div>
             {nameLockedReason && <FieldDescription>{nameLockedReason}</FieldDescription>}
           </Field>
           {withNote && (
