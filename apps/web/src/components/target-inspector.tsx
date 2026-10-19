@@ -252,6 +252,52 @@ export function TargetSection({
     );
   }
 
+  return (
+    <TargetSummary
+      title={title}
+      target={target}
+      need={need}
+      format={format}
+      targetFormat={targetFormat}
+      currency={currency}
+      payment={payment}
+      onAssign={onAssign}
+      onEdit={() => setEditing(true)}
+      onSnooze={onSnooze}
+      snoozeLocked={snoozeLocked}
+    />
+  );
+}
+
+/**
+ * What a target asks for and how far along it is. `onEdit` is left out for a viewer
+ * (EVERYCENT-200), who gets the summary without Edit, Assign or Snooze.
+ */
+function TargetSummary({
+  title,
+  target,
+  need,
+  format,
+  targetFormat,
+  currency,
+  payment,
+  onAssign,
+  onEdit,
+  onSnooze,
+  snoozeLocked = false,
+}: {
+  title: string;
+  target: CategoryTarget;
+  need: TargetNeed;
+  format: Format;
+  targetFormat: Format;
+  currency?: TargetCurrency;
+  payment?: { month: string; fundedSpending: string; paymentsMade: string };
+  onAssign?: (amount: bigint) => Promise<void>;
+  onEdit?: () => void;
+  onSnooze?: (snoozed: boolean) => Promise<void>;
+  snoozeLocked?: boolean;
+}) {
   const percent = targetPercent({ needed: BigInt(need.needed), funded: BigInt(need.funded) });
   const message = targetMessage(target, need, format, payment?.month);
   const met = BigInt(need.funded) >= BigInt(need.needed);
@@ -320,10 +366,12 @@ export function TargetSection({
           />
         ))}
       </dl>
-      <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
-        Edit Target
-      </Button>
-      {(onSnooze || (snoozeLocked && !payment)) && (
+      {onEdit && (
+        <Button size="sm" variant="secondary" onClick={onEdit}>
+          Edit Target
+        </Button>
+      )}
+      {onEdit && (onSnooze || (snoozeLocked && !payment)) && (
         // YNAB keeps the target's details on show while it's snoozed.
         <div className="flex items-center gap-1">
           <Label
@@ -344,6 +392,56 @@ export function TargetSection({
         </div>
       )}
     </Section>
+  );
+}
+
+/**
+ * A viewer's target (EVERYCENT-200): the same summary as the editable one, with nothing to change.
+ * Nothing at all when the category has no target (there's nothing to invite a viewer to create).
+ */
+export function ReadOnlyTarget({
+  target,
+  need,
+  format,
+  currency,
+  debt = false,
+  payment,
+}: {
+  target: CategoryTarget | null;
+  need: TargetNeed | null;
+  format: Format;
+  currency?: TargetCurrency;
+  debt?: boolean;
+  payment?: { month: string; fundedSpending: string; paymentsMade: string };
+}) {
+  if (!target) return null;
+  const title = debt ? "Debt Payment Target" : "Target";
+  const targetFormat =
+    currency && target.currency !== currency.budgetCurrency
+      ? currency.moneyIn(target.currency).format
+      : format;
+  if (currency?.rateMissing) {
+    return (
+      <Section title={title}>
+        <p className="font-medium text-sm">{targetHeading(target, targetFormat(target.amount))}</p>
+        <p className="text-muted-foreground text-sm">
+          No {target.currency} to {currency.budgetCurrency} exchange rate is available yet, so this
+          target can't say what it needs.
+        </p>
+      </Section>
+    );
+  }
+  if (!need) return null;
+  return (
+    <TargetSummary
+      title={title}
+      target={target}
+      need={need}
+      format={format}
+      targetFormat={targetFormat}
+      currency={currency}
+      payment={payment}
+    />
   );
 }
 
