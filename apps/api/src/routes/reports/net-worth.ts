@@ -96,7 +96,9 @@ const NetWorthSchema = z
           rateDate: z.iso.date().nullable(),
         }),
       )
-      .describe("The month-end rate of each foreign currency, for each month of the range"),
+      .describe(
+        "The month-end rate of each foreign currency, for each month of the range from its accounts' first transaction on",
+      ),
   })
   .openapi("NetWorthReport");
 

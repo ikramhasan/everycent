@@ -5407,7 +5407,7 @@ export interface components {
             };
             months: components["schemas"]["NetWorthMonth"][];
             accounts: components["schemas"]["NetWorthAccount"][];
-            /** @description The month-end rate of each foreign currency, for each month of the range */
+            /** @description The month-end rate of each foreign currency, for each month of the range from its accounts' first transaction on */
             rates: {
                 /**
                  * @description ISO 4217 currency code

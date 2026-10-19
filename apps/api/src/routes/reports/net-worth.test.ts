@@ -300,6 +300,26 @@ describe("net worth report", () => {
     });
   });
 
+  // EVERYCENT-245: no rates for months before a currency's first transaction.
+  it("looks up a foreign currency's rates only from its first transaction", async () => {
+    fx.seed("2000-01-01", "EUR", { USD: "1.1" });
+    const { account, report } = await setup();
+    await account({ name: "Euros", type: "savings", currency: "EUR", balance: "10000" });
+
+    const r = await report("from=2026-01&to=2026-10");
+    // The account opens 2026-07-01: rates for July to October only.
+    expect(r.rates.map((x) => x.month)).toEqual(["2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(r.months[0]?.netWorth).toBe("0");
+    expect(r.months[6]?.netWorth).toBe("11000");
+
+    // A century-wide range asks the provider only for the months with a balance.
+    fx.calls.length = 0;
+    const wide = await report("from=1926-10&to=2026-09");
+    expect(wide.months).toHaveLength(1200);
+    expect(wide.rates).toHaveLength(3);
+    expect(fx.calls.length).toBeLessThanOrEqual(3);
+  });
+
   it("filters accounts and checks the range", async () => {
     const { cookie, base, account, report } = await setup();
     const a = await account({ name: "A", type: "checking", balance: "1000" });

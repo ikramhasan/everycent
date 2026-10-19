@@ -16385,7 +16385,7 @@
                 "rateDate"
               ]
             },
-            "description": "The month-end rate of each foreign currency, for each month of the range"
+            "description": "The month-end rate of each foreign currency, for each month of the range from its accounts' first transaction on"
           }
         },
         "required": [
